@@ -18,6 +18,13 @@
   block-size: 14px;
 }
 
+/* `Meta.dc.html`'s phase mark: 8px, no check, standing beside the phase's own
+   name rather than at the head of a tappable row. */
+.dot {
+  inline-size: 8px;
+  block-size: 8px;
+}
+
 /* The design's stroke is 1.5px and Chromium floors a border-width to a whole
    CSS pixel: measured at a scale factor of 4, `border: 1.5px` paints the same
    4 device pixels `border: 1px` does, which is the row's own hairline. An

@@ -40,8 +40,17 @@ export function civilDateToDate(value: string): Date {
 }
 
 // Reads a midday-UTC instant back as its own calendar day, never a shifted one.
-function dateToCivilDate(date: Date): string {
+export function dateToCivilDate(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
+}
+
+// The civil date `weeks` weeks after `day`, in the same midday-UTC arithmetic
+// `weekOf` already runs: a horizon typed in weeks (RP-11) is turned into the
+// civil date `createGoal` stores, never the caller's own local offset.
+export function addWeeksToCivilDate(day: string, weeks: number): string {
+  const date = civilDateToDate(day);
+  date.setUTCDate(date.getUTCDate() + weeks * 7);
+  return dateToCivilDate(date);
 }
 
 // The seven civil days of the Monday-to-Sunday week `day` sits in, oldest

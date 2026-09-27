@@ -17,6 +17,7 @@ export function Mark({
   state,
   dashed,
   label,
+  size = "row",
 }: {
   state: MarkState;
   // The one dashed stroke in the design: the row nothing has written yet
@@ -25,8 +26,18 @@ export function Mark({
   // Names the mark when it stands on its own, in a grid of days. Inside a row
   // the row's own text already says it, so the mark stays out of the tree.
   label?: string;
+  // `row` is the 24px mark at the head of a day's row, with a check inside a
+  // filled or evidence state. `dot` is Meta.dc.html's 8px phase mark — the
+  // same filled/outlined shape, standing on its own with no check, since a
+  // phase is never "satisfied", only in effect or not (RP-15).
+  size?: "row" | "dot";
 }) {
-  const className = [styles.mark, states[state], dashed ? styles.dashed : undefined]
+  const className = [
+    styles.mark,
+    states[state],
+    dashed ? styles.dashed : undefined,
+    size === "dot" ? styles.dot : undefined,
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -37,7 +48,9 @@ export function Mark({
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      {state === "empty" ? null : <Check className={styles.check} strokeWidth={3} />}
+      {size === "row" && state !== "empty" ? (
+        <Check className={styles.check} strokeWidth={3} />
+      ) : null}
     </span>
   );
 }

@@ -6,6 +6,15 @@ body {
   margin: 0;
 }
 
+/* The shell every screen stands in: a column so `components/ui/bottom-nav
+   .tsx` — the last child `app/layout.tsx` renders — sits after a screen's
+   content and still reaches the viewport's own bottom when that content is
+   short, the way `.page`'s own `flex: 1 0 auto` (page.module.css) expects. */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
 /* docs/pulsar/DESIGN.md "Tokens" — light is the primary face, dark is the
    same design inverted. The class comes from the pre-paint script, never
    from a media query, so a chosen face survives the device's own setting. */
@@ -88,4 +97,10 @@ body {
   color: var(--pulsar-ink);
   background-color: var(--pulsar-ground);
   --color-overlay: var(--pulsar-scrim);
+  /* Fills `body`'s own flex column so its two children — a screen's `.page`
+     and the nav after it — share its height rather than `body`'s auto one. */
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }

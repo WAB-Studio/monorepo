@@ -24,6 +24,9 @@ const mono = DM_Mono({
   display: "swap",
 });
 
+// No dynamic API here on purpose: `app/(app)/layout.tsx` is what calls
+// `getPerson()` and draws the nav, scoped to the signed-in screens alone —
+// this file stays static so `/entrar` and `/auth/confirm` do too.
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
