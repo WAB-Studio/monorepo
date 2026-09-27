@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 import { Archivo, DM_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { Theme } from "@radix-ui/themes";
 
+import { BottomNav } from "@/components/ui";
 import { ThemeScript } from "@/components/theme-script";
+import { getPerson } from "@/lib/session";
 import "@radix-ui/themes/styles.css";
 import "./theme.css";
 
@@ -24,7 +27,13 @@ const mono = DM_Mono({
   display: "swap",
 });
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // No round trip: the same verified-JWT read every page's own gate already
+  // pays for. A signed-out person sees `/entrar` alone — the nav names three
+  // routes that would only bounce them straight back to it.
+  const person = await getPerson();
+  const t = await getTranslations("common.nav");
+
   return (
     <html
       lang="es"
@@ -39,6 +48,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <NextIntlClientProvider>
           <Theme accentColor="teal" grayColor="slate" radius="large" scaling="100%">
             {children}
+            {person ? (
+              <BottomNav todayLabel={t("today")} weekLabel={t("week")} goalLabel={t("goal")} />
+            ) : null}
           </Theme>
         </NextIntlClientProvider>
       </body>

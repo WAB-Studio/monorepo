@@ -20,6 +20,8 @@ export { Flex, Grid, VisuallyHidden } from "@radix-ui/themes";
 
 export { Page } from "./page";
 
+export { BottomNav } from "./bottom-nav";
+
 export { Row } from "./row";
 
 export { Mark, type MarkState } from "./mark";

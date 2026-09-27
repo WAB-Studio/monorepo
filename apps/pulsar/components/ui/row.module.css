@@ -47,10 +47,27 @@
   overflow-wrap: anywhere;
 }
 
-.leading,
-.trailing {
+.leading {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: none;
+}
+
+/* Unlike `.leading`, a trailing block can carry a sentence — `Meta.dc.html`'s
+   own two-line cadence-and-satisfaction column. Bounded to under half the
+   row, so a long one (five weekday names) wraps onto its own lines instead
+   of claiming its full unwrapped width and squeezing `.body` to a sliver.
+   `flex-shrink: 0`, unlike `.body`: this text has no `overflow-wrap:
+   anywhere` floor to fall back on, so letting the flex algorithm shrink it
+   past what its own wrapping already settled on would overflow the row
+   instead of wrapping a second time. `.body`'s own shrink-to-fit, safe at
+   any width, is what absorbs the rest of the squeeze. */
+.trailing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  max-inline-size: 45%;
+  text-align: end;
 }

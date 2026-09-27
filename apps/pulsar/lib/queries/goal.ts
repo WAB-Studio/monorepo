@@ -20,6 +20,7 @@ type GoalRow = {
   horizon: string;
   measure_name: string | null;
   measure_unit: string | null;
+  created_at: string;
 };
 
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
@@ -95,6 +96,10 @@ export type GoalView = {
   id: string;
   name: string;
   horizon: string;
+  // When the goal was opened (§0.3, 3), in the person's own zone — the goal
+  // screen's own overline (RP-11), read off `to_jsonb(g)`'s whole row rather
+  // than a second round trip.
+  createdAt: string;
   measureName: string | null;
   measureUnit: string | null;
   // A sum over facts, computed here and never read from a column (RP-14):
@@ -353,6 +358,7 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
     id: row.goal.id,
     name: row.goal.name,
     horizon: row.goal.horizon,
+    createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
     measureUnit: row.goal.measure_unit,
     measureTotal: declaredTotal + evidenceTotal,

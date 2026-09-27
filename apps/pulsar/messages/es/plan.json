@@ -1,0 +1,26 @@
+{
+  "errors": {
+    "signedOut": "Tu sesión terminó. Entra otra vez.",
+    "goalNotFound": "Esa meta ya no existe.",
+    "sourceNotFound": "Esa fuente no existe.",
+    "notFound": "Eso ya no existe.",
+    "goalInvalid": "Esa meta no es válida.",
+    "commitmentInvalid": "Ese compromiso no es válido.",
+    "nameEmpty": "Escribe un nombre.",
+    "nameTooLong": "El nombre es muy largo. Escribe máximo 120 caracteres.",
+    "horizonInvalid": "Esa fecha no es válida.",
+    "aimEmpty": "Escribe un objetivo.",
+    "aimTooLong": "El objetivo es muy largo. Escribe máximo 200 caracteres.",
+    "startsOnInvalid": "Esa fecha de inicio no es válida.",
+    "endsOnInvalid": "Esa fecha de fin no es válida.",
+    "phaseBackwards": "La fase termina antes de empezar.",
+    "weekdayInvalid": "Ese día no es válido.",
+    "weekdaysEmpty": "Elige al menos un día.",
+    "cadenceNInvalid": "Escribe un número entero mayor que cero.",
+    "targetQuantityInvalid": "Escribe un número entero mayor que cero.",
+    "unitEmpty": "Escribe qué se cuenta.",
+    "unitTooLong": "Eso es muy largo. Escribe máximo 40 caracteres.",
+    "sourceKeyEmpty": "Elige una fuente.",
+    "thresholdInvalid": "Escribe un número entero de al menos 1."
+  }
+}

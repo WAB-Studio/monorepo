@@ -5,10 +5,18 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  min-height: 100%;
   background: var(--pulsar-ground);
   color: var(--pulsar-ink);
   padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  /* `app/theme.css`'s shell makes this the only route to filling the
+     viewport on a short screen: `flex-grow` against the nav's own fixed
+     height, not `min-height: 100%`, which measured against that same shell
+     claimed the whole height for itself and pushed `components/ui/
+     bottom-nav.tsx` below the fold — the two cannot both hold "the rest of
+     the height" at once. A no-op outside a flex parent, which nothing in
+     this app is any longer. */
+  flex: 1 0 auto;
+  min-height: 0;
 }
 
 /* Past the phone the column stops growing and centres: only the review's table
