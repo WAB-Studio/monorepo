@@ -20,6 +20,13 @@
 // file originally let it hide inside the very count it was supposed to
 // bound. Every run asserts the bracket, cold included: only the overlap
 // claim is cold-exempt, never the shape of the transaction or its count.
+// The type-fetch `postgres` sends on a connection's first-ever use is netted
+// out the same bounded way, by an exact match on its own text (never a bare
+// substring, which let a statement merely mentioning `pg_catalog.pg_type`
+// net itself out too) and capped at one per connection, zero on every warm
+// run. Five consecutive warm calls are asserted, not one or two: a fix that
+// only holds for the first couple is a fix a later screen the same minute
+// would still be paying for.
 //
 // The degraded scenario needs a fresh module graph: `lib/evidence/
 // registry.ts` builds its reader map once, at import time, and a process
@@ -124,13 +131,19 @@ function normalizeStatement(query: string): string {
 
 // `postgres`'s own default `fetch_types: true` (never set in `db/client.ts`,
 // and this file must not set it either) sends exactly this query the first
-// time a physical connection is ever used
-// (`node_modules/postgres/src/connection.js`'s own `fetchArrayTypes`).
-// Matched by its own text, so whatever count a run actually sent is what
-// gets netted out — never a fixed "two" standing in for a fact the driver
-// already reports.
+// time a physical connection is ever used — read verbatim off
+// `node_modules/postgres/src/connection.js`'s own `fetchArrayTypes`, not
+// guessed at. An exact match on the whole statement, whitespace collapsed:
+// a bare `pg_catalog.pg_type` substring match let a statement that merely
+// *mentions* that catalog (independent validation's own
+// `select count(*) from pg_catalog.pg_type`) net itself out of the count
+// it was supposed to inflate.
+const TYPE_FETCH_QUERY_TEXT =
+  "select b.oid, b.typarray from pg_catalog.pg_type a left join pg_catalog.pg_type b " +
+  "on b.oid = a.typelem where a.typcategory = 'a' group by b.oid, b.typarray order by b.oid";
+
 function isTypeFetchText(query: string): boolean {
-  return /pg_catalog\.pg_type/i.test(query);
+  return query.replace(/\s+/g, " ").trim().toLowerCase() === TYPE_FETCH_QUERY_TEXT;
 }
 
 // The settle statement's third `set_config` argument is the search path
@@ -198,16 +211,19 @@ function assert(label: string, ok: boolean, detail: string): void {
  * one `commit`, never a `rollback`, never a second one of either (an extra
  * transaction-control statement is a round trip `day.ts` did not choose to
  * spend, and hiding inside a blind filter is the hole independent
- * validation found); the application statements, net of that bracket and of
- * the type-fetch a connection's first-ever use sends, total exactly four —
- * asserted on the cold run too, not only the warm one; and, only when
- * `assertOverlap`, the two windows overlap in wall-clock time. `assertOverlap`
- * is false for the cold run alone: the user's own decided note says a cold
- * process pays a real dial between the two transactions and does not
- * overlap — a timing fact, never a licence to leave the cold run's bracket
- * or its statement count unchecked.
+ * validation found); at most one type-fetch statement per connection, and
+ * on a warm run none at all — a connection warm enough to be reused has
+ * already paid that cost, so a second sighting of it is itself a defect,
+ * never a fact to net out a second time; the application statements, net of
+ * that bracket and of any legitimate type-fetch, total exactly four —
+ * asserted on the cold run too, not only the warm ones; and, only when
+ * `isWarm`, the two windows overlap in wall-clock time. `isWarm` is false
+ * for the cold run alone: the user's own decided note says a cold process
+ * pays a real dial between the two transactions and does not overlap — a
+ * timing fact, never a licence to leave the cold run's bracket, its
+ * type-fetch cap or its statement count unchecked.
  */
-function reportRun(label: string, calls: DebugCall[], assertOverlap: boolean): void {
+function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
   const groups = [...groupByConnection(calls).entries()].map(([connection, groupCalls]) =>
     analyzeGroup(connection, groupCalls),
   );
@@ -253,13 +269,35 @@ function reportRun(label: string, calls: DebugCall[], assertOverlap: boolean): v
           .join("; "),
   );
 
+  const overCapped = groups.filter((group) => group.typeFetchCount > 1);
+  assert(
+    `${label} run's connections send at most one type-fetch statement each`,
+    overCapped.length === 0,
+    overCapped.length === 0
+      ? `${groups.length} connection(s), each type-fetch <= 1`
+      : overCapped.map((group) => `cid=${group.connection} (${group.label}) type-fetch=${group.typeFetchCount}`).join("; "),
+  );
+
+  if (isWarm) {
+    const unexpectedTypeFetch = groups.filter((group) => group.typeFetchCount > 0);
+    assert(
+      `${label} run's connections send no type-fetch statement`,
+      unexpectedTypeFetch.length === 0,
+      unexpectedTypeFetch.length === 0
+        ? `${groups.length} connection(s), each type-fetch = 0`
+        : unexpectedTypeFetch
+            .map((group) => `cid=${group.connection} (${group.label}) type-fetch=${group.typeFetchCount}`)
+            .join("; "),
+    );
+  }
+
   assert(
     `${label} run issues four application statements, no more`,
     totalApplication === 4,
     `${totalApplication} application statement(s) of ${calls.length} on the wire, ${totalTypeFetch} netted out as type-fetch`,
   );
 
-  if (assertOverlap) {
+  if (isWarm) {
     assert(
       `${label} run's two transactions overlap in wall-clock time`,
       overlaps,
@@ -307,41 +345,43 @@ async function runMain(): Promise<void> {
   const today = todayInZone();
 
   // First call: whatever the pool's connections happen to be, cold after
-  // this process's own startup. Its bracket and its statement count are
-  // asserted like any other run; only its overlap is not — the user's own
-  // decided note names the cold dial, never a free pass on the rest.
+  // this process's own startup. Its bracket, its type-fetch cap and its
+  // statement count are asserted like any other run; only its overlap is
+  // not — the user's own decided note names the cold dial, never a free
+  // pass on the rest.
   const coldStart = wireCalls.length;
   const cold = await loadDay(today);
   reportRun("cold", wireCalls.slice(coldStart), false);
 
-  // Two consecutive warm calls, both bounded: a fix that only holds for the
-  // very first warm call after the cold one is a fix a second screen the
-  // same minute would still be paying for.
-  const warm1Start = wireCalls.length;
-  const warm1 = await loadDay(today);
-  reportRun("warm-1", wireCalls.slice(warm1Start), true);
-
-  const warm2Start = wireCalls.length;
-  const warm2 = await loadDay(today);
-  reportRun("warm-2", wireCalls.slice(warm2Start), true);
-
-  assert("the warm-1 run reads the source", warm1.evidence === "read", `evidence = ${warm1.evidence}`);
-  assert("the warm-2 run reads the source", warm2.evidence === "read", `evidence = ${warm2.evidence}`);
+  // Five consecutive warm calls, each bounded on its own: a fix that only
+  // holds for the first one or two warm calls after the cold one is a fix a
+  // later screen the same minute would still be paying for — independent
+  // validation found exactly that hole with a mutation that only bit from
+  // the fourth `withGoalsDb` call on. Five, not more: this is the number
+  // that closed the hole, and chasing a larger one buys nothing new.
+  const WARM_CALLS = 5;
+  const warmResults: Awaited<ReturnType<typeof loadDay>>[] = [];
+  for (let i = 1; i <= WARM_CALLS; i++) {
+    const start = wireCalls.length;
+    const result = await loadDay(today);
+    reportRun(`warm-${i}`, wireCalls.slice(start), true);
+    warmResults.push(result);
+    assert(`the warm-${i} run reads the source`, result.evidence === "read", `evidence = ${result.evidence}`);
+  }
 
   const coldSlotIds = cold.view.slots.map((slot) => slot.commitmentId).sort();
-  const warm1SlotIds = warm1.view.slots.map((slot) => slot.commitmentId).sort();
-  const warm2SlotIds = warm2.view.slots.map((slot) => slot.commitmentId).sort();
+  const warmSlotIdLists = warmResults.map((result) => result.view.slots.map((slot) => slot.commitmentId).sort());
+  const lastWarmSlotIds = warmSlotIdLists[warmSlotIdLists.length - 1] ?? [];
   assert(
-    "the cold and both warm runs declare the same slots",
-    JSON.stringify(coldSlotIds) === JSON.stringify(warm1SlotIds) &&
-      JSON.stringify(warm1SlotIds) === JSON.stringify(warm2SlotIds),
-    `cold ${coldSlotIds.length}, warm-1 ${warm1SlotIds.length}, warm-2 ${warm2SlotIds.length} slot(s)`,
+    "the cold and every warm run declare the same slots",
+    warmSlotIdLists.every((ids) => JSON.stringify(ids) === JSON.stringify(coldSlotIds)),
+    `cold ${coldSlotIds.length} slot(s); warm ${warmSlotIdLists.map((ids) => ids.length).join(", ")} slot(s)`,
   );
 
   const degraded = runDegradedChildProcess();
 
   console.log(`\ndegraded run — evidence = ${degraded.evidence}`);
-  console.log(`  undegraded slots: [${warm2SlotIds.join(", ")}]`);
+  console.log(`  undegraded slots: [${lastWarmSlotIds.join(", ")}]`);
   console.log(`  degraded slots:   [${degraded.slotIds.join(", ")}]`);
 
   assert(
@@ -351,8 +391,8 @@ async function runMain(): Promise<void> {
   );
   assert(
     "every declared slot is still present when the source cannot be read",
-    JSON.stringify(degraded.slotIds) === JSON.stringify(warm2SlotIds),
-    `undegraded ${warm2SlotIds.length} slot(s), degraded ${degraded.slotIds.length} slot(s)`,
+    JSON.stringify(degraded.slotIds) === JSON.stringify(lastWarmSlotIds),
+    `undegraded ${lastWarmSlotIds.length} slot(s), degraded ${degraded.slotIds.length} slot(s)`,
   );
 
   console.log("");
