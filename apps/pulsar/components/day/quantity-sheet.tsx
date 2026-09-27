@@ -113,9 +113,9 @@ export function QuantitySheet({
       open={open}
       onOpenChange={onOpenChange}
       label={name}
-      title={t("day.quantitySheet.question", { unit })}
+      title={t("day.quantitySheet.question")}
     >
-      <Flex gap="2" wrap="wrap">
+      <Flex gap="2" wrap="wrap" align="center">
         {chips.map((value) => (
           <Chip
             key={value}
@@ -126,6 +126,10 @@ export function QuantitySheet({
             {value}
           </Chip>
         ))}
+        {/* The heading stays neutral; a unit inside it would need a gender. */}
+        <Text variant="meta" tone="quiet">
+          {unit}
+        </Text>
       </Flex>
 
       {customMode ? (
