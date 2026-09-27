@@ -16,19 +16,30 @@ function requireOneSubject(
   }
 }
 
+// The commitment's own unit, never typed twice (RP-03): shared by the server
+// action and by the sheet's own "escribir otra cantidad" field, so a number
+// the client refuses is a number the server would have refused too, and
+// nothing types past the schema on either side. Bounded well under
+// Postgres's `integer` column's own ceiling (2,147,483,647) — no quantity a
+// person types in one day, in any of RP-03's units, plausibly reaches into
+// the millions, and a value that large is a mistyped digit, not a real one.
+// Left unbounded, that mistyped digit used to reach the insert and come back
+// as a raw `value out of range for type integer` — a 500, not a message.
+export const quantitySchema = z
+  .number({ error: "day.errors.quantityInvalid" })
+  .int({ error: "day.errors.quantityInvalid" })
+  .positive({ error: "day.errors.quantityInvalid" })
+  .max(1_000_000, { error: "day.errors.quantityInvalid" });
+
 export const declareFactSchema = z
   .object({
     commitmentId: z.uuid({ error: "day.errors.subjectInvalid" }).nullish(),
     oneOffId: z.uuid({ error: "day.errors.subjectInvalid" }).nullish(),
-    // The commitment's own unit, never typed twice (RP-03). Whether this is
-    // required at all depends on the commitment's `satisfaction`, which the
-    // shape below cannot see — `requireQuantityFor` runs that check on the
-    // same schema, once the action has read the commitment it names.
-    quantity: z
-      .number({ error: "day.errors.quantityInvalid" })
-      .int({ error: "day.errors.quantityInvalid" })
-      .positive({ error: "day.errors.quantityInvalid" })
-      .nullish(),
+    // Whether this is required at all depends on the commitment's
+    // `satisfaction`, which the shape below cannot see — `requireQuantityFor`
+    // runs that check on the same schema, once the action has read the
+    // commitment it names.
+    quantity: quantitySchema.nullish(),
     // The two mistakes from today's monologue (RP-04): offered, never required.
     note: z
       .string()

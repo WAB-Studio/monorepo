@@ -80,6 +80,9 @@ export async function DayScreen() {
                     sourceName={
                       slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
                     }
+                    target={commitment.target}
+                    unit={commitment.unit}
+                    cadence={commitment.cadence}
                   />
                 ))}
               </section>
