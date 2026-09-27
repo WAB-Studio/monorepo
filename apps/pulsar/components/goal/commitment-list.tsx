@@ -2,7 +2,9 @@ import { getTranslations } from "next-intl/server";
 
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
-import { Flex, Row, SectionLabel, Text } from "@/components/ui";
+import { Flex, SectionLabel, Text } from "@/components/ui";
+
+import { CommitmentRow } from "./retire-sheet";
 
 export type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -87,10 +89,13 @@ export async function CommitmentList({ commitments }: { commitments: GoalCommitm
         })}
       </SectionLabel>
       {commitments.map((commitment) => (
-        <Row
+        <CommitmentRow
           key={commitment.id}
+          commitmentId={commitment.id}
           name={commitment.name}
-          meta={commitment.retiredAt ? t("goal.commitments.retired") : undefined}
+          retired={commitment.retiredAt !== null}
+          retiredLabel={t("goal.commitments.retired")}
+          factDayCount={commitment.factDayCount}
           trailing={
             <Flex direction="column" align="end" gap="1">
               <Text as="span" variant="meta" tone="muted">
@@ -101,7 +106,6 @@ export async function CommitmentList({ commitments }: { commitments: GoalCommitm
               </Text>
             </Flex>
           }
-          disabled
         />
       ))}
     </section>

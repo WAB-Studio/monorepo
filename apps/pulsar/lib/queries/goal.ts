@@ -90,6 +90,13 @@ export type GoalCommitment = {
   // `satisfiedBy.kind === "evidence"` — the goal's screen reads the source's
   // name from `sources.json` under this key, never a sentence stored here.
   sourceLabelKey: string | null;
+  // Distinct days this commitment has a declared fact on (module 18's retire
+  // sheet: "los N días en que lo hiciste" — RP-13 says the days already done
+  // stay done). Counted here, off `row.facts` the goal statement already
+  // carries whole, never a second round trip and never a subselect: an
+  // evidence-satisfied commitment writes no fact of its own (RP-05), so this
+  // is 0 for one and the screen drops the clause rather than say "0 días".
+  factDayCount: number;
 };
 
 export type GoalView = {
@@ -194,7 +201,7 @@ function toSatisfiedBy(row: CommitmentRow): SatisfiedBy {
   }
 }
 
-function toGoalCommitment(row: CommitmentRow): GoalCommitment {
+function toGoalCommitment(row: CommitmentRow, factDayCount: number): GoalCommitment {
   return {
     id: row.id,
     name: row.name,
@@ -202,7 +209,24 @@ function toGoalCommitment(row: CommitmentRow): GoalCommitment {
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
     sourceLabelKey: row.satisfaction === "evidence" ? row.source_label_key : null,
+    factDayCount,
   };
+}
+
+// Distinct fact days per commitment, from the goal statement's own
+// unfiltered `facts` subquery — a one-off's fact carries no `commitment_id`
+// and is skipped, the same guard `loadGoal` applies before `toDeclaredFact`.
+function factDayCounts(facts: FactRow[]): Map<string, number> {
+  const daysByCommitment = new Map<string, Set<string>>();
+  for (const fact of facts) {
+    if (!fact.commitment_id) continue;
+    const days = daysByCommitment.get(fact.commitment_id) ?? new Set<string>();
+    days.add(fact.day);
+    daysByCommitment.set(fact.commitment_id, days);
+  }
+  const counts = new Map<string, number>();
+  for (const [commitmentId, days] of daysByCommitment) counts.set(commitmentId, days.size);
+  return counts;
 }
 
 function toPhase(row: PhaseRow): Phase {
@@ -338,7 +362,10 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
   if (!row.goal) throw new Error("loadGoal called with an unknown goal");
 
   const phases = row.phases.map(toPhase);
-  const commitments = row.commitments.map(toGoalCommitment);
+  const dayCounts = factDayCounts(row.facts);
+  const commitments = row.commitments.map((commitment) =>
+    toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
+  );
   // A one-off's fact carries no `commitment_id`, and no unit to feed the
   // measure with; only a commitment's own quantity ever can (RP-14).
   const facts = row.facts

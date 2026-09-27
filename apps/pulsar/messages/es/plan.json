@@ -1,4 +1,37 @@
 {
+  "commitmentForm": {
+    "overline": "{goal}",
+    "title": "Compromiso nuevo",
+    "whatLabel": "qué es",
+    "whenLabel": "cada cuándo",
+    "cadence": {
+      "daily": "todos los días",
+      "weekdays": "días sueltos",
+      "times_per_week": "N por semana",
+      "every_n_days": "cada N días"
+    },
+    "timesPerWeekLabel": "veces por semana",
+    "everyNDaysLabel": "cada cuántos días",
+    "doneByLabel": "qué lo da por hecho",
+    "satisfaction": {
+      "tap": "un toque",
+      "quantity": "un número",
+      "evidence": "lo que ya sabe otra app"
+    },
+    "quantityLabel": "cantidad",
+    "unitLabel": "unidad",
+    "noMeasureYet": "Esta meta todavía no tiene cifra: «{unit}» se la pone.",
+    "sourceLabel": "fuente",
+    "thresholdLabel": "umbral",
+    "submit": "Añadirlo"
+  },
+  "retireSheet": {
+    "title": "¿Retirarlo?",
+    "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y los {days, plural, one {# día} other {# días}} en que lo hiciste siguen ahí.",
+    "descriptionNoDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual.",
+    "confirm": "Retirarlo",
+    "cancel": "Dejarlo como está"
+  },
   "errors": {
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "goalNotFound": "Esa meta ya no existe.",
