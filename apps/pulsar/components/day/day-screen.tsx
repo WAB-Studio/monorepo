@@ -1,15 +1,17 @@
 import { getTranslations } from "next-intl/server";
 
-import { Mark, Page, Row, SectionLabel, Text } from "@/components/ui";
+import { Page, SectionLabel, Text } from "@/components/ui";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
-import { loadDay, type CommitmentInfo } from "@/lib/queries/day";
+import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { todayInZone } from "@/lib/zone";
 
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
 import { EmptyDay } from "./empty-day";
 import { EvidenceNote } from "./evidence-note";
+import { NewOneOff } from "./new-one-off";
+import { OneOffRow } from "./one-off-row";
 
 /**
  * Opens the app on today (RP-01): no tap, no choice, no screen before it —
@@ -23,10 +25,12 @@ import { EvidenceNote } from "./evidence-note";
  * than reading `view.phase`, which picks a single span across every goal at
  * once and is only ever right for one of them.
  *
- * Today's one-offs draw in their own group below the last goal (RP-19,
- * RP-20), as a plain row rather than an interactive one: tapping one to
- * complete it and the field that writes a new one are module 15's own
- * files (`one-off-row.tsx`, `new-one-off.tsx`), not built in this module.
+ * A one-off draws under the goal it belongs to (RP-19, RP-20): its own row
+ * inside that goal's section, with that goal's own field to write another
+ * one the same way. A one-off that belongs to nothing draws in its own
+ * "Sueltas" group below the last goal, with the field that writes one of
+ * those — permanently visible either way, never behind a control that
+ * reveals it (`one-off-row.tsx`, `new-one-off.tsx`).
  */
 export async function DayScreen() {
   const t = await getTranslations();
@@ -85,25 +89,30 @@ export async function DayScreen() {
                     cadence={commitment.cadence}
                   />
                 ))}
+                {oneOffs
+                  .filter((oneOff): oneOff is OneOffSummary => oneOff.goalId === goal.id)
+                  .map((oneOff) => (
+                    <OneOffRow key={oneOff.id} oneOffId={oneOff.id} name={oneOff.name} />
+                  ))}
+                <NewOneOff goalId={goal.id} />
               </section>
             );
           })}
-
-          {oneOffs.length > 0 ? (
-            <section>
-              <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
-              {oneOffs.map((oneOff) => (
-                <Row
-                  key={oneOff.id}
-                  leading={<Mark state="empty" />}
-                  name={oneOff.name}
-                  disabled
-                />
-              ))}
-            </section>
-          ) : null}
         </>
       )}
+
+      {/* A one-off belonging to nothing (RP-20) has no goal section to draw
+          under, so it gets a group of its own — always on screen, even with
+          no goal open yet, because RP-19 asks for no goal behind it either. */}
+      <section>
+        <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
+        {oneOffs
+          .filter((oneOff) => oneOff.goalId === null)
+          .map((oneOff) => (
+            <OneOffRow key={oneOff.id} oneOffId={oneOff.id} name={oneOff.name} />
+          ))}
+        <NewOneOff />
+      </section>
     </Page>
   );
 }

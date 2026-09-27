@@ -12,6 +12,10 @@
   "oneOffs": {
     "title": "Sueltas"
   },
+  "newOneOff": {
+    "label": "Algo suelto",
+    "placeholder": "Escribe algo suelto..."
+  },
   "quantitySheet": {
     "question": "¿Cuántos {unit}?",
     "otherAmount": "Escribir otra cantidad",
@@ -36,6 +40,9 @@
     "noteTooLong": "La nota es muy larga. Escribe máximo 280 caracteres.",
     "quantityInvalid": "Escribe un número entero entre 1 y 1 000 000.",
     "invalid": "Eso no es válido.",
-    "signedOut": "Tu sesión terminó. Entra otra vez."
+    "signedOut": "Tu sesión terminó. Entra otra vez.",
+    "oneOffNameEmpty": "Escribe qué es lo suelto.",
+    "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
+    "oneOffDayInvalid": "Ese día no es válido."
   }
 }
