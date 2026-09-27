@@ -270,17 +270,28 @@ function toOneOffSummary(row: OneOffRow): OneOffSummary {
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
 // commitment belongs to, its own name, and the mechanism that satisfies it —
 // module 13's screen groups by the first, names a row with the second, and
-// decides a tap's target with the third (a `quantity` row opens module 14's
-// sheet instead of calling `declareFact` bare).
+// decides a tap's target with the third (a `quantity` row opens the
+// quantity sheet instead of calling `declareFact` bare). `target` and `unit`
+// ride the same `commitments` row `toSatisfiedBy` already reads (RP-03); null
+// for every kind but `quantity`, which is the only one that needs them.
 export type CommitmentInfo = {
   id: string;
   goalId: string;
   name: string;
   kind: SatisfiedBy["kind"];
+  target: number | null;
+  unit: string | null;
 };
 
 function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
-  return { id: row.id, goalId: row.goal_id, name: row.name, kind: row.satisfaction };
+  return {
+    id: row.id,
+    goalId: row.goal_id,
+    name: row.name,
+    kind: row.satisfaction,
+    target: row.satisfaction === "quantity" ? row.target_quantity : null,
+    unit: row.satisfaction === "quantity" ? row.unit : null,
+  };
 }
 
 function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact {

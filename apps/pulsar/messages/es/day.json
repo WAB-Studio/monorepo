@@ -12,6 +12,15 @@
   "oneOffs": {
     "title": "Sueltas"
   },
+  "quantitySheet": {
+    "subtitle": "¿Cuánto hiciste hoy?",
+    "quantityLabel": "Cantidad",
+    "otherAmount": "Escribir otra cantidad",
+    "customLabel": "Otra cantidad",
+    "noteLabel": "Nota (opcional)",
+    "notePlaceholder": "¿Qué pasó?",
+    "accept": "Guardar"
+  },
   "errors": {
     "notFound": "Eso ya no existe. Recarga la página.",
     "evidenceOnly": "Eso lo cierra una fuente, no un toque.",
