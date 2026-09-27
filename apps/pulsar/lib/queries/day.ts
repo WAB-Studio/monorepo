@@ -50,9 +50,14 @@ type GoalRow = {
 
 // `source_key` and `source_unit` ride in from the join to `evidence_sources`;
 // neither column exists on `commitments` itself (RNP-10 keeps the source a
-// row of configuration, not a commitment column).
+// row of configuration, not a commitment column). `goal_id` and `name` ride
+// in from `to_jsonb(c)` the same as every other bare column below — nothing
+// module 4's `CommitmentPlan` reads, so `toCommitmentPlan` still ignores
+// them; module 13's screen is what groups a slot by goal and names its row.
 type CommitmentRow = {
   id: string;
+  goal_id: string;
+  name: string;
   cadence_kind: Cadence["kind"];
   cadence_n: number | null;
   cadence_weekdays: number[] | null;
@@ -68,6 +73,7 @@ type CommitmentRow = {
 
 type PhaseRow = {
   id: string;
+  goal_id: string;
   aim: string;
   starts_on: string;
   ends_on: string | null;
@@ -93,10 +99,11 @@ type OneOffRow = {
   day: string | null;
 };
 
-// The one statement's whole shape. `goals` and `one_offs` are fetched here,
-// as the contract requires, and go unused by this file: `deriveDay` takes no
-// goals array and `DayView` has no place for a one-off. A later screen reads
-// both from this same round trip; this file computes no state of its own.
+// The one statement's whole shape. `goals` and `one_offs` are fetched here
+// and, beside `view`, returned from `loadDay` below as `GoalSummary[]` and
+// `OneOffSummary[]` — `deriveDay` takes no goals array and `DayView` has no
+// place for a one-off, so module 13's screen is what groups a slot under the
+// goal it belongs to and draws a one-off beneath the last one.
 type GoalsQueryRow = {
   goals: GoalRow[];
   commitments: CommitmentRow[];
@@ -119,12 +126,12 @@ type EvidenceOutcome = {
 async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
     select
-      (select coalesce(json_agg(to_jsonb(g)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
          from "goals"."goals" g) as goals,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
-               )), '[]'::json)
+               ) order by c.created_at), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.retired_at is null or c.retired_at::date >= ${day}::date) as commitments,
@@ -138,7 +145,7 @@ async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRo
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.day = ${day}::date) as facts,
-      (select coalesce(json_agg(to_jsonb(o)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
          from "goals"."one_offs" o
          where o.day = ${day}::date) as one_offs
   `);
@@ -215,6 +222,67 @@ function toPhase(row: PhaseRow): Phase {
   return { id: row.id, name: row.aim, startsOn: row.starts_on, endsOn: row.ends_on };
 }
 
+// `Phase` (module 4) names no goal: `deriveDay`'s own `phaseOn` picks the
+// first span that holds `day` out of every phase across every goal, which is
+// only ever right for one goal at a time. Module 13's screen calls that same
+// `phaseOn` itself, once per goal, against phases narrowed to that goal by
+// this `goalId` — `deriveDay` and `DayView.phase` stay exactly as module 4
+// left them.
+export type PhaseInfo = Phase & { goalId: string };
+
+function toPhaseInfo(row: PhaseRow): PhaseInfo {
+  return { ...toPhase(row), goalId: row.goal_id };
+}
+
+// A goal's own name and measure (RP-11, RP-14), read beside `DayView` rather
+// than folded into it: the day engine derives a slot, never a group.
+export type GoalSummary = {
+  id: string;
+  name: string;
+  horizon: string;
+  measureName: string | null;
+  measureUnit: string | null;
+};
+
+function toGoalSummary(row: GoalRow): GoalSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    horizon: row.horizon,
+    measureName: row.measure_name,
+    measureUnit: row.measure_unit,
+  };
+}
+
+// A one-off already on today (RP-19, RP-20): `goalId` is null for one that
+// belongs to none, and the screen draws it in its own group below the rest.
+export type OneOffSummary = {
+  id: string;
+  goalId: string | null;
+  name: string;
+  day: string | null;
+};
+
+function toOneOffSummary(row: OneOffRow): OneOffSummary {
+  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day };
+}
+
+// What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
+// commitment belongs to, its own name, and the mechanism that satisfies it —
+// module 13's screen groups by the first, names a row with the second, and
+// decides a tap's target with the third (a `quantity` row opens module 14's
+// sheet instead of calling `declareFact` bare).
+export type CommitmentInfo = {
+  id: string;
+  goalId: string;
+  name: string;
+  kind: SatisfiedBy["kind"];
+};
+
+function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
+  return { id: row.id, goalId: row.goal_id, name: row.name, kind: row.satisfaction };
+}
+
 function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact {
   return {
     commitmentId: row.commitment_id,
@@ -253,10 +321,22 @@ function toEvidenceByCommitment(
  * awaited bare — a rejection degrades to `"unreadable"` and the declared
  * facts alone decide the day (RNP-04): never a blank day, never an error
  * page.
+ *
+ * `goals`, `oneOffs` and `commitments` ride out of the same `withGoalsDb`
+ * statement `view` is derived from — no third query, still four statements
+ * total (`withGoalsDb`'s settle + select, `withReadingDb`'s settle + select).
+ * Module 13's screen is what groups a slot under its goal and draws a
+ * one-off beneath the last one; `DayView` and `deriveDay` (module 4) are
+ * unchanged.
  */
-export async function loadDay(
-  day: string,
-): Promise<{ view: DayView; evidence: "read" | "unreadable" }> {
+export async function loadDay(day: string): Promise<{
+  view: DayView;
+  evidence: "read" | "unreadable";
+  goals: GoalSummary[];
+  oneOffs: OneOffSummary[];
+  commitments: CommitmentInfo[];
+  phases: PhaseInfo[];
+}> {
   const person = await getPerson();
   if (!person) throw new Error("loadDay called without a verified session");
 
@@ -272,8 +352,8 @@ export async function loadDay(
   const phases = row.phases.map(toPhase);
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
   // that always does, so a one-off's own fact plays no part in deriving a
-  // commitment's slot (RP-19's list is a future screen's own reading of the
-  // `one_offs` this statement already fetched).
+  // commitment's slot (RP-19's list is this file's own `oneOffs`, read by
+  // module 13's screen).
   const facts = row.facts
     .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);
@@ -281,5 +361,12 @@ export async function loadDay(
 
   const view = deriveDay({ commitments, phases, facts, evidence, day });
 
-  return { view, evidence: evidenceOutcome.status };
+  return {
+    view,
+    evidence: evidenceOutcome.status,
+    goals: row.goals.map(toGoalSummary),
+    oneOffs: row.one_offs.map(toOneOffSummary),
+    commitments: row.commitments.map(toCommitmentInfo),
+    phases: row.phases.map(toPhaseInfo),
+  };
 }

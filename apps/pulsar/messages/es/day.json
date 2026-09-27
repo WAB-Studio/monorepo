@@ -1,7 +1,6 @@
 {
   "title": "Hoy",
   "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
-  "commitmentFallback": "Compromiso {n}",
   "theme": {
     "toLight": "Cambiar a modo claro",
     "toDark": "Cambiar a modo oscuro"
@@ -9,6 +8,9 @@
   "empty": {
     "title": "Todavía no tienes una meta abierta.",
     "action": "Crear una meta"
+  },
+  "oneOffs": {
+    "title": "Sueltas"
   },
   "errors": {
     "notFound": "Eso ya no existe. Recarga la página.",
