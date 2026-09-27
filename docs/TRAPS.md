@@ -2342,3 +2342,15 @@ found a regression in `day.ts` — module 8's own done criterion ("the two trans
 overlap in time") is true most of the time, and failing to reproduce a serialized run on
 the first try does not disprove this entry: the effect comes and goes with the host's own
 connection caches, not with the code.
+
+## No harness identity can reach an evidence-satisfied row, so that row has no end-to-end proof
+
+- **What.** A pulsar row satisfied by evidence reads `reading.lookups`. The only rows there — 55, written
+  on 2026-09-11 — belong to one real voyager reader. A harness identity has none, and writing that
+  table is forbidden: it is global and belongs to `apps/voyager`.
+- **Measured 2026-09-27**, module 13. The day screen was driven at 360 px for every other state; the
+  source name on an evidence-satisfied row was proven only through a direct `deriveDay` call with a
+  synthetic `EvidenceDay`.
+- **Do.** Prove the evidence path with the reader stubbed in a child process, the way
+  `scripts/check-day.ts` degrades it, and say in the report that the screen half is unproven. Never
+  insert into `reading.lookups` to close the gap, and never sign in as the real reader.
