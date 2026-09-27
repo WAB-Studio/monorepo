@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Dialog } from "@radix-ui/themes";
 
+import { SectionLabel } from "./section-label";
 import styles from "./sheet.module.css";
 
 // The surface a fact is written on: it rises from the foot of the screen with
@@ -11,12 +12,18 @@ import styles from "./sheet.module.css";
 export function Sheet({
   open,
   onOpenChange,
+  label,
   title,
   description,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Names the goal or commitment the sheet's act belongs to, in the section
+  // label's own type (docs/pulsar/DESIGN.md "Decisions taken here" — "a
+  // field's label takes the section label's type"). Never the sheet's
+  // accessible name: `title` still owns that, as the one real `<h2>`.
+  label?: string;
   title: string;
   description?: string;
   children?: ReactNode;
@@ -29,7 +36,12 @@ export function Sheet({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content className={styles.sheet} {...described}>
         <div className={styles.grabber} aria-hidden />
-        <Dialog.Title className={styles.title}>{title}</Dialog.Title>
+        {label ? (
+          <div className={styles.label}>
+            <SectionLabel>{label}</SectionLabel>
+          </div>
+        ) : null}
+        <Dialog.Title as="h2" className={styles.title}>{title}</Dialog.Title>
         {description ? (
           <Dialog.Description className={styles.description}>{description}</Dialog.Description>
         ) : null}

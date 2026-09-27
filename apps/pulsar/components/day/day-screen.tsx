@@ -82,6 +82,7 @@ export async function DayScreen() {
                     }
                     target={commitment.target}
                     unit={commitment.unit}
+                    cadence={commitment.cadence}
                   />
                 ))}
               </section>

@@ -36,6 +36,12 @@
   background-color: var(--pulsar-quiet);
 }
 
+/* Sits above the title, never a heading of its own: it names the commitment
+   or the goal the sheet's act belongs to. */
+.label {
+  margin: 0 0 6px;
+}
+
 .title.title {
   margin: 0;
   font-size: var(--pulsar-text-sheet-title-size);

@@ -274,6 +274,10 @@ function toOneOffSummary(row: OneOffRow): OneOffSummary {
 // quantity sheet instead of calling `declareFact` bare). `target` and `unit`
 // ride the same `commitments` row `toSatisfiedBy` already reads (RP-03); null
 // for every kind but `quantity`, which is the only one that needs them.
+// `cadence` is `toCadence`'s own return (used above to build `CommitmentPlan`
+// for `deriveDay`), read a second time here for the row's own second line —
+// no new column, no second query: `to_jsonb(c)` already carries every column
+// `toCadence` reads.
 export type CommitmentInfo = {
   id: string;
   goalId: string;
@@ -281,6 +285,7 @@ export type CommitmentInfo = {
   kind: SatisfiedBy["kind"];
   target: number | null;
   unit: string | null;
+  cadence: Cadence;
 };
 
 function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
@@ -291,6 +296,7 @@ function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
     kind: row.satisfaction,
     target: row.satisfaction === "quantity" ? row.target_quantity : null,
     unit: row.satisfaction === "quantity" ? row.unit : null,
+    cadence: toCadence(row),
   };
 }
 

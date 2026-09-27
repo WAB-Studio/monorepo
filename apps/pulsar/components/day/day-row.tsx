@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact } from "@/app/actions/facts";
-import { Figure, Mark, Row, Text, type MarkState } from "@/components/ui";
+import type { Cadence } from "@/lib/day/types";
+import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
 import { QuantitySheet } from "./quantity-sheet";
 
@@ -23,11 +24,42 @@ export type DayRowProps = {
   // row is actually satisfied by it (RP-09): before that there is nothing
   // yet to attribute to a source.
   sourceName?: string;
-  // The plan's own number and unit for a `quantity` row (RP-03): null for
-  // every other kind, which needs neither.
+  // The plan's own number, unit and cadence for a `quantity` row (RP-03):
+  // null for every other kind, which needs none of them.
   target?: number | null;
   unit?: string | null;
+  cadence?: Cadence;
 };
+
+// The row's own mono second line for a `quantity` commitment — `HoyCantidad
+// .dc.html` draws "10 min · diario" under the name. `unit` is read as the
+// commitment's own word (`goals.commitments.unit`, e.g. "minutos"), not
+// abbreviated to the board's "min": there is no table mapping an arbitrary
+// unit string to a short form, and guessing one would be a second unit the
+// person never typed.
+function quantityMeta(target: number, unit: string, cadence: Cadence, t: ReturnType<typeof useTranslations>): string {
+  return `${target} ${unit} · ${cadenceLabel(cadence, t)}`;
+}
+
+function cadenceLabel(cadence: Cadence, t: ReturnType<typeof useTranslations>): string {
+  switch (cadence.kind) {
+    case "daily":
+      return t("day.cadence.daily");
+    case "weekdays": {
+      const names = t.raw("day.cadence.weekdayShort") as string[];
+      return cadence.days.map((day) => names[day - 1]).join(", ");
+    }
+    case "times_per_week":
+      return t("day.cadence.timesPerWeek", { count: cadence.count });
+    case "every_n_days":
+      // "Every 1 day" reads exactly as daily; nothing distinguishes them on
+      // screen (RP-12 anchors `every_n_days` to `created_at`, not to a
+      // visible span, so there is nothing else to say about `n === 1`).
+      return cadence.n === 1 ? t("day.cadence.daily") : t("day.cadence.everyNDays", { n: cadence.n });
+    case "times_per_month":
+      return t("day.cadence.timesPerMonth", { count: cadence.count });
+  }
+}
 
 /**
  * One commitment's row (RP-01, RP-02, RP-08). A `tap` commitment is
@@ -45,6 +77,7 @@ export function DayRow({
   sourceName,
   target,
   unit,
+  cadence,
 }: DayRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
@@ -52,6 +85,10 @@ export function DayRow({
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const tappable = kind !== "evidence";
+  const meta =
+    kind === "quantity" && target != null && unit != null && cadence
+      ? quantityMeta(target, unit, cadence, t)
+      : sourceName;
 
   function handleTap() {
     if (!tappable || pending) return;
@@ -74,12 +111,7 @@ export function DayRow({
       <Row
         leading={<Mark state={markState} />}
         name={name}
-        meta={sourceName}
-        trailing={
-          kind === "quantity" && target != null ? (
-            <Figure value={target} unit={unit ?? undefined} variant="meta" />
-          ) : undefined
-        }
+        meta={meta}
         onClick={handleTap}
         disabled={!tappable || pending}
       />

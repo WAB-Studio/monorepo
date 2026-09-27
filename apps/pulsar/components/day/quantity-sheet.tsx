@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact } from "@/app/actions/facts";
-import { Button, Chip, Field, Figure, Flex, SectionLabel, Sheet, Text } from "@/components/ui";
+import { quantitySchema } from "@/lib/validation/fact";
+import { Button, Chip, Field, Flex, Sheet, Text } from "@/components/ui";
 
 export type QuantitySheetProps = {
   open: boolean;
@@ -17,20 +18,15 @@ export type QuantitySheetProps = {
   unit: string;
 };
 
-// Four round numbers around the plan's own target, always ascending and
-// always positive — the board draws four with the target already selected,
-// never a fifth and never a menu (docs/pulsar/DESIGN.md "Decisions taken
-// here"). The exact spread is this component's own choice, not the
-// contract's: the contract fixes the middle chip, not the other three.
+// Four consecutive integers, the target second — `HoyCantidad.dc.html`'s own
+// spread, never a fifth and never a menu (docs/pulsar/DESIGN.md "Decisions
+// taken here"). `target` is always >=1 (the column's own CHECK), so `target
+// - 1` only ever goes non-positive at `target === 1`, the one case with no
+// smaller integer to offer: `[1, 2, 3, 4]`, with 1 — still the target —
+// selected.
 function chipsAround(target: number): number[] {
-  const step = Math.max(1, Math.round(target / 2));
-  const low = target - step > 0 ? target - step : target;
-  const start = low === target ? target : low;
-  const candidates =
-    low === target
-      ? [target, target + step, target + 2 * step, target + 3 * step]
-      : [start, target, target + step, target + 2 * step];
-  return Array.from(new Set(candidates)).sort((a, b) => a - b);
+  if (target <= 1) return [1, 2, 3, 4];
+  return [target - 1, target, target + 1, target + 2];
 }
 
 /**
@@ -80,14 +76,15 @@ export function QuantitySheet({
     setSelected(value);
   }
 
+  // The same bound the server enforces (`quantitySchema`, `lib/validation/
+  // fact.ts`), run here first: a number this schema refuses is a number
+  // `declareFact` would have refused too, never a raw Postgres error.
   function customQuantity(): number | null {
     const trimmed = customValue.trim();
-    if (!/^[0-9]+$/.test(trimmed)) return null;
-    const value = Number(trimmed);
-    return value > 0 ? value : null;
+    if (trimmed.length === 0) return null;
+    const parsed = quantitySchema.safeParse(Number(trimmed));
+    return parsed.success ? parsed.data : null;
   }
-
-  const shownQuantity = customMode ? customQuantity() : selected;
 
   function handleAccept() {
     if (pending) return;
@@ -115,26 +112,21 @@ export function QuantitySheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={name}
-      description={t("day.quantitySheet.subtitle")}
+      label={name}
+      title={t("day.quantitySheet.question", { unit })}
     >
-      <Figure value={shownQuantity ?? "–"} unit={unit} variant="measure" />
-
-      <div>
-        <SectionLabel>{t("day.quantitySheet.quantityLabel")}</SectionLabel>
-        <Flex gap="2" wrap="wrap" mt="2">
-          {chips.map((value) => (
-            <Chip
-              key={value}
-              mono
-              selected={!customMode && selected === value}
-              onClick={() => pickChip(value)}
-            >
-              {value}
-            </Chip>
-          ))}
-        </Flex>
-      </div>
+      <Flex gap="2" wrap="wrap">
+        {chips.map((value) => (
+          <Chip
+            key={value}
+            mono
+            selected={!customMode && selected === value}
+            onClick={() => pickChip(value)}
+          >
+            {value}
+          </Chip>
+        ))}
+      </Flex>
 
       {customMode ? (
         <Field

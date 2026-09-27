@@ -98,8 +98,22 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
     return { ok: true, factId };
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: error.message };
+    // `declareFactSchema`'s own `.max()` (`lib/validation/fact.ts`) refuses a
+    // quantity this large before the insert ever runs; this is the second
+    // line, not the first — a number the schema missed for any reason still
+    // meets Postgres's own `integer` ceiling as a message, never a 500.
+    if (isNumericRangeError(error)) return { ok: false, error: "day.errors.quantityInvalid" };
     throw error;
   }
+}
+
+function isNumericRangeError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "22003"
+  );
 }
 
 /**
