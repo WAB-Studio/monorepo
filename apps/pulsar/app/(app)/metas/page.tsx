@@ -24,7 +24,7 @@ export default async function GoalsIndexPage() {
     <Page>
       <SectionLabel>{t("goal.list.title")}</SectionLabel>
       {goals.map((goal) => (
-        <Button key={goal.id} asChild variant="ghost" block>
+        <Button key={goal.id} asChild variant="outline" block>
           <Link href={`/metas/${goal.id}`}>{goal.name}</Link>
         </Button>
       ))}

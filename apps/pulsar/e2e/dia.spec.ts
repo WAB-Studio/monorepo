@@ -33,7 +33,10 @@ test("holds at 360px, no horizontal overflow, every control at least 32px on its
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByText("Hoy")).toBeVisible();
+  // Scoped to `main`: module 16's own bottom nav (`components/ui/bottom-nav
+  // .tsx`) names its current tab "Hoy" too, so the bare text now resolves
+  // twice — the day's own title lives in `main`, the nav in its own `nav`.
+  await expect(page.getByRole("main").getByText("Hoy")).toBeVisible();
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(360);
