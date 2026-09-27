@@ -28,6 +28,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   which assertions cannot fail, which surfaces nobody drives, and which facts are paid for twice.
   `mutator` judges the lines a branch changed; only this one judges the suite as a whole.
 - Put the critic's questions to the user, in their own words. Never answer one for them.
+- Ask the user only what they alone can decide. Ask it whole: what it is, the options, what each
+  costs, and your pick. Decide everything else and report it. Decided by the user 2026-09-27,
+  after seven questions in one message, five of them unreadable without the session behind them.
 - Never close a slice on a report of greens alone. A slice with no criticism in it was not reviewed.
 - Keep plans in `private/`.
 - Use the credential the user hands you. Configure with it and move on.
