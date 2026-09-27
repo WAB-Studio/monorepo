@@ -126,10 +126,7 @@ export function QuantitySheet({
             {value}
           </Chip>
         ))}
-        {/* The unit a gendered heading used to carry (docs/pulsar/DESIGN.md
-            "Decisions taken here", 2026-09-27): named once, in quiet, beside
-            the chips it belongs to, rather than in a question that guesses
-            a gender for it. */}
+        {/* The heading stays neutral; a unit inside it would need a gender. */}
         <Text variant="meta" tone="quiet">
           {unit}
         </Text>
