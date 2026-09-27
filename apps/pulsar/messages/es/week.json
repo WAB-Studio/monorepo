@@ -1,1 +1,22 @@
-{}
+{
+  "range": "Del {start} al {end}",
+  "overline": "Semana {week} de {total}",
+  "today": "hoy",
+  "ratio": "{done} de {total}",
+  "unreadableEvidence": "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.",
+  "weekdayShort": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
+  "monthShort": [
+    "ene", "feb", "mar", "abr", "may", "jun",
+    "jul", "ago", "sep", "oct", "nov", "dic"
+  ],
+  "oneOffs": {
+    "title": "Sueltas"
+  },
+  "dot": {
+    "commitment": "{name}: {status}",
+    "evidence": "{name}: {source}",
+    "done": "hecho",
+    "pending": "pendiente",
+    "oneOff": "suelta hecha"
+  }
+}
