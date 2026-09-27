@@ -157,6 +157,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run the RNF-09 timing alone. A second lane on the same server inflates it.
 - Land a fresh token when a lane's session file is lost: `HARNESS_LANE=2 npm run harness:token`.
 - Never run a lane's suite while another track holds that lane.
+- Never age a harness run by hand to make `harness:reap` fire. `heartbeat_at`, `started_at` and
+  `finished_at` in `harness.runs` are written by `@repo/harness-registry` and nothing else. A check
+  that needs a dead run waits the real threshold, or asserts the delete path on a run it created
+  dead. The same `UPDATE` with another `WHERE` prunes a live lane's identity out from under it.
 
 ## Git
 
