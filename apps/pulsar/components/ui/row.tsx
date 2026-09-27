@@ -8,9 +8,15 @@ import styles from "./row.module.css";
 // docs/pulsar/DESIGN.md: a row is a real `<button>`, never a div, at least 56px
 // tall, ruled from the next by a hairline. Never a card, never a border box.
 // Writing a fact costs one tap, so the whole row is the target (RNP-02).
-type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children"> & {
-  // The mark at the head of the row, or nothing where a row carries no state.
+type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & {
+  // What sits at the head of the row — usually the mark, sometimes a plain
+  // label (`Semana.dc.html`'s own day row has no mark of its own to lead
+  // with).
   leading?: ReactNode;
+  // The row's own display name — never the native `<button name>` form
+  // attribute, which this type deliberately excludes above: nothing in this
+  // app submits a row as a form control, and a `ReactNode` here (module 17's
+  // own dot grid, not just a string) would otherwise collide with it.
   name: ReactNode;
   // The line under the name: mono, muted, a date or a count.
   meta?: ReactNode;

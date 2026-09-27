@@ -1,4 +1,4 @@
-import { Flex, Mark, Separator, Text, type MarkState } from "@/components/ui";
+import { Flex, Mark, Row, Text, type MarkState } from "@/components/ui";
 
 export type WeekDot = {
   state: MarkState;
@@ -26,24 +26,42 @@ export type WeekDayRowProps = {
  * an absence, never a mark of its own — `dots` is simply empty for it, and no
  * word here says "nothing happened". No streak, no score, no colour outside
  * `Mark`'s own three states, none of them red.
+ *
+ * Composed from `Row` at its own default height rather than a bare `Flex`:
+ * `Semana.dc.html`'s own 54px floor is already cleared by `Row`'s own 56px
+ * minimum (`row.module.css`, unedited here), so no new size variant is
+ * needed. The day label leads, the dots stand in for the row's own `name`,
+ * and the note trails — the same hairline and button shape every other row
+ * in this app draws (docs/pulsar/DESIGN.md "a row is a real button, never a
+ * div"). Each dot is `Mark` at `size="dot"` (`Meta.dc.html`'s own 8px phase
+ * mark, module 16), 6px apart — `gap="6px"` is a plain CSS string, a value
+ * `Flex`'s own `gap` prop already accepts, not a new class.
  */
 export function WeekDayRow({ label, isToday, dots, note, rule = true }: WeekDayRowProps) {
   return (
-    <>
-      <Flex justify="between" align="center" gap="3" py="2">
+    <Row
+      rule={rule}
+      leading={
         <Text as="span" variant="meta" tone={isToday ? "ink" : "muted"}>
           {label}
         </Text>
-        <Flex gap="1" wrap="wrap" justify="center" flexGrow="1">
+      }
+      name={
+        // `Row` wraps `name` in a `<Text as="span">` (`row.tsx`): `as="span"`
+        // here keeps this flex inline, never a `<div>` nested in a `<span>`.
+        <Flex as="span" gap="6px" wrap="wrap">
           {dots.map((dot, index) => (
-            <Mark key={index} state={dot.state} label={dot.label} />
+            <Mark key={index} state={dot.state} label={dot.label} size="dot" />
           ))}
         </Flex>
-        <Text as="span" variant="meta" tone="muted">
-          {note}
-        </Text>
-      </Flex>
-      {rule ? <Separator /> : null}
-    </>
+      }
+      trailing={
+        note ? (
+          <Text as="span" variant="meta" tone="muted">
+            {note}
+          </Text>
+        ) : undefined
+      }
+    />
   );
 }

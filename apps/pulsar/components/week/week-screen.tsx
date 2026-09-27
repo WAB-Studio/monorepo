@@ -119,15 +119,18 @@ export async function WeekScreen() {
 
   function goalSection(goal: GoalSummary) {
     const progress = goalWeekProgress(goal, view.start);
+    // The page's own overline is the date range alone (`Semana.dc.html`
+    // draws it once, above the h1); "semana N de M" rides the goal's own
+    // section label instead — "inglés b2+ laboral · semana 1 de 12" — since
+    // several open goals can carry different horizons and no single figure
+    // would have an obvious owner.
+    const sectionLabel = progress
+      ? t("week.sectionLabel", { name: goal.name, week: progress.week, total: progress.total })
+      : goal.name;
 
     return (
       <section key={goal.id}>
-        <SectionLabel>{goal.name}</SectionLabel>
-        {progress ? (
-          <Text as="p" tone="muted" variant="meta">
-            {t("week.overline", { week: progress.week, total: progress.total })}
-          </Text>
-        ) : null}
+        <SectionLabel>{sectionLabel}</SectionLabel>
         {view.days.map((dayView, index) => {
           const dots = dotsFor(goal.id, dayView.day);
           const filled = dots.filter((dot) => dot.state !== "empty").length;

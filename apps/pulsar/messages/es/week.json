@@ -1,6 +1,6 @@
 {
   "range": "Del {start} al {end}",
-  "overline": "Semana {week} de {total}",
+  "sectionLabel": "{name} · semana {week} de {total}",
   "today": "hoy",
   "ratio": "{done} de {total}",
   "unreadableEvidence": "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.",
