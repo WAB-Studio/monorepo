@@ -170,6 +170,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **The moment a phase ends (RP-15)** and the review's own act — recording the answer again. Not drawn.
 - **A read-only field.** No board shows one; "Decisions taken here" says what it looks like anyway,
   because the kit needed the answer before any screen asked for it.
+- **«Escribir otra cantidad», typed.** `HoyCantidad.dc.html` draws the chips alone; the typed field
+  the tap on that button opens — the exception this design already allows — is built and not drawn.
 
 ## Decisions taken here
 
@@ -220,3 +222,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A read-only field reads exactly as a disabled one.** Muted ink, a `line` ring, no fill of its
   own — one form for "this does not move," not two half-dressed states a reader would have to tell
   apart. No board draws a read-only field; this decision has none. Taken by the user 2026-09-22.
+- **The quantity sheet's question is neutral, never gendered by the unit.** «¿Cuántos {unit}?» read
+  «¿Cuántos páginas?» for a feminine unit; the heading is now «¿Cuánto hiciste hoy?», the unit named
+  once beside the chips instead of inside the sentence. Decided 2026-09-27 by the coordinator, the
+  user having delegated it, over storing a gender per unit.
+- **The chip row keeps the whole unit word, never the board's short form.** «10 minutos», not «10
+  min»: no table maps an arbitrary unit string to an abbreviation, and guessing one would be a second
+  unit the person never typed. Decided 2026-09-27 by the coordinator, the user having delegated it.

@@ -17,7 +17,7 @@
     "placeholder": "Escribe algo suelto..."
   },
   "quantitySheet": {
-    "question": "¿Cuántos {unit}?",
+    "question": "¿Cuánto hiciste hoy?",
     "otherAmount": "Escribir otra cantidad",
     "customLabel": "Otra cantidad",
     "noteLabel": "Una línea, si quieres",

@@ -113,9 +113,9 @@ export function QuantitySheet({
       open={open}
       onOpenChange={onOpenChange}
       label={name}
-      title={t("day.quantitySheet.question", { unit })}
+      title={t("day.quantitySheet.question")}
     >
-      <Flex gap="2" wrap="wrap">
+      <Flex gap="2" wrap="wrap" align="center">
         {chips.map((value) => (
           <Chip
             key={value}
@@ -126,6 +126,13 @@ export function QuantitySheet({
             {value}
           </Chip>
         ))}
+        {/* The unit a gendered heading used to carry (docs/pulsar/DESIGN.md
+            "Decisions taken here", 2026-09-27): named once, in quiet, beside
+            the chips it belongs to, rather than in a question that guesses
+            a gender for it. */}
+        <Text variant="meta" tone="quiet">
+          {unit}
+        </Text>
       </Flex>
 
       {customMode ? (
