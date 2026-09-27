@@ -378,11 +378,22 @@ export async function loadDay(day: string): Promise<{
 
   const view = deriveDay({ commitments, phases, facts, evidence, day });
 
+  // `completeOneOff` (module 12) never deletes the one-off's own row — it
+  // only writes the fact that explains it — so a completed one-off is still
+  // in `row.one_offs` and has to be read back out here: RP-19 says "done, it
+  // leaves the list", and `row.facts` (unfiltered, unlike `facts` above) is
+  // the one place today's completions already are, no third query needed.
+  const completedOneOffIds = new Set(
+    row.facts.filter((fact) => fact.one_off_id !== null).map((fact) => fact.one_off_id),
+  );
+
   return {
     view,
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
-    oneOffs: row.one_offs.map(toOneOffSummary),
+    oneOffs: row.one_offs
+      .filter((oneOff) => !completedOneOffIds.has(oneOff.id))
+      .map(toOneOffSummary),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),
   };
