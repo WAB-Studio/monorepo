@@ -312,13 +312,98 @@ type DegradedResult = { evidence: string; slotIds: string[] };
 // (Next's own, a dependency's) never gets parsed as the result.
 const DEGRADED_MARKER = "DEGRADED_JSON ";
 
+// The goals transaction's own two statements (its settle, its query) plus
+// the reading transaction's one (its settle alone). Measured, not assumed:
+// `withReadingDb`'s settle always runs, unconditionally, before `fn(tx)`
+// does (`lib/session.ts`'s `withSettledDb`); the stub this file installs for
+// `./reading-lookups` throws before it ever touches `tx`, so nothing of the
+// reader's own reaches the wire. `sql.begin` answers a thrown callback with
+// `rollback`, never `commit` (`node_modules/postgres/src/index.js`'s own
+// `begin()`), so the reading connection's bracket is begin+rollback, not
+// begin+commit — RNP-03's bound on the failure path is not the happy path's
+// shape, but it is still a bound, and this is what a real run of it sends.
+const EXPECTED_DEGRADED_APPLICATION_STATEMENTS = 3;
+
+/**
+ * The degraded child spawns fresh every time (`runDegradedChildProcess`), so
+ * both its connections are cold — each may pay one type-fetch, capped the
+ * same way the main run's cold call is. Asserts the goals connection's usual
+ * bracket, the reading connection's rolled-back one, and the total
+ * application-statement count — the hole independent validation found:
+ * `runDegradedChild` counted nothing of its own, so a real extra round trip
+ * on the failure path went unnoticed while `REPORT passed`.
+ */
+function reportDegradedRun(calls: DebugCall[]): void {
+  const groups = [...groupByConnection(calls).entries()].map(([connection, groupCalls]) =>
+    analyzeGroup(connection, groupCalls),
+  );
+
+  const totalApplication = groups.reduce((sum, group) => sum + group.applicationCount, 0);
+  const totalTypeFetch = groups.reduce((sum, group) => sum + group.typeFetchCount, 0);
+
+  console.log(
+    `\ndegraded child's own wire — ${calls.length} statement(s) across ${groups.length} connection(s), ` +
+      `${totalApplication} application statement(s), ${totalTypeFetch} type-fetch statement(s)`,
+  );
+  for (const group of groups) {
+    console.log(
+      `  ${group.label.padEnd(8)} cid=${group.connection} begin=${group.beginCount} commit=${group.commitCount} ` +
+        `rollback=${group.rollbackCount}, application=${group.applicationCount}, type-fetch=${group.typeFetchCount}`,
+    );
+  }
+
+  const overCapped = groups.filter((group) => group.typeFetchCount > 1);
+  assert(
+    "degraded child's connections send at most one type-fetch statement each",
+    overCapped.length === 0,
+    overCapped.length === 0
+      ? `${groups.length} connection(s), each type-fetch <= 1`
+      : overCapped.map((group) => `cid=${group.connection} (${group.label}) type-fetch=${group.typeFetchCount}`).join("; "),
+  );
+
+  const goalsGroups = groups.filter((group) => group.label === "goals");
+  const readingGroups = groups.filter((group) => group.label === "reading");
+  assert(
+    "degraded child opens exactly one goals connection and one reading connection",
+    groups.length === 2 && goalsGroups.length === 1 && readingGroups.length === 1,
+    `${groups.length} connection(s): ${groups.map((group) => group.label).join(", ") || "none"}`,
+  );
+
+  const goals = goalsGroups[0];
+  if (goals) {
+    assert(
+      "degraded child's goals connection brackets exactly one begin and one commit, no rollback",
+      goals.beginCount === 1 && goals.commitCount === 1 && goals.rollbackCount === 0,
+      `begin=${goals.beginCount} commit=${goals.commitCount} rollback=${goals.rollbackCount}`,
+    );
+  }
+
+  const reading = readingGroups[0];
+  if (reading) {
+    assert(
+      "degraded child's reading connection brackets exactly one begin and one rollback, no commit",
+      reading.beginCount === 1 && reading.commitCount === 0 && reading.rollbackCount === 1,
+      `begin=${reading.beginCount} commit=${reading.commitCount} rollback=${reading.rollbackCount}`,
+    );
+  }
+
+  assert(
+    `degraded child issues ${EXPECTED_DEGRADED_APPLICATION_STATEMENTS} application statements, no more`,
+    totalApplication === EXPECTED_DEGRADED_APPLICATION_STATEMENTS,
+    `${totalApplication} application statement(s) of ${calls.length} on the wire, ${totalTypeFetch} netted out as type-fetch`,
+  );
+}
+
 async function runDegradedChild(): Promise<void> {
   installStubs(loadCookies(), true);
 
   const { loadDay } = await import("@/lib/queries/day");
   const { todayInZone } = await import("@/lib/zone");
 
+  const start = wireCalls.length;
   const { view, evidence } = await loadDay(todayInZone());
+  reportDegradedRun(wireCalls.slice(start));
+
   const result: DegradedResult = {
     evidence,
     slotIds: view.slots.map((slot) => slot.commitmentId).sort(),
@@ -327,11 +412,23 @@ async function runDegradedChild(): Promise<void> {
 }
 
 function runDegradedChildProcess(): DegradedResult {
-  const output = execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/check-day.ts", "--degraded-child"],
-    { cwd: process.cwd(), env: process.env, encoding: "utf8" },
-  );
+  let output: string;
+  try {
+    output = execFileSync(
+      process.execPath,
+      ["--import", "tsx", "--env-file=.env.local", "scripts/check-day.ts", "--degraded-child"],
+      { cwd: process.cwd(), env: process.env, encoding: "utf8" },
+    );
+  } catch (error) {
+    // The child's own PASS/FAIL lines are on its stdout, lost the moment
+    // `execFileSync` throws unless printed here — the only place a caller of
+    // this function still has them.
+    const execError = error as { stdout?: string; stderr?: string; message: string };
+    if (execError.stdout) console.log(execError.stdout);
+    if (execError.stderr) console.error(execError.stderr);
+    throw new Error(`degraded child process failed: ${execError.message}`);
+  }
+  console.log(output);
   const line = output.split("\n").find((row) => row.startsWith(DEGRADED_MARKER));
   if (!line) throw new Error(`degraded child printed no result:\n${output}`);
   return JSON.parse(line.slice(DEGRADED_MARKER.length)) as DegradedResult;
@@ -404,7 +501,10 @@ void (async () => {
   try {
     if (process.argv.includes("--degraded-child")) {
       await runDegradedChild();
-      process.exit(0);
+      // `failed` is this process's own — a fresh process per run, so this
+      // reads only what `reportDegradedRun` just asserted, nothing carried
+      // over from a previous invocation.
+      process.exit(failed ? 1 : 0);
     } else {
       await runMain();
     }
