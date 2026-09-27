@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import styles from "./bottom-nav.module.css";
 
 // The three routes every screen stands over — `Hoy`, `Semana`, `Meta` — fixed
-// here rather than configured by a screen: `app/layout.tsx` is the one place
+// here rather than configured by a screen: `app/(app)/layout.tsx` is the one place
 // that mounts this, so there is only ever one nav in the tree (RNP-07's own
 // floor: three equal links, each at least 48px). Labels arrive as already-
 // translated strings, never a function, since a Server Component cannot hand
