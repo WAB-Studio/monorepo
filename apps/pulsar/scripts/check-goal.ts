@@ -7,25 +7,41 @@
 // `postgres`'s own type-fetch text, capped at one per connection and zero
 // warm) is copied from it verbatim, not reinvented.
 //
-// This closes the one hole module 28's own validator found in its gitignored
-// probe (`private/check-goal.ts`, a copy sits at
-// `private/reportes/check-goal.modulo28.ts`): that probe's SQL-text
-// assertion only tested that `"goals"."goals"` appears *somewhere* in the
-// reading statement, so a `from` bound rewritten as a hardcoded
+// This closes the holes module 28's own validator and this module's own
+// first round each found. First (module 28's gitignored probe, a copy sits
+// at `private/reportes/check-goal.modulo28.ts`): its SQL-text assertion only
+// tested that `"goals"."goals"` appears *somewhere* in the reading
+// statement, so a `from` bound rewritten as a hardcoded
 // `sql`'0001-01-01'::date`` still passed — the `to` bound's own reference
 // carried the whole assertion. `assertReadingBounds` below extracts the
 // `between <from> and <to>` clause `goalSpan`'s own two subqueries land in
-// (`lib/queries/goal.ts`) and checks each side on its own.
+// (`lib/queries/goal.ts`) and checks each side on its own. Second: that same
+// text-only check also passes a bound that names `"goals"."goals"` but reads
+// the wrong row or the wrong column — both bounds on `horizon`, say. Text
+// alone cannot tell; `assertBoundsResolveToGoalRow` below replays the exact
+// `from`/`to` fragments the wire carried, values included, and compares what
+// they resolve to against the goal's own `created_at` and `horizon`, fetched
+// independently.
 //
-// No goal on this shared database, for any harness identity, has an
-// evidence-only measuring commitment (checked before writing this file), so
-// this script seeds one itself — through `createGoal`/`addCommitment`/
-// `retireCommitment`, never a raw INSERT — the same three actions module
-// 28's probe drove.
+// The fixture also used to retire its only quantity commitment, forcing
+// `declaredTotal` to zero on purpose — the same value a mutation that zeroes
+// `declaredTotal` whenever evidence is unreadable also produces, so the
+// degraded child's own assertion could never tell the two apart. It now
+// keeps that commitment active with one real declared fact instead
+// (`seedMixedMeasureGoal`), so the degraded child's declared-total assertion
+// has a nonzero number a bug can actually miss.
+//
+// This script seeds its own goal every run — through `createGoal`,
+// `addCommitment` and `declareFact`, never a raw INSERT — the same doors a
+// person's own screen uses.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
+
+// A plain npm package, not a `@/`-rooted specifier: safe to import before
+// `installStubs` runs, the same way `lib/queries/goal.ts` itself imports it.
+import { sql, type SQL } from "drizzle-orm";
 
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
@@ -339,6 +355,84 @@ function assertReadingBounds(label: string, calls: DebugCall[]): void {
 }
 
 /**
+ * Turns a bound fragment's own wire text — `$3`, `$4`, literal SQL and
+ * all — back into an `SQL` object drizzle can execute, bound to the exact
+ * values `call.parameters` carried, not to values this file already knows
+ * from having built the goal itself. Splitting on `$<digits>` and rebuilding
+ * with `sql.raw` for the literal pieces and `${...}` for each value is what
+ * lets this replay a hardcoded id or a swapped column exactly as sent —
+ * `sql.raw` alone cannot bind a value, and hand-formatting the value into the
+ * string would trust this file's own escaping instead of drizzle's.
+ */
+function rebuildAsSql(text: string, allParams: unknown[]): SQL {
+  const parts = text.split(/\$(\d+)/);
+  let result: SQL = sql.raw(parts[0] ?? "");
+  for (let i = 1; i < parts.length; i += 2) {
+    const paramIndex = Number(parts[i]) - 1;
+    const literalAfter = parts[i + 1] ?? "";
+    result = sql`${result}${allParams[paramIndex]}${sql.raw(literalAfter)}`;
+  }
+  return result;
+}
+
+/**
+ * The assertion `assertReadingBounds` above cannot make: that a bound naming
+ * `"goals"."goals"` actually *resolves* to the goal's own row and the right
+ * column. A bound rewritten to read a hardcoded id, or to read `horizon`
+ * on both sides, still names `"goals"."goals"` once each — the text-only
+ * check goes green either way. This replays the exact `from`/`to` fragments
+ * `readReadingLookups` sent, values included, inside a fresh `withReadingDb`
+ * transaction — "the way the reading transaction sees them" — and compares
+ * the result to the goal's own `created_at` and `horizon`, fetched
+ * independently through `withGoalsDb`. Never by calling `goalSpan` again:
+ * that would just repeat whatever bug it carries, not catch it.
+ */
+async function assertBoundsResolveToGoalRow(goalId: string, calls: DebugCall[]): Promise<void> {
+  const label = "the reading statement's bounds resolve to the goal's own created_at and horizon";
+  const call = findReadingAppCall(calls);
+  if (!call) {
+    assert(label, false, "no reading application statement found on the wire");
+    return;
+  }
+  const bounds = splitBetweenBounds(call.query);
+  if (!bounds) {
+    assert(label, false, `no "between ... and ..." clause found in: ${call.query.replace(/\s+/g, " ").trim()}`);
+    return;
+  }
+
+  const { withGoalsDb, withReadingDb } = await import("@/lib/session");
+  const { TIME_ZONE } = await import("@/lib/zone");
+
+  const fromFragment = rebuildAsSql(bounds.from, call.parameters);
+  const toFragment = rebuildAsSql(bounds.to, call.parameters);
+
+  const [resolved] = await withReadingDb((tx) =>
+    tx.execute<{ from_value: string | null; to_value: string | null }>(
+      sql`select ${fromFragment} as from_value, ${toFragment} as to_value`,
+    ),
+  );
+
+  const [expected] = await withGoalsDb((tx) =>
+    tx.execute<{ expected_from: string; expected_to: string }>(sql`
+      select (g.created_at at time zone ${TIME_ZONE})::date as expected_from, g.horizon as expected_to
+      from "goals"."goals" g where g.id = ${goalId}
+    `),
+  );
+
+  const ok =
+    !!resolved &&
+    !!expected &&
+    resolved.from_value === expected.expected_from &&
+    resolved.to_value === expected.expected_to;
+  assert(
+    label,
+    ok,
+    `resolved from=${resolved?.from_value} to=${resolved?.to_value} | ` +
+      `expected from=${expected?.expected_from} to=${expected?.expected_to}`,
+  );
+}
+
+/**
  * Prints every connection's own window, bracket and statement counts, and
  * asserts on all of it — the same shape `check-day.ts`'s `reportRun` asserts,
  * plus `assertReadingBounds` above: every connection brackets exactly one
@@ -442,27 +536,38 @@ function addDays(day: string, days: number): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
 }
 
+// The declared half of `measureTotal`: a real fact, written through
+// `declareFact` like any other, never a row this file inserts by hand.
+const DECLARED_QUANTITY = 7;
+
 /**
- * A goal whose only *active* measuring commitment is evidence-satisfied: a
- * quantity commitment names the measure ("searches") and is retired the same
- * run — the mechanism RP-12's own note describes for a correction — leaving
- * only the evidence commitment, of the same unit, asking. Never a raw
- * INSERT: the same three actions `seed-goal.ts` drives.
+ * A goal measured in one unit ("searches") by two commitments at once, both
+ * active: a quantity commitment carrying one real declared fact, and an
+ * evidence commitment naming the same unit. Retiring the quantity commitment
+ * used to be how this fixture forced `declaredTotal` to zero — which is
+ * exactly the value a mutation that zeroes `declaredTotal` whenever evidence
+ * is unreadable can also produce, so the validator's own assertion could
+ * never tell the two apart. Keeping the quantity commitment active, with a
+ * nonzero fact, is what makes the degraded child's declared total (7) a
+ * number that mutation cannot fake. Never a raw INSERT: `createGoal`,
+ * `addCommitment` and `declareFact` are the same three actions a person's
+ * own screen drives.
  */
-async function seedEvidenceOnlyGoal(): Promise<string> {
-  const { createGoal, addCommitment, retireCommitment } = await import("@/app/actions/plan");
+async function seedMixedMeasureGoal(): Promise<string> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
   const { todayInZone } = await import("@/lib/zone");
 
   const today = todayInZone();
   const goal = await createGoal({
-    name: "check-goal.ts probe — evidence-only measure",
+    name: "check-goal.ts probe — medida mixta",
     horizon: addDays(today, 30),
   });
   if (!goal.ok) throw new Error(`createGoal: ${goal.error}`);
 
   const counter = await addCommitment({
     goalId: goal.goalId,
-    name: "check-goal.ts probe — contador manual (a retirar)",
+    name: "check-goal.ts probe — contador manual",
     cadenceKind: "daily",
     satisfaction: "quantity",
     targetQuantity: 1,
@@ -470,8 +575,8 @@ async function seedEvidenceOnlyGoal(): Promise<string> {
   });
   if (!counter.ok) throw new Error(`addCommitment(counter): ${counter.error}`);
 
-  const retired = await retireCommitment({ commitmentId: counter.commitmentId });
-  if (!retired.ok) throw new Error(`retireCommitment: ${retired.error}`);
+  const fact = await declareFact({ commitmentId: counter.commitmentId, quantity: DECLARED_QUANTITY });
+  if (!fact.ok) throw new Error(`declareFact: ${fact.error}`);
 
   const evidence = await addCommitment({
     goalId: goal.goalId,
@@ -613,7 +718,7 @@ async function runMain(): Promise<void> {
 
   const { loadGoal } = await import("@/lib/queries/goal");
 
-  const goalId = await seedEvidenceOnlyGoal();
+  const goalId = await seedMixedMeasureGoal();
   console.log(`seeded goal ${goalId}`);
 
   // First call: whatever the pool's connections happen to be, cold after
@@ -623,7 +728,9 @@ async function runMain(): Promise<void> {
   // dial, never a free pass on the rest.
   const coldStart = wireCalls.length;
   const cold = await loadGoal(goalId);
-  reportRun("cold", wireCalls.slice(coldStart), false);
+  const coldCalls = wireCalls.slice(coldStart);
+  reportRun("cold", coldCalls, false);
+  await assertBoundsResolveToGoalRow(goalId, coldCalls);
 
   // Five consecutive warm calls, each bounded on its own — the same number
   // `check-day.ts` settled on: a fix that only holds for the first couple of
@@ -648,9 +755,9 @@ async function runMain(): Promise<void> {
   );
 
   assert(
-    "against the real (empty) reading.lookups, the evidence-only goal sums to zero, not undefined",
-    cold.measureTotal === 0 && warmResults.every((result) => result.measureTotal === 0),
-    `cold=${cold.measureTotal} warm=[${warmResults.map((result) => result.measureTotal).join(", ")}]`,
+    "against the real (empty) reading.lookups, the goal sums to its declared total alone, not zero and not undefined",
+    cold.measureTotal === DECLARED_QUANTITY && warmResults.every((result) => result.measureTotal === DECLARED_QUANTITY),
+    `expected ${DECLARED_QUANTITY}, cold=${cold.measureTotal} warm=[${warmResults.map((result) => result.measureTotal).join(", ")}]`,
   );
   assert(
     "the goal's own measure unit is the evidence source's own unit",
@@ -661,13 +768,14 @@ async function runMain(): Promise<void> {
   // The registry's reader replaced in a child process (module 28's own
   // dispatch): proves the sum against known rows, since no harness identity
   // on this database carries a real `reading.lookups` row to sum instead.
+  const stubExpected = DECLARED_QUANTITY + STUB_TOTAL;
   const stub = runChildProcess("stub", goalId);
   console.log(`\nstub run — evidence = ${stub.evidence}, measureTotal = ${stub.measureTotal}`);
   assert("the stub run reads the source", stub.evidence === "read", `evidence = ${stub.evidence}`);
   assert(
-    "a goal whose only measuring commitment is evidence-satisfied reports the source's count, not 0",
-    stub.measureTotal === STUB_TOTAL,
-    `expected ${STUB_TOTAL} (${STUB_QUANTITIES.join("+")}), got ${stub.measureTotal}`,
+    "a goal measured by both a declared fact and an evidence commitment sums the two, not either alone",
+    stub.measureTotal === stubExpected,
+    `expected ${stubExpected} (${DECLARED_QUANTITY} declared + ${STUB_TOTAL} evidence: ${STUB_QUANTITIES.join("+")}), got ${stub.measureTotal}`,
   );
 
   const degraded = runChildProcess("degraded", goalId);
@@ -678,9 +786,9 @@ async function runMain(): Promise<void> {
     `evidence = ${degraded.evidence}`,
   );
   assert(
-    "the degraded run still returns the goal, with its declared total alone",
-    degraded.measureTotal === 0,
-    `measureTotal = ${degraded.measureTotal} (declared alone, no evidence commitment ever writes a fact)`,
+    "the degraded run still returns the goal, with its declared total alone, never zeroed by the source's own failure",
+    degraded.measureTotal === DECLARED_QUANTITY,
+    `expected ${DECLARED_QUANTITY} (the declared fact alone), got ${degraded.measureTotal}`,
   );
 
   console.log("");
