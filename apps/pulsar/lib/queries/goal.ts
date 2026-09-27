@@ -1,11 +1,18 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { measureOf } from "@/lib/day/derive";
-import type { Cadence, DeclaredFact, Phase, SatisfiedBy } from "@/lib/day/types";
-import { withGoalsDb, type Transaction } from "@/lib/session";
-import { civilDateInZone } from "@/lib/zone";
+import type { Cadence, DeclaredFact, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
+import { readerFor } from "@/lib/evidence/registry";
+import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
+import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
+
+// The same fixed list `lib/queries/day.ts` and `lib/queries/week.ts` keep,
+// for the same reason: which source a goal's commitments actually name is
+// only known once the goals query resolves, and waiting on that would turn
+// this file's own `Promise.all` into the chain RNP-03 forbids.
+const KNOWN_EVIDENCE_SOURCE_KEYS = ["reading_lookups"] as const;
 
 type GoalRow = {
   id: string;
@@ -15,11 +22,12 @@ type GoalRow = {
   measure_unit: string | null;
 };
 
-// `source_unit` and `source_label_key` ride in from the join to
-// `evidence_sources`; the goal's own screen names no evidence to fan out for
-// (loadGoal opens no reading transaction, RP-05), so `source_label_key` is
-// the only way it can ever say which source an evidence commitment names
-// (RP-09) — a catalogue key, never a sentence (RNP-01).
+// `source_key`, `source_unit` and `source_label_key` ride in from the join to
+// `evidence_sources`. `source_key` feeds `evidenceMeasureTotal` below, the
+// same way `lib/queries/day.ts`'s own `source_key` feeds its per-commitment
+// mapping; `source_label_key` is what lets the screen say which source an
+// evidence commitment names (RP-09) — a catalogue key, never a sentence
+// (RNP-01).
 type CommitmentRow = {
   id: string;
   name: string;
@@ -32,6 +40,7 @@ type CommitmentRow = {
   threshold: number | null;
   retired_at: string | null;
   created_at: string;
+  source_key: string | null;
   source_unit: string | null;
   source_label_key: string | null;
 };
@@ -94,6 +103,11 @@ export type GoalView = {
   measureTotal: number;
   phases: Phase[];
   commitments: GoalCommitment[];
+  // Whether the second transaction — another app's own rows — could be read
+  // this time (RNP-04). `measureTotal` above is still the goal's real total
+  // when this reads `"unreadable"`: it is the declared half alone, never a
+  // blank goal and never an error page.
+  evidence: "read" | "unreadable";
 };
 
 export type GoalSummary = {
@@ -120,6 +134,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
          from "goals"."phases" p
          where p.goal_id = ${goalId}) as phases,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
+                 'source_key', s.key,
                  'source_unit', s.unit,
                  'source_label_key', s.label_key
                )), '[]'::json)
@@ -200,16 +215,121 @@ function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact 
   };
 }
 
+type EvidenceOutcome = {
+  status: "read" | "unreadable";
+  bySourceKey: Record<string, EvidenceDay[]>;
+};
+
 /**
- * One transaction, one statement — the goal's own screen names no other
- * app's evidence to fan out for (evidence never produces a fact, RP-05, so
- * `measureOf` below only ever sums declared quantities): `withGoalsDb` throws
- * on its own, before any connection is taken, when the session is missing.
- * This throws for a goal id RLS will not resolve, the same convention as
- * that missing-session case.
+ * The goal's own span, as two `SQL` fragments rather than two values: the
+ * reading transaction opens blind, in the same `Promise.all` as the goals
+ * one (RNP-03), so nothing in this process has read `created_at` or
+ * `horizon` yet when this is built. Each fragment is a scalar subquery on
+ * `"goals"."goals"`, fully schema-qualified so it resolves under the reading
+ * connection's own `search_path` ("reading, public"), scoped to `goalId` and
+ * narrowed to the caller's own row by `goals_select_self` — the very RLS
+ * policy `withGoalsDb`'s own queries already lean on, applying here because
+ * both transactions carry the same settled claims. `readerFor`'s own
+ * contract (`lib/evidence/types.ts`) is what makes this legal without
+ * teaching a source's reader anything about `goals`: `from`/`to` are typed
+ * `string | SQL`, an opaque bound a reader interpolates and never inspects,
+ * and `reading-lookups.ts` never spells the schema name out — only this
+ * file, which already reads `goals.*` under its own door, does. Never a
+ * second round trip: the subquery runs inside the reading statement itself,
+ * the same one statement `queryEvidenceBySource` always sent.
+ */
+function goalSpan(goalId: string): { from: SQL; to: SQL } {
+  return {
+    // A civil day, the same conversion `civilDateInZone` applies in JS
+    // elsewhere in this file, done here in SQL instead so the bound never
+    // leaves the statement that needs it.
+    from: sql`(select (g.created_at at time zone ${TIME_ZONE})::date
+                 from "goals"."goals" g where g.id = ${goalId})`,
+    // `horizon` is already a civil date (RP-11): no zone conversion needed.
+    to: sql`(select g.horizon from "goals"."goals" g where g.id = ${goalId})`,
+  };
+}
+
+// One query per known source (today, exactly one), independent of which of
+// the goal's own commitments actually reference it — the same shape `lib/
+// queries/day.ts` and `lib/queries/week.ts` run, bounded to the goal's own
+// span rather than one day or one week.
+async function queryEvidenceBySource(
+  tx: Transaction,
+  personId: string,
+  goalId: string,
+): Promise<Record<string, EvidenceDay[]>> {
+  const bySourceKey: Record<string, EvidenceDay[]> = {};
+  const { from, to } = goalSpan(goalId);
+
+  for (const key of KNOWN_EVIDENCE_SOURCE_KEYS) {
+    const reader = readerFor(key);
+    if (!reader) continue;
+    bySourceKey[key] = await reader({ personId, from, to, zone: TIME_ZONE, tx });
+  }
+
+  return bySourceKey;
+}
+
+/**
+ * The evidence half of `measureTotal` (RP-14, decided 2026-09-22 —
+ * `docs/pulsar/SPEC.md`): a quantity in the goal's own measure unit feeds it
+ * whether a fact declared it or a source recorded it, and evidence never
+ * writes a fact (RP-05), so this is the only place that quantity is ever
+ * summed. Only a commitment that is both evidence-satisfied and named in the
+ * goal's own unit counts — the same "in that measure's unit" rule `measureOf`
+ * applies to a declared fact's own unit, read here off the commitment's
+ * `source_unit` instead. Deduplicated by source key, not by commitment: two
+ * commitments naming the same source must not sum its rows twice. No date
+ * filter here — `goalSpan` already bounded what `bySourceKey` can hold to
+ * the goal's own span, in SQL, before these rows ever reached this process.
+ */
+function evidenceMeasureTotal(
+  goal: GoalRow,
+  commitments: CommitmentRow[],
+  bySourceKey: Record<string, EvidenceDay[]>,
+): number {
+  if (!goal.measure_unit) return 0;
+
+  const matchingKeys = new Set(
+    commitments
+      .filter(
+        (row) =>
+          row.satisfaction === "evidence" &&
+          row.source_key !== null &&
+          row.source_unit === goal.measure_unit,
+      )
+      .map((row) => row.source_key as string),
+  );
+
+  let total = 0;
+  for (const key of matchingKeys) {
+    for (const day of bySourceKey[key] ?? []) total += day.quantity;
+  }
+  return total;
+}
+
+/**
+ * Feeds the goal's own screen in exactly two transactions, fanned with
+ * `Promise.all` and never chained (RNP-03) — the same shape `lib/queries/
+ * day.ts`'s `loadDay` and `lib/queries/week.ts`'s `loadWeek` already run, over
+ * the goal's own span rather than a day or a week. The evidence promise is
+ * settled here, not awaited bare: a rejection degrades to `"unreadable"` and
+ * `measureTotal` still carries the declared half alone (RNP-04) — a goal
+ * screen never fails because another app's rows could not be read.
  */
 export async function loadGoal(goalId: string): Promise<GoalView> {
-  const row = await withGoalsDb((tx) => queryGoalRow(tx, goalId));
+  const person = await getPerson();
+  if (!person) throw new Error("loadGoal called without a verified session");
+
+  const [row, evidenceOutcome] = await Promise.all([
+    withGoalsDb((tx) => queryGoalRow(tx, goalId)),
+    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, goalId)).then(
+      (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
+      (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
+    ),
+  ]);
+
   if (!row.goal) throw new Error("loadGoal called with an unknown goal");
 
   const phases = row.phases.map(toPhase);
@@ -223,7 +343,11 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
   // Null until the first quantity commitment names it (§0.3, 3): nothing to
   // sum into yet, so the total stays zero rather than matching facts with no
   // unit of their own against a measure the goal does not have.
-  const measureTotal = row.goal.measure_unit ? measureOf(row.goal.measure_unit, facts) : 0;
+  const declaredTotal = row.goal.measure_unit ? measureOf(row.goal.measure_unit, facts) : 0;
+  const evidenceTotal =
+    evidenceOutcome.status === "read"
+      ? evidenceMeasureTotal(row.goal, row.commitments, evidenceOutcome.bySourceKey)
+      : 0;
 
   return {
     id: row.goal.id,
@@ -231,9 +355,10 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
     horizon: row.goal.horizon,
     measureName: row.goal.measure_name,
     measureUnit: row.goal.measure_unit,
-    measureTotal,
+    measureTotal: declaredTotal + evidenceTotal,
     phases,
     commitments,
+    evidence: evidenceOutcome.status,
   };
 }
 
