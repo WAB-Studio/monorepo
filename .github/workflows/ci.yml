@@ -24,6 +24,8 @@ jobs:
         working-directory: apps/orbit
       - run: npx next typegen
         working-directory: apps/voyager
+      - run: npx next typegen
+        working-directory: apps/pulsar
       - run: npm run typecheck
 
   lint:
@@ -104,6 +106,52 @@ jobs:
             exit 1
           fi
       - run: npm run check:sync -w apps/voyager
+
+  # The pure modules, mirrors voyager's `unit` job. No database, no secret.
+  pulsar-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:unit -w apps/pulsar
+
+  # Drives the `goals` policies against the real database, exactly as
+  # `policies` does for `reading` — one transaction that always rolls back,
+  # so it leaves no row. The npm script sets its own NODE_PATH.
+  pulsar-policies:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # `check:policies` reads `--env-file=.env.local`, not the job environment.
+      - name: Write .env.local from the secrets
+        working-directory: apps/pulsar
+        run: |
+          missing=""
+          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
+                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+            printf '%s=%s\n' "$name" "${!name}" >> .env.local
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secrets:$missing"
+            exit 1
+          fi
+      - run: npm run check:policies -w apps/pulsar
 
   # The 12-minute suite runs here so a laptop is not holding a dev server and a
   # Chromium for it. One at a time: every run drives the one remote Postgres, and
@@ -188,6 +236,46 @@ jobs:
       # No database is reached: the build compiles and prerenders, and every route
       # that queries is dynamic. It is the compile that has to be proven here.
       - run: npm run build -w apps/orbit
+
+  # `next build` for pulsar runs nowhere else since it ships production-only,
+  # same as orbit. Unlike `build-orbit` this runs on every pull request rather
+  # than only the ones a `changes` job says touch the app: pulsar is one app
+  # with no sibling paths feeding it, so the fork check is the only gate.
+  build-pulsar:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Named here, or an empty secret surfaces inside the build as a Zod error on
+      # a variable nobody set and reads like the schema broke.
+      - name: Name any secret the build needs and does not have
+        run: |
+          missing=""
+          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
+                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secrets:$missing"
+            exit 1
+          fi
+
+      - run: npm run build -w apps/pulsar
 
   e2e:
     runs-on: ubuntu-latest
