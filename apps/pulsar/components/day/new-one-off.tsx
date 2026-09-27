@@ -4,6 +4,7 @@ import { type FormEvent, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { createOneOff } from "@/app/actions/one-offs";
+import { createOneOffSchema } from "@/lib/validation/one-off";
 import { Field, Flex, Mark, Text } from "@/components/ui";
 import { todayInZone } from "@/lib/zone";
 
@@ -34,11 +35,19 @@ export function NewOneOff({ goalId }: NewOneOffProps) {
     // second row: the field stays disabled for the same span.
     if (pending) return;
 
-    const trimmed = name.trim();
+    // The same schema the server runs (`createOneOff`, `app/actions/one-
+    // offs.ts`), run here first: a name this refuses never reaches the
+    // network, the same discipline `QuantitySheet` already holds for a
+    // quantity (`lib/validation/fact.ts`'s `quantitySchema`).
+    const parsed = createOneOffSchema.safeParse({ name, day: todayInZone(), goalId });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0].message);
+      return;
+    }
     setError(null);
 
     startTransition(() => {
-      void createOneOff({ name: trimmed, day: todayInZone(), goalId }).then((result) => {
+      void createOneOff(parsed.data).then((result) => {
         if (result.ok) setName("");
         else setError(result.error);
       });
