@@ -1,12 +1,12 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { measureOf } from "@/lib/day/derive";
 import type { Cadence, DeclaredFact, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
 import { readerFor } from "@/lib/evidence/registry";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, todayInZone, TIME_ZONE } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
 
 // The same fixed list `lib/queries/day.ts` and `lib/queries/week.ts` keep,
 // for the same reason: which source a goal's commitments actually name is
@@ -14,23 +14,12 @@ import { civilDateInZone, todayInZone, TIME_ZONE } from "@/lib/zone";
 // this file's own `Promise.all` into the chain RNP-03 forbids.
 const KNOWN_EVIDENCE_SOURCE_KEYS = ["reading_lookups"] as const;
 
-// The widest range a person's evidence can ever sit in — the reading
-// transaction opens blind, before the goal row (and so its own `created_at`
-// and `horizon`) is known, exactly like the list above. `evidenceMeasureTotal`
-// is where the goal's own span — read from the very row this same `Promise
-// .all` also fetches — actually narrows what gets summed.
-const EVIDENCE_READ_FROM = "0001-01-01";
-
 type GoalRow = {
   id: string;
   name: string;
   horizon: string;
   measure_name: string | null;
   measure_unit: string | null;
-  // Only read to anchor the evidence span's lower bound (`civilDateInZone`,
-  // the same conversion `toCadence`'s `every_n_days` case already applies to
-  // a commitment's own `created_at`) — never shown on a screen.
-  created_at: string;
 };
 
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
@@ -231,21 +220,52 @@ type EvidenceOutcome = {
   bySourceKey: Record<string, EvidenceDay[]>;
 };
 
+/**
+ * The goal's own span, as two `SQL` fragments rather than two values: the
+ * reading transaction opens blind, in the same `Promise.all` as the goals
+ * one (RNP-03), so nothing in this process has read `created_at` or
+ * `horizon` yet when this is built. Each fragment is a scalar subquery on
+ * `"goals"."goals"`, fully schema-qualified so it resolves under the reading
+ * connection's own `search_path` ("reading, public"), scoped to `goalId` and
+ * narrowed to the caller's own row by `goals_select_self` — the very RLS
+ * policy `withGoalsDb`'s own queries already lean on, applying here because
+ * both transactions carry the same settled claims. `readerFor`'s own
+ * contract (`lib/evidence/types.ts`) is what makes this legal without
+ * teaching a source's reader anything about `goals`: `from`/`to` are typed
+ * `string | SQL`, an opaque bound a reader interpolates and never inspects,
+ * and `reading-lookups.ts` never spells the schema name out — only this
+ * file, which already reads `goals.*` under its own door, does. Never a
+ * second round trip: the subquery runs inside the reading statement itself,
+ * the same one statement `queryEvidenceBySource` always sent.
+ */
+function goalSpan(goalId: string): { from: SQL; to: SQL } {
+  return {
+    // A civil day, the same conversion `civilDateInZone` applies in JS
+    // elsewhere in this file, done here in SQL instead so the bound never
+    // leaves the statement that needs it.
+    from: sql`(select (g.created_at at time zone ${TIME_ZONE})::date
+                 from "goals"."goals" g where g.id = ${goalId})`,
+    // `horizon` is already a civil date (RP-11): no zone conversion needed.
+    to: sql`(select g.horizon from "goals"."goals" g where g.id = ${goalId})`,
+  };
+}
+
 // One query per known source (today, exactly one), independent of which of
 // the goal's own commitments actually reference it — the same shape `lib/
-// queries/day.ts` and `lib/queries/week.ts` run, over the widest range
-// (`EVIDENCE_READ_FROM` above) rather than one day or one week.
+// queries/day.ts` and `lib/queries/week.ts` run, bounded to the goal's own
+// span rather than one day or one week.
 async function queryEvidenceBySource(
   tx: Transaction,
   personId: string,
-  to: string,
+  goalId: string,
 ): Promise<Record<string, EvidenceDay[]>> {
   const bySourceKey: Record<string, EvidenceDay[]> = {};
+  const { from, to } = goalSpan(goalId);
 
   for (const key of KNOWN_EVIDENCE_SOURCE_KEYS) {
     const reader = readerFor(key);
     if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from: EVIDENCE_READ_FROM, to, zone: TIME_ZONE, tx });
+    bySourceKey[key] = await reader({ personId, from, to, zone: TIME_ZONE, tx });
   }
 
   return bySourceKey;
@@ -260,11 +280,9 @@ async function queryEvidenceBySource(
  * goal's own unit counts — the same "in that measure's unit" rule `measureOf`
  * applies to a declared fact's own unit, read here off the commitment's
  * `source_unit` instead. Deduplicated by source key, not by commitment: two
- * commitments naming the same source must not sum its rows twice. Bounded to
- * the goal's own span — from its `created_at`, read as a civil day the same
- * way a commitment's own `every_n_days` anchor is, to its `horizon` — because
- * the rows this sums were read far wider than any one goal needs (`EVIDENCE
- * _READ_FROM`'s own comment).
+ * commitments naming the same source must not sum its rows twice. No date
+ * filter here — `goalSpan` already bounded what `bySourceKey` can hold to
+ * the goal's own span, in SQL, before these rows ever reached this process.
  */
 function evidenceMeasureTotal(
   goal: GoalRow,
@@ -272,9 +290,6 @@ function evidenceMeasureTotal(
   bySourceKey: Record<string, EvidenceDay[]>,
 ): number {
   if (!goal.measure_unit) return 0;
-
-  const spanStart = civilDateInZone(new Date(goal.created_at));
-  const spanEnd = goal.horizon;
 
   const matchingKeys = new Set(
     commitments
@@ -289,9 +304,7 @@ function evidenceMeasureTotal(
 
   let total = 0;
   for (const key of matchingKeys) {
-    for (const day of bySourceKey[key] ?? []) {
-      if (day.day >= spanStart && day.day <= spanEnd) total += day.quantity;
-    }
+    for (const day of bySourceKey[key] ?? []) total += day.quantity;
   }
   return total;
 }
@@ -311,7 +324,7 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
 
   const [row, evidenceOutcome] = await Promise.all([
     withGoalsDb((tx) => queryGoalRow(tx, goalId)),
-    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, todayInZone())).then(
+    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, goalId)).then(
       (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
       (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
     ),
