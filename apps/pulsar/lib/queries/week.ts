@@ -2,26 +2,27 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { deriveWeek, type EvidenceByCommitment } from "@/lib/day/derive";
-import type {
-  Cadence,
-  CommitmentPlan,
-  DeclaredFact,
-  EvidenceDay,
-  Phase,
-  SatisfiedBy,
-  WeekView,
-} from "@/lib/day/types";
-import { readerFor } from "@/lib/evidence/registry";
+import { deriveWeek } from "@/lib/day/derive";
+import type { CommitmentPlan, EvidenceDay, WeekView } from "@/lib/day/types";
+import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import {
+  toCadence,
+  toDeclaredFact,
+  toEvidenceByCommitment,
+  toPhase,
+  toSatisfiedBy,
+  type CommitmentRow as BaseCommitmentRow,
+  type PhaseRow,
+} from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
+import { TIME_ZONE, weekOf } from "@/lib/zone";
 
-// The same fixed list `lib/queries/day.ts` keeps, for the same reason: a set
-// derived from the week's own commitments would only be known once the
-// `goals` query resolved, turning this `Promise.all` into the chain RNP-03
-// forbids. A second source costs a reader, a catalogue row and one more key
-// here — never a migration (RNP-10).
-const KNOWN_EVIDENCE_SOURCE_KEYS = ["reading_lookups"] as const;
+// `withReadingDb`'s query fans out over `knownSourceKeys()`
+// (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts`
+// does: a set derived from the week's own commitments would only be known
+// once the `goals` query resolved, turning this `Promise.all` into the
+// chain RNP-03 forbids. A second source costs a reader, a catalogue row and
+// one more key in the registry's own map — never a migration (RNP-10).
 
 // The goal's own name, horizon and creation moment: module 17's screen groups
 // its rows by goal and needs all three to say which week of the plan's own
@@ -36,33 +37,10 @@ type GoalRow = {
 };
 
 // `source_key` / `source_unit` ride in from the join to `evidence_sources`;
-// neither column exists on `commitments` itself. `goal_id` and `name` ride in
-// from `to_jsonb(c)` the same way — module 17's screen is what groups a
-// commitment's own dot under the goal it belongs to; `deriveWeek` (module 4)
-// never learns either.
-type CommitmentRow = {
-  id: string;
-  goal_id: string;
-  name: string;
-  cadence_kind: Cadence["kind"];
-  cadence_n: number | null;
-  cadence_weekdays: number[] | null;
-  satisfaction: SatisfiedBy["kind"];
-  target_quantity: number | null;
-  unit: string | null;
-  threshold: number | null;
-  retired_at: string | null;
-  created_at: string;
-  source_key: string | null;
-  source_unit: string | null;
-};
-
-type PhaseRow = {
-  id: string;
-  aim: string;
-  starts_on: string;
-  ends_on: string | null;
-};
+// neither column exists on `commitments` itself. `goal_id` widens `rows.ts`'s
+// own `CommitmentRow` — module 17's screen is what groups a commitment's own
+// dot under the goal it belongs to; `deriveWeek` (module 4) never learns it.
+type CommitmentRow = BaseCommitmentRow & { goal_id: string };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
 // bare quantity, never its own unit. `one_off_id` and `goal_id` ride in from
@@ -157,7 +135,7 @@ async function queryEvidenceBySource(
 ): Promise<Record<string, EvidenceDay[]>> {
   const bySourceKey: Record<string, EvidenceDay[]> = {};
 
-  for (const key of KNOWN_EVIDENCE_SOURCE_KEYS) {
+  for (const key of knownSourceKeys()) {
     const reader = readerFor(key);
     if (!reader) continue;
     bySourceKey[key] = await reader({
@@ -172,43 +150,6 @@ async function queryEvidenceBySource(
   return bySourceKey;
 }
 
-function toCadence(row: CommitmentRow): Cadence {
-  switch (row.cadence_kind) {
-    case "daily":
-      return { kind: "daily" };
-    case "weekdays":
-      return { kind: "weekdays", days: row.cadence_weekdays ?? [] };
-    case "times_per_week":
-      return { kind: "times_per_week", count: row.cadence_n ?? 0 };
-    case "every_n_days":
-      // `goals.commitments` has no anchor column: RP-12 (`docs/pulsar/
-      // SPEC.md`) settles "every N days" to count from `created_at`, read
-      // as the person's own civil day, never Postgres's UTC render of the
-      // timestamp — `created_at` between 19:00 and 23:59:59 Bogotá already
-      // reads as the next UTC day, so slicing that string would anchor a
-      // fifth of all commitments one day late and silently shift the whole
-      // cadence from the day it was actually set up.
-      return {
-        kind: "every_n_days",
-        n: row.cadence_n ?? 1,
-        anchor: civilDateInZone(new Date(row.created_at)),
-      };
-    case "times_per_month":
-      return { kind: "times_per_month", count: row.cadence_n ?? 0 };
-  }
-}
-
-function toSatisfiedBy(row: CommitmentRow): SatisfiedBy {
-  switch (row.satisfaction) {
-    case "tap":
-      return { kind: "tap" };
-    case "quantity":
-      return { kind: "quantity", target: row.target_quantity ?? 0, unit: row.unit ?? "" };
-    case "evidence":
-      return { kind: "evidence", threshold: row.threshold ?? 1, unit: row.source_unit ?? "" };
-  }
-}
-
 function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
   return {
     id: row.id,
@@ -216,10 +157,6 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
   };
-}
-
-function toPhase(row: PhaseRow): Phase {
-  return { id: row.id, name: row.aim, startsOn: row.starts_on, endsOn: row.ends_on };
 }
 
 // A goal's own name and horizon (RP-16's overline), read beside `WeekView`
@@ -247,34 +184,6 @@ export type CommitmentGoal = {
 
 function toCommitmentGoal(row: CommitmentRow): CommitmentGoal {
   return { id: row.id, goalId: row.goal_id, name: row.name };
-}
-
-function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact {
-  return {
-    commitmentId: row.commitment_id,
-    day: row.day,
-    writtenAt: row.written_at,
-    quantity: row.quantity,
-    unit: row.commitment_unit,
-    note: row.note,
-  };
-}
-
-// Evidence arrives keyed by source, never by commitment: this turns it into
-// the per-commitment map `deriveWeek` expects.
-function toEvidenceByCommitment(
-  commitments: CommitmentRow[],
-  bySourceKey: Record<string, EvidenceDay[]>,
-): EvidenceByCommitment {
-  const byCommitment: EvidenceByCommitment = {};
-
-  for (const row of commitments) {
-    if (row.satisfaction !== "evidence" || !row.source_key) continue;
-    const days = bySourceKey[row.source_key];
-    if (days) byCommitment[row.id] = days;
-  }
-
-  return byCommitment;
 }
 
 // A one-off's own fact (RP-20): `goalId` is the one-off's own, copied onto

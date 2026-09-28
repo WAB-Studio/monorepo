@@ -3,16 +3,24 @@ import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 
 import { measureOf } from "@/lib/day/derive";
-import type { Cadence, DeclaredFact, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
-import { readerFor } from "@/lib/evidence/registry";
+import type { Cadence, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
+import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import {
+  toCadence,
+  toDeclaredFact,
+  toPhase,
+  toSatisfiedBy,
+  type CommitmentRow as BaseCommitmentRow,
+  type PhaseRow,
+} from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
+import { TIME_ZONE } from "@/lib/zone";
 
-// The same fixed list `lib/queries/day.ts` and `lib/queries/week.ts` keep,
-// for the same reason: which source a goal's commitments actually name is
-// only known once the goals query resolves, and waiting on that would turn
-// this file's own `Promise.all` into the chain RNP-03 forbids.
-const KNOWN_EVIDENCE_SOURCE_KEYS = ["reading_lookups"] as const;
+// `withReadingDb`'s query fans out over `knownSourceKeys()`
+// (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts` and
+// `lib/queries/week.ts` do: which source a goal's commitments actually name
+// is only known once the goals query resolves, and waiting on that would
+// turn this file's own `Promise.all` into the chain RNP-03 forbids.
 
 type GoalRow = {
   id: string;
@@ -30,32 +38,10 @@ type GoalRow = {
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
 // `evidence_sources`. `source_key` feeds `evidenceMeasureTotal` below, the
 // same way `lib/queries/day.ts`'s own `source_key` feeds its per-commitment
-// mapping; `source_label_key` is what lets the screen say which source an
-// evidence commitment names (RP-09) — a catalogue key, never a sentence
-// (RNP-01).
-type CommitmentRow = {
-  id: string;
-  name: string;
-  cadence_kind: Cadence["kind"];
-  cadence_n: number | null;
-  cadence_weekdays: number[] | null;
-  satisfaction: SatisfiedBy["kind"];
-  target_quantity: number | null;
-  unit: string | null;
-  threshold: number | null;
-  retired_at: string | null;
-  created_at: string;
-  source_key: string | null;
-  source_unit: string | null;
-  source_label_key: string | null;
-};
-
-type PhaseRow = {
-  id: string;
-  aim: string;
-  starts_on: string;
-  ends_on: string | null;
-};
+// mapping; `source_label_key` widens `rows.ts`'s own `CommitmentRow` and is
+// what lets the screen say which source an evidence commitment names (RP-09)
+// — a catalogue key, never a sentence (RNP-01).
+type CommitmentRow = BaseCommitmentRow & { source_label_key: string | null };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
 // bare quantity, never its own unit.
@@ -173,43 +159,6 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
   return row;
 }
 
-function toCadence(row: CommitmentRow): Cadence {
-  switch (row.cadence_kind) {
-    case "daily":
-      return { kind: "daily" };
-    case "weekdays":
-      return { kind: "weekdays", days: row.cadence_weekdays ?? [] };
-    case "times_per_week":
-      return { kind: "times_per_week", count: row.cadence_n ?? 0 };
-    case "every_n_days":
-      // `goals.commitments` has no anchor column: RP-12 (`docs/pulsar/
-      // SPEC.md`) settles "every N days" to count from `created_at`, read
-      // as the person's own civil day, never Postgres's UTC render of the
-      // timestamp — `created_at` between 19:00 and 23:59:59 Bogotá already
-      // reads as the next UTC day, so slicing that string would anchor a
-      // fifth of all commitments one day late and silently shift the whole
-      // cadence from the day it was actually set up.
-      return {
-        kind: "every_n_days",
-        n: row.cadence_n ?? 1,
-        anchor: civilDateInZone(new Date(row.created_at)),
-      };
-    case "times_per_month":
-      return { kind: "times_per_month", count: row.cadence_n ?? 0 };
-  }
-}
-
-function toSatisfiedBy(row: CommitmentRow): SatisfiedBy {
-  switch (row.satisfaction) {
-    case "tap":
-      return { kind: "tap" };
-    case "quantity":
-      return { kind: "quantity", target: row.target_quantity ?? 0, unit: row.unit ?? "" };
-    case "evidence":
-      return { kind: "evidence", threshold: row.threshold ?? 1, unit: row.source_unit ?? "" };
-  }
-}
-
 function toGoalCommitment(row: CommitmentRow, factDayCount: number): GoalCommitment {
   return {
     id: row.id,
@@ -236,21 +185,6 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const [commitmentId, days] of daysByCommitment) counts.set(commitmentId, days.size);
   return counts;
-}
-
-function toPhase(row: PhaseRow): Phase {
-  return { id: row.id, name: row.aim, startsOn: row.starts_on, endsOn: row.ends_on };
-}
-
-function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact {
-  return {
-    commitmentId: row.commitment_id,
-    day: row.day,
-    writtenAt: row.written_at,
-    quantity: row.quantity,
-    unit: row.commitment_unit,
-    note: row.note,
-  };
 }
 
 type EvidenceOutcome = {
@@ -300,7 +234,7 @@ async function queryEvidenceBySource(
   const bySourceKey: Record<string, EvidenceDay[]> = {};
   const { from, to } = goalSpan(goalId);
 
-  for (const key of KNOWN_EVIDENCE_SOURCE_KEYS) {
+  for (const key of knownSourceKeys()) {
     const reader = readerFor(key);
     if (!reader) continue;
     bySourceKey[key] = await reader({ personId, from, to, zone: TIME_ZONE, tx });
