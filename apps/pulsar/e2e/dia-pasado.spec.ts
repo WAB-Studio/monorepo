@@ -177,8 +177,8 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
   }
 });
 
-// The not-found page belongs to another lane: asserted by the day not being
-// drawn, never by its heading or its status (`docs/TRAPS.md`).
+// Asserted by the not-found's heading, never by its status (`docs/TRAPS.md`):
+// an error boundary would draw no day either.
 for (const [label, fecha] of [
   ["tomorrow", pastDay(-1)],
   ["a word", "banana"],
@@ -187,6 +187,7 @@ for (const [label, fecha] of [
 ] as const) {
   test(`/dia/<${label}> draws no day (RP-06)`, async ({ page }) => {
     await page.goto(`/dia/${fecha}`);
+    await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
     await expect(page.getByText(/ese día pedía/i)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Ver (ayer|el día anterior)/ })).toHaveCount(0);
