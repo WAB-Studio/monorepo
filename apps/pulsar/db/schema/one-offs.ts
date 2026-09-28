@@ -47,6 +47,18 @@ export const oneOffs = goalsSchema.table(
         select 1 from "goals"."facts" f where f.one_off_id = ${t.id}
       )`,
     }),
+    // RP-21: a one-off with no day takes one, never one that has a day or a
+    // fact. The grant narrows the write to `day`; `using` is what refuses a
+    // second move. Same subquery shape as the delete policy, for the same
+    // import-cycle reason.
+    pgPolicy("one_offs_update_self", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`${authUid} = ${t.userId} and ${t.day} is null and not exists (
+        select 1 from "goals"."facts" f where f.one_off_id = ${t.id}
+      )`,
+      withCheck: sql`${authUid} = ${t.userId}`,
+    }),
   ],
 );
 
