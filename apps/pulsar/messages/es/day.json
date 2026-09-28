@@ -1,6 +1,24 @@
 {
   "title": "Hoy",
+  "date": "{weekday} {day} de {month}",
   "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
+  "monthLong": [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+  ],
+  "nav": {
+    "yesterday": "Ver ayer",
+    "dayBefore": "Ver el día anterior",
+    "today": "volver a hoy"
+  },
+  "past": {
+    "asked": "Ese día pedía {count}",
+    "countWords": [
+      "nada", "uno", "dos", "tres", "cuatro", "cinco", "seis",
+      "siete", "ocho", "nueve", "diez", "once", "doce"
+    ],
+    "writtenOn": "anotado el {weekday} {day}"
+  },
   "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
   "theme": {
     "toLight": "Cambiar a modo claro",
@@ -27,6 +45,7 @@
   },
   "quantitySheet": {
     "question": "¿Cuánto hiciste hoy?",
+    "questionPast": "¿Cuánto hiciste ese día?",
     "otherAmount": "Escribir otra cantidad",
     "customLabel": "Otra cantidad",
     "noteLabel": "Una línea, si quieres",
