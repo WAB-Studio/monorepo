@@ -282,7 +282,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   same gesture that made it unmakes it. Decided 2026-09-27 by the coordinator, the user having
   delegated it.
 - **A tap on a done `quantity` row opens the quantity sheet showing the logged figure**, with
-  «Deshacer» as a secondary action beside changing the amount. Evidence rows stay untappable
+  «Deshacer» as a secondary action beside changing the amount. Its primary reads «Cambiar» and
+  replaces that day's fact in one transaction; only the first log of the day reads «Anotar» and adds.
+  Replacing, not adding, keeps the day and the goal's total saying the same number. Evidence rows stay untappable
   (RP-05: a derived fact cannot be undone). Decided 2026-09-27 by the coordinator, the user having
   delegated it.
 - **A done row's second line shows what was logged** («25 minutos») instead of the target, and the
