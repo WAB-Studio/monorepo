@@ -840,6 +840,182 @@ async function runEvidenceRefusalCheck(): Promise<void> {
   );
 }
 
+/**
+ * Proves module 38's own contract: a `tap` commitment holds at most one fact
+ * a day, whatever the device. Two concurrent `declareFact` calls race on the
+ * pool (`max: 8`, `db/client.ts`), so `Promise.all` genuinely opens two
+ * connections rather than one queued behind the other — the shape the
+ * assignment names, not a stand-in for it.
+ *
+ * The raw second insert bypasses `declareFact`'s own `on conflict … do
+ * nothing` on purpose: it is the negative control for the index itself,
+ * proved as the person under RLS (`withGoalsDb`, never a privileged
+ * connection) rather than asserted from the migration (`AGENTS.md`
+ * «## Verification»).
+ */
+async function runFactUniqueCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { facts } = await import("@/db/schema");
+  const { pgCode } = await import("@/lib/db-error");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runFactUniqueCheck: no verified session");
+
+  const goal = await createGoal({ name: "check-day unique-fact probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runFactUniqueCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day unique-fact probe",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!commitment.ok) {
+    throw new Error(`runFactUniqueCheck: addCommitment failed: ${commitment.error}`);
+  }
+  const testId = commitment.commitmentId;
+  const today = todayInZone();
+
+  const [first, second] = await Promise.all([
+    declareFact({ commitmentId: testId }),
+    declareFact({ commitmentId: testId }),
+  ]);
+  assert(
+    "two concurrent declareFact calls for the same tap commitment and day both report ok",
+    first.ok && second.ok,
+    `first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+  );
+
+  const [{ count }] = await withGoalsDb((tx) =>
+    tx.execute<{ count: string }>(
+      sql`select count(*)::int as count from ${facts} where commitment_id = ${testId} and day = ${today}`,
+    ),
+  );
+  assert(
+    "two concurrent declareFact calls for the same commitment and day leave exactly one fact",
+    Number(count) === 1,
+    `count = ${count}`,
+  );
+
+  let rawInsertCode: string | undefined;
+  try {
+    await withGoalsDb((tx) =>
+      tx.execute(sql`
+        insert into ${facts} (user_id, commitment_id, one_off_id, goal_id, day)
+        values (${person.id}, ${testId}, null, ${goal.goalId}, ${today})
+      `),
+    );
+  } catch (error) {
+    // `pgCode` (`@/lib/db-error`, round 2): `PgPreparedQuery#queryWithCache`
+    // (`pg-core/session.ts`) wraps the raw `postgres` error in a
+    // `DrizzleQueryError`, whose own `.code` is undefined — the code that
+    // matters is on `.cause`, the real driver error.
+    rawInsertCode = pgCode(error);
+  }
+  assert(
+    "a raw second insert for the same commitment and day fails with the unique violation (23505)",
+    rawInsertCode === "23505",
+    `code = ${rawInsertCode ?? "none — the insert succeeded"}`,
+  );
+}
+
+/**
+ * Proves module 38's round 2 fix: `declareFact`'s own advisory lock
+ * (`app/actions/facts.ts`) serialises "Cambiar" (`replace: true`) racing a
+ * plain tap on the same commitment and day. Before the lock, an independent
+ * validator drove this live and found 11 of 20 trials where the loser's own
+ * fallback `select` (after `on conflict … do nothing`) read a row the
+ * winner's own delete had already removed by the time either transaction
+ * committed — a `factId` that no longer exists is worse than an error, since
+ * nothing on screen ever finds out.
+ *
+ * Each trial has its own fresh commitment, so one trial's race can never
+ * contaminate another's — but every trial's pair is fired in the same
+ * `Promise.all`, all `TRIALS * 2` calls at once, not one trial at a time.
+ * Sequential trials never reproduced the bug in this environment (0 of 70,
+ * measured): each trial's two calls raced each other, but the pool sat idle
+ * between trials, and this script's own round trips to Supabase are close
+ * enough in latency that one trial alone rarely lands the exact interleaving
+ * the bug needs (`declareFact`'s comment above spells out which one). Firing
+ * every trial's pair together reproduces the real contention an independent
+ * validator saw driving this live through the app, where many requests
+ * genuinely overlap on the connection pool (`db/client.ts`'s own `max: 8`).
+ */
+async function runReplaceRaceCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+  const { withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { facts } = await import("@/db/schema");
+  const { sql } = await import("drizzle-orm");
+
+  const TRIALS = 10;
+  const today = todayInZone();
+
+  const goal = await createGoal({ name: "check-day replace-race probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runReplaceRaceCheck: createGoal failed: ${goal.error}`);
+
+  const testIds: string[] = [];
+  for (let trial = 0; trial < TRIALS; trial++) {
+    const commitment = await addCommitment({
+      goalId: goal.goalId,
+      name: `check-day replace-race probe ${trial}`,
+      cadenceKind: "daily",
+      satisfaction: "tap",
+    });
+    if (!commitment.ok) {
+      throw new Error(`runReplaceRaceCheck: addCommitment failed: ${commitment.error}`);
+    }
+    testIds.push(commitment.commitmentId);
+  }
+
+  type Call = { testId: string; result: Awaited<ReturnType<typeof declareFact>> };
+  const calls: Promise<Call>[] = testIds.flatMap((testId) => [
+    declareFact({ commitmentId: testId }).then((result) => ({ testId, result })),
+    declareFact({ commitmentId: testId, replace: true }).then((result) => ({ testId, result })),
+  ]);
+  const settled = await Promise.all(calls);
+
+  for (const { testId, result } of settled) {
+    if (!result.ok) {
+      throw new Error(`runReplaceRaceCheck: a call for ${testId} failed: ${JSON.stringify(result)}`);
+    }
+  }
+
+  let multiRowTrials = 0;
+  let deadIdTrials = 0;
+
+  for (const testId of testIds) {
+    const rows = await withGoalsDb((tx) =>
+      tx.execute<{ id: string }>(
+        sql`select id from ${facts} where commitment_id = ${testId} and day = ${today}`,
+      ),
+    );
+    if (rows.length !== 1) multiRowTrials++;
+
+    const liveIds = new Set(rows.map((row) => row.id));
+    const returnedIds = settled
+      .filter((call) => call.testId === testId)
+      .map((call) => (call.result as { ok: true; factId: string }).factId);
+    if (returnedIds.some((factId) => !liveIds.has(factId))) deadIdTrials++;
+  }
+
+  assert(
+    `${TRIALS} replace-vs-plain trials each leave exactly one row for their own commitment and day`,
+    multiRowTrials === 0,
+    `${multiRowTrials} of ${TRIALS} trial(s) left more than one row`,
+  );
+  assert(
+    `${TRIALS} replace-vs-plain trials never return a factId that is not the row left standing`,
+    deadIdTrials === 0,
+    `${deadIdTrials} of ${TRIALS} trial(s) returned a dead factId`,
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -904,6 +1080,8 @@ async function runMain(): Promise<void> {
   await runPhaseWeekBoundCheck();
   await runFactSatisfactionCheck();
   await runEvidenceRefusalCheck();
+  await runFactUniqueCheck();
+  await runReplaceRaceCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

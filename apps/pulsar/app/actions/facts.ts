@@ -6,6 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { commitments, facts, oneOffs } from "@/db/schema";
+import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
   declareFactSchema,
@@ -40,6 +41,25 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
 
   try {
     const factId = await withGoalsDb(async (tx) => {
+      const day = todayInZone();
+
+      // Serialises every write for this (commitment, day) — round 2's own
+      // fix. Without it, "Cambiar" racing a plain tap on the same commitment
+      // could return a `factId` from a row the other call's own delete had
+      // already removed by the time this one's fallback `select` ran: two
+      // separate statements, no lock between them, each transaction reading
+      // a row the other was free to delete out from under it. A transaction-
+      // scoped advisory lock is released at commit, so the loser's whole
+      // transaction — delete, insert, fallback select alike — runs only
+      // after the winner's has fully landed. A one-off never conflicts on
+      // `facts_commitment_day_unique` (it carries no `commitmentId`), so it
+      // takes no lock.
+      if (commitmentId != null) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${commitmentId}::text || ':' || ${day}, 0))`,
+        );
+      }
+
       let goalId: string | null = null;
 
       if (commitmentId != null) {
@@ -81,16 +101,38 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // carries a fact today is replaced whole, in the same transaction as
       // the insert below — delete-then-insert, never an UPDATE (`facts`
       // grants none), and never two separate calls a client could interleave
-      // with someone else's read. Scoped by commitment and day, not by one
-      // factId, so it also clears an old accumulation from before this
-      // guard existed.
+      // with someone else's read.
+      //
+      // Adopts first, deletes only when there is something to actually
+      // change (round 2): the lock above serialises the two writes, but does
+      // not by itself say what "replace" should do when it wins the race
+      // *after* a concurrent plain tap already landed the very same
+      // (commitment, day) row — deleting that row unconditionally would
+      // still hand the plain caller a `factId` this transaction had just
+      // removed. Reading the existing row first and comparing its own
+      // quantity and note mirrors the plain insert's own `on conflict … do
+      // nothing`: unchanged data is adopted, not recreated, so two calls
+      // racing on a `tap` commitment (no quantity, no note — always
+      // identical) never see a row deleted out from under them. A quantity
+      // that genuinely differs still deletes and recreates: that is what
+      // "Cambiar" is for.
       if (replace && commitmentId != null) {
-        await tx.execute(sql`
-          delete from ${facts}
-          where user_id = ${person.id}
-            and commitment_id = ${commitmentId}
-            and day = ${todayInZone()}::date
+        const [existing] = await tx.execute<{
+          id: string;
+          quantity: number | null;
+          note: string | null;
+        }>(sql`
+          select id, quantity, note from ${facts}
+          where commitment_id = ${commitmentId} and day = ${day}
         `);
+
+        if (existing) {
+          const unchanged =
+            existing.quantity === (quantity ?? null) && existing.note === (note ?? null);
+          if (unchanged) return existing.id;
+
+          await tx.execute(sql`delete from ${facts} where id = ${existing.id}`);
+        }
       }
 
       // Named columns only, never the builder's `.insert()`: it lists every
@@ -98,16 +140,37 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // checks the grant on a column named that way too — `written_at` is
       // deliberately withheld from `authenticated`, left to the column's own
       // `now()` (RP-06).
+      //
+      // `facts_commitment_day_unique` (module 38) is the arbiter for a
+      // `commitmentId` insert: two taps racing from two devices both reach
+      // this statement, one lands and one conflicts, and `on conflict …
+      // do nothing` turns the second into a no-op rather than a 500 — a
+      // one-off's insert never carries a `commitmentId`, so it never matches
+      // that partial index and always returns a row here.
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${facts}
           (user_id, commitment_id, one_off_id, goal_id, day, quantity, note)
         values
           (${person.id}, ${commitmentId ?? null}, ${oneOffId ?? null}, ${goalId},
-           ${todayInZone()}, ${quantity ?? null}, ${note ?? null})
+           ${day}, ${quantity ?? null}, ${note ?? null})
+        on conflict (commitment_id, day) where commitment_id is not null do nothing
         returning id
       `);
 
-      return inserted.id;
+      if (inserted) return inserted.id;
+
+      // The index refused this insert: another device's tap for the same
+      // commitment and day landed first. Read back its id rather than fail —
+      // a second tap from another device is a no-op, never an error.
+      const [existing] = await tx.execute<{ id: string }>(sql`
+        select id from ${facts}
+        where commitment_id = ${commitmentId} and day = ${day}
+      `);
+      if (!existing) {
+        // Unreachable: the conflict that just fired proves a row is there.
+        throw new NamedError("day.errors.notFound");
+      }
+      return existing.id;
     });
 
     revalidatePath("/");
@@ -118,18 +181,12 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
     // quantity this large before the insert ever runs; this is the second
     // line, not the first — a number the schema missed for any reason still
     // meets Postgres's own `integer` ceiling as a message, never a 500.
-    if (isNumericRangeError(error)) return { ok: false, error: "day.errors.quantityInvalid" };
+    // `pgCode`, not a bare `error.code`: drizzle-orm wraps the driver's error
+    // in `DrizzleQueryError` and hangs the real one off `.cause`, so the
+    // bare check never fired (module 38, round 2).
+    if (pgCode(error) === "22003") return { ok: false, error: "day.errors.quantityInvalid" };
     throw error;
   }
-}
-
-function isNumericRangeError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "22003"
-  );
 }
 
 /**

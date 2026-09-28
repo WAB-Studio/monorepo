@@ -7,6 +7,7 @@ import {
   pgPolicy,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
@@ -41,6 +42,14 @@ export const facts = goalsSchema.table(
   (t) => [
     // The day's screen reads one person's facts for one day.
     index("facts_user_id_day_idx").on(t.userId, t.day),
+    // A commitment holds at most one fact a day, whatever the device: a `tap`
+    // row never doubles under two taps and a `quantity` row's "Cambiar"
+    // deletes the old one first, so this is never in their way, only in a
+    // race's. Partial on `commitment_id is not null`: a one-off's fact keeps
+    // no such limit (RP-19/RP-22 name no such invariant).
+    uniqueIndex("facts_commitment_day_unique")
+      .on(t.commitmentId, t.day)
+      .where(sql`${t.commitmentId} is not null`),
     // A line, not a journal entry.
     check("facts_note_length", sql`length(${t.note}) <= 280`),
     // Exactly one of the two, never both and never neither: a fact satisfies
