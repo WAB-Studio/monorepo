@@ -42,6 +42,12 @@ import { resolve } from "node:path";
 // A plain npm package, not a `@/`-rooted specifier: safe to import before
 // `installStubs` runs, the same way `lib/queries/goal.ts` itself imports it.
 import { sql, type SQL } from "drizzle-orm";
+// The session pooler, bypassing RLS the same way `scripts/check-goal-
+// actions.ts` does for its own backdated fixtures — never the app's own
+// `DATABASE_URL` role, and loaded here (a plain npm package, static import)
+// before `installStubs` ever runs, so it is never the wrapped, counted
+// `postgres` `installStubs` hands `loadGoal` itself.
+import postgres from "postgres";
 
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
@@ -593,7 +599,15 @@ async function seedMixedMeasureGoal(): Promise<string> {
 
 const CHILD_MARKER = "CHILD_JSON ";
 
-type ChildResult = { evidence: string; measureTotal: number; measureUnit: string | null };
+type ChildResult = {
+  evidence: string;
+  measureTotal: number;
+  measureUnit: string | null;
+  // `view.weeks.length` (RP-17): carried out of the child alongside
+  // `measureTotal` so `runWeeksCheck` can prove `weeks` survives the same
+  // degraded reading transaction `measureTotal` already survives (RNP-04).
+  weeksCount: number;
+};
 
 /**
  * The child's own report: the goals connection's usual bracket, the reading
@@ -687,6 +701,7 @@ async function runChild(mode: "stub" | "degraded", goalId: string): Promise<void
     evidence: view.evidence,
     measureTotal: view.measureTotal,
     measureUnit: view.measureUnit,
+    weeksCount: view.weeks.length,
   };
   console.log(`${CHILD_MARKER}${JSON.stringify(result)}`);
 }
@@ -834,6 +849,124 @@ async function runPhaseOverlapRaceCheck(): Promise<void> {
   );
 }
 
+// One quantity of `min` per week, on that week's own known day: `openedOn`
+// itself (week 1), a week later (week 2), and today (week 3's own `endsOn` —
+// `openedOn` + `OPENED_DAYS_BACK` days is today by construction below), so
+// `loadGoal`'s own `weeks` (RP-17) has exactly one fact to place in each row
+// it returns.
+const WEEK_TOTALS = [5, 8, 3];
+// 21 days back lands `today` on week 4's own `startsOn` (`floor(21 / 7) + 1`),
+// one week past the three this fixture means to seed — 20 is the highest
+// offset `weekIndexOf` still reads as week 3 (`floor(20 / 7) + 1 = 3`), which
+// is also week 3's own `endsOn`: the seed's own last day and the day
+// `loadGoal` reads as "today" are the same day, never one past it.
+const OPENED_DAYS_BACK = 20;
+
+/**
+ * RP-17: `loadGoal`'s own `weeks`, off a goal whose `created_at` sits three
+ * weeks back — set through the session pooler, the only door open to that
+ * column at all (`goals.goals` grants `authenticated` UPDATE on
+ * `measure_name`/`measure_unit` and `name`/`archived_at` alone, never
+ * `created_at`) — with one declared fact seeded straight into `goals.facts`
+ * on each week's own known day: the first two are further back than
+ * `declareFact`'s own `PAST_DAY_LIMIT` (7) can reach, so seeded through the
+ * granted INSERT columns directly, the same technique `declareFact` itself
+ * uses (`day`, `quantity` — never `written_at`), never through the action.
+ * `loadGoal` still issues four statements against this goal (module 28's own
+ * "no new statement" promise), and the reading transaction forced to throw
+ * still returns three weeks — the declared half alone, RNP-04 carried from
+ * `measureTotal` into the review. The seed is torn down by its own goal id,
+ * which cascades to the commitment and the three facts alike (`ON DELETE
+ * CASCADE` on both foreign keys) — `goals.goals` grants no DELETE to
+ * `authenticated` at all, so the session pooler is the only door out too.
+ */
+async function runWeeksCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runWeeksCheck: no settled session");
+
+  const today = todayInZone();
+  const openedOn = addDays(today, -OPENED_DAYS_BACK);
+  const knownDays = [openedOn, addDays(openedOn, 7), today];
+
+  const goal = await createGoal({
+    name: "check-goal.ts probe — RP-17 semanas",
+    horizon: addDays(today, 60),
+  });
+  if (!goal.ok) throw new Error(`runWeeksCheck: createGoal failed: ${goal.error}`);
+  const goalId = goal.goalId;
+
+  const commitment = await addCommitment({
+    goalId,
+    name: "check-goal.ts probe — RP-17 medida",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 1,
+    unit: "min",
+  });
+  if (!commitment.ok) throw new Error(`runWeeksCheck: addCommitment failed: ${commitment.error}`);
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    // Bogota carries no DST (`lib/zone.ts`'s own fixed offset), so shifting
+    // the instant back by whole days shifts its own civil date by exactly
+    // that many days too — the same `openedOn` this function already
+    // computed from `today`, never a second, independent calculation.
+    const backdatedAt = new Date(Date.now() - OPENED_DAYS_BACK * 86_400_000);
+    await migrationDb`update goals.goals set created_at = ${backdatedAt} where id = ${goalId}`;
+
+    await withGoalsDb(async (tx) => {
+      for (let i = 0; i < knownDays.length; i++) {
+        await tx.execute(sql`
+          insert into "goals"."facts" (user_id, commitment_id, goal_id, day, quantity)
+          values (${person.id}, ${commitment.commitmentId}, ${goalId}, ${knownDays[i]}, ${WEEK_TOTALS[i]})
+        `);
+      }
+    });
+
+    const start = wireCalls.length;
+    const view = await loadGoal(goalId);
+    const calls = wireCalls.slice(start);
+    reportRun("weeks", calls, true);
+    await assertBoundsResolveToGoalRow(goalId, calls);
+    if (!view) throw new Error(`runWeeksCheck: loadGoal(${goalId}) returned null — the seeded goal is gone`);
+
+    assert(
+      "RP-17: loadGoal returns exactly three weeks for a goal opened three weeks back",
+      view.weeks.length === 3,
+      `weeks = ${JSON.stringify(view.weeks.map((week) => ({ index: week.index, total: week.total })))}`,
+    );
+
+    const totals = view.weeks.map((week) => week.total);
+    assert(
+      "RP-17: each week's own total matches the fact seeded on its own known day",
+      JSON.stringify(totals) === JSON.stringify(WEEK_TOTALS),
+      `expected ${JSON.stringify(WEEK_TOTALS)}, got ${JSON.stringify(totals)}`,
+    );
+
+    const weeksSum = view.weeks.reduce((sum, week) => sum + week.total, 0);
+    assert(
+      "measureTotal equals the sum of weeks[].total, up to today",
+      view.measureTotal === weeksSum,
+      `measureTotal=${view.measureTotal}, sum(weeks)=${weeksSum}`,
+    );
+
+    const degraded = runChildProcess("degraded", goalId);
+    assert(
+      "with the reading transaction forced to throw, weeks still has three rows (RNP-04 carried into the review)",
+      degraded.weeksCount === 3,
+      `weeksCount = ${degraded.weeksCount}`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goalId}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -916,6 +1049,7 @@ async function runMain(): Promise<void> {
 
   await runMeasureRenameCheck();
   await runPhaseOverlapRaceCheck();
+  await runWeeksCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
