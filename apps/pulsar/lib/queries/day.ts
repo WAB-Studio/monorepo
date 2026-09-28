@@ -147,7 +147,10 @@ async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRo
          where f.day = ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
          from "goals"."one_offs" o
-         where o.day = ${day}::date) as one_offs
+         where o.day <= ${day}::date
+           and not exists (
+             select 1 from "goals"."facts" f where f.one_off_id = o.id
+           )) as one_offs
   `);
 
   return row;
@@ -213,8 +216,12 @@ function toGoalSummary(row: GoalRow): GoalSummary {
   };
 }
 
-// A one-off already on today (RP-19, RP-20): `goalId` is null for one that
-// belongs to none, and the screen draws it in its own group below the rest.
+// A one-off still owed (RP-19, RP-20): `goalId` is null for one that belongs
+// to none, and the screen draws it in its own group below the rest. `day` is
+// the one-off's own, not the day drawn — a screen reading `day < view.day`
+// is reading a carried one-off, undone since a day before today's; RP-19
+// widened 2026-09-28 says it rides every day after its own until it is done
+// or deleted, never just the one it was written for.
 export type OneOffSummary = {
   id: string;
   goalId: string | null;
@@ -287,6 +294,14 @@ function toFactForCommitment(row: FactRow) {
  * Module 13's screen is what groups a slot under its goal and draws a
  * one-off beneath the last one; `DayView` and `deriveDay` (module 4) are
  * unchanged.
+ *
+ * `oneOffs` carries every one-off dated on or before `day` that no fact yet
+ * names, whatever day that fact was written on (RP-19 widened 2026-09-28):
+ * an undone one-off from three days back rides every `loadDay` after its
+ * own until it is done or deleted, read here through `o.day <= day` beside
+ * the row-level `not exists` the SQL above already runs. `OneOffSummary`
+ * still carries its own `day`, unclamped, so a caller can tell a carried one
+ * from today's own by comparing it against the day drawn.
  */
 export async function loadDay(day: string): Promise<{
   view: DayView;
@@ -322,21 +337,16 @@ export async function loadDay(day: string): Promise<{
   const view = deriveDay({ commitments, phases, facts, evidence, day });
 
   // `completeOneOff` (module 12) never deletes the one-off's own row — it
-  // only writes the fact that explains it — so a completed one-off is still
-  // in `row.one_offs` and has to be read back out here: RP-19 says "done, it
-  // leaves the list", and `row.facts` (unfiltered, unlike `facts` above) is
-  // the one place today's completions already are, no third query needed.
-  const completedOneOffIds = new Set(
-    row.facts.filter((fact) => fact.one_off_id !== null).map((fact) => fact.one_off_id),
-  );
-
+  // only writes the fact that explains it — so the `one_offs` subquery
+  // itself carries the `not exists (... facts ...)` check now (RP-19's
+  // "done, it leaves the list", true on any day the fact was written, not
+  // only today's): `row.one_offs` already excludes a completed one, no JS
+  // filter and no third query needed.
   return {
     view,
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
-    oneOffs: row.one_offs
-      .filter((oneOff) => !completedOneOffIds.has(oneOff.id))
-      .map(toOneOffSummary),
+    oneOffs: row.one_offs.map(toOneOffSummary),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),
     factsByCommitment: latestFactByCommitment(row.facts.map(toFactForCommitment)),
