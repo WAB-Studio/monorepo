@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
-import { declareFact } from "@/app/actions/facts";
+import { declareFact, undoFact } from "@/app/actions/facts";
 import { quantitySchema } from "@/lib/validation/fact";
 import { Button, Chip, Field, Flex, Sheet, Text } from "@/components/ui";
 
@@ -16,6 +16,13 @@ export type QuantitySheetProps = {
   // the commitment and offered back.
   target: number;
   unit: string;
+  // Today's own fact, only when the row is already done (RP-05): its
+  // presence is what turns the sheet from "declare" into "declared, and
+  // undoable". Reopening prefills the figure and note it actually holds,
+  // never the plan's target again.
+  factId?: string;
+  loggedQuantity?: number | null;
+  loggedNote?: string | null;
 };
 
 // Four consecutive integers, the target second — `HoyCantidad.dc.html`'s own
@@ -44,29 +51,33 @@ export function QuantitySheet({
   name,
   target,
   unit,
+  factId,
+  loggedQuantity,
+  loggedNote,
 }: QuantitySheetProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState(target);
+  const [selected, setSelected] = useState(loggedQuantity ?? target);
   const [customMode, setCustomMode] = useState(false);
   const [customValue, setCustomValue] = useState("");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(loggedNote ?? "");
   const [wasOpen, setWasOpen] = useState(open);
 
   const chips = chipsAround(target);
 
-  // Every open starts exactly where the plan expects (RP-03): the target
-  // chip selected, no line written, no leftover error from a prior open.
-  // Adjusted during render rather than an effect — the recommended way to
-  // reset state on a prop change, since it bails out before a second paint.
+  // Every open starts where today's own row stands: the logged figure and
+  // note when the row is done (RP-04, RP-05), the plan's own target and a
+  // blank line otherwise — never a leftover from a prior open. Adjusted
+  // during render rather than an effect — the recommended way to reset
+  // state on a prop change, since it bails out before a second paint.
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setSelected(target);
-      setCustomMode(false);
-      setCustomValue("");
-      setNote("");
+      setSelected(loggedQuantity ?? target);
+      setCustomMode(loggedQuantity != null && !chipsAround(target).includes(loggedQuantity));
+      setCustomValue(loggedQuantity != null ? String(loggedQuantity) : "");
+      setNote(loggedNote ?? "");
       setError(null);
     }
   }
@@ -101,7 +112,27 @@ export function QuantitySheet({
         commitmentId,
         quantity,
         note: trimmedNote.length > 0 ? trimmedNote : undefined,
+        // "Cambiar", not "Anotar": a row already carrying a fact today
+        // replaces it whole, server-side, in one transaction — never a
+        // second `declareFact` beside the first (the defect the validator
+        // proved live: 25 and 30 both landing in `goals.facts`).
+        replace: factId != null,
       }).then((result) => {
+        if (result.ok) onOpenChange(false);
+        else setError(result.error);
+      });
+    });
+  }
+
+  // The same gesture the day row itself offers a done `tap` row (RP-05): no
+  // confirm sheet here either, since this sheet's own "Deshacer" already is
+  // the confirm — a person who opened it to look can still just close it.
+  function handleUndo() {
+    if (pending || !factId) return;
+    setError(null);
+
+    startTransition(() => {
+      void undoFact({ factId }).then((result) => {
         if (result.ok) onOpenChange(false);
         else setError(result.error);
       });
@@ -163,8 +194,13 @@ export function QuantitySheet({
       ) : null}
 
       <Button block onClick={handleAccept} disabled={pending}>
-        {t("day.quantitySheet.accept")}
+        {factId ? t("day.quantitySheet.change") : t("day.quantitySheet.accept")}
       </Button>
+      {factId ? (
+        <Button block variant="outline" onClick={handleUndo} disabled={pending}>
+          {t("day.quantitySheet.undo")}
+        </Button>
+      ) : null}
     </Sheet>
   );
 }

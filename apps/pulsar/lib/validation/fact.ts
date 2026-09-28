@@ -47,6 +47,12 @@ export const declareFactSchema = z
       .min(1, { error: "day.errors.noteEmpty" })
       .max(280, { error: "day.errors.noteTooLong" })
       .nullish(),
+    // Set by `quantity-sheet.tsx`'s own "Cambiar", never by "Anotar": a row
+    // that already carries a fact today is replaced whole — that
+    // commitment's facts for today deleted, the new one inserted, one
+    // transaction — rather than added beside it (RP-03's "one gesture",
+    // read back rather than accumulated).
+    replace: z.boolean().optional(),
   })
   .superRefine(requireOneSubject);
 
