@@ -1,5 +1,43 @@
 import { z } from "zod";
 
+import { civilDateToDate, dateToCivilDate, isCivilDate, todayInZone } from "@/lib/zone";
+
+// The same shape check `one-off.ts`'s own `civilDate` runs, reused here: a
+// caller-supplied day is a real calendar date or refused before it ever
+// reaches the range and subject checks below, which assume a well-formed
+// string and compare it lexicographically against another one.
+const civilDate = (message: string) => z.string().refine(isCivilDate, { error: message });
+
+// How far back a fact may reach (RP-06), decided by the user 2026-09-28, in
+// exactly one place — the one modules 46 and 49 read their date picker's
+// floor from, never a second 7 typed beside this one.
+export const PAST_DAY_LIMIT = 7;
+
+// The earliest civil day a fact may name, given today's. Goes through `Date`
+// and back rather than subtracting on the string: a civil date crosses
+// months and years, and a plain digit subtraction does not.
+function earliestPastDay(today: string): string {
+  const date = civilDateToDate(today);
+  date.setUTCDate(date.getUTCDate() - PAST_DAY_LIMIT);
+  return dateToCivilDate(date);
+}
+
+// Needs only today's own date, never the subject's: a day the person could
+// never have meant, whatever it explains. `requireDayForSubject` below
+// carries what only the subject itself can say.
+function requireDayInRange(data: { day?: string | null }, ctx: z.RefinementCtx) {
+  if (data.day == null) return;
+
+  const today = todayInZone();
+  if (data.day > today) {
+    ctx.addIssue({ code: "custom", message: "day.errors.dayFuture", path: ["day"] });
+    return;
+  }
+  if (data.day < earliestPastDay(today)) {
+    ctx.addIssue({ code: "custom", message: "day.errors.dayTooOld", path: ["day"] });
+  }
+}
+
 // Exactly one subject, mirroring the database's own `facts_one_subject`
 // check: a fact explains a commitment or a one-off, never both and never
 // neither (§2 «Invariants»).
@@ -53,8 +91,13 @@ export const declareFactSchema = z
     // transaction — rather than added beside it (RP-03's "one gesture",
     // read back rather than accumulated).
     replace: z.boolean().optional(),
+    // The day it happened, when that day is gone (RP-06). Absent means
+    // today — the action still decides that from the person's own zone, never
+    // from the client (RNP-06); this is only ever a day already past.
+    day: civilDate("day.errors.dayInvalid").optional(),
   })
-  .superRefine(requireOneSubject);
+  .superRefine(requireOneSubject)
+  .superRefine(requireDayInRange);
 
 export type DeclareFactInput = z.infer<typeof declareFactSchema>;
 
@@ -74,6 +117,35 @@ export function requireQuantityFor(satisfaction: "tap" | "quantity" | "evidence"
         message: "day.errors.quantityRequired",
         path: ["quantity"],
       });
+    }
+  };
+}
+
+/**
+ * A caller-supplied day never names a moment its subject could not have had
+ * (RP-06): before a commitment existed, after it was retired, or at all on a
+ * one-off — a one-off is done on the day it is done, never redated. Read the
+ * subject's own civil days first, never guessed from the payload, then run
+ * this refinement on the very schema the action used.
+ */
+export function requireDayForSubject(
+  subject:
+    | { kind: "commitment"; createdDay: string; retiredDay: string | null }
+    | { kind: "oneOff" },
+) {
+  return function refine(data: { day?: string | null }, ctx: z.RefinementCtx) {
+    if (data.day == null) return;
+
+    if (subject.kind === "oneOff") {
+      ctx.addIssue({ code: "custom", message: "day.errors.dayOnOneOff", path: ["day"] });
+      return;
+    }
+
+    if (data.day < subject.createdDay) {
+      ctx.addIssue({ code: "custom", message: "day.errors.dayBeforeCommitment", path: ["day"] });
+    }
+    if (subject.retiredDay != null && data.day > subject.retiredDay) {
+      ctx.addIssue({ code: "custom", message: "day.errors.dayAfterRetired", path: ["day"] });
     }
   };
 }
