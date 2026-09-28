@@ -44,6 +44,7 @@ export function Mark({
   return (
     <span
       className={className}
+      data-state={state}
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}

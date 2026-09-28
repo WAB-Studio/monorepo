@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
@@ -32,6 +33,24 @@ function otherDayLabel(): string {
   other.setUTCDate(other.getUTCDate() - 1);
   const label = civilLabel(other);
   return label === todayLabel() ? civilLabel(new Date(other.getTime() - 86_400_000)) : label;
+}
+
+// The state `components/ui/mark.tsx` should have painted for a given dot,
+// read off nothing but its own accessible name (`week.dot.*`,
+// `messages/es/week.json`) — never `commitmentDotState`'s own source, so a
+// mutation that paints the wrong fill while leaving the label alone (module
+// 17's own surviving mutant) has somewhere to be caught.
+function expectedStateFor(label: string): string {
+  if (label === "suelta hecha") return "declared";
+  if (label.endsWith(": pendiente")) return "empty";
+  if (label.endsWith(": hecho")) return "declared";
+  return "evidence";
+}
+
+async function dotStates(locator: Locator): Promise<{ label: string | null; state: string | null }[]> {
+  return locator.locator('[role="img"]').evaluateAll((els) =>
+    els.map((el) => ({ label: el.getAttribute("aria-label"), state: el.getAttribute("data-state") })),
+  );
 }
 
 async function oneOffId(db: postgres.Sql, personId: string): Promise<string> {
@@ -69,15 +88,23 @@ test("a day with no facts carries no filled dot (RP-16)", async ({ page }) => {
   const row = goalSection.locator("button", { hasText: otherDayLabel() });
   await expect(row).toBeVisible();
 
-  const labels = await row.locator('[role="img"]').evaluateAll((els) =>
-    els.map((el) => el.getAttribute("aria-label")),
-  );
+  const dots = await dotStates(row);
   // A fresh seed writes no fact anywhere: every dot reads "pendiente"
   // (`week.dot.commitment`/`week.dot.done`/`week.dot.pending`,
   // `messages/es/week.json`), none "hecho" — the mark's own fill, read back
   // through its accessible name rather than a CSS class the build hashes.
-  expect(labels.length).toBeGreaterThan(0);
-  expect(labels.some((label) => label?.includes("hecho"))).toBe(false);
+  expect(dots.length).toBeGreaterThan(0);
+  expect(dots.some(({ label }) => label?.includes("hecho"))).toBe(false);
+  // The label alone is not the mark: a dot could still paint its accent fill
+  // while its own name still read "pendiente" (module 17's surviving
+  // mutant, `commitmentDotState` pinned to "declared"). Every dot on an
+  // untouched day must paint `empty`, and every one of them must paint what
+  // its own name says it should — the same rule a satisfied or an evidence
+  // day would be held to.
+  for (const { label, state } of dots) {
+    expect(state).toBe(expectedStateFor(label ?? ""));
+  }
+  expect(dots.every(({ state }) => state === "empty")).toBe(true);
 });
 
 test("a one-off under a goal completed today fills a dot in that goal's today row (RP-20)", async ({
@@ -104,11 +131,18 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
 
     await page.goto("/semana");
     const afterRow = goalSection.locator("button", { hasText: todayLabel() });
-    const dots = afterRow.locator('[role="img"]');
-    await expect(dots).toHaveCount(before + 1);
+    await expect(afterRow.locator('[role="img"]')).toHaveCount(before + 1);
 
-    const labels = await dots.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")));
-    expect(labels.some((label) => label?.includes("suelta hecha"))).toBe(true);
+    const dots = await dotStates(afterRow);
+    const oneOff = dots.find(({ label }) => label?.includes("suelta hecha"));
+    expect(oneOff).toBeDefined();
+    // The one-off's own dot paints the accent fill exactly like a satisfied
+    // commitment's — never left `empty` under a label that already says
+    // "hecha", and never a third colour of its own.
+    expect(oneOff?.state).toBe("declared");
+    for (const { label, state } of dots) {
+      expect(state).toBe(expectedStateFor(label ?? ""));
+    }
   } finally {
     await resetOneOff(db, id);
   }
