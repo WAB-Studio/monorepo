@@ -2460,3 +2460,15 @@ connection caches, not with the code.
 - **Do.** Assert a not-found by what the page draws («This page could not be found.») and by the
   form's title being absent, never by the status code. Run such a spec against `next build && next
   start`, as `playwright.config.ts` says.
+
+## A lane's `session-<n>.json` outlives the identity it names
+
+- **What.** `check:goal` failed with `Failed query: insert into "goals"."goals" … params: 50a8cf48-…`:
+  the cookie in `apps/pulsar/private/session-4.json` named a harness identity `harness:reap` had already
+  pruned. `mint-session` opens a seed run it never closes, so the reap drops it once its heartbeat is
+  30 minutes stale, and the session file stays behind pointing at nobody.
+- **Measured 2026-09-28** on lane 4, twice: module 65's rerun and the coordinator's. A fresh
+  `harness:mint-session` made the same code pass, 87 checks.
+- **Do.** Run `HARNESS_LANE=<n> PULSAR_BASE_URL=http://localhost:<port> npm run harness:mint-session
+  -w apps/pulsar` before `check:day`, `check:goal` or `check:goal-actions` when the last mint is over
+  half an hour old. A red on an insert naming a `user_id` that is not the lane's is this, not the code.
