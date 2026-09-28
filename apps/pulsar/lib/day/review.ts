@@ -1,6 +1,6 @@
 import { measureOf, phaseOn } from "@/lib/day/derive";
 import type { DeclaredFact, EvidenceDay, Phase, ReviewWeek } from "@/lib/day/types";
-import { weekIndexOf, weekSpan } from "@/lib/day/weeks";
+import { horizonWeeksOf, weekIndexOf, weekSpan } from "@/lib/day/weeks";
 
 // `measureOf`'s own rule (RP-14), run twice: once over the declared facts of
 // the span, once over the evidence days of the span, by `unit`. `unit: null`
@@ -46,8 +46,7 @@ export function measureByWeek(args: {
   const { openedOn, horizon, today, unit, facts, evidence, phases } = args;
 
   const todayWeek = weekIndexOf(openedOn, today);
-  const horizonWeek = weekIndexOf(openedOn, horizon);
-  const lastIndex = Math.min(todayWeek, horizonWeek);
+  const lastIndex = Math.max(1, Math.min(todayWeek, horizonWeeksOf(openedOn, horizon)));
 
   const rows: ReviewWeek[] = [];
   for (let index = 1; index <= lastIndex; index++) {

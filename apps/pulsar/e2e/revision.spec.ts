@@ -1,7 +1,8 @@
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
+import { weekSpan } from "@/lib/day/weeks";
+import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, laneNumber } from "./fixtures";
 
@@ -14,11 +15,10 @@ function dayAfter(openedOn: string, days: number): string {
   return dateToCivilDate(date);
 }
 
-// 20 days back lands `today` on week 3 (`floor(20 / 7) + 1`), the same
-// fixture `scripts/check-goal.ts`'s own `runWeeksCheck` seeds for the same
-// requirement — proven safe there against `loadGoal` directly; this file
-// proves the screen that draws it.
-const OPENED_DAYS_BACK = 20;
+// The Wednesday of the week two Mondays back: `today` always sits in week 3
+// (RP-17), whatever weekday the spec runs on, and week 1 is partial. Every
+// week's own start comes from `weekSpan`, never a fixed count of days.
+const OPENED_WEEKDAY_OFFSET = 2;
 const WEEK1_TOTAL = 12;
 const WEEK2_TOTAL = 9;
 // Week 3 (today's own) gets no fact at all: the zero `measureByWeek` must
@@ -66,7 +66,7 @@ async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): P
   await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
 }
 
-test("a goal opened three weeks back draws its measure week by week, the current week's zero included (RP-17)", async ({
+test("a goal opened on a Wednesday two weeks back draws its measure week by week, the current week's zero included (RP-17)", async ({
   page,
   db,
   personId,
@@ -93,9 +93,12 @@ test("a goal opened three weeks back draws its measure week by week, the current
     // `created_at` carries no grant to `authenticated` at all
     // (`db/schema/goals.ts`): the session pooler is the only door onto it,
     // the same one `scripts/check-goal.ts`'s own `runWeeksCheck` uses.
-    const backdatedAt = new Date(Date.now() - OPENED_DAYS_BACK * 86_400_000);
+    const openedOn = dayAfter(weekOf(todayInZone())[0], -14 + OPENED_WEEKDAY_OFFSET);
+    const openedDaysBack =
+      (civilDateToDate(todayInZone()).getTime() - civilDateToDate(openedOn).getTime()) / 86_400_000;
+    const backdatedAt = new Date(Date.now() - openedDaysBack * 86_400_000);
     await db`update goals.goals set created_at = ${backdatedAt} where id = ${goalId} and user_id = ${personId}`;
-    const openedOn = dateToCivilDate(backdatedAt);
+    expect(dateToCivilDate(backdatedAt)).toBe(openedOn);
 
     // Facts in two of the three weeks (week 1's own opening day, week 2's
     // own opening day); week 3, today's own, gets none.
@@ -103,7 +106,7 @@ test("a goal opened three weeks back draws its measure week by week, the current
       insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
       values
         (${personId}, ${id}, ${goalId}, ${openedOn}, ${WEEK1_TOTAL}),
-        (${personId}, ${id}, ${goalId}, ${dayAfter(openedOn, 7)}, ${WEEK2_TOTAL})
+        (${personId}, ${id}, ${goalId}, ${weekSpan(openedOn, 2, 2).startsOn}, ${WEEK2_TOTAL})
     `;
 
     await page.goto(`/metas/${goalId}/revision`);
