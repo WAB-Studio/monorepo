@@ -70,6 +70,13 @@
   color: var(--pulsar-muted);
 }
 
+/* `NoEncontrada.dc.html`'s own quiet link: ghost's frame with the accent ink
+   a link reads by, in place of the muted a way-out control takes. Declared
+   after `.ghost.ghost` so the cascade, not just the selector, picks it. */
+.accentTone.accentTone {
+  color: var(--pulsar-accent);
+}
+
 /* docs/pulsar/DESIGN.md "The controls": solid is the accent filled, with no
    ring of its own. */
 .solid.solid {
