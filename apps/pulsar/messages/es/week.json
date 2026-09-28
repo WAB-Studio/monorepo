@@ -12,6 +12,10 @@
   "oneOffs": {
     "title": "Sueltas"
   },
+  "empty": {
+    "title": "Todavía no tienes una meta abierta.",
+    "action": "Crear una meta"
+  },
   "dot": {
     "commitment": "{name}: {status}",
     "evidence": "{name}: {source}",

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { formatFigureValue } from "./format-figure";
 import styles from "./figure.module.css";
 
 // docs/pulsar/DESIGN.md: hours, counts, minutes, dates and quantities are the
@@ -17,7 +18,7 @@ export function Figure({
   const size = variant === "meta" ? styles.meta : styles.measure;
   return (
     <span className={`${styles.figure} ${size}`}>
-      {value}
+      {formatFigureValue(value)}
       {unit ? <span className={styles.unit}>{unit}</span> : null}
     </span>
   );

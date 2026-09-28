@@ -5,6 +5,7 @@ import type { DaySlot } from "@/lib/day/types";
 import { loadWeek, type CommitmentGoal, type GoalSummary, type OneOffFact } from "@/lib/queries/week";
 import { todayInZone } from "@/lib/zone";
 
+import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
 import { goalWeekProgress } from "./week-progress";
 
@@ -92,6 +93,11 @@ function WeekTitle({ start, end, t }: { start: string; end: string; t: Translate
  * nothing draws in its own "Sueltas" group, exactly as the day screen's own
  * one does, but only when the week actually holds one — this screen writes
  * nothing, so an empty group here would be a group with no reason to exist.
+ *
+ * With no open goal at all (RP-11), this drew "Del 21 al 27" and nothing
+ * else — a range and a dead end. `EmptyWeek` fills that in, in the day
+ * screen's own words: the goalless one-offs below still draw when the week
+ * holds one, since RP-20 asks for that group with or without a goal open.
  */
 export async function WeekScreen() {
   const t = await getTranslations();
@@ -163,7 +169,11 @@ export async function WeekScreen() {
         </Text>
       ) : null}
 
-      {goals.map(goalSection)}
+      {goals.length === 0 ? (
+        <EmptyWeek title={t("week.empty.title")} action={t("week.empty.action")} />
+      ) : (
+        goals.map(goalSection)
+      )}
 
       {hasGoalless ? (
         <section>
