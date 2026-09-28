@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
+import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
 import type { Cadence, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
@@ -289,8 +290,18 @@ function evidenceMeasureTotal(
  * settled here, not awaited bare: a rejection degrades to `"unreadable"` and
  * `measureTotal` still carries the declared half alone (RNP-04) — a goal
  * screen never fails because another app's rows could not be read.
+ *
+ * `null` reads as "this goal is not there" — a shape nobody owns or one whose
+ * id was never a uuid — and only that; every other rejection (an outage, a
+ * dropped connection) propagates untouched, so `goal-screen.tsx`'s own
+ * `.catch(() => null)` degrading a Supabase outage to a 404 dies with this
+ * function returning the honest thing instead. The non-uuid check runs before
+ * either transaction opens — no round trip spent asking the database to
+ * refuse a shape it was never going to match (`22P02`).
  */
-export async function loadGoal(goalId: string): Promise<GoalView> {
+export async function loadGoal(goalId: string): Promise<GoalView | null> {
+  if (!z.uuid().safeParse(goalId).success) return null;
+
   const person = await getPerson();
   if (!person) throw new Error("loadGoal called without a verified session");
 
@@ -302,7 +313,7 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
     ),
   ]);
 
-  if (!row.goal) throw new Error("loadGoal called with an unknown goal");
+  if (!row.goal) return null;
 
   const phases = row.phases.map(toPhase);
   const dayCounts = factDayCounts(row.facts);
