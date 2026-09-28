@@ -40,6 +40,17 @@
     "confirm": "Retirarlo",
     "cancel": "Dejarlo como está"
   },
+  "renameSheet": {
+    "title": "Renombrarla",
+    "confirm": "Guardarlo",
+    "cancel": "Dejarlo como está"
+  },
+  "archiveSheet": {
+    "title": "¿Archivarla?",
+    "description": "Sus hechos, las semanas que gobernó y sus compromisos siguen aquí. Sale de Hoy y de Semana, y puedes reabrirla desde Metas.",
+    "confirm": "Archivarla",
+    "cancel": "Dejarla abierta"
+  },
   "errors": {
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "goalNotFound": "Esa meta ya no existe.",

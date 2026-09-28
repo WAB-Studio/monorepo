@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { ArchiveGoalAction, ReopenGoalButton } from "@/components/goal/archive-sheet";
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { phaseOn } from "@/lib/day/derive";
 import { loadGoal } from "@/lib/queries/goal";
@@ -10,6 +11,7 @@ import { Button, Figure, Flex, Mark, Page, Row, SectionLabel, Text } from "@/com
 
 import { CommitmentList, countWord, type Translator } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
+import { RenameGoalAction } from "./rename-sheet";
 
 // "22 de septiembre": the day the goal was opened, in the person's own zone
 // (RNP-06) and in words, never a locale this design does not otherwise use.
@@ -53,6 +55,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <Text as="p" variant="title">
         {goal.name}
       </Text>
+      <RenameGoalAction goalId={goal.id} name={goal.name} />
       <Text as="p" variant="meta" tone="muted">
         {goal.measureUnit
           ? t("goal.detail.horizonAndMeasure", { weeks: totalWeeks, measure: goal.measureName ?? "" })
@@ -67,7 +70,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
       ) : null}
 
-      <CommitmentList goalId={goal.id} commitments={goal.commitments} />
+      <CommitmentList
+        goalId={goal.id}
+        commitments={goal.commitments}
+        archived={goal.archivedAt !== null}
+      />
 
       <section>
         <SectionLabel>
@@ -91,10 +98,18 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             disabled
           />
         ))}
-        <Button asChild variant={goal.phases.length > 0 ? "outline" : "solid"} block>
-          <Link href={`/metas/${goal.id}/fases/nueva`}>{t("goal.phases.add")}</Link>
-        </Button>
+        {goal.archivedAt === null ? (
+          <Button asChild variant={goal.phases.length > 0 ? "outline" : "solid"} block>
+            <Link href={`/metas/${goal.id}/fases/nueva`}>{t("goal.phases.add")}</Link>
+          </Button>
+        ) : null}
       </section>
+
+      {goal.archivedAt !== null ? (
+        <ReopenGoalButton goalId={goal.id} />
+      ) : (
+        <ArchiveGoalAction goalId={goal.id} name={goal.name} />
+      )}
     </Page>
   );
 }

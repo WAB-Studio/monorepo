@@ -108,6 +108,11 @@ type EvidenceOutcome = {
  * person's own civil day before the `::date` cast, the same fix `lib/queries/
  * day.ts` applies — a bare cast renders in the session's zone (UTC), which
  * would keep a commitment retired after 19:00 Bogotá live one day too long.
+ *
+ * `goals` excludes an archived one (RP-24), the same filter `lib/queries/
+ * day.ts`'s own `queryGoalsRow` carries: `WeekScreen` (module 17) only ever
+ * groups a dot under a goal it finds here, and `goals.length === 0` is what
+ * decides the week's own empty state (`empty-week.tsx`).
  */
 async function queryGoalsRow(
   tx: Transaction,
@@ -117,7 +122,8 @@ async function queryGoalsRow(
   const [row] = await tx.execute<WeekQueryRow>(sql`
     select
       (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
-         from "goals"."goals" g) as goals,
+         from "goals"."goals" g
+         where g.archived_at is null) as goals,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit

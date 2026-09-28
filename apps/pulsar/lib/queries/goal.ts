@@ -21,6 +21,10 @@ type GoalRow = {
   measure_name: string | null;
   measure_unit: string | null;
   created_at: string;
+  // Null while open, set once by `archiveGoal` (RP-24). `listGoals`'s own
+  // raw select and `queryGoalRow`'s `to_jsonb(g)` both fill it, so one type
+  // covers a single goal and a list of them alike.
+  archived_at: string | null;
 };
 
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
@@ -109,6 +113,10 @@ export type GoalView = {
   createdAt: string;
   measureName: string | null;
   measureUnit: string | null;
+  // Null while open, set once the moment `archiveGoal` runs (RP-24): what
+  // the goal's own screen reads to draw «Reabrir» in place of «Archivar esta
+  // meta» and to drop its add-commitment / add-phase ways in.
+  archivedAt: string | null;
   // A sum over facts, computed here and never read from a column (RP-14):
   // `goals.goals` has no place to hold one, and the grant layer refuses a
   // write to any column that would.
@@ -128,6 +136,7 @@ export type GoalSummary = {
   horizon: string;
   measureName: string | null;
   measureUnit: string | null;
+  archivedAt: string | null;
 };
 
 /**
@@ -388,6 +397,7 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
     createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
     measureUnit: row.goal.measure_unit,
+    archivedAt: row.goal.archived_at,
     measureTotal: declaredTotal + evidenceTotal,
     phases,
     commitments,
@@ -395,25 +405,56 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
   };
 }
 
-/**
- * One transaction, one statement: every goal the person has open, for the
- * day screen's grouping and for `/metas`. This slice never closes a goal
- * (RP-06/17/21 are out of it), so "open" is every row RLS hands back.
- */
-export async function listGoals(): Promise<GoalSummary[]> {
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<GoalRow>(sql`
-      select id, name, horizon, measure_name, measure_unit
-      from "goals"."goals"
-      order by created_at
-    `),
-  );
-
-  return rows.map((row) => ({
+function toGoalSummary(row: GoalRow): GoalSummary {
+  return {
     id: row.id,
     name: row.name,
     horizon: row.horizon,
     measureName: row.measure_name,
     measureUnit: row.measure_unit,
-  }));
+    archivedAt: row.archived_at,
+  };
+}
+
+/**
+ * One transaction, one statement: every *open* goal the person has, for
+ * `app/(app)/metas/[goalId]/compromisos/nuevo/page.tsx`'s own lookup — an
+ * archived goal excluded (RP-24) is what makes a direct visit to that route
+ * 404 for one, the same way "no add-commitment button" reads on its own
+ * screen. `listGoalsForMetas` below is `/metas`'s own query: it needs the
+ * archived half too, to list under "Archivadas".
+ */
+export async function listGoals(): Promise<GoalSummary[]> {
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<GoalRow>(sql`
+      select id, name, horizon, measure_name, measure_unit, archived_at
+      from "goals"."goals"
+      where archived_at is null
+      order by created_at
+    `),
+  );
+
+  return rows.map(toGoalSummary);
+}
+
+/**
+ * `/metas`'s own query (RP-24): one statement, every goal the person has
+ * ever opened, split into "open" and "archived" here rather than by a
+ * second round trip — the screen lists the first, then a quiet "Archivadas"
+ * section for the second, each still its own way into `Meta.dc.html`.
+ */
+export async function listGoalsForMetas(): Promise<{ open: GoalSummary[]; archived: GoalSummary[] }> {
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<GoalRow>(sql`
+      select id, name, horizon, measure_name, measure_unit, archived_at
+      from "goals"."goals"
+      order by created_at
+    `),
+  );
+
+  const summaries = rows.map(toGoalSummary);
+  return {
+    open: summaries.filter((goal) => goal.archivedAt === null),
+    archived: summaries.filter((goal) => goal.archivedAt !== null),
+  };
 }

@@ -85,9 +85,13 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): string {
 export async function CommitmentList({
   goalId,
   commitments,
+  archived = false,
 }: {
   goalId: string;
   commitments: GoalCommitment[];
+  // RP-24: an archived goal draws no way to add a commitment — the way a
+  // retired one still shows the ones it already has, never hidden.
+  archived?: boolean;
 }) {
   const t = await getTranslations();
   // A retired commitment stays in the list — never hidden (RP-13) — but it
@@ -123,9 +127,11 @@ export async function CommitmentList({
           }
         />
       ))}
-      <Button asChild variant={commitments.length > 0 ? "outline" : "solid"} block>
-        <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>
-      </Button>
+      {!archived ? (
+        <Button asChild variant={commitments.length > 0 ? "outline" : "solid"} block>
+          <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>
+        </Button>
+      ) : null}
     </section>
   );
 }

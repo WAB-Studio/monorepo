@@ -59,6 +59,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `node_modules` hoists to the root. A script that names a binary by path reaches it as `../../node_modules/...`.
 - Promote nothing to `packages/` until a second app asks for it.
 - `apps/voyager` is the reading dictionary. Its contract is `docs/voyager/SPEC.md`; its `RL` and `RNL` codes share no number with the finances `RF`/`RNF` series.
+- Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in
+  by email first deploys. Without it the link lands on orbit's Site URL.
 - Give every app its own design. `docs/DESIGN.md` governs `apps/orbit` alone; `docs/voyager/DESIGN.md`
   governs `apps/voyager`. Never carry a pattern across because it exists next door.
 

@@ -133,12 +133,21 @@ type EvidenceOutcome = {
  * would still ask for one more day. `at time zone ${TIME_ZONE}` first turns
  * it into the person's own civil day before the cast, the same move
  * `lib/queries/goal.ts`'s `goalSpan` already makes on `created_at`.
+ *
+ * `goals` is the one subquery RP-24 filters: an archived goal is never in
+ * this list, and `DayScreen` (module 13) only ever groups a row under a goal
+ * it finds here — a commitment or a one-off belonging to an archived goal
+ * still rides along unfiltered in its own subquery below, but nothing loops
+ * over either outside the per-goal grouping, so it never draws. `goals.length
+ * === 0` is also what decides the day's own empty state (`empty-day.tsx`), so
+ * an all-archived person needs no second check.
  */
 async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
     select
       (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
-         from "goals"."goals" g) as goals,
+         from "goals"."goals" g
+         where g.archived_at is null) as goals,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit

@@ -15,7 +15,10 @@
     "commitmentsCount": "{word} {count, plural, one {compromiso} other {compromisos}}",
     "phasesCount": "{word} {count, plural, one {fase} other {fases}}",
     "phaseSpan": "semanas {start}–{end}",
-    "unreadableEvidence": "No pudimos leer una fuente. Lo declarado sigue aquí."
+    "unreadableEvidence": "No pudimos leer una fuente. Lo declarado sigue aquí.",
+    "rename": "Renombrar",
+    "archive": "Archivar esta meta",
+    "reopen": "Reabrir"
   },
   "commitments": {
     "retired": "retirado",
@@ -62,7 +65,8 @@
   ],
   "list": {
     "title": "tus metas",
-    "addAnother": "Abrir otra meta"
+    "addAnother": "Abrir otra meta",
+    "archivedTitle": "Archivadas"
   },
   "errors": {
     "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520."

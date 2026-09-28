@@ -172,3 +172,32 @@ export const retireCommitmentSchema = z.object({
 });
 
 export type RetireCommitmentInput = z.infer<typeof retireCommitmentSchema>;
+
+// RP-23: the same rules as `createGoalSchema`'s own name field — trimmed,
+// required, 120 characters — shared here rather than duplicated, since a
+// goal is asked for its name in both places.
+export const renameGoalSchema = z.object({
+  goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
+  name: z
+    .string({ error: "plan.errors.nameEmpty" })
+    .trim()
+    .min(1, { error: "plan.errors.nameEmpty" })
+    .max(120, { error: "plan.errors.nameTooLong" }),
+});
+
+export type RenameGoalInput = z.infer<typeof renameGoalSchema>;
+
+// RP-24: archiving and reopening name nothing but the goal itself — the
+// grant layer (`db/migrations/0004_melodic_dreadnoughts.sql`) is what keeps
+// either from moving any other column.
+export const archiveGoalSchema = z.object({
+  goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
+});
+
+export type ArchiveGoalInput = z.infer<typeof archiveGoalSchema>;
+
+export const reopenGoalSchema = z.object({
+  goalId: z.uuid({ error: "plan.errors.goalInvalid" }),
+});
+
+export type ReopenGoalInput = z.infer<typeof reopenGoalSchema>;
