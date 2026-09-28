@@ -58,7 +58,8 @@
     "veinte"
   ],
   "list": {
-    "title": "tus metas"
+    "title": "tus metas",
+    "addAnother": "Abrir otra meta"
   },
   "errors": {
     "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520."

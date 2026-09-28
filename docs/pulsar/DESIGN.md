@@ -166,6 +166,12 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A wide face beyond `RevisionEscritorio.dc.html`.** Only the review's table changes shape rather
   than width. The rest is used with one thumb.
 - **The one-offs with no day (RP-21).** Their list is named in the contract and drawn nowhere.
+- **The goals list (`/metas` with more than one goal).** Its own way in reuses `commitment-list.tsx`'s
+  block-button pattern; no board draws the list itself. Decided 2026-09-27 by the coordinator, the
+  user having delegated it.
+- **The empty week.** No board draws a week with no goal open; it reuses the empty day's own shape
+  and sentence, never a state of its own. Decided 2026-09-27 by the coordinator, the user having
+  delegated it.
 - **Writing a fact for a day already past (RP-06).** Not drawn.
 - **The moment a phase ends (RP-15)** and the review's own act — recording the answer again. Not drawn.
 - **A read-only field.** No board shows one; "Decisions taken here" says what it looks like anyway,
@@ -246,3 +252,27 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **The chip row keeps the whole unit word, never the board's short form.** «10 minutos», not «10
   min»: no table maps an arbitrary unit string to an abbreviation, and guessing one would be a second
   unit the person never typed. Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **`/metas` always lists the person's open goals, and never redirects past a single one.** Each row
+  is its own way into `Meta.dc.html`; the list ends with a block `Button` «Abrir otra meta», outlined,
+  linking to `/metas/nueva` — the same pattern `commitment-list.tsx` draws under a goal's own
+  commitments. With none yet, there is nothing to list and nobody to open a second goal from, so
+  `/metas/nueva` is still the only useful screen and the redirect there stays. The bottom nav's
+  «Meta» tab lands on this list. Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **The goal's own screen has no added way back to the list.** The bottom nav's «Meta» tab already
+  sits on every signed-in screen and already routes to `/metas`, so a second link would be a second
+  way to do what one control already does. Checked, not built, 2026-09-27 by the coordinator.
+- **The empty week reuses the day's own empty state, word for word.** «Todavía no tienes una meta
+  abierta.» and «Crear una meta», linking to `/metas/nueva` — copied into `week.json` and a sibling
+  component (`components/week/empty-week.tsx`) rather than importing `components/day/empty-day.tsx`,
+  since a week's own screen owns nothing under `components/day/**`. Decided 2026-09-27 by the
+  coordinator, the user having delegated it.
+- **A figure formats through `Intl.NumberFormat`, in the one locale `i18n/request.ts` fixes the app
+  on** (`"es"`), rather than printing a bare number. `components/ui/figure.tsx` still takes only
+  props and imports no catalogue: the locale is a constant beside it, the same way `lib/zone.ts`
+  fixes `TIME_ZONE` for the same reason — the app has exactly one of each and nothing negotiates
+  either. `Intl.NumberFormat("es")` groups `1000039` into `1.000.039` — a period, not the space this
+  decision was first asked for in, measured against both Node's and Chromium's own ICU data on this
+  machine (`Intl.NumberFormat.supportedLocalesOf`, Playwright's own bundled Chromium): grouped
+  digits is the fix RP-14's own figure needed, and which punctuation mark ICU picks for Spanish is
+  not this app's decision to make twice. Decided 2026-09-27 by the coordinator, the user having
+  delegated it.
