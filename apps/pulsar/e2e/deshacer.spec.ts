@@ -199,7 +199,10 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     await sheet.getByLabel("Otra cantidad").fill("25");
     await sheet.getByRole("button", { name: "Anotar" }).click();
     await expect(sheet).toBeHidden();
-    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
+
+    // No wait between the close and the reopen: a closed sheet must already
+    // stand on a row carrying the fact, and any read here would hide a sheet
+    // that reopens stale, as undone.
 
     // Reopen and change the amount through «Cambiar», the sheet's own
     // primary once a fact already stands for today — never a second

@@ -97,6 +97,18 @@ export function QuantitySheet({
     return parsed.success ? parsed.data : null;
   }
 
+  // The action's promise resolves before the router commits the page it
+  // revalidated, so closing outside the transition left the row showing
+  // the props from before the write: a tap in that gap reopened the sheet as
+  // undone, and it never re-read the fact once it landed. Inside the same
+  // transition the close commits together with the fresh row.
+  function settle(result: { ok: true } | { ok: false; error: string }) {
+    startTransition(() => {
+      if (result.ok) onOpenChange(false);
+      else setError(result.error);
+    });
+  }
+
   function handleAccept() {
     if (pending) return;
     const quantity = customMode ? customQuantity() : selected;
@@ -107,8 +119,8 @@ export function QuantitySheet({
     const trimmedNote = note.trim();
     setError(null);
 
-    startTransition(() => {
-      void declareFact({
+    startTransition(async () => {
+      const result = await declareFact({
         commitmentId,
         quantity,
         note: trimmedNote.length > 0 ? trimmedNote : undefined,
@@ -117,10 +129,8 @@ export function QuantitySheet({
         // second `declareFact` beside the first (the defect the validator
         // proved live: 25 and 30 both landing in `goals.facts`).
         replace: factId != null,
-      }).then((result) => {
-        if (result.ok) onOpenChange(false);
-        else setError(result.error);
       });
+      settle(result);
     });
   }
 
@@ -131,11 +141,8 @@ export function QuantitySheet({
     if (pending || !factId) return;
     setError(null);
 
-    startTransition(() => {
-      void undoFact({ factId }).then((result) => {
-        if (result.ok) onOpenChange(false);
-        else setError(result.error);
-      });
+    startTransition(async () => {
+      settle(await undoFact({ factId }));
     });
   }
 
