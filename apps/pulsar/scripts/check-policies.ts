@@ -644,6 +644,56 @@ async function checkOneOffDeleteGrant(): Promise<void> {
   await sql.end();
 }
 
+// Round 2, 2026-09-28: an independent validator drove a bare `DELETE` under
+// a settled session, no server action in the way, and an own one-off that
+// carried a fact went — the invariant lived in `deleteOneOff`'s own check
+// alone, never in the grant layer. `one_offs_delete_self`'s own `USING`
+// (migration 0002) is what closes that: this drives the very same bare
+// statement the validator did, never `deleteOneOff`, so a regression in any
+// future writer is caught here too, not only in this app's own action.
+async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject})`;
+      await enterUserContext(tx, subject);
+
+      const [oneOff] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'suelto con hecho') returning id`;
+      await tx`
+        insert into goals.facts (user_id, one_off_id, day)
+        values (${subject}, ${oneOff.id}, '2026-09-22')`;
+
+      // Bare, under the caller's own settled claims — no `deleteOneOff`, no
+      // server action: exactly what the round-2 validator drove.
+      const deleted = await tx<{ id: string }[]>`
+        delete from goals.one_offs where id = ${oneOff.id} returning id`;
+      assert(
+        "P39",
+        deleted.length === 0,
+        `bare delete of an own one-off carrying a fact, rows deleted = ${deleted.length}`,
+      );
+
+      const stillThere = await tx<{ id: string }[]>`
+        select id from goals.facts where one_off_id = ${oneOff.id}`;
+      assert(
+        "P40",
+        stillThere.length === 1,
+        `the fact after the refused delete, rows visible = ${stillThere.length}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   const sql = postgres(DATABASE_URL!, {
     prepare: false,
@@ -659,6 +709,7 @@ async function main(): Promise<void> {
   await checkRealClientRejectsBadTokens();
   await checkRealDoor();
   await checkOneOffDeleteGrant();
+  await checkOneOffWithFactRefusedByPolicy();
 
   if (failed) process.exit(1);
 }

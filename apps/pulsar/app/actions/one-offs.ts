@@ -85,12 +85,18 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
 
 /**
  * Deletes a one-off written by mistake (RP-22): it never happened, so there
- * is no fact to keep. `facts.one_off_id`'s own FK is `ON DELETE cascade`
- * (`db/schema/facts.ts`), not `restrict` — changing that would be a second
- * migration this module does not carry — so the refusal below is an
- * application check, read before the delete, never the FK's own error code:
- * unchecked, the statement would succeed and silently take the fact with it,
- * which is exactly what RP-22 says must not happen to a day that did occur.
+ * is no fact to keep. This check is a courtesy, not the enforcement — round
+ * 2, 2026-09-28: driven bare, under a settled session with no server action
+ * in the way, the old policy let an own one-off with a fact go and the fact
+ * cascaded away with it (`facts.one_off_id`'s own FK is `ON DELETE cascade`,
+ * `db/schema/facts.ts`, not `restrict` — changing that risks a person's own
+ * cascade elsewhere and is out of this module's own migration). The real
+ * guard is `one_offs_delete_self` (`db/schema/one-offs.ts`, migration 0002):
+ * its own `USING` now refuses a row that carries a fact, so even a write
+ * that skips this function entirely — or a fact landing between this check
+ * and the statement below — never deletes one. This check only ever buys
+ * the sheet its named message before the round trip; the delete itself is
+ * the same statement either way.
  */
 export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneOffResult> {
   const parsed = deleteOneOffSchema.safeParse(input);
@@ -115,7 +121,12 @@ export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneO
         .returning({ id: oneOffs.id });
     });
 
-    if (deleted.length === 0) return { ok: false, error: "day.errors.notFound" };
+    // A fact this check never saw, written after it and before the
+    // statement above: the policy is what actually refused the row, and
+    // `deleted.length === 0` is the only sign of that reaching this
+    // function — reported as the same refusal, never "not found", since a
+    // sheet only ever opens for a one-off the person can already see.
+    if (deleted.length === 0) return { ok: false, error: "day.errors.oneOffHasFact" };
 
     revalidatePath("/");
     return { ok: true };
