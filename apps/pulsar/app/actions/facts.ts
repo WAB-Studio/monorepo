@@ -10,12 +10,13 @@ import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
   declareFactSchema,
+  requireDayForSubject,
   requireQuantityFor,
   undoFactSchema,
   type DeclareFactInput,
   type UndoFactInput,
 } from "@/lib/validation/fact";
-import { todayInZone } from "@/lib/zone";
+import { civilDateInZone, todayInZone } from "@/lib/zone";
 
 export type DeclareFactResult = { ok: true; factId: string } | { ok: false; error: string };
 export type UndoFactResult = { ok: true } | { ok: false; error: string };
@@ -40,8 +41,12 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
   const { commitmentId, oneOffId, quantity, note, replace } = parsed.data;
 
   try {
-    const factId = await withGoalsDb(async (tx) => {
-      const day = todayInZone();
+    const written = await withGoalsDb(async (tx) => {
+      // Absent means today, decided here from the person's own zone, never
+      // from the client (RNP-06); present, it is a day already past —
+      // `requireDayInRange` (schema) and `requireDayForSubject` (below,
+      // once the subject is read) are what keep it inside RP-06's reach.
+      const day = parsed.data.day ?? todayInZone();
 
       // Serialises every write for this (commitment, day) — round 2's own
       // fix. Without it, "Cambiar" racing a plain tap on the same commitment
@@ -64,7 +69,12 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
 
       if (commitmentId != null) {
         const [commitment] = await tx
-          .select({ satisfaction: commitments.satisfaction, goalId: commitments.goalId })
+          .select({
+            satisfaction: commitments.satisfaction,
+            goalId: commitments.goalId,
+            createdAt: commitments.createdAt,
+            retiredAt: commitments.retiredAt,
+          })
           .from(commitments)
           .where(eq(commitments.id, commitmentId));
 
@@ -76,6 +86,22 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
         // otherwise happily hold it.
         if (commitment.satisfaction === "evidence") {
           throw new NamedError("day.errors.evidenceOnly");
+        }
+
+        // RP-06: a caller-supplied day never names a moment this commitment
+        // could not have had — read back from the row itself, never guessed.
+        const dayCheck = z
+          .custom<{ day?: string | null }>()
+          .superRefine(
+            requireDayForSubject({
+              kind: "commitment",
+              createdDay: civilDateInZone(commitment.createdAt),
+              retiredDay: commitment.retiredAt ? civilDateInZone(commitment.retiredAt) : null,
+            }),
+          )
+          .safeParse({ day: parsed.data.day });
+        if (!dayCheck.success) {
+          throw new NamedError(dayCheck.error.issues[0].message);
         }
 
         const quantityCheck = z
@@ -94,6 +120,16 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           .where(eq(oneOffs.id, oneOffId));
 
         if (!oneOff) throw new NamedError("day.errors.notFound");
+
+        // RP-06: a one-off is done on the day it is done, never redated.
+        const dayCheck = z
+          .custom<{ day?: string | null }>()
+          .superRefine(requireDayForSubject({ kind: "oneOff" }))
+          .safeParse({ day: parsed.data.day });
+        if (!dayCheck.success) {
+          throw new NamedError(dayCheck.error.issues[0].message);
+        }
+
         goalId = oneOff.goalId;
       }
 
@@ -129,7 +165,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
         if (existing) {
           const unchanged =
             existing.quantity === (quantity ?? null) && existing.note === (note ?? null);
-          if (unchanged) return existing.id;
+          if (unchanged) return { id: existing.id, day };
 
           await tx.execute(sql`delete from ${facts} where id = ${existing.id}`);
         }
@@ -157,7 +193,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
         returning id
       `);
 
-      if (inserted) return inserted.id;
+      if (inserted) return { id: inserted.id, day };
 
       // The index refused this insert: another device's tap for the same
       // commitment and day landed first. Read back its id rather than fail —
@@ -170,11 +206,17 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
         // Unreachable: the conflict that just fired proves a row is there.
         throw new NamedError("day.errors.notFound");
       }
-      return existing.id;
+      return { id: existing.id, day };
     });
 
+    // `/dia/[fecha]` (modules 46, 49): the day a past fact just landed on has
+    // its own route, revalidated by its literal path — never the pattern,
+    // which would need a `'page'` `type` this call has no business asking
+    // for since the route itself is still unbuilt.
     revalidatePath("/");
-    return { ok: true, factId };
+    revalidatePath("/semana");
+    revalidatePath(`/dia/${written.day}`);
+    return { ok: true, factId: written.id };
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: error.message };
     // `declareFactSchema`'s own `.max()` (`lib/validation/fact.ts`) refuses a

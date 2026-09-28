@@ -53,6 +53,12 @@
     "oneOffNameEmpty": "Escribe qué es lo suelto.",
     "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
     "oneOffDayInvalid": "Ese día no es válido.",
-    "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra."
+    "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra.",
+    "dayInvalid": "Ese día no es válido.",
+    "dayFuture": "Ese día todavía no llega.",
+    "dayTooOld": "Eso ya pasó hace más de una semana.",
+    "dayBeforeCommitment": "Ese día es anterior a cuando empezó este compromiso.",
+    "dayAfterRetired": "Ese día es posterior a cuando se retiró este compromiso.",
+    "dayOnOneOff": "Una suelta se hace el día que se hace, no otro."
   }
 }
