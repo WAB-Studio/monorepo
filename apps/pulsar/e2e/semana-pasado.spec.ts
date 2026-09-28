@@ -86,6 +86,8 @@ test("a past day of the week is a link to its own screen, today and a future day
 });
 
 test("a tap on a past day from the week fills that day's dot on return (RP-06)", async ({ page, db, personId }) => {
+  // The rule itself, every day of the week, is proven in
+  // `lib/day/week-href.test.ts`; only the tap needs a past day to exist.
   test.skip(pastDays.length === 0, "a Monday's week holds no past day");
   const name = `Compromiso semana ${Date.now()}`;
   const goalId = await seedGoal(db, personId, name);
