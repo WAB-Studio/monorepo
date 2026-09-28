@@ -93,6 +93,48 @@ async function attempt(
   return { code };
 }
 
+// The same shape as `attempt`, keeping the rows a successful statement
+// `returning`s — module 37's own checks need to read back what a rename or
+// an archive actually wrote, not only whether it was refused. Also what
+// keeps this suite from crashing outright when run *before* `0004` is
+// applied: `archived_at` does not exist yet, so a bare `update ... set
+// archived_at = ...` would abort the whole outer transaction without a
+// savepoint under it.
+async function attemptRows<T>(
+  tx: postgres.TransactionSql,
+  fn: (sp: postgres.TransactionSql) => Promise<T[]>,
+): Promise<{ rows: T[]; code?: string }> {
+  let rows: T[] = [];
+  let code: string | undefined;
+  await tx.savepoint(async (sp) => {
+    rows = await fn(sp);
+  }).catch((error: unknown) => {
+    code = pgCode(error);
+  });
+  return { rows, code };
+}
+
+// Same shape again, for an UPDATE with no `returning`: what a cross-identity
+// attempt needs, since post-`0004` it is refused by RLS alone — a real
+// statement that runs and affects zero rows, never an error — while
+// pre-`0004` the same statement is refused by the grant (`name`) or by a
+// column that does not exist yet (`archived_at`), which does throw. `count`
+// stays `0` either way, so "0 rows or 42501" (the contract's own words) is
+// one assertion regardless of which side of the migration this runs on.
+async function attemptCount(
+  tx: postgres.TransactionSql,
+  fn: (sp: postgres.TransactionSql) => Promise<{ count: number }>,
+): Promise<{ count: number; code?: string }> {
+  let count = 0;
+  let code: string | undefined;
+  await tx.savepoint(async (sp) => {
+    count = (await fn(sp)).count;
+  }).catch((error: unknown) => {
+    code = pgCode(error);
+  });
+  return { count, code };
+}
+
 // Mirrors `withGoalsDb` (`apps/pulsar/lib/session.ts`): one statement, not
 // four, and transaction-local (`true`), so re-pointing mid-transaction is
 // safe — it never reaches across a reused connection.
@@ -276,8 +318,22 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
         `update goal's measure pair, sqlstate = ${updateGoalMeasure.code ?? "none (succeeded)"}`,
       );
 
-      const updateGoalName = await attempt(tx, (sp) => sp`update goals.goals set name = 'renombrada' where id = ${a.goalId}`);
-      assert("P16", updateGoalName.code === "42501", `update goal.name, sqlstate = ${updateGoalName.code ?? "none"}`);
+      // Module 37 (RP-23): `name` is now grantable to the owner alone — the
+      // grant `0004_melodic_dreadnoughts.sql` adds, proved here rather than
+      // only in `checkGoalRenameArchiveGrant` below, so a regression to
+      // "column not granted" still turns this very P-number red. Red before
+      // that migration applies (permission denied), green after.
+      const updateGoalName = await attemptRows<{ id: string; name: string }>(
+        tx,
+        (sp) => sp`update goals.goals set name = 'renombrada' where id = ${a.goalId} returning id, name`,
+      );
+      assert(
+        "P16",
+        updateGoalName.code === undefined &&
+          updateGoalName.rows.length === 1 &&
+          updateGoalName.rows[0].name === "renombrada",
+        `update own goal.name, sqlstate = ${updateGoalName.code ?? "none"}, rows = ${updateGoalName.rows.length}`,
+      );
 
       // -- DELETE: another person's row never disappears, and "retired, never
       // deleted" is a fact of the grant layer even before RLS is asked --
@@ -694,6 +750,137 @@ async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
   await sql.end();
 }
 
+// Module 37 (RP-23, RP-24): the grant `0004_melodic_dreadnoughts.sql` adds —
+// `UPDATE (name, archived_at)` on `goals.goals`, to the owner alone — driven
+// for real rather than read from the migration. Own connection, own
+// transaction, own forced rollback, the same shape as `checkOneOffDeleteGrant`.
+// Every statement below goes through `attempt`/`attemptRows`: before `0004`
+// applies, `archived_at` does not exist and the grant on `name` does not
+// either, so the owner's own rename/archive/reopen attempts are refused —
+// this suite is meant to read red at that point, not crash. After it
+// applies, they succeed and the assertions read green.
+async function checkGoalRenameArchiveGrant(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta original', '2026-12-31') returning id`;
+
+      // -- the owner renames their own goal --
+      const renamed = await attemptRows<{ id: string; name: string }>(
+        tx,
+        (sp) => sp`update goals.goals set name = 'meta renombrada' where id = ${goal.id} returning id, name`,
+      );
+      assert(
+        "P41",
+        renamed.code === undefined && renamed.rows.length === 1 && renamed.rows[0].name === "meta renombrada",
+        `owner rename, sqlstate = ${renamed.code ?? "none"}, rows = ${renamed.rows.length}`,
+      );
+
+      // -- the owner archives their own goal --
+      const archived = await attemptRows<{ id: string; archived_at: string | null }>(
+        tx,
+        (sp) => sp`update goals.goals set archived_at = now() where id = ${goal.id} returning id, archived_at`,
+      );
+      assert(
+        "P42",
+        archived.code === undefined && archived.rows.length === 1 && archived.rows[0].archived_at !== null,
+        `owner archive, sqlstate = ${archived.code ?? "none"}, rows = ${archived.rows.length}`,
+      );
+
+      // -- and reopens it, the same grant running the other way --
+      const reopened = await attemptRows<{ id: string; archived_at: string | null }>(
+        tx,
+        (sp) => sp`update goals.goals set archived_at = null where id = ${goal.id} returning id, archived_at`,
+      );
+      assert(
+        "P43",
+        reopened.code === undefined && reopened.rows.length === 1 && reopened.rows[0].archived_at === null,
+        `owner reopen, sqlstate = ${reopened.code ?? "none"}, rows = ${reopened.rows.length}`,
+      );
+
+      // -- another person can neither rename nor archive: RLS narrows the
+      // UPDATE to zero rows, never an error, the same shape P17's foreign
+      // DELETE already takes --
+      await enterUserContext(tx, intruder);
+      const intruderRename = await attemptCount(
+        tx,
+        (sp) => sp`update goals.goals set name = 'ajena' where id = ${goal.id}`,
+      );
+      assert(
+        "P44",
+        intruderRename.count === 0,
+        `another person renames it, sqlstate = ${intruderRename.code ?? "none"}, rows affected = ${intruderRename.count}`,
+      );
+
+      const intruderArchive = await attemptCount(
+        tx,
+        (sp) => sp`update goals.goals set archived_at = now() where id = ${goal.id}`,
+      );
+      assert(
+        "P45",
+        intruderArchive.count === 0,
+        `another person archives it, sqlstate = ${intruderArchive.code ?? "none"}, rows affected = ${intruderArchive.count}`,
+      );
+
+      // -- the owner cannot move `user_id`, `horizon` or `created_at`
+      // through this grant: neither column is ever named in it --
+      await enterUserContext(tx, subject);
+      const changeUserId = await attempt(
+        tx,
+        (sp) => sp`update goals.goals set user_id = ${intruder} where id = ${goal.id}`,
+      );
+      assert("P46", changeUserId.code === "42501", `owner updates goal.user_id, sqlstate = ${changeUserId.code ?? "none"}`);
+
+      const changeHorizon = await attempt(
+        tx,
+        (sp) => sp`update goals.goals set horizon = '2099-01-01' where id = ${goal.id}`,
+      );
+      assert("P47", changeHorizon.code === "42501", `owner updates goal.horizon, sqlstate = ${changeHorizon.code ?? "none"}`);
+
+      const changeCreatedAt = await attempt(
+        tx,
+        (sp) => sp`update goals.goals set created_at = now() where id = ${goal.id}`,
+      );
+      assert(
+        "P48",
+        changeCreatedAt.code === "42501",
+        `owner updates goal.created_at, sqlstate = ${changeCreatedAt.code ?? "none"}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // Read the grant back from the catalogue, never from the migration file:
+  // `goals` already carried `UPDATE (measure_name, measure_unit)` (0000);
+  // this migration adds `name` and `archived_at` beside them and nothing
+  // else.
+  const columns = await sql<{ column_name: string }[]>`
+    select column_name from information_schema.column_privileges
+    where table_schema = 'goals' and table_name = 'goals'
+      and grantee = 'authenticated' and privilege_type = 'UPDATE'`;
+  const updatable = columns.map((row) => row.column_name).sort();
+  assert(
+    "P49",
+    updatable.length === 4 &&
+      updatable.join(",") === ["archived_at", "measure_name", "measure_unit", "name"].sort().join(","),
+    `columns of goals.goals updatable by authenticated = ${updatable.join(", ") || "none"}`,
+  );
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   const sql = postgres(DATABASE_URL!, {
     prepare: false,
@@ -710,6 +897,7 @@ async function main(): Promise<void> {
   await checkRealDoor();
   await checkOneOffDeleteGrant();
   await checkOneOffWithFactRefusedByPolicy();
+  await checkGoalRenameArchiveGrant();
 
   if (failed) process.exit(1);
 }

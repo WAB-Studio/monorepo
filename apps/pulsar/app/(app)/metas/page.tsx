@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { listGoals } from "@/lib/queries/goal";
+import { listGoalsForMetas } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
 import { Button, Page, SectionLabel } from "@/components/ui";
 
@@ -14,19 +14,25 @@ import { Button, Page, SectionLabel } from "@/components/ui";
 // already open by the time this list draws at all. With none yet there is
 // nothing to list and nobody to open a second goal from, so `/metas/nueva`
 // is the only useful screen and this alone still redirects there.
+//
+// RP-24: an archived goal is never in the "open" section, and lists apart
+// under a quiet "Archivadas" one when there is at least one — each still its
+// own way into `Meta.dc.html`, from where it reopens. The redirect to
+// `/metas/nueva` only fires when the person has never opened a goal at all,
+// open or archived: an all-archived person still lands here, not there.
 export default async function GoalsIndexPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
-  const goals = await listGoals();
-  if (goals.length === 0) redirect("/metas/nueva");
+  const { open, archived } = await listGoalsForMetas();
+  if (open.length === 0 && archived.length === 0) redirect("/metas/nueva");
 
   const t = await getTranslations();
 
   return (
     <Page>
       <SectionLabel>{t("goal.list.title")}</SectionLabel>
-      {goals.map((goal) => (
+      {open.map((goal) => (
         <Button key={goal.id} asChild variant="outline" block>
           <Link href={`/metas/${goal.id}`}>{goal.name}</Link>
         </Button>
@@ -34,6 +40,17 @@ export default async function GoalsIndexPage() {
       <Button asChild variant="outline" block>
         <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
       </Button>
+
+      {archived.length > 0 ? (
+        <section>
+          <SectionLabel>{t("goal.list.archivedTitle")}</SectionLabel>
+          {archived.map((goal) => (
+            <Button key={goal.id} asChild variant="outline" block>
+              <Link href={`/metas/${goal.id}`}>{goal.name}</Link>
+            </Button>
+          ))}
+        </section>
+      ) : null}
     </Page>
   );
 }

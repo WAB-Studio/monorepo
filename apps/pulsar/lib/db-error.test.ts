@@ -45,3 +45,22 @@ test("a bare .code check misses a wrapped 22003 the way declareFact used to; pgC
   assert.equal(oldCheck, false);
   assert.equal(pgCode(wrapped), "22003");
 });
+
+// Module 37: `app/actions/plan.ts`'s own `addCommitment` carried the exact
+// same bug — a private `isNumericRangeError` reading `error.code` bare —
+// moved onto `pgCode` the same way `declareFact` was. Not proved by
+// importing `plan.ts` itself: it is `"use server"` and its top-level imports
+// reach `lib/session.ts`, which needs a live `DATABASE_URL` `check:unit`
+// never sets. The fix is the identical one-line change, so this is the same
+// red/green as the test above, named for its own caller.
+test("addCommitment's own 22003 catch reads pgCode, not the bare .code that left it unreachable", () => {
+  const wrapped = wrappedError("22003");
+  const bareCheck =
+    typeof wrapped === "object" &&
+    wrapped !== null &&
+    "code" in wrapped &&
+    (wrapped as { code?: unknown }).code === "22003";
+
+  assert.equal(bareCheck, false);
+  assert.equal(pgCode(wrapped), "22003");
+});

@@ -185,6 +185,15 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   the tap on that button opens — the exception this design already allows — is built and not drawn.
 - **A done row with its note.** No board draws a commitment's second and third lines once it is
   satisfied — what was logged, and the note under it. "Decisions taken here" says what they read.
+- **Renombrar.** No board draws the rename sheet; "Decisions taken here" says it takes the retire
+  sheet's own shape, with a field. Decided 2026-09-27 by the coordinator, the user having delegated
+  it.
+- **Archivar.** No board draws the archive sheet, the outlined block that opens it, or the solid
+  «Reabrir» that replaces it once a goal is archived; "Decisions taken here" says all three. Decided
+  2026-09-27 by the coordinator, the user having delegated it.
+- **Metas archivadas.** No board draws `/metas`'s own «Archivadas» section; "Decisions taken here"
+  says it reuses the list's own block-button pattern, under a second `SectionLabel`. Decided
+  2026-09-27 by the coordinator, the user having delegated it.
 
 ## Decisions taken here
 
@@ -325,3 +334,27 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `commitment-list.tsx`'s own list — dimmed, marked, never hidden — but the count above the list
   names only what still asks something of the goal, not the whole history the list itself keeps.
   Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **Renaming is a quiet text action under the goal's own title, in the retire sheet's shape.** A
+  ghost `Button` «Renombrar» — the same variant the theme control and «Escribir otra cantidad»
+  already draw with — opens a `Sheet` carrying one `Field`, prefilled with the goal's current name
+  and bound to the same rules `MetaNueva.dc.html`'s own name field already enforces (trimmed,
+  required, 120 characters). «Guardarlo» / «Dejarlo como está», the retire sheet's own solid-over-
+  outline pair. Nothing else moves: facts, weeks and commitments read exactly as they did (RP-23).
+  Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **Archiving is an outlined block at the foot of the goal screen, opening the retire sheet's own
+  shape.** «Archivar esta meta» opens a `Sheet` labelled with the goal's own name, h2 «¿Archivarla?»,
+  a sentence naming what survives — its facts, the weeks it governed, its commitments — and that it
+  leaves Hoy and Semana and can be reopened from Metas. «Archivarla» / «Dejarla abierta». For an
+  archived goal, the block is replaced by a solid `Button` «Reabrir» — a direct action, no sheet,
+  the same way undoing a tap needs none — and the goal's own add-commitment and add-phase ways in
+  are both gone (RP-24). Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **`/metas` lists open goals first, then a quiet section «Archivadas»** (RP-24) — `listGoalsForMetas`
+  (`lib/queries/goal.ts`) is the one statement behind both halves. Each archived row is still its own
+  way into `Meta.dc.html`, from where «Reabrir» brings it back. The redirect to `/metas/nueva` only
+  fires when the person has opened no goal at all, open or archived. Decided 2026-09-27 by the
+  coordinator, the user having delegated it.
+- **The day and the week exclude an archived goal by filtering the one "goals" subquery each already
+  runs** (`lib/queries/day.ts`, `lib/queries/week.ts`) — no second check for the empty state: with
+  every goal archived, that subquery returns nothing and the screen's own `goals.length === 0`
+  branch already draws `HoyVacio.dc.html` / the empty week. Decided 2026-09-27 by the coordinator,
+  the user having delegated it.

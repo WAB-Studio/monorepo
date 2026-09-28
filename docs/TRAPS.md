@@ -2417,3 +2417,17 @@ connection caches, not with the code.
   keep the latest row for every identity, not only harness ones. Either reads as a deliberate
   decision on the next database this migration meets; today it reads as a fact true only because
   someone measured it by hand, once, on 2026-09-27, and never asked the question again.
+
+## A spec's own "another day" was yesterday, which on a Monday belongs to the week before
+
+- **What.** `apps/pulsar/e2e/semana.spec.ts` picked a day "guaranteed not to be today" by subtracting
+  24 hours from now, unconditionally. On every day but Monday that lands inside the current
+  Monday-to-Sunday week; on a Monday it lands on the Sunday before, a day `lib/zone.ts`'s `weekOf`
+  places in the *previous* week — the spec then asserted against a day `/semana` never draws at all.
+- **Measured 2026-09-28**, 00:08 Bogotá — the first Monday the suite ran after it landed. Fixed the
+  same day in `#250`: `otherDayLabel()` steps forward a day instead of back when today is itself a
+  Monday, so "another day of this week" always stays inside the week it means to test.
+- **Do.** A spec that picks "some other day near today" to stay inside one civil-day window (a week,
+  a month) must derive its direction from where today itself sits in that window, never assume
+  "yesterday" or "tomorrow" is always inside it — the boundary day is exactly the one on which that
+  assumption breaks, and a suite run any other day of the week will not catch it.

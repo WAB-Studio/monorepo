@@ -20,6 +20,12 @@ export const goals = goalsSchema.table(
     measureName: text(),
     measureUnit: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // Null while the goal is open. Set once, by `archiveGoal`, and cleared
+    // once, by `reopenGoal` (RP-24) — never a second state beyond "set" and
+    // "null": archiving is not a history, only a switch every open-goals
+    // query filters on (`lib/queries/day.ts`, `lib/queries/week.ts`,
+    // `lib/queries/goal.ts`'s own `listGoals`).
+    archivedAt: timestamp({ withTimezone: true }),
   },
   (t) => [
     // A measure with no unit is not a measure. Both null or both set.

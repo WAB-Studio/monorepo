@@ -5,17 +5,24 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, phases } from "@/db/schema";
+import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
   addCommitmentSchema,
   addPhaseSchema,
+  archiveGoalSchema,
   createGoalSchema,
   phasesOverlap,
   phaseWithinHorizon,
+  renameGoalSchema,
+  reopenGoalSchema,
   retireCommitmentSchema,
   type AddCommitmentInput,
   type AddPhaseInput,
+  type ArchiveGoalInput,
   type CreateGoalInput,
+  type RenameGoalInput,
+  type ReopenGoalInput,
   type RetireCommitmentInput,
 } from "@/lib/validation/plan";
 
@@ -25,6 +32,9 @@ export type AddCommitmentResult =
   | { ok: true; commitmentId: string }
   | { ok: false; error: string };
 export type RetireCommitmentResult = { ok: true } | { ok: false; error: string };
+export type RenameGoalResult = { ok: true } | { ok: false; error: string };
+export type ArchiveGoalResult = { ok: true } | { ok: false; error: string };
+export type ReopenGoalResult = { ok: true } | { ok: false; error: string };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -217,19 +227,14 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
     // targetQuantity or threshold before the insert runs; this is the second
     // line, the way `declareFact` catches the same code — a number the schema
     // missed for any reason still meets `integer`'s ceiling as a message,
-    // never a 500.
-    if (isNumericRangeError(error)) return { ok: false, error: "plan.errors.valueOutOfRange" };
+    // never a 500. `pgCode`, not a bare `error.code`: drizzle-orm wraps the
+    // driver's error in `DrizzleQueryError` and hangs the real one off
+    // `.cause`, so the bare check this used to be never fired (module 38's
+    // own bug in `declareFact`, measured again here by module 37's validator —
+    // `lib/db-error.test.ts` proves the difference).
+    if (pgCode(error) === "22003") return { ok: false, error: "plan.errors.valueOutOfRange" };
     throw error;
   }
-}
-
-function isNumericRangeError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "22003"
-  );
 }
 
 /**
@@ -261,5 +266,98 @@ export async function retireCommitment(
   if (retired.length === 0) return { ok: false, error: "plan.errors.notFound" };
 
   revalidatePath("/");
+  return { ok: true };
+}
+
+// Every screen a goal's own name or its open/archived state can change what
+// it draws on: the day, the week, the list and the goal's own screen.
+function revalidateGoalScreens(goalId: string): void {
+  revalidatePath("/");
+  revalidatePath("/semana");
+  revalidatePath("/metas");
+  revalidatePath(`/metas/${goalId}`);
+}
+
+/**
+ * Renames a goal (RP-23). One UPDATE of `name` alone, scoped by `(id,
+ * userId)` in the query itself, the same shape `retireCommitment` and
+ * `undoFact` already take — a foreign id renames nothing and is reported the
+ * way a missing one would be. Facts, weeks and commitments never move: `name`
+ * is the one column this statement ever names.
+ */
+export async function renameGoal(input: RenameGoalInput): Promise<RenameGoalResult> {
+  const parsed = renameGoalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const renamed = await withGoalsDb((tx) =>
+    tx
+      .update(goals)
+      .set({ name: parsed.data.name })
+      .where(and(eq(goals.id, parsed.data.goalId), eq(goals.userId, person.id)))
+      .returning({ id: goals.id }),
+  );
+
+  if (renamed.length === 0) return { ok: false, error: "plan.errors.notFound" };
+
+  revalidateGoalScreens(parsed.data.goalId);
+  return { ok: true };
+}
+
+/**
+ * Archives a goal (RP-24). One UPDATE of `archived_at` alone — nothing here
+ * is deleted: `goals.facts`, `goals.phases` and `goals.commitments` all keep
+ * every row they had. Archiving only takes the goal out of `loadDay`'s and
+ * `loadWeek`'s own "open goals" queries (`lib/queries/day.ts`, `lib/queries/
+ * week.ts`) and off `listGoals`'s own list — `listGoalsForMetas` (`lib/
+ * queries/goal.ts`) is what still finds it, under "Archivadas".
+ */
+export async function archiveGoal(input: ArchiveGoalInput): Promise<ArchiveGoalResult> {
+  const parsed = archiveGoalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const archived = await withGoalsDb((tx) =>
+    tx
+      .update(goals)
+      .set({ archivedAt: sql`now()` })
+      .where(and(eq(goals.id, parsed.data.goalId), eq(goals.userId, person.id)))
+      .returning({ id: goals.id }),
+  );
+
+  if (archived.length === 0) return { ok: false, error: "plan.errors.notFound" };
+
+  revalidateGoalScreens(parsed.data.goalId);
+  return { ok: true };
+}
+
+/**
+ * Reopens an archived goal (RP-24): the same UPDATE as `archiveGoal`, with
+ * `archived_at` set back to null. No sheet asks first (`docs/pulsar/
+ * DESIGN.md` "Decisions taken here") — the same way undoing a tap needs
+ * none (RP-05).
+ */
+export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResult> {
+  const parsed = reopenGoalSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const reopened = await withGoalsDb((tx) =>
+    tx
+      .update(goals)
+      .set({ archivedAt: null })
+      .where(and(eq(goals.id, parsed.data.goalId), eq(goals.userId, person.id)))
+      .returning({ id: goals.id }),
+  );
+
+  if (reopened.length === 0) return { ok: false, error: "plan.errors.notFound" };
+
+  revalidateGoalScreens(parsed.data.goalId);
   return { ok: true };
 }

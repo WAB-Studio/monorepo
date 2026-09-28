@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addPhaseSchema, phasesOverlap } from "./plan";
+import { addPhaseSchema, archiveGoalSchema, phasesOverlap, renameGoalSchema, reopenGoalSchema } from "./plan";
 
 const GOAL_ID = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d";
 
@@ -45,4 +45,33 @@ test("phasesOverlap: a span starting the day after another ends do not overlap",
   const a = { startsOn: "2026-02-01", endsOn: "2026-02-14" };
   const b = { startsOn: "2026-02-15", endsOn: "2026-02-28" };
   assert.equal(phasesOverlap(a, b), false);
+});
+
+// RP-23: the same trim/require/120-character rule `createGoalSchema`'s own
+// name field already carries.
+test("renameGoalSchema: trims the name before it ever reaches the database", () => {
+  const result = renameGoalSchema.safeParse({ goalId: GOAL_ID, name: "  meta renombrada  " });
+  assert.equal(result.success, true);
+  if (result.success) assert.equal(result.data.name, "meta renombrada");
+});
+
+test("renameGoalSchema: refuses a name that is empty once trimmed", () => {
+  const result = renameGoalSchema.safeParse({ goalId: GOAL_ID, name: "   " });
+  assert.equal(result.success, false);
+});
+
+test("renameGoalSchema: refuses a name past 120 characters", () => {
+  const result = renameGoalSchema.safeParse({ goalId: GOAL_ID, name: "a".repeat(121) });
+  assert.equal(result.success, false);
+});
+
+// RP-24: neither act asks for anything but the goal itself.
+test("archiveGoalSchema: refuses a goalId that is not a uuid", () => {
+  const result = archiveGoalSchema.safeParse({ goalId: "not-a-uuid" });
+  assert.equal(result.success, false);
+});
+
+test("reopenGoalSchema: accepts a real goalId and nothing else", () => {
+  const result = reopenGoalSchema.safeParse({ goalId: GOAL_ID });
+  assert.equal(result.success, true);
 });

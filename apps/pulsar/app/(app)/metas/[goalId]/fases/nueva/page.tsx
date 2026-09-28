@@ -26,6 +26,10 @@ export default async function NewPhasePage({
   const { goalId } = await params;
   const goal = await loadGoal(goalId).catch(() => null);
   if (!goal) notFound();
+  // RP-24: an archived goal draws no "Añadir una fase" way in; a direct
+  // visit to this route is refused the same way `listGoals` (open-only)
+  // already 404s `compromisos/nuevo` for one.
+  if (goal.archivedAt) notFound();
 
   const openedOn = civilDateInZone(new Date(goal.createdAt));
   const totalWeeks = horizonWeeks(openedOn, goal.horizon);
