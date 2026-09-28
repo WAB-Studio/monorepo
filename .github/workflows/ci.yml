@@ -366,8 +366,11 @@ jobs:
       # reaches its own. It reads its own `.env.local`, not pulsar's; the
       # only variable its own import chain reaches through `process.env` is
       # `DATABASE_URL` (`apps/orbit/scripts/harness/fixtures.ts`), already
-      # named present by this job's own secret check above.
+      # named present by this job's own secret check above. `always()`, like
+      # the reap it feeds: skipped after a red suite, the reap died on a
+      # missing `.env.local` exactly when it had a run to take.
       - name: Write apps/orbit/.env.local for the reaper
+        if: always()
         working-directory: apps/orbit
         run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env.local
 
