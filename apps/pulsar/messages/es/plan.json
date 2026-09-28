@@ -49,11 +49,12 @@
     "phaseBackwards": "La fase termina antes de empezar.",
     "weekdayInvalid": "Ese día no es válido.",
     "weekdaysEmpty": "Elige al menos un día.",
-    "cadenceNInvalid": "Escribe un número entero mayor que cero.",
-    "targetQuantityInvalid": "Escribe un número entero mayor que cero.",
+    "cadenceNInvalid": "Escribe un número entero entre 1 y 1000.",
+    "targetQuantityInvalid": "Escribe un número entero entre 1 y 1 000 000.",
     "unitEmpty": "Escribe qué se cuenta.",
     "unitTooLong": "Eso es muy largo. Escribe máximo 40 caracteres.",
     "sourceKeyEmpty": "Elige una fuente.",
-    "thresholdInvalid": "Escribe un número entero de al menos 1."
+    "thresholdInvalid": "Escribe un número entero entre 1 y 1 000 000.",
+    "valueOutOfRange": "Ese número es demasiado grande."
   }
 }

@@ -60,26 +60,34 @@ const cadenceSchema = z.discriminatedUnion("cadenceKind", [
       )
       .min(1, { error: "plan.errors.weekdaysEmpty" }),
   }),
+  // Bounded well under Postgres's `integer` ceiling, the way module 14 bounded
+  // a declared quantity: nobody means "every 1000 days" or "1000 times a
+  // month", so a value that large is a mistyped digit, not a real cadence.
+  // Left unbounded, that digit used to reach the insert raw and come back as
+  // `value out of range for type integer` — a 500, not a message.
   z.object({
     cadenceKind: z.literal("times_per_week"),
     cadenceN: z
       .number({ error: "plan.errors.cadenceNInvalid" })
       .int({ error: "plan.errors.cadenceNInvalid" })
-      .positive({ error: "plan.errors.cadenceNInvalid" }),
+      .positive({ error: "plan.errors.cadenceNInvalid" })
+      .max(1_000, { error: "plan.errors.cadenceNInvalid" }),
   }),
   z.object({
     cadenceKind: z.literal("every_n_days"),
     cadenceN: z
       .number({ error: "plan.errors.cadenceNInvalid" })
       .int({ error: "plan.errors.cadenceNInvalid" })
-      .positive({ error: "plan.errors.cadenceNInvalid" }),
+      .positive({ error: "plan.errors.cadenceNInvalid" })
+      .max(1_000, { error: "plan.errors.cadenceNInvalid" }),
   }),
   z.object({
     cadenceKind: z.literal("times_per_month"),
     cadenceN: z
       .number({ error: "plan.errors.cadenceNInvalid" })
       .int({ error: "plan.errors.cadenceNInvalid" })
-      .positive({ error: "plan.errors.cadenceNInvalid" }),
+      .positive({ error: "plan.errors.cadenceNInvalid" })
+      .max(1_000, { error: "plan.errors.cadenceNInvalid" }),
   }),
 ]);
 
@@ -93,10 +101,14 @@ const satisfactionSchema = z.discriminatedUnion("satisfaction", [
   z.object({ satisfaction: z.literal("tap") }),
   z.object({
     satisfaction: z.literal("quantity"),
+    // Same ceiling as a declared day's own quantity (`lib/validation/fact.ts`):
+    // the target and the day's tally live in the same unit, so one bound
+    // serves both and a huge target never reaches the `integer` column raw.
     targetQuantity: z
       .number({ error: "plan.errors.targetQuantityInvalid" })
       .int({ error: "plan.errors.targetQuantityInvalid" })
-      .positive({ error: "plan.errors.targetQuantityInvalid" }),
+      .positive({ error: "plan.errors.targetQuantityInvalid" })
+      .max(1_000_000, { error: "plan.errors.targetQuantityInvalid" }),
     // The person's own word for what is counted — stored as they wrote it,
     // never resolved against a catalogue (AGENTS.md «## Code»).
     unit: z
@@ -114,7 +126,8 @@ const satisfactionSchema = z.discriminatedUnion("satisfaction", [
     threshold: z
       .number({ error: "plan.errors.thresholdInvalid" })
       .int({ error: "plan.errors.thresholdInvalid" })
-      .min(1, { error: "plan.errors.thresholdInvalid" }),
+      .min(1, { error: "plan.errors.thresholdInvalid" })
+      .max(1_000_000, { error: "plan.errors.thresholdInvalid" }),
   }),
 ]);
 
