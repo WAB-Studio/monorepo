@@ -55,12 +55,12 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### The day
 
-- [ ] **RP-01** — The app opens on today: what today asks for, what is already satisfied, and what is not. No tap, no choice, no screen before it.
-- [ ] **RP-02** — A commitment is satisfied in one tap. No form, no field, no confirmation.
-- [ ] **RP-03** — A commitment that measures something takes its number in the same gesture, offered with the number the plan expects, and is satisfied by accepting it. **The number carries its unit** — minutes, pages, kilometres, repetitions, cards — named once on the commitment and never typed again.
+- [x] **RP-01** — The app opens on today: what today asks for, what is already satisfied, and what is not. No tap, no choice, no screen before it.
+- [x] **RP-02** — A commitment is satisfied in one tap. No form, no field, no confirmation.
+- [x] **RP-03** — A commitment that measures something takes its number in the same gesture, offered with the number the plan expects, and is satisfied by accepting it. **The number carries its unit** — minutes, pages, kilometres, repetitions, cards — named once on the commitment and never typed again.
   - Widened 2026-09-22, the day it was written, when the user asked whether the app served anything beyond one plan. A quantity with no unit cannot be summed into a goal's measure and cannot be drawn. The code was unticked and nothing had been verified against it, so no tick is invalidated.
-- [ ] **RP-04** — A fact can carry one line the person writes — the two mistakes from today's monologue, what the conversation cost. It is offered, never required, and the day shows it.
-- [ ] **RP-05** — A declared fact can be undone. A derived one cannot: it belongs to the app that recorded it.
+- [x] **RP-04** — A fact can carry one line the person writes — the two mistakes from today's monologue, what the conversation cost. It is offered, never required, and the day shows it.
+- [x] **RP-05** — A declared fact can be undone. A derived one cannot: it belongs to the app that recorded it.
 - [ ] **RP-06** — A fact can be written for a day already past. It keeps the day it happened and the moment it was written, and the two are never shown as one.
 
 #### The evidence another app leaves
@@ -69,11 +69,11 @@ of this gets built, and no schema, table or column is "prepared for" it.
   - Widened 2026-09-22, same day and same question. Written as "the reading app's searches", a second source — a movement in `apps/orbit`, a commit, an import — cost a migration instead of a reader.
 - [ ] **RP-08** — A commitment satisfied by evidence says **how much** of it satisfies the day, in the source's own unit, and the person sets it. **The reading app's source is offered at one search**: opening the dictionary and looking something up is reading. Taken by the user 2026-09-22, over ten and over forty, on the ground that the copy does not yet start on its own (RL-30) and a high threshold would make a working feature read as a broken one. A source that only ever happens once satisfies at one and offers no choice.
 - [ ] **RP-09** — Evidence names its source wherever it is drawn. A day marked by the reading app never reads as a day the person said they did.
-- [ ] **RP-10** — Evidence is read where it already lives and is never copied into this app. Emptying the record in the reading app empties the evidence here too: there is one truth and it has one home. Decided by the user 2026-09-22.
+- [x] **RP-10** — Evidence is read where it already lives and is never copied into this app. Emptying the record in the reading app empties the evidence here too: there is one truth and it has one home. Decided by the user 2026-09-22.
 
 #### The goal and its plan
 
-- [ ] **RP-11** — A person creates a goal with a name and a horizon, and the app holds more than one at a time.
+- [x] **RP-11** — A person creates a goal with a name and a horizon, and the app holds more than one at a time.
 - [ ] **RP-12** — A goal holds commitments. A commitment names what counts and how often: every day, named weekdays, a number of times a week, every N days, or a number of times a month.
   - Widened 2026-09-22 from the three cadences one plan needed. A habit measured by the month — a haircut, a deep clean, a call home — had nowhere to live.
   - **«Every N days» counts from the day the commitment was created.** Decided by the user
@@ -82,8 +82,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
     nothing for a person to get wrong. The price they took knowingly — a commitment typed on a
     Tuesday night is anchored to that Tuesday for good, and `commitments` accepts UPDATE on
     `retired_at` alone, so the only correction is to retire it and open another.
-- [ ] **RP-13** — A commitment is retired, never deleted. The facts it explains stay explained and the weeks it governed keep reading as they did.
-- [ ] **RP-14** — A goal names **one** measure that predicts its progress — minutes spoken, pages read — and every fact that carries a quantity **in that measure's unit** feeds it. A quantity in any other unit satisfies its commitment and is not summed: a goal measured in minutes is not advanced by forty searches.
+- [x] **RP-13** — A commitment is retired, never deleted. The facts it explains stay explained and the weeks it governed keep reading as they did.
+- [x] **RP-14** — A goal names **one** measure that predicts its progress — minutes spoken, pages read — and every fact that carries a quantity **in that measure's unit** feeds it. A quantity in any other unit satisfies its commitment and is not summed: a goal measured in minutes is not advanced by forty searches.
   - Settled 2026-09-22, when the engine asked whether evidence feeds the measure. It does, when it shares the unit, and by the same rule as any other quantity — the measure never knows which app a quantity came from. Written before any screen read it, so no tick is invalidated.
   - **Decided by the user 2026-09-22: sum it by reading the source, never draw a permanent zero.** RP-05
     says evidence never writes a fact — deliberately — so a goal whose only *measuring* commitment is
@@ -95,20 +95,20 @@ of this gets built, and no schema, table or column is "prepared for" it.
     evidence source directly for every evidence-satisfied commitment whose own unit matches the goal's,
     over the goal's own span, and adds that count to the declared sum. RNP-04 still governs it: a source
     that cannot be read that moment degrades to the declared total alone, never a blank goal.
-- [ ] **RP-15** — A goal holds phases: a span of weeks with its own single aim. The day says which phase it is in.
+- [x] **RP-15** — A goal holds phases: a span of weeks with its own single aim. The day says which phase it is in.
 
 #### The thing that happens once
 
 - [ ] **RP-19** — A person writes down something that happens **once** — call the bank, renew the passport, finish chapter three — with no cadence, no goal and no plan behind it. It takes a day when it has one and sits in the day's list beside the commitments; done, it leaves the list and stays in the log as the fact it produced. Asked for by the user 2026-09-22: a log of goals that cannot hold a plain errand is not the app they asked for.
 - [ ] **RP-20** — A one-off can belong to a goal or to nothing at all. Belonging to one, it counts toward that goal's week; belonging to nothing, it is still a fact with a day, and the week still shows it.
-- [ ] **RP-22** — A one-off written by mistake can be deleted, and nothing survives it: it never happened, so there is no fact to keep. The act says, where it is offered, how it differs from marking the thing done — done leaves a record, deleted leaves nothing. Asked for by the user 2026-09-22, after the grant layer was measured refusing it: «llamar al banko» with a typo is a first-week problem and today it stays forever.
-- [ ] **RP-23** — A goal can be renamed. Its facts, weeks and commitments keep reading as they did. Asked for by the user 2026-09-27.
-- [ ] **RP-24** — A goal can be archived. It leaves the day and the week; its facts and the weeks it governed stay, and it can be opened again from the goals list. Nothing is deleted. Asked for by the user 2026-09-27.
+- [x] **RP-22** — A one-off written by mistake can be deleted, and nothing survives it: it never happened, so there is no fact to keep. The act says, where it is offered, how it differs from marking the thing done — done leaves a record, deleted leaves nothing. Asked for by the user 2026-09-22, after the grant layer was measured refusing it: «llamar al banko» with a typo is a first-week problem and today it stays forever.
+- [x] **RP-23** — A goal can be renamed. Its facts, weeks and commitments keep reading as they did. Asked for by the user 2026-09-27.
+- [x] **RP-24** — A goal can be archived. It leaves the day and the week; its facts and the weeks it governed stay, and it can be opened again from the goals list. Nothing is deleted. Asked for by the user 2026-09-27.
 - [ ] **RP-21** — A one-off with no day is not lost. It waits in a list of its own, off the day's screen, and is given a day whenever the person wants one.
 
 #### The week and the review
 
-- [ ] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
+- [x] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
 - [ ] **RP-17** — A goal's measure is read week by week, as the one table its review needs, from the first week to the current one.
 
 #### The account
@@ -118,13 +118,13 @@ of this gets built, and no schema, table or column is "prepared for" it.
 ### Non-functional requirements
 
 - [ ] **RNP-01** — Every string a person reads comes from the message catalogue. The interface is Spanish.
-- [ ] **RNP-02** — A declared fact costs one tap and lands in under five seconds from the app being open. This is the requirement the product lives or dies by; when it conflicts with another, it wins.
-- [ ] **RNP-03** — The day's screen pays a bounded number of round trips to Postgres, every one of them fanned out together, the evidence query included. Never a chain of awaits.
-- [ ] **RNP-04** — The evidence is never a condition of the day. When the reading app's rows cannot be read, the day draws its declared facts and says that one source could not be read. Never a blank day, never an error page.
-- [ ] **RNP-05** — A person reads and writes only their own facts. The access policies in the database decide it, not the query, and they are proved by driving them. No service path evades them.
-- [ ] **RNP-06** — The day is the person's day, in their own zone, never UTC. A fact at 23:40 belongs to that day; the same fact read from another zone still belongs to it.
+- [x] **RNP-02** — A declared fact costs one tap and lands in under five seconds from the app being open. This is the requirement the product lives or dies by; when it conflicts with another, it wins.
+- [x] **RNP-03** — The day's screen pays a bounded number of round trips to Postgres, every one of them fanned out together, the evidence query included. Never a chain of awaits.
+- [x] **RNP-04** — The evidence is never a condition of the day. When the reading app's rows cannot be read, the day draws its declared facts and says that one source could not be read. Never a blank day, never an error page.
+- [x] **RNP-05** — A person reads and writes only their own facts. The access policies in the database decide it, not the query, and they are proved by driving them. No service path evades them.
+- [x] **RNP-06** — The day is the person's day, in their own zone, never UTC. A fact at 23:40 belongs to that day; the same fact read from another zone still belongs to it.
 - [ ] **RNP-07** — The app holds at a 360 px viewport: no horizontal overflow, no overlapping control, no tap target under 32 px on its shorter side. It is used with one thumb, in the minute the thing was finished.
-- [ ] **RNP-08** — The person chooses light or dark and the choice is remembered on the device. The app opens in the system's mode until a choice is made.
+- [x] **RNP-08** — The person chooses light or dark and the choice is remembered on the device. The app opens in the system's mode until a choice is made.
 - [ ] **RNP-10** — A second evidence source costs a reader and a row of configuration, never a migration and never a screen. The shape a source answers in is fixed — a day, a quantity, a unit, a name for the person — and nothing downstream of it knows which app it came from.
 - [ ] **RNP-09** — Every `auth.users` row a script of this app creates is registered through `@repo/harness-registry`. No automated check ever submits the sign-in form with a typed address: it sends a real email from the user's own account and mints a real row.
 
