@@ -11,8 +11,16 @@ import { sessionFile } from "./e2e/fixtures";
 // running by hand — this file starts no server of its own.
 const baseURL = process.env.PULSAR_BASE_URL ?? "http://localhost:3200";
 
+// A second `next start` of the same build with `DATABASE_URL` pointed at a
+// port nothing listens on (`e2e/caida.spec.ts`). Absent, the project does not
+// exist and the ordinary suite is unchanged.
+const downBaseURL = process.env.PULSAR_DOWN_BASE_URL;
+
 export default defineConfig({
   testDir: "./e2e",
+  // Opens the suite's harness run, mints and seeds the lane's person under it,
+  // and drops them when the last spec ends.
+  globalSetup: "./scripts/harness/e2e-run.ts",
   // Gitignored, so a run leaves the tree clean.
   outputDir: "./private/playwright-results",
   workers: 2,
@@ -35,6 +43,21 @@ export default defineConfig({
         viewport: { width: 360, height: 740 },
         hasTouch: true,
       },
+      testIgnore: /caida\.spec\.ts/,
     },
+    ...(downBaseURL
+      ? [
+          {
+            name: "caida",
+            testMatch: /caida\.spec\.ts/,
+            use: {
+              ...devices["Desktop Chrome"],
+              viewport: { width: 360, height: 740 },
+              hasTouch: true,
+              baseURL: downBaseURL,
+            },
+          },
+        ]
+      : []),
   ],
 });

@@ -8,8 +8,6 @@ export const env = createEnv({
   server: {
     // Supabase transaction pooler (6543), used by the running app.
     DATABASE_URL: z.url(),
-    // Supabase session pooler (5432), used by drizzle-kit only.
-    MIGRATION_DATABASE_URL: z.url(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),

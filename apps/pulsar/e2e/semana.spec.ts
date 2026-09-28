@@ -52,6 +52,12 @@ function expectedStateFor(label: string): string {
   return "evidence";
 }
 
+// A past day's row is a `div` with a link (`Semana.dc.html`), today's and a
+// future day's a `button`: the label's own text finds either.
+function dayRow(section: Locator, label: string): Locator {
+  return section.locator("button, div").filter({ hasText: label });
+}
+
 async function dotStates(locator: Locator): Promise<{ label: string | null; state: string | null }[]> {
   return locator.locator('[role="img"]').evaluateAll((els) =>
     els.map((el) => ({ label: el.getAttribute("aria-label"), state: el.getAttribute("data-state") })),
@@ -80,7 +86,7 @@ test("seven rows per goal at 360px, no horizontal overflow (RP-16)", async ({ pa
 
   const goalSection = page.locator("section", { hasText: GOAL_NAME });
   await expect(goalSection).toBeVisible();
-  await expect(goalSection.getByRole("button")).toHaveCount(7);
+  await expect(goalSection.locator("button, a")).toHaveCount(7);
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(360);
@@ -90,7 +96,7 @@ test("a day with no facts carries no filled dot (RP-16)", async ({ page }) => {
   await page.goto("/semana");
 
   const goalSection = page.locator("section", { hasText: GOAL_NAME });
-  const row = goalSection.locator("button", { hasText: otherDayLabel() });
+  const row = dayRow(goalSection, otherDayLabel());
   await expect(row).toBeVisible();
 
   const dots = await dotStates(row);
@@ -123,7 +129,7 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
   try {
     await page.goto("/semana");
     const goalSection = page.locator("section", { hasText: GOAL_NAME });
-    const todayRow = goalSection.locator("button", { hasText: todayLabel() });
+    const todayRow = dayRow(goalSection, todayLabel());
     await expect(todayRow).toBeVisible();
     const before = await todayRow.locator('[role="img"]').count();
 
@@ -138,7 +144,7 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
     await expect(nameButton).toHaveCount(0);
 
     await page.goto("/semana");
-    const afterRow = goalSection.locator("button", { hasText: todayLabel() });
+    const afterRow = dayRow(goalSection, todayLabel());
     await expect(afterRow.locator('[role="img"]')).toHaveCount(before + 1);
 
     const dots = await dotStates(afterRow);
@@ -153,5 +159,54 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
     }
   } finally {
     await resetOneOff(db, id);
+  }
+});
+
+test("a one-off belonging to nothing, done today, fills a dot in the Sueltas row on /semana (RP-20)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const name = `Suelta sin meta ${Date.now()}`;
+
+  // Written from the day's own field, never a goal's group (`NewOneOff`'s
+  // own `goalId` left undefined) — `.last()` is not needed here since this
+  // spec writes no other one-off first, but the field at the foot of
+  // "Sueltas" is still the last "Algo suelto" on the page.
+  await page.goto("/");
+  const field = page.getByLabel("Algo suelto").last();
+  await field.fill(name);
+  await field.press("Enter");
+
+  const nameButton = page.locator("button", { hasText: name });
+  await expect(nameButton).toBeVisible();
+
+  const [row] = await db<{ id: string }[]>`
+    select id from goals.one_offs where user_id = ${personId} and name = ${name} and goal_id is null
+  `;
+  if (!row) throw new Error(`no goalless one-off named "${name}" landed for ${personId}`);
+  const id = row.id;
+
+  try {
+    const rowContainer = nameButton.locator("xpath=ancestor::div[1]");
+    await rowContainer.getByRole("button", { name: "Marcar como hecho" }).click();
+    await expect(nameButton).toHaveCount(0);
+
+    await page.goto("/semana");
+    // `loadWeek`'s own `oneOffFacts` (RP-20's second half): a fact with no
+    // goal still has a day, so this group draws even with no goal open.
+    const sueltas = page.locator("section", { hasText: "Sueltas" });
+    await expect(sueltas).toBeVisible();
+    const todayRow = dayRow(sueltas, todayLabel());
+    await expect(todayRow).toBeVisible();
+
+    const dots = await dotStates(todayRow);
+    const oneOff = dots.find(({ label }) => label?.includes("suelta hecha"));
+    expect(oneOff).toBeDefined();
+    expect(oneOff?.state).toBe("declared");
+  } finally {
+    // Deletes the fact along with it (`facts.one_off_id`'s own cascade) —
+    // never a blanket delete by name, only this exact row's id.
+    await db`delete from goals.one_offs where id = ${id} and user_id = ${personId}`;
   }
 });

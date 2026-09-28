@@ -2,44 +2,45 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { deriveDay, type EvidenceByCommitment } from "@/lib/day/derive";
+import { deriveDay } from "@/lib/day/derive";
 import { latestFactByCommitment, type LoggedFact } from "@/lib/day/logged-fact";
 import type {
   Cadence,
   CommitmentPlan,
   DayView,
-  DeclaredFact,
   EvidenceDay,
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
-import { readerFor } from "@/lib/evidence/registry";
+import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import {
+  toCadence,
+  toDeclaredFact,
+  toEvidenceByCommitment,
+  toPhase,
+  toSatisfiedBy,
+  type CommitmentRow as BaseCommitmentRow,
+  type PhaseRow as BasePhaseRow,
+} from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
+import { TIME_ZONE } from "@/lib/zone";
 
-/**
- * Every source key `withReadingDb`'s query fans out to, kept beside this
- * file rather than derived from the day's own commitments: a distinct set of
- * keys can only be known once the goals query has already returned, and
- * waiting on that would turn the second transaction's opening into a
- * continuation of the first's — the very chain RNP-03 forbids. Both
- * transactions open, settle and query concurrently instead; the mapping step
- * below decides, once both have answered, which commitment each source's
- * rows belong to. A second source (RNP-10) costs a reader in
- * `lib/evidence/registry.ts`, a row in `goals.evidence_sources`, and one more
- * key here.
- *
- * This is also why `withReadingDb` runs one query *per key in this list*,
- * not one per commitment that actually needs it: today, with one key, that
- * is four statements total, the number module 8's done criterion measured.
- * **Four is a fact of today's registry, not a law of this file.** The day a
- * second key lands, a person with no commitment pointing at it still pays
- * its query — RNP-03's "bounded" still holds (bounded by the catalogue's own
- * size, which RNP-10 keeps small), but "four" stops being the count, and
- * whoever adds that key should expect the round-trip count named in a done
- * criterion to move, not stay pinned to this comment.
- */
-const KNOWN_EVIDENCE_SOURCE_KEYS = ["reading_lookups"] as const;
+// `withReadingDb`'s query fans out over `knownSourceKeys()`
+// (`lib/evidence/registry.ts`), never over the day's own commitments: a
+// distinct set of keys can only be known once the goals query has already
+// returned, and waiting on that would turn the second transaction's opening
+// into a continuation of the first's — the very chain RNP-03 forbids. Both
+// transactions open, settle and query concurrently instead; the mapping step
+// below decides, once both have answered, which commitment each source's
+// rows belong to.
+//
+// This is also why `withReadingDb` runs one query *per known key*, not one
+// per commitment that actually needs it: today, with one key, that is four
+// statements total, the number module 8's done criterion measured. **Four is
+// a fact of today's registry, not a law of this file.** The day a second key
+// lands, a person with no commitment pointing at it still pays its query —
+// RNP-03's "bounded" still holds (bounded by the catalogue's own size, which
+// RNP-10 keeps small), but "four" stops being the count.
 
 type GoalRow = {
   id: string;
@@ -51,34 +52,13 @@ type GoalRow = {
 
 // `source_key` and `source_unit` ride in from the join to `evidence_sources`;
 // neither column exists on `commitments` itself (RNP-10 keeps the source a
-// row of configuration, not a commitment column). `goal_id` and `name` ride
-// in from `to_jsonb(c)` the same as every other bare column below — nothing
-// module 4's `CommitmentPlan` reads, so `toCommitmentPlan` still ignores
-// them; module 13's screen is what groups a slot by goal and names its row.
-type CommitmentRow = {
-  id: string;
-  goal_id: string;
-  name: string;
-  cadence_kind: Cadence["kind"];
-  cadence_n: number | null;
-  cadence_weekdays: number[] | null;
-  satisfaction: SatisfiedBy["kind"];
-  target_quantity: number | null;
-  unit: string | null;
-  threshold: number | null;
-  retired_at: string | null;
-  created_at: string;
-  source_key: string | null;
-  source_unit: string | null;
-};
+// row of configuration, not a commitment column). `goal_id` widens
+// `rows.ts`'s own `CommitmentRow` — nothing module 4's `CommitmentPlan`
+// reads, so `toCommitmentPlan` still ignores it; module 13's screen is what
+// groups a slot by goal and names its row.
+type CommitmentRow = BaseCommitmentRow & { goal_id: string };
 
-type PhaseRow = {
-  id: string;
-  goal_id: string;
-  aim: string;
-  starts_on: string;
-  ends_on: string | null;
-};
+type PhaseRow = BasePhaseRow & { goal_id: string };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
 // bare quantity, never its own unit (`db/schema/commitments.ts`'s own
@@ -167,7 +147,10 @@ async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRo
          where f.day = ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
          from "goals"."one_offs" o
-         where o.day = ${day}::date) as one_offs
+         where o.day <= ${day}::date
+           and not exists (
+             select 1 from "goals"."facts" f where f.one_off_id = o.id
+           )) as one_offs
   `);
 
   return row;
@@ -183,50 +166,13 @@ async function queryEvidenceBySource(
 ): Promise<Record<string, EvidenceDay[]>> {
   const bySourceKey: Record<string, EvidenceDay[]> = {};
 
-  for (const key of KNOWN_EVIDENCE_SOURCE_KEYS) {
+  for (const key of knownSourceKeys()) {
     const reader = readerFor(key);
     if (!reader) continue;
     bySourceKey[key] = await reader({ personId, from: day, to: day, zone: TIME_ZONE, tx });
   }
 
   return bySourceKey;
-}
-
-function toCadence(row: CommitmentRow): Cadence {
-  switch (row.cadence_kind) {
-    case "daily":
-      return { kind: "daily" };
-    case "weekdays":
-      return { kind: "weekdays", days: row.cadence_weekdays ?? [] };
-    case "times_per_week":
-      return { kind: "times_per_week", count: row.cadence_n ?? 0 };
-    case "every_n_days":
-      // `goals.commitments` has no anchor column: RP-12 (`docs/pulsar/
-      // SPEC.md`) settles "every N days" to count from `created_at`, read
-      // as the person's own civil day, never Postgres's UTC render of the
-      // timestamp — `created_at` between 19:00 and 23:59:59 Bogotá already
-      // reads as the next UTC day, so slicing that string would anchor a
-      // fifth of all commitments one day late and silently shift the whole
-      // cadence from the day it was actually set up.
-      return {
-        kind: "every_n_days",
-        n: row.cadence_n ?? 1,
-        anchor: civilDateInZone(new Date(row.created_at)),
-      };
-    case "times_per_month":
-      return { kind: "times_per_month", count: row.cadence_n ?? 0 };
-  }
-}
-
-function toSatisfiedBy(row: CommitmentRow): SatisfiedBy {
-  switch (row.satisfaction) {
-    case "tap":
-      return { kind: "tap" };
-    case "quantity":
-      return { kind: "quantity", target: row.target_quantity ?? 0, unit: row.unit ?? "" };
-    case "evidence":
-      return { kind: "evidence", threshold: row.threshold ?? 1, unit: row.source_unit ?? "" };
-  }
 }
 
 function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
@@ -236,10 +182,6 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
   };
-}
-
-function toPhase(row: PhaseRow): Phase {
-  return { id: row.id, name: row.aim, startsOn: row.starts_on, endsOn: row.ends_on };
 }
 
 // `Phase` (module 4) names no goal: `deriveDay`'s own `phaseOn` picks the
@@ -274,8 +216,12 @@ function toGoalSummary(row: GoalRow): GoalSummary {
   };
 }
 
-// A one-off already on today (RP-19, RP-20): `goalId` is null for one that
-// belongs to none, and the screen draws it in its own group below the rest.
+// A one-off still owed (RP-19, RP-20): `goalId` is null for one that belongs
+// to none, and the screen draws it in its own group below the rest. `day` is
+// the one-off's own, not the day drawn — a screen reading `day < view.day`
+// is reading a carried one-off, undone since a day before today's; RP-19
+// widened 2026-09-28 says it rides every day after its own until it is done
+// or deleted, never just the one it was written for.
 export type OneOffSummary = {
   id: string;
   goalId: string | null;
@@ -320,17 +266,6 @@ function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
   };
 }
 
-function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact {
-  return {
-    commitmentId: row.commitment_id,
-    day: row.day,
-    writtenAt: row.written_at,
-    quantity: row.quantity,
-    unit: row.commitment_unit,
-    note: row.note,
-  };
-}
-
 // `LoggedFact` and the rule that picks it — the latest write, never the
 // first row — live in `lib/day/logged-fact.ts`, pure and DB-free so a plain
 // `node:test` can pin that rule with no database behind it.
@@ -342,25 +277,6 @@ function toFactForCommitment(row: FactRow) {
     quantity: row.quantity,
     note: row.note,
   };
-}
-
-// Evidence arrives keyed by source, never by commitment (RNP-10: a source
-// answers for the person, not for one commitment). This is the one place
-// that turns it into the per-commitment map `deriveDay` expects, matching
-// each evidence-satisfied commitment to the source it names.
-function toEvidenceByCommitment(
-  commitments: CommitmentRow[],
-  bySourceKey: Record<string, EvidenceDay[]>,
-): EvidenceByCommitment {
-  const byCommitment: EvidenceByCommitment = {};
-
-  for (const row of commitments) {
-    if (row.satisfaction !== "evidence" || !row.source_key) continue;
-    const days = bySourceKey[row.source_key];
-    if (days) byCommitment[row.id] = days;
-  }
-
-  return byCommitment;
 }
 
 /**
@@ -378,6 +294,14 @@ function toEvidenceByCommitment(
  * Module 13's screen is what groups a slot under its goal and draws a
  * one-off beneath the last one; `DayView` and `deriveDay` (module 4) are
  * unchanged.
+ *
+ * `oneOffs` carries every one-off dated on or before `day` that no fact yet
+ * names, whatever day that fact was written on (RP-19 widened 2026-09-28):
+ * an undone one-off from three days back rides every `loadDay` after its
+ * own until it is done or deleted, read here through `o.day <= day` beside
+ * the row-level `not exists` the SQL above already runs. `OneOffSummary`
+ * still carries its own `day`, unclamped, so a caller can tell a carried one
+ * from today's own by comparing it against the day drawn.
  */
 export async function loadDay(day: string): Promise<{
   view: DayView;
@@ -413,21 +337,16 @@ export async function loadDay(day: string): Promise<{
   const view = deriveDay({ commitments, phases, facts, evidence, day });
 
   // `completeOneOff` (module 12) never deletes the one-off's own row — it
-  // only writes the fact that explains it — so a completed one-off is still
-  // in `row.one_offs` and has to be read back out here: RP-19 says "done, it
-  // leaves the list", and `row.facts` (unfiltered, unlike `facts` above) is
-  // the one place today's completions already are, no third query needed.
-  const completedOneOffIds = new Set(
-    row.facts.filter((fact) => fact.one_off_id !== null).map((fact) => fact.one_off_id),
-  );
-
+  // only writes the fact that explains it — so the `one_offs` subquery
+  // itself carries the `not exists (... facts ...)` check now (RP-19's
+  // "done, it leaves the list", true on any day the fact was written, not
+  // only today's): `row.one_offs` already excludes a completed one, no JS
+  // filter and no third query needed.
   return {
     view,
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
-    oneOffs: row.one_offs
-      .filter((oneOff) => !completedOneOffIds.has(oneOff.id))
-      .map(toOneOffSummary),
+    oneOffs: row.one_offs.map(toOneOffSummary),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),
     factsByCommitment: latestFactByCommitment(row.facts.map(toFactForCommitment)),

@@ -2343,17 +2343,18 @@ overlap in time") is true most of the time, and failing to reproduce a serialize
 the first try does not disprove this entry: the effect comes and goes with the host's own
 connection caches, not with the code.
 
-## No harness identity can reach an evidence-satisfied row, so that row has no end-to-end proof
+## A harness identity may own its own `reading.lookups` rows, and nobody else's
 
-- **What.** A pulsar row satisfied by evidence reads `reading.lookups`. The only rows there — 55, written
-  on 2026-09-11 — belong to one real voyager reader. A harness identity has none, and writing that
-  table is forbidden: it is global and belongs to `apps/voyager`.
-- **Measured 2026-09-27**, module 13. The day screen was driven at 360 px for every other state; the
-  source name on an evidence-satisfied row was proven only through a direct `deriveDay` call with a
-  synthetic `EvidenceDay`.
-- **Do.** Prove the evidence path with the reader stubbed in a child process, the way
-  `scripts/check-day.ts` degrades it, and say in the report that the screen half is unproven. Never
-  insert into `reading.lookups` to close the gap, and never sign in as the real reader.
+- **What.** A pulsar row satisfied by evidence reads `reading.lookups`. Until 2026-09-28 the only rows
+  there belonged to one real voyager reader, so no harness identity could reach an evidence-satisfied
+  row and the screen half of RP-09 had no proof.
+- **Decided by the user 2026-09-28.** `reading.lookups` is per person (`user_id`, `ON DELETE CASCADE`
+  to `auth.users`, measured), not global like `reading.word_texts` and `reading.model_spend`. A
+  registered harness identity may insert rows under its own `user_id`.
+- **Do.** Insert under your lane's own identity only, delete by the ids you created, and let the
+  identity purge be the backstop. Count the rows that are not yours before and after; the number must
+  not move. Never sign in as the real reader. `reading.word_texts` and `reading.model_spend` stay off
+  limits.
 
 ## A timestamptz read as a day lands on tomorrow every evening in Bogotá
 
@@ -2432,17 +2433,22 @@ connection caches, not with the code.
   "yesterday" or "tomorrow" is always inside it — the boundary day is exactly the one on which that
   assumption breaks, and a suite run any other day of the week will not catch it.
 
-## A pulsar spec's own database connection drops with `CONNECTION_ENDED` while other lanes load the pooler
+## A sheet closed after its action resolves reopens on the page before the refresh
 
-- **What.** A pulsar e2e fixture that opens its own `postgres(MIGRATION_DATABASE_URL)` connection
-  fails with `write CONNECTION_ENDED` mid-test. The app's own pool is untouched, and
-  `pg_stat_activity` shows no hung transaction behind it.
-- **Measured.** Three times on 2026-09-27 (`semana` RP-20, `deshacer`), and on 2026-09-28
-  `e2e/deshacer.spec.ts` «changing a done quantity row's amount…» went red 4 of 4, solo reruns
-  included, while the module 37 validator drove policies and e2e from the same lane. Once it also hit
-  `archivar.spec.ts`. Never in CI. Every time, another suite was running against the shared pooler.
-- **Do.** Read it as load, not as the spec: rerun that one spec once with nothing else running.
-  Never add a retry or a `sleep` to buy quiet. Save the log the first time it shows up in CI.
+- **What.** Next resolves a server action's promise before the router applies the page it
+  revalidated (`server-action-reducer.js:263`). `components/day/quantity-sheet.tsx` closed itself in
+  `.then()`, outside a transition, so the sheet vanished while the row still carried the old props.
+  A tap in that gap opened the sheet as if nothing was logged, and «Cambiar» then overwrote the
+  logged amount with the plan's target.
+- **Measured 2026-09-28.** `e2e/deshacer.spec.ts:179` timed out 4 of 4 on a validator's lane and red
+  in CI (PR #257). The `write CONNECTION_ENDED` beside the timeout is a consequence: Playwright ends
+  the `db` fixture at the timeout while `finally { deleteGoal }` still writes. It was first written
+  here as pooler load; it was not.
+- **Do.** Close a sheet, or show its error, inside the same `startTransition` as the action it awaits,
+  so React commits the close with the refreshed page. A spec that polls the database between the
+  close and the next tap hides this gap; drive the tap straight after the close.
+- **Read a `CONNECTION_ENDED` beside a test timeout as the timeout's echo.** Find the step that waited
+  in the trace (`--trace on`) before blaming the pooler.
 
 ## A `notFound()` after the page has streamed still answers 200
 

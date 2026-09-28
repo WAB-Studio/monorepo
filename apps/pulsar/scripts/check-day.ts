@@ -39,6 +39,10 @@ import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
 
+// The session pooler, loaded here before `installStubs` runs so it is never
+// the wrapped, counted `postgres` — used only to delete a probe's own goal.
+import postgres from "postgres";
+
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
   if (!raw) return 1;
@@ -1016,6 +1020,199 @@ async function runReplaceRaceCheck(): Promise<void> {
   );
 }
 
+/**
+ * Proves RP-19 widened 2026-09-28: `loadDay(today).oneOffs` carries a
+ * one-off dated three days back, still undone, with its own `day`; drops one
+ * dated three days back whose fact was written on a day other than today —
+ * "done leaves the list for good", true on any day the fact was written, not
+ * only today's; and never carries one dated tomorrow. Built through
+ * `createOneOff` (`app/actions/one-offs.ts`) for every row, plus one raw
+ * insert for the "got a fact yesterday" case: `declareFact` itself refuses a
+ * caller-supplied day for a one-off (`requireDayForSubject`'s own
+ * `dayOnOneOff`, RP-06 never redates one), so a fact dated anywhere but
+ * today can only be seeded the way `runZoneCheck` above already seeds state
+ * `declareFact` cannot reach. The `loadDay(today)` call itself is wrapped in
+ * `reportRun` the same way the cold/warm calls in `runMain` are, so the
+ * carrying oneOffs list and the four-statement count are proven from the
+ * very same call. Cleaned up by the ids this function returns: the fact
+ * first (`facts_delete_self`), then every one-off (`one_offs_delete_self`,
+ * which refuses a row that still carries a fact).
+ */
+async function runOneOffCarryCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { createOneOff } = await import("@/app/actions/one-offs");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { facts, oneOffs } = await import("@/db/schema");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runOneOffCarryCheck: no verified session");
+
+  const today = todayInZone();
+  const threeDaysBack = addDays(today, -3);
+  const yesterday = addDays(today, -1);
+  const tomorrow = addDays(today, 1);
+
+  const undone = await createOneOff({ name: "check-day carry probe undone", day: threeDaysBack });
+  if (!undone.ok) {
+    throw new Error(`runOneOffCarryCheck: createOneOff (undone) failed: ${undone.error}`);
+  }
+
+  const doneElsewhen = await createOneOff({
+    name: "check-day carry probe done-elsewhen",
+    day: threeDaysBack,
+  });
+  if (!doneElsewhen.ok) {
+    throw new Error(`runOneOffCarryCheck: createOneOff (done-elsewhen) failed: ${doneElsewhen.error}`);
+  }
+
+  const future = await createOneOff({ name: "check-day carry probe future", day: tomorrow });
+  if (!future.ok) {
+    throw new Error(`runOneOffCarryCheck: createOneOff (future) failed: ${future.error}`);
+  }
+
+  const [factRow] = await withGoalsDb((tx) =>
+    tx.execute<{ id: string }>(sql`
+      insert into ${facts} (user_id, commitment_id, one_off_id, goal_id, day)
+      values (${person.id}, null, ${doneElsewhen.oneOffId}, null, ${yesterday})
+      returning id
+    `),
+  );
+
+  const start = wireCalls.length;
+  const day = await loadDay(today);
+  reportRun("carry", wireCalls.slice(start), false);
+
+  const ids = day.oneOffs.map((oneOff) => oneOff.id);
+  const undoneRow = day.oneOffs.find((oneOff) => oneOff.id === undone.oneOffId);
+
+  assert(
+    "loadDay(today).oneOffs carries a one-off dated three days back, still undone, with its own day",
+    undoneRow !== undefined && undoneRow.day === threeDaysBack,
+    `row = ${JSON.stringify(undoneRow)}`,
+  );
+  assert(
+    "loadDay(today).oneOffs drops a one-off whose fact was written on a day other than today",
+    !ids.includes(doneElsewhen.oneOffId),
+    `ids = ${JSON.stringify(ids)}`,
+  );
+  assert(
+    "loadDay(today).oneOffs never carries a one-off dated tomorrow",
+    !ids.includes(future.oneOffId),
+    `ids = ${JSON.stringify(ids)}`,
+  );
+
+  await withGoalsDb((tx) => tx.execute(sql`delete from ${facts} where id = ${factRow.id}`));
+  await withGoalsDb((tx) =>
+    tx.execute(
+      sql`delete from ${oneOffs} where id in (${undone.oneOffId}, ${doneElsewhen.oneOffId}, ${future.oneOffId})`,
+    ),
+  );
+}
+
+/**
+ * Proves RP-06 for `LoggedFact.writtenOn` (`lib/day/logged-fact.ts`): a fact
+ * dated `yesterday` but inserted right now reads back from
+ * `loadDay(yesterday)` with `writtenOn` — today's own civil day, read
+ * through `civilDateInZone`, never a bare substring of `writtenAt` — never
+ * the day the fact explains. `declareFact` cannot seed this state for a
+ * fresh commitment: `requireDayForSubject` refuses a `day` before the
+ * commitment's own `createdDay`, which a commitment created moments ago
+ * always is, so the raw insert below is the only way to reach a fact whose
+ * own day and whose own written moment fall on two different civil days.
+ */
+async function runFactWrittenOnCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { facts } = await import("@/db/schema");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runFactWrittenOnCheck: no verified session");
+
+  const today = todayInZone();
+  const yesterday = addDays(today, -1);
+
+  const goal = await createGoal({ name: "check-day written-on probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runFactWrittenOnCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day written-on probe",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!commitment.ok) {
+    throw new Error(`runFactWrittenOnCheck: addCommitment failed: ${commitment.error}`);
+  }
+  const testId = commitment.commitmentId;
+
+  const [factRow] = await withGoalsDb((tx) =>
+    tx.execute<{ id: string }>(sql`
+      insert into ${facts} (user_id, commitment_id, one_off_id, goal_id, day)
+      values (${person.id}, ${testId}, null, ${goal.goalId}, ${yesterday})
+      returning id
+    `),
+  );
+
+  const day = await loadDay(yesterday);
+  const logged = day.factsByCommitment[testId];
+
+  assert(
+    "a fact written today for yesterday comes back from loadDay(yesterday) with writtenOn = today",
+    logged !== undefined && logged.writtenOn === today,
+    `logged = ${JSON.stringify(logged)}`,
+  );
+
+  const slot = day.view.slots.find((candidate) => candidate.commitmentId === testId);
+  assert(
+    "that same fact satisfies the commitment's own slot on the day it explains (yesterday)",
+    slot?.satisfied === true,
+    `slot = ${JSON.stringify(slot)}`,
+  );
+
+  await withGoalsDb((tx) => tx.execute(sql`delete from ${facts} where id = ${factRow.id}`));
+}
+
+/**
+ * Proves `lib/queries/day.ts`'s own `p.ends_on >= day` bound: a phase ending
+ * on day D is in `loadDay(D).phases`. The week-bound check above proves the
+ * same edge for `loadWeek`; this is `loadDay`'s own statement.
+ */
+async function runPhaseDayBoundCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { createGoal, addPhase } = await import("@/app/actions/plan");
+
+  const endsOn = await pickFreshPhaseMonday();
+
+  const goal = await createGoal({ name: "check-day phase day-bound probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runPhaseDayBoundCheck: createGoal failed: ${goal.error}`);
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const phase = await addPhase({
+      goalId: goal.goalId,
+      aim: "check-day phase day-bound probe",
+      startsOn: addDays(endsOn, -7),
+      endsOn,
+    });
+    if (!phase.ok) throw new Error(`runPhaseDayBoundCheck: addPhase failed: ${phase.error}`);
+
+    const day = await loadDay(endsOn);
+    assert(
+      "a phase ending on day D is in loadDay(D).phases (RP-15)",
+      day.phases.some((candidate) => candidate.id === phase.phaseId),
+      `phases = ${JSON.stringify(day.phases.map((candidate) => candidate.id))}, wanted ${phase.phaseId}`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goal.goalId}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -1082,6 +1279,9 @@ async function runMain(): Promise<void> {
   await runEvidenceRefusalCheck();
   await runFactUniqueCheck();
   await runReplaceRaceCheck();
+  await runOneOffCarryCheck();
+  await runFactWrittenOnCheck();
+  await runPhaseDayBoundCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

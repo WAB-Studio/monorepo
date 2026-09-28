@@ -13,7 +13,11 @@ export type Translator = Awaited<ReturnType<typeof getTranslations>>;
 // fases"): `goal.countWords` covers what a real plan holds; past its length
 // the plain numeral still reads correctly, never a placeholder. Exported: the
 // goal screen's own phases section needs the identical wording.
-export function countWord(n: number, t: Translator): string {
+export function countWord(n: number, t: Translator, feminine = false): string {
+  // Only «una» differs from the masculine list, so the feminine one stops at
+  // 2 and falls through to the shared words after it.
+  const own = feminine ? (t.raw("goal.countWordsFeminine") as string[]) : [];
+  if (own[n] !== undefined) return own[n];
   const words = t.raw("goal.countWords") as string[];
   return words[n] ?? String(n);
 }

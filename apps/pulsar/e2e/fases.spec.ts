@@ -48,11 +48,12 @@ async function phaseCount(db: postgres.Sql, goalId: string): Promise<number> {
 // /auth/confirm` redemption, never a typed address — RNP-09) — offset by
 // 500 from its own `9000 + laneNumber()` so the two specs, run together
 // under `workers: 2`, never mint at the same disposable lane. Its goal and
-// phase are never deleted through this app's own doors either, but
-// `harness:reap`'s own delete of the identity's `auth.users` row cascades
-// through `goals.goals.user_id`'s own `ON DELETE CASCADE` (`db/schema/
-// goals.ts`) — a superuser statement, not a grant this role holds — so
-// nothing here accumulates past that identity's own stale heartbeat. Kept
+// phase are never deleted through this app's own doors either, but the
+// identity is registered under the suite's run (`HARNESS_RUN_ID`, inherited
+// through `process.env`) and `scripts/harness/e2e-run.ts`'s teardown deletes
+// its `auth.users` row, which cascades through `goals.goals.user_id`'s own
+// `ON DELETE CASCADE` (`db/schema/goals.ts`) — a superuser statement, not a
+// grant this role holds — so nothing here outlives the run. Kept
 // separate from the lane's own reused goal below: the "solid button, empty
 // goal" state cannot be reproduced on a goal any rerun has already given a
 // phase to.
@@ -87,6 +88,7 @@ test("a fresh goal draws its own way in solid; the first phase added lists as se
     const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
     await expect(addPhaseLink).toBeVisible();
     await expect(addPhaseLink).toHaveClass(/\bsolid\b/);
+    await expect(page.getByText("cero fases")).toBeVisible();
 
     // A goal just opened has nothing before it: the first span defaults to
     // weeks 1–4, counted from its own opening (today).
@@ -99,6 +101,7 @@ test("a fresh goal draws its own way in solid; the first phase added lists as se
 
     await expect(page.getByText(aim)).toBeVisible();
     await expect(page.getByText("semanas 1–4")).toBeVisible();
+    await expect(page.getByText("una fase", { exact: true })).toBeVisible();
 
     // The day this phase covers names it (RP-15): a goal's own opening day
     // falls in week 1, so today's screen reads this phase's own aim.

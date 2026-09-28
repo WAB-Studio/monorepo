@@ -1,18 +1,28 @@
 import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
+import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
-import type { Cadence, DeclaredFact, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
-import { readerFor } from "@/lib/evidence/registry";
+import { measureByWeek } from "@/lib/day/review";
+import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
+import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import {
+  toCadence,
+  toDeclaredFact,
+  toPhase,
+  toSatisfiedBy,
+  type CommitmentRow as BaseCommitmentRow,
+  type PhaseRow,
+} from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 
-// The same fixed list `lib/queries/day.ts` and `lib/queries/week.ts` keep,
-// for the same reason: which source a goal's commitments actually name is
-// only known once the goals query resolves, and waiting on that would turn
-// this file's own `Promise.all` into the chain RNP-03 forbids.
-const KNOWN_EVIDENCE_SOURCE_KEYS = ["reading_lookups"] as const;
+// `withReadingDb`'s query fans out over `knownSourceKeys()`
+// (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts` and
+// `lib/queries/week.ts` do: which source a goal's commitments actually name
+// is only known once the goals query resolves, and waiting on that would
+// turn this file's own `Promise.all` into the chain RNP-03 forbids.
 
 type GoalRow = {
   id: string;
@@ -30,32 +40,10 @@ type GoalRow = {
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
 // `evidence_sources`. `source_key` feeds `evidenceMeasureTotal` below, the
 // same way `lib/queries/day.ts`'s own `source_key` feeds its per-commitment
-// mapping; `source_label_key` is what lets the screen say which source an
-// evidence commitment names (RP-09) — a catalogue key, never a sentence
-// (RNP-01).
-type CommitmentRow = {
-  id: string;
-  name: string;
-  cadence_kind: Cadence["kind"];
-  cadence_n: number | null;
-  cadence_weekdays: number[] | null;
-  satisfaction: SatisfiedBy["kind"];
-  target_quantity: number | null;
-  unit: string | null;
-  threshold: number | null;
-  retired_at: string | null;
-  created_at: string;
-  source_key: string | null;
-  source_unit: string | null;
-  source_label_key: string | null;
-};
-
-type PhaseRow = {
-  id: string;
-  aim: string;
-  starts_on: string;
-  ends_on: string | null;
-};
+// mapping; `source_label_key` widens `rows.ts`'s own `CommitmentRow` and is
+// what lets the screen say which source an evidence commitment names (RP-09)
+// — a catalogue key, never a sentence (RNP-01).
+type CommitmentRow = BaseCommitmentRow & { source_label_key: string | null };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
 // bare quantity, never its own unit.
@@ -123,6 +111,13 @@ export type GoalView = {
   measureTotal: number;
   phases: Phase[];
   commitments: GoalCommitment[];
+  // The measure read week by week, from the goal's own opening to the week
+  // holding today (RP-17) — `measureByWeek` (`lib/day/review.ts`), run over
+  // the same declared facts and evidence days `measureTotal` above sums.
+  // Evidence `"unreadable"` still fills this: `loadGoal` hands `measureByWeek`
+  // an empty evidence list in that case (RNP-04), so a week reads its
+  // declared half alone rather than going missing.
+  weeks: ReviewWeek[];
   // Whether the second transaction — another app's own rows — could be read
   // this time (RNP-04). `measureTotal` above is still the goal's real total
   // when this reads `"unreadable"`: it is the declared half alone, never a
@@ -173,43 +168,6 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
   return row;
 }
 
-function toCadence(row: CommitmentRow): Cadence {
-  switch (row.cadence_kind) {
-    case "daily":
-      return { kind: "daily" };
-    case "weekdays":
-      return { kind: "weekdays", days: row.cadence_weekdays ?? [] };
-    case "times_per_week":
-      return { kind: "times_per_week", count: row.cadence_n ?? 0 };
-    case "every_n_days":
-      // `goals.commitments` has no anchor column: RP-12 (`docs/pulsar/
-      // SPEC.md`) settles "every N days" to count from `created_at`, read
-      // as the person's own civil day, never Postgres's UTC render of the
-      // timestamp — `created_at` between 19:00 and 23:59:59 Bogotá already
-      // reads as the next UTC day, so slicing that string would anchor a
-      // fifth of all commitments one day late and silently shift the whole
-      // cadence from the day it was actually set up.
-      return {
-        kind: "every_n_days",
-        n: row.cadence_n ?? 1,
-        anchor: civilDateInZone(new Date(row.created_at)),
-      };
-    case "times_per_month":
-      return { kind: "times_per_month", count: row.cadence_n ?? 0 };
-  }
-}
-
-function toSatisfiedBy(row: CommitmentRow): SatisfiedBy {
-  switch (row.satisfaction) {
-    case "tap":
-      return { kind: "tap" };
-    case "quantity":
-      return { kind: "quantity", target: row.target_quantity ?? 0, unit: row.unit ?? "" };
-    case "evidence":
-      return { kind: "evidence", threshold: row.threshold ?? 1, unit: row.source_unit ?? "" };
-  }
-}
-
 function toGoalCommitment(row: CommitmentRow, factDayCount: number): GoalCommitment {
   return {
     id: row.id,
@@ -236,21 +194,6 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const [commitmentId, days] of daysByCommitment) counts.set(commitmentId, days.size);
   return counts;
-}
-
-function toPhase(row: PhaseRow): Phase {
-  return { id: row.id, name: row.aim, startsOn: row.starts_on, endsOn: row.ends_on };
-}
-
-function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact {
-  return {
-    commitmentId: row.commitment_id,
-    day: row.day,
-    writtenAt: row.written_at,
-    quantity: row.quantity,
-    unit: row.commitment_unit,
-    note: row.note,
-  };
 }
 
 type EvidenceOutcome = {
@@ -300,7 +243,7 @@ async function queryEvidenceBySource(
   const bySourceKey: Record<string, EvidenceDay[]> = {};
   const { from, to } = goalSpan(goalId);
 
-  for (const key of KNOWN_EVIDENCE_SOURCE_KEYS) {
+  for (const key of knownSourceKeys()) {
     const reader = readerFor(key);
     if (!reader) continue;
     bySourceKey[key] = await reader({ personId, from, to, zone: TIME_ZONE, tx });
@@ -309,27 +252,14 @@ async function queryEvidenceBySource(
   return bySourceKey;
 }
 
-/**
- * The evidence half of `measureTotal` (RP-14, decided 2026-09-22 —
- * `docs/pulsar/SPEC.md`): a quantity in the goal's own measure unit feeds it
- * whether a fact declared it or a source recorded it, and evidence never
- * writes a fact (RP-05), so this is the only place that quantity is ever
- * summed. Only a commitment that is both evidence-satisfied and named in the
- * goal's own unit counts — the same "in that measure's unit" rule `measureOf`
- * applies to a declared fact's own unit, read here off the commitment's
- * `source_unit` instead. Deduplicated by source key, not by commitment: two
- * commitments naming the same source must not sum its rows twice. No date
- * filter here — `goalSpan` already bounded what `bySourceKey` can hold to
- * the goal's own span, in SQL, before these rows ever reached this process.
- */
-function evidenceMeasureTotal(
-  goal: GoalRow,
-  commitments: CommitmentRow[],
-  bySourceKey: Record<string, EvidenceDay[]>,
-): number {
-  if (!goal.measure_unit) return 0;
-
-  const matchingKeys = new Set(
+// The source keys a goal's own evidence-satisfied commitments name, in its
+// own measure unit — the one dedupe `evidenceMeasureTotal` and
+// `evidenceDaysForMeasure` both apply, by source key rather than by
+// commitment: two commitments naming the same source must not sum its rows
+// twice.
+function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<string> {
+  if (!goal.measure_unit) return new Set();
+  return new Set(
     commitments
       .filter(
         (row) =>
@@ -339,12 +269,32 @@ function evidenceMeasureTotal(
       )
       .map((row) => row.source_key as string),
   );
+}
 
-  let total = 0;
-  for (const key of matchingKeys) {
-    for (const day of bySourceKey[key] ?? []) total += day.quantity;
+/**
+ * The evidence half of `measureTotal` and `weeks` alike (RP-14, decided
+ * 2026-09-22 — `docs/pulsar/SPEC.md`; RP-17): a quantity in the goal's own
+ * measure unit feeds it whether a fact declared it or a source recorded it,
+ * and evidence never writes a fact (RP-05), so this is the only place that
+ * quantity is ever read. Only a commitment that is both evidence-satisfied
+ * and named in the goal's own unit counts — the same "in that measure's
+ * unit" rule `measureOf` applies to a declared fact's own unit, read here off
+ * the commitment's `source_unit` instead. No date filter here — `goalSpan`
+ * already bounded what `bySourceKey` can hold to the goal's own span, in
+ * SQL, before these rows ever reached this process. `loadGoal` sums this
+ * list for `measureTotal` and hands it whole to `measureByWeek` for `weeks`,
+ * so the two never read `bySourceKey` under two different dedupes.
+ */
+function evidenceDaysForMeasure(
+  goal: GoalRow,
+  commitments: CommitmentRow[],
+  bySourceKey: Record<string, EvidenceDay[]>,
+): EvidenceDay[] {
+  const days: EvidenceDay[] = [];
+  for (const key of matchingSourceKeys(goal, commitments)) {
+    for (const day of bySourceKey[key] ?? []) days.push(day);
   }
-  return total;
+  return days;
 }
 
 /**
@@ -355,8 +305,18 @@ function evidenceMeasureTotal(
  * settled here, not awaited bare: a rejection degrades to `"unreadable"` and
  * `measureTotal` still carries the declared half alone (RNP-04) — a goal
  * screen never fails because another app's rows could not be read.
+ *
+ * `null` reads as "this goal is not there" — a shape nobody owns or one whose
+ * id was never a uuid — and only that; every other rejection (an outage, a
+ * dropped connection) propagates untouched, so `goal-screen.tsx`'s own
+ * `.catch(() => null)` degrading a Supabase outage to a 404 dies with this
+ * function returning the honest thing instead. The non-uuid check runs before
+ * either transaction opens — no round trip spent asking the database to
+ * refuse a shape it was never going to match (`22P02`).
  */
-export async function loadGoal(goalId: string): Promise<GoalView> {
+export async function loadGoal(goalId: string): Promise<GoalView | null> {
+  if (!z.uuid().safeParse(goalId).success) return null;
+
   const person = await getPerson();
   if (!person) throw new Error("loadGoal called without a verified session");
 
@@ -368,7 +328,7 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
     ),
   ]);
 
-  if (!row.goal) throw new Error("loadGoal called with an unknown goal");
+  if (!row.goal) return null;
 
   const phases = row.phases.map(toPhase);
   const dayCounts = factDayCounts(row.facts);
@@ -385,10 +345,25 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
   // sum into yet, so the total stays zero rather than matching facts with no
   // unit of their own against a measure the goal does not have.
   const declaredTotal = row.goal.measure_unit ? measureOf(row.goal.measure_unit, facts) : 0;
-  const evidenceTotal =
+  const evidenceDays =
     evidenceOutcome.status === "read"
-      ? evidenceMeasureTotal(row.goal, row.commitments, evidenceOutcome.bySourceKey)
-      : 0;
+      ? evidenceDaysForMeasure(row.goal, row.commitments, evidenceOutcome.bySourceKey)
+      : [];
+  const evidenceTotal = evidenceDays.reduce((total, day) => total + day.quantity, 0);
+
+  // The same civil-day conversion `goalSpan`'s own SQL runs
+  // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
+  // one row this statement already carries: week 1 opens the day the goal
+  // was created (decided by the user 2026-09-28), never a second query.
+  const weeks = measureByWeek({
+    openedOn: civilDateInZone(new Date(row.goal.created_at)),
+    horizon: row.goal.horizon,
+    today: todayInZone(),
+    unit: row.goal.measure_unit,
+    facts,
+    evidence: evidenceDays,
+    phases,
+  });
 
   return {
     id: row.goal.id,
@@ -401,6 +376,7 @@ export async function loadGoal(goalId: string): Promise<GoalView> {
     measureTotal: declaredTotal + evidenceTotal,
     phases,
     commitments,
+    weeks,
     evidence: evidenceOutcome.status,
   };
 }

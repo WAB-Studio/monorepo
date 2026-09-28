@@ -5,5 +5,18 @@
     "today": "Hoy",
     "week": "Semana",
     "goal": "Meta"
+  },
+  "notFound": {
+    "kicker": "no está",
+    "title": "Esta página no existe",
+    "primaryAction": "Ir a hoy",
+    "secondaryAction": "Ver las metas"
+  },
+  "error": {
+    "kicker": "no cargó",
+    "title": "No se pudo abrir",
+    "body": "Lo que ya anotaste está guardado.",
+    "retry": "Intentar otra vez",
+    "secondaryAction": "Ir a hoy"
   }
 }

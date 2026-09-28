@@ -24,7 +24,7 @@ export default async function NewPhasePage({
   if (!person) redirect("/entrar");
 
   const { goalId } = await params;
-  const goal = await loadGoal(goalId).catch(() => null);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
   // RP-24: an archived goal draws no "Añadir una fase" way in; a direct
   // visit to this route is refused the same way `listGoals` (open-only)

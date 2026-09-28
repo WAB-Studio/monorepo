@@ -38,7 +38,7 @@ function phaseSpanLabel(openedOn: string, startsOn: string, endsOn: string | nul
  * show and nothing to sum.
  */
 export async function GoalScreen({ goalId }: { goalId: string }) {
-  const goal = await loadGoal(goalId).catch(() => null);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
   const t = await getTranslations();
@@ -66,6 +66,12 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <Figure value={goal.measureTotal} unit={goal.measureUnit} variant="measure" />
       ) : null}
 
+      {goal.measureUnit ? (
+        <Button asChild variant="ghost">
+          <Link href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</Link>
+        </Button>
+      ) : null}
+
       {goal.measureUnit && goal.evidence === "unreadable" ? (
         <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
       ) : null}
@@ -79,7 +85,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <section>
         <SectionLabel>
           {t("goal.detail.phasesCount", {
-            word: countWord(goal.phases.length, t),
+            word: countWord(goal.phases.length, t, true),
             count: goal.phases.length,
           })}
         </SectionLabel>

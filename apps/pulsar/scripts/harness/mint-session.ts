@@ -1,13 +1,18 @@
 // Mints a real pulsar session and leaves it standing, for `seed-goal.ts` — a
-// second process — to drive under. Unlike `apps/voyager/scripts/harness/
-// mint-reader-session.ts`, which this file otherwise copies, nothing here
-// drops the identity when it is done: the whole point is a person `seed-
-// goal.ts` can still sign in as, and there is nothing here for it to sign in
-// with once dropped.
+// second process — and the browser suite to drive under. Unlike `apps/voyager/
+// scripts/harness/mint-reader-session.ts`, which this file otherwise copies,
+// nothing here drops the identity or closes a run.
+//
+// Under `check:e2e` the run belongs to `e2e-run.ts`, whose id arrives as
+// `HARNESS_RUN_ID`: the identity is registered under it, and that process
+// alone drops it and stamps `finished_at`. Run bare — for `check:day`,
+// `check:goal` and `check:goal-actions`, which read the same session file —
+// this opens a `seed` run of its own and leaves it open: once its heartbeat is
+// 30 minutes stale, `harness:reap` takes the run and the identity.
 //
 // `registerEphemeralIdentity` is not imported: it inserts into `app_users`, a
-// finances table a pulsar person has no row in. The run and the
-// `harness.identities` insert are composed here instead, by hand, exactly as
+// finances table a pulsar person has no row in. The `harness.identities`
+// insert is composed here instead, by hand, exactly as
 // `mint-reader-session.ts` does it.
 //
 // NOTHING HERE ASKS THE AUTH SERVER TO SEND (`apps/orbit/scripts/harness/
@@ -38,6 +43,14 @@ function laneNumber(): number {
 }
 
 const lane = laneNumber();
+
+async function registeringRunId(): Promise<string> {
+  const inherited = process.env.HARNESS_RUN_ID?.trim();
+  if (inherited) return inherited;
+  const own = await openRun("seed", sql);
+  console.log(`no HARNESS_RUN_ID — opened seed run ${own}, left open for harness:reap`);
+  return own;
+}
 
 // `apps/pulsar` on `:320<n-1>` (`scripts/worktree.sh`'s own table). Overridable
 // for a lane pointed at someone else's already-running server (`AGENTS.md`,
@@ -189,19 +202,13 @@ function writeStorageState(url: string, cookies: MintedCookie[]): void {
 }
 
 async function main(): Promise<void> {
-  const runId = await openRun("seed", sql);
-  const identity = await createIdentity(runId);
+  const identity = await createIdentity(await registeringRunId());
 
   const hash = await landRecoveryToken(identity.id, identity.email);
   const cookies = await redeemToken(hash);
   writeStorageState(baseUrl(), cookies);
 
   console.log(`minted a session for ${identity.email} (${identity.id}), lane ${lane}`);
-  // Deliberately not closed: the identity has to outlive this process for
-  // `seed-goal.ts` to sign in as it, so the run stays open. Its heartbeat
-  // stops the moment this process exits, and once it is 30 minutes stale
-  // `apps/orbit/scripts/harness/reap.ts` — the one place that owns tearing a
-  // run down — takes both the run and the identity it named.
 }
 
 void (async () => {

@@ -362,5 +362,46 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   nothing, so RP-16's «no score» does not forbid it. Decided by the user 2026-09-28.
 - **A one-off left undone carries to the next day.** It reads on Hoy, marked as from an earlier day,
   until it is done or deleted. Not built yet; no board draws it. Decided by the user 2026-09-28.
-- **Pulsar has no Spanish not-found or error page yet.** Next's English one reaches a stale link.
-  Shipped that way on purpose; the next slice draws both. Decided by the user 2026-09-28.
+- **Pulsar's not-found and error pages speak Spanish**, as `NoEncontrada.dc.html` and `Fallo.dc.html`
+  draw. The not-found marks no tab. An error inside the app keeps the nav of the layout it broke in,
+  so a crash on Hoy shows Hoy marked: the error happened in that place. The quiet accent link is
+  `Button tone="accent"`. Decided 2026-09-28 by the coordinator, the user having delegated it.
+- **The review's columns are semana, the measure, fase and nota.** The wide board's second figure
+  column («monólogo sin parar») is not built: no data feeds it. The phone shows the measure and the
+  note alone. A week with nothing reads «0», never «—» and never hidden; the review stops at the
+  current week, whose note reads «en curso». Decided 2026-09-28 by the coordinator, the user having
+  delegated it.
+- **The way into the review is a ghost «Ver por semana» under the goal's measure figure.** No board
+  draws one; it shows only on a goal with a measure. Decided 2026-09-28 by the coordinator, the user
+  having delegated it.
+- **The review is the one screen wider than 640 px.** `Page` takes `width="wide"`, which lifts the
+  cap to 1020 past the kit's 700 px breakpoint, as `RevisionEscritorio.dc.html` draws. Decided
+  2026-09-28 by the coordinator, the user having delegated it.
+- **Six boards drawn for the slice «la revisión», approved by the user 2026-09-28.** `Hoy.dc.html`
+  (redrawn: a step back to yesterday before the date), `Semana.dc.html` (redrawn: past days within
+  seven are links; no footer, no «descanso deliberado»), `HoySueltaAtrasada.dc.html` (a carried
+  one-off reads «del sábado 19» under its text, before today's), `DiaPasado.dc.html` (step back,
+  «volver a hoy», «anotado el lunes 21» on a late fact, no step back on the seventh day, no one-offs),
+  `NoEncontrada.dc.html` and `Fallo.dc.html` (no tab marked: neither is a place in the app).
+- **A past day lists only what existed that day.** A commitment created after the day drawn is not
+  on `/dia/<fecha>`; with nothing left, the day says it asked for nothing. Not built yet. Decided by
+  the user 2026-09-28, over allowing a backfill before the commitment existed.
+- **A week is Monday to Sunday, on Semana and in the review alike.** A goal's week 1 is the partial
+  week up to its first Sunday. Replaces «the review's week is the goal's own», taken the same morning.
+  Not built yet. Decided by the user 2026-09-28, over 7-day runs from the opening day, and over
+  printing both with dates.
+- **A done one-off stays on Hoy, in a «hechas hoy» list, and a second tap undoes it**, as a
+  commitment's fact does. Not built yet; no board draws it. Decided by the user 2026-09-28, over an
+  undo toast and over leaving it.
+- **A goal's horizon can be moved from the goal screen**, which keeps «Se puede mover después» true.
+  Not built yet; no board draws it. Decided by the user 2026-09-28, over changing the copy.
+- **A one-off's field takes a day, today by default.** One gesture still writes it for today; the
+  person may pick «mañana», a date, or «sin día», and a dayless one waits in its own list (RP-21).
+  Not built yet; no board draws it. Decided by the user 2026-09-28, over one-offs for today only.
+- **The seventh day back says why there is no step further.** One line from the catalogue; the limit
+  stays `PAST_DAY_LIMIT` = 7. Not built yet. Decided by the user 2026-09-28, over widening it to 14 or 30.
+- **The cadences take bounds a person means:** at most 7 times a week and every 365 days at most, and
+  the message says so. A commitment already stored outside them still reads. Not built yet. Decided
+  by the user 2026-09-28, over keeping 1 to 1 000.
+- **RP-17 is kept through the move to Monday–Sunday weeks.** Its text stays true; the change lives in
+  the decision above. Decided by the user 2026-09-28, over retiring it for a new code.

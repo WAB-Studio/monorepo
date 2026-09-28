@@ -65,10 +65,10 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### The evidence another app leaves
 
-- [ ] **RP-07** — A commitment can be satisfied by evidence another app already records, with no act from the person. **A source is declared, never built in**: it names where the rows live, what one row means and what the person sees it called. The reading app's searches are the first one; the app names no source in its schema, its screens or its types.
+- [x] **RP-07** — A commitment can be satisfied by evidence another app already records, with no act from the person. **A source is declared, never built in**: it names where the rows live, what one row means and what the person sees it called. The reading app's searches are the first one; the app names no source in its schema, its screens or its types.
   - Widened 2026-09-22, same day and same question. Written as "the reading app's searches", a second source — a movement in `apps/orbit`, a commit, an import — cost a migration instead of a reader.
-- [ ] **RP-08** — A commitment satisfied by evidence says **how much** of it satisfies the day, in the source's own unit, and the person sets it. **The reading app's source is offered at one search**: opening the dictionary and looking something up is reading. Taken by the user 2026-09-22, over ten and over forty, on the ground that the copy does not yet start on its own (RL-30) and a high threshold would make a working feature read as a broken one. A source that only ever happens once satisfies at one and offers no choice.
-- [ ] **RP-09** — Evidence names its source wherever it is drawn. A day marked by the reading app never reads as a day the person said they did.
+- [x] **RP-08** — A commitment satisfied by evidence says **how much** of it satisfies the day, in the source's own unit, and the person sets it. **The reading app's source is offered at one search**: opening the dictionary and looking something up is reading. Taken by the user 2026-09-22, over ten and over forty, on the ground that the copy does not yet start on its own (RL-30) and a high threshold would make a working feature read as a broken one. A source that only ever happens once satisfies at one and offers no choice.
+- [x] **RP-09** — Evidence names its source wherever it is drawn. A day marked by the reading app never reads as a day the person said they did.
 - [x] **RP-10** — Evidence is read where it already lives and is never copied into this app. Emptying the record in the reading app empties the evidence here too: there is one truth and it has one home. Decided by the user 2026-09-22.
 
 #### The goal and its plan
@@ -99,8 +99,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### The thing that happens once
 
-- [ ] **RP-19** — A person writes down something that happens **once** — call the bank, renew the passport, finish chapter three — with no cadence, no goal and no plan behind it. It takes a day when it has one and sits in the day's list beside the commitments; done, it leaves the list and stays in the log as the fact it produced. Asked for by the user 2026-09-22: a log of goals that cannot hold a plain errand is not the app they asked for.
-- [ ] **RP-20** — A one-off can belong to a goal or to nothing at all. Belonging to one, it counts toward that goal's week; belonging to nothing, it is still a fact with a day, and the week still shows it.
+- [ ] **RP-19** — A person writes down something that happens **once** — call the bank, renew the passport, finish chapter three — with no cadence, no goal and no plan behind it. It takes a day when it has one and sits in the day's list beside the commitments; done, it leaves the list and stays in the log as the fact it produced. Left undone, it carries to every day after its own, showing the day it belonged to, until it is done or deleted. Asked for by the user 2026-09-22: a log of goals that cannot hold a plain errand is not the app they asked for. The carry was added by the user 2026-09-28.
+- [x] **RP-20** — A one-off can belong to a goal or to nothing at all. Belonging to one, it counts toward that goal's week; belonging to nothing, it is still a fact with a day, and the week still shows it.
 - [x] **RP-22** — A one-off written by mistake can be deleted, and nothing survives it: it never happened, so there is no fact to keep. The act says, where it is offered, how it differs from marking the thing done — done leaves a record, deleted leaves nothing. Asked for by the user 2026-09-22, after the grant layer was measured refusing it: «llamar al banko» with a typo is a first-week problem and today it stays forever.
 - [x] **RP-23** — A goal can be renamed. Its facts, weeks and commitments keep reading as they did. Asked for by the user 2026-09-27.
 - [x] **RP-24** — A goal can be archived. It leaves the day and the week; its facts and the weeks it governed stay, and it can be opened again from the goals list. Nothing is deleted. Asked for by the user 2026-09-27.
@@ -109,7 +109,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 #### The week and the review
 
 - [x] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
-- [ ] **RP-17** — A goal's measure is read week by week, as the one table its review needs, from the first week to the current one.
+- [x] **RP-17** — A goal's measure is read week by week, as the one table its review needs, from the first week to the current one.
 
 #### The account
 

@@ -18,7 +18,20 @@
     "unreadableEvidence": "No pudimos leer una fuente. Lo declarado sigue aquí.",
     "rename": "Renombrar",
     "archive": "Archivar esta meta",
-    "reopen": "Reabrir"
+    "reopen": "Reabrir",
+    "reviewLink": "Ver por semana"
+  },
+  "review": {
+    "caption": "por semana",
+    "columns": {
+      "week": "semana",
+      "phase": "fase",
+      "note": "nota"
+    },
+    "weekLabel": "semana {n}",
+    "current": "en curso",
+    "noMeasure": "Esta meta todavía no tiene cifra.",
+    "back": "Volver a la meta"
   },
   "commitments": {
     "retired": "retirado",
@@ -40,6 +53,11 @@
   "units": {
     "searches": "{count, plural, one {búsqueda} other {búsquedas}}"
   },
+  "countWordsFeminine": [
+    "cero",
+    "una",
+    "dos"
+  ],
   "countWords": [
     "cero",
     "un",
