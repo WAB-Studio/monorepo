@@ -72,11 +72,10 @@ test("the Meta tab opens the goals list, and a second goal is opened from it, no
 // running at the same moment. A fresh, disposable identity is minted
 // instead, through the same door `seed-goal.ts` itself signs in with — a
 // real `GET /auth/confirm` redemption, never a typed address (RNP-09) — at a
-// lane number no real lane ever uses, so it collides with nothing. It is
-// left unregistered from further use and, like every identity `mint-
-// session.ts` itself mints, for `harness:reap` to take once its heartbeat
-// goes stale; nothing here writes a second goal, or any goal at all, under
-// it.
+// lane number no real lane ever uses, so it collides with nothing. The
+// child inherits `HARNESS_RUN_ID` through `process.env`, so the identity is
+// registered under the suite's own run and dropped with it at teardown
+// (`scripts/harness/e2e-run.ts`); nothing here writes a goal under it.
 function mintDisposableSession(lane: number, baseUrl: string): void {
   execFileSync(
     process.execPath,

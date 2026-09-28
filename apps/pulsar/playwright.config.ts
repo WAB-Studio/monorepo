@@ -13,6 +13,9 @@ const baseURL = process.env.PULSAR_BASE_URL ?? "http://localhost:3200";
 
 export default defineConfig({
   testDir: "./e2e",
+  // Opens the suite's harness run, mints and seeds the lane's person under it,
+  // and drops them when the last spec ends.
+  globalSetup: "./scripts/harness/e2e-run.ts",
   // Gitignored, so a run leaves the tree clean.
   outputDir: "./private/playwright-results",
   workers: 2,

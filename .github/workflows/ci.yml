@@ -321,7 +321,7 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # `check:e2e`, `harness:mint-session` and `harness:seed-goal` all read
+      # `check:e2e` and the harness scripts its global setup spawns all read
       # `--env-file=.env.local`, not the job environment.
       - name: Write .env.local from the secrets
         working-directory: apps/pulsar
@@ -354,11 +354,10 @@ jobs:
           done
           echo "the server never answered"; tail -50 /tmp/pulsar.log; exit 1
 
-      # Lane 8's signed-in person and its seeded goal, minted the same way a
-      # local lane's are — no typed address, no email sent (RNP-09).
-      - run: npm run harness:mint-session -w apps/pulsar
-      - run: npm run harness:seed-goal -w apps/pulsar
-
+      # Its global setup (`scripts/harness/e2e-run.ts`) opens the one harness
+      # run, mints and seeds lane 8's person under it — no typed address, no
+      # email sent (RNP-09) — and its teardown drops every identity and closes
+      # the run, so the reap below is never blocked by this job's own run.
       - run: npm run check:e2e -w apps/pulsar
 
       # The reaper lives in `apps/orbit` — `harness.identities` and

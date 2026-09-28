@@ -4,11 +4,11 @@ import { resolve } from "node:path";
 import { test as base, expect } from "@playwright/test";
 import postgres from "postgres";
 
-// The signed-in person every spec drives: module 20's `mint-session.ts`
-// leaves a real, still-standing identity behind and writes its cookie to
-// this file — never a typed address, never a fresh sign-in per spec
-// (RNP-09). `playwright.config.ts` points the whole suite's browser context
-// at it; nothing here opens `/entrar`.
+// The signed-in person every spec drives: the suite's global setup mints a
+// real identity under its own run and writes its cookie to this file —
+// never a typed address, never a fresh sign-in per spec (RNP-09).
+// `playwright.config.ts` points the whole suite's browser context at it;
+// nothing here opens `/entrar`.
 export function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
   if (!raw) return 1;
@@ -30,7 +30,7 @@ function loadStorageState(): StorageState {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
   } catch {
-    throw new Error(`no session at ${file} — run harness:mint-session and harness:seed-goal first`);
+    throw new Error(`no session at ${file} — scripts/harness/e2e-run.ts mints it before any spec`);
   }
 }
 
