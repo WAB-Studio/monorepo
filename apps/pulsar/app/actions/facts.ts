@@ -36,7 +36,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { commitmentId, oneOffId, quantity, note } = parsed.data;
+  const { commitmentId, oneOffId, quantity, note, replace } = parsed.data;
 
   try {
     const factId = await withGoalsDb(async (tx) => {
@@ -75,6 +75,22 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
 
         if (!oneOff) throw new NamedError("day.errors.notFound");
         goalId = oneOff.goalId;
+      }
+
+      // "Cambiar" (`quantity-sheet.tsx`), never "Anotar": a row that already
+      // carries a fact today is replaced whole, in the same transaction as
+      // the insert below — delete-then-insert, never an UPDATE (`facts`
+      // grants none), and never two separate calls a client could interleave
+      // with someone else's read. Scoped by commitment and day, not by one
+      // factId, so it also clears an old accumulation from before this
+      // guard existed.
+      if (replace && commitmentId != null) {
+        await tx.execute(sql`
+          delete from ${facts}
+          where user_id = ${person.id}
+            and commitment_id = ${commitmentId}
+            and day = ${todayInZone()}::date
+        `);
       }
 
       // Named columns only, never the builder's `.insert()`: it lists every

@@ -1,90 +1,130 @@
+import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
-// Seeded by `harness:seed-goal`: a plain `tap` commitment (RP-02) and a
-// `quantity` one, target 10 `minutos` (RP-03) — the same two rows `dia.spec
-// .ts` and `cantidad.spec.ts` already drive.
-const TAP_COMMITMENT = "Cerrar el ciclo: tarjetas de los errores";
-const QUANTITY_COMMITMENT = "Anki";
+// Each spec seeds its own goal and commitment through the screen — never the
+// shared fixture `harness:seed-goal` writes — and drops it by id in `finally`
+// (`deleteGoal`'s own cascade). The first round shared `harness:seed-goal`'s
+// own commitments across two specs and `workers: 2` raced them: one test's
+// `clearFactsFor` deleted the fact the other had just declared.
+
+async function createGoal(page: Page, name: string): Promise<string> {
+  await page.goto("/metas/nueva");
+  await page.getByLabel("nombre").fill(name);
+  await page.getByRole("button", { name: "Abrirla" }).click();
+  await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
+  return page.url().split("/metas/")[1];
+}
+
+async function openNewCommitmentForm(page: Page, goalId: string): Promise<void> {
+  await page.goto(`/metas/${goalId}`);
+  await page.getByRole("link", { name: "Añadir un compromiso" }).click();
+  await page.waitForURL(`**/metas/${goalId}/compromisos/nuevo`);
+}
+
+// The board's own default cadence and satisfaction (daily, tap): every tap
+// test here is about the undo gesture, never about a cadence it does not
+// touch.
+async function addTapCommitment(page: Page, goalId: string, name: string): Promise<void> {
+  await openNewCommitmentForm(page, goalId);
+  await page.getByLabel("qué es").fill(name);
+  await page.getByRole("button", { name: "Añadirlo" }).click();
+  await page.waitForURL(`**/metas/${goalId}`);
+}
+
+async function addQuantityCommitment(
+  page: Page,
+  goalId: string,
+  name: string,
+  target: number,
+  unit: string,
+): Promise<void> {
+  await openNewCommitmentForm(page, goalId);
+  await page.getByLabel("qué es").fill(name);
+  await page.getByRole("button", { name: "un número", exact: true }).click();
+  await page.getByLabel("cantidad").fill(String(target));
+  await page.getByLabel("unidad").fill(unit);
+  await page.getByRole("button", { name: "Añadirlo" }).click();
+  await page.waitForURL(`**/metas/${goalId}`);
+}
+
+// Deletes the goal and, by `goals_id`'s own cascade, every commitment and
+// fact it carried — scoped to this run's own id, never by name (other
+// pulsar lanes share this identity).
+async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): Promise<void> {
+  await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+}
 
 async function commitmentId(db: postgres.Sql, personId: string, name: string): Promise<string> {
   const [row] = await db<{ id: string }[]>`
-    select id from goals.commitments
-    where user_id = ${personId} and name = ${name} and retired_at is null
+    select id from goals.commitments where user_id = ${personId} and name = ${name}
   `;
-  if (!row) {
-    throw new Error(`no commitment named "${name}" for ${personId} — run harness:seed-goal first`);
-  }
+  if (!row) throw new Error(`no commitment named "${name}" for ${personId}`);
   return row.id;
 }
 
-// Scoped by exact id, never by `user_id` alone: other pulsar lanes share this
-// identity (`docs/TRAPS.md`, "A cleanup keyed by a fixture's name…").
-async function clearFactsFor(db: postgres.Sql, commitmentId: string): Promise<void> {
-  const rows = await db<{ id: string }[]>`
-    select id from goals.facts where commitment_id = ${commitmentId} and day = ${todayInZone()}::date
+async function factsFor(
+  db: postgres.Sql,
+  commitmentId: string,
+): Promise<{ id: string; quantity: number | null }[]> {
+  return db<{ id: string; quantity: number | null }[]>`
+    select id, quantity from goals.facts
+    where commitment_id = ${commitmentId} and day = ${todayInZone()}::date
   `;
-  if (rows.length > 0) {
-    await db`delete from goals.facts where id = any(${rows.map((row) => row.id)})`;
+}
+
+test("a done tap row undoes on its second tap: tap, tap again, tap a third time — one fact, zero, one (RP-05)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const name = `Compromiso deshacer ${Date.now()}`;
+  const goalId = await createGoal(page, `Meta deshacer ${Date.now()}`);
+  await addTapCommitment(page, goalId, name);
+
+  try {
+    const id = await commitmentId(db, personId, name);
+    await page.goto("/");
+    const row = page.locator("button", { hasText: name });
+
+    await row.click();
+    await expect(row.locator("svg")).toBeVisible();
+    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
+
+    await row.click();
+    await expect(row.locator("svg")).toHaveCount(0);
+    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(0);
+
+    await row.click();
+    await expect(row.locator("svg")).toBeVisible();
+    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
+  } finally {
+    await deleteGoal(db, personId, goalId);
   }
-}
+});
 
-async function factCountFor(db: postgres.Sql, commitmentId: string): Promise<number> {
-  const rows = await db<{ id: string }[]>`
-    select id from goals.facts where commitment_id = ${commitmentId} and day = ${todayInZone()}::date
-  `;
-  return rows.length;
-}
+test("two rapid taps on an undone row leave exactly one fact (RNP-02's own guard)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const name = `Compromiso doble toque ${Date.now()}`;
+  const goalId = await createGoal(page, `Meta doble toque ${Date.now()}`);
+  await addTapCommitment(page, goalId, name);
 
-// Serial: both specs drive the same seeded commitment for the same person,
-// and the suite's own `workers: 2` would otherwise run them at once, each
-// clearing and writing the other's facts underneath it.
-test.describe.serial("a done tap row undoes on its second tap (RP-05)", () => {
-  test("tap, tap again, tap a third time — one fact, zero, one", async ({ page, db, personId }) => {
-    const id = await commitmentId(db, personId, TAP_COMMITMENT);
-    await clearFactsFor(db, id);
+  try {
+    const id = await commitmentId(db, personId, name);
+    await page.goto("/");
+    const row = page.locator("button", { hasText: name });
 
-    try {
-      await page.goto("/");
-      const row = page.locator("button", { hasText: TAP_COMMITMENT });
-
-      await row.click();
-      await expect(row.locator("svg")).toBeVisible();
-      await expect.poll(() => factCountFor(db, id)).toBe(1);
-
-      await row.click();
-      await expect(row.locator("svg")).toHaveCount(0);
-      await expect.poll(() => factCountFor(db, id)).toBe(0);
-
-      await row.click();
-      await expect(row.locator("svg")).toBeVisible();
-      await expect.poll(() => factCountFor(db, id)).toBe(1);
-    } finally {
-      await clearFactsFor(db, id);
-    }
-  });
-
-  test("two rapid taps on an undone row leave exactly one fact (RNP-02's own guard)", async ({
-    page,
-    db,
-    personId,
-  }) => {
-    const id = await commitmentId(db, personId, TAP_COMMITMENT);
-    await clearFactsFor(db, id);
-
-    try {
-      await page.goto("/");
-      const row = page.locator("button", { hasText: TAP_COMMITMENT });
-
-      await Promise.all([row.click(), row.click()]);
-      await expect(row.locator("svg")).toBeVisible();
-      await expect.poll(() => factCountFor(db, id)).toBe(1);
-    } finally {
-      await clearFactsFor(db, id);
-    }
-  });
+    await Promise.all([row.click(), row.click()]);
+    await expect(row.locator("svg")).toBeVisible();
+    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
+  } finally {
+    await deleteGoal(db, personId, goalId);
+  }
 });
 
 test("a quantity row shows what was logged, with its note, and undoes from the sheet (RP-04, RP-05)", async ({
@@ -92,14 +132,16 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
   db,
   personId,
 }) => {
-  const id = await commitmentId(db, personId, QUANTITY_COMMITMENT);
-  await clearFactsFor(db, id);
+  const name = `Compromiso cantidad ${Date.now()}`;
+  const goalId = await createGoal(page, `Meta cantidad ${Date.now()}`);
+  await addQuantityCommitment(page, goalId, name, 10, "minutos");
   const note = `nota de prueba ${Date.now()}`;
   const chosen = 25;
 
   try {
+    const id = await commitmentId(db, personId, name);
     await page.goto("/");
-    const row = page.locator("button", { hasText: QUANTITY_COMMITMENT });
+    const row = page.locator("button", { hasText: name });
 
     await row.click();
     const sheet = page.getByRole("dialog");
@@ -114,21 +156,72 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
     // What was logged, never the plan's own target (RP-04's own "done row").
     await expect(row).toContainText(`${chosen} minutos`);
     await expect(page.getByText(note)).toBeVisible();
-    await expect.poll(() => factCountFor(db, id)).toBe(1);
+    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
 
     // Reopen: the sheet reads the logged figure and note back, and offers
-    // «Deshacer» beside changing the amount.
+    // «Deshacer» beside «Cambiar».
     await row.click();
     await expect(sheet).toBeVisible();
     await expect(sheet.getByLabel("Otra cantidad")).toHaveValue(String(chosen));
     await expect(sheet.getByLabel("Una línea, si quieres")).toHaveValue(note);
+    await expect(sheet.getByRole("button", { name: "Cambiar" })).toBeVisible();
 
     await sheet.getByRole("button", { name: "Deshacer" }).click();
     await expect(sheet).toBeHidden();
 
-    await expect.poll(() => factCountFor(db, id)).toBe(0);
+    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(0);
     await expect(page.getByText(note)).toHaveCount(0);
   } finally {
-    await clearFactsFor(db, id);
+    await deleteGoal(db, personId, goalId);
+  }
+});
+
+test("changing a done quantity row's amount replaces the fact, never adds beside it — one row at 30, not two at 25 and 30 (RP-03, module 28's own goal total)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const name = `Compromiso cambiar ${Date.now()}`;
+  const goalId = await createGoal(page, `Meta cambiar ${Date.now()}`);
+  // The goal's first quantity commitment names its measure (RP-14): the
+  // goal's own total below reads this commitment's unit alone.
+  await addQuantityCommitment(page, goalId, name, 10, "minutos");
+
+  try {
+    const id = await commitmentId(db, personId, name);
+    await page.goto("/");
+    const row = page.locator("button", { hasText: name });
+
+    await row.click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
+    await sheet.getByLabel("Otra cantidad").fill("25");
+    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await expect(sheet).toBeHidden();
+    await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
+
+    // Reopen and change the amount through «Cambiar», the sheet's own
+    // primary once a fact already stands for today — never a second
+    // `declareFact` beside the first (the defect the validator proved live:
+    // 25 and 30 both landing in `goals.facts`, the day reading 30 and the
+    // goal reading 55).
+    await row.click();
+    await expect(sheet).toBeVisible();
+    await sheet.getByLabel("Otra cantidad").fill("30");
+    await sheet.getByRole("button", { name: "Cambiar" }).click();
+    await expect(sheet).toBeHidden();
+
+    const rows = await factsFor(db, id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].quantity).toBe(30);
+
+    await expect(row).toContainText("30 minutos");
+
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(/30\s*minutos/)).toBeVisible();
+    await expect(page.getByText(/55\s*minutos/)).toHaveCount(0);
+  } finally {
+    await deleteGoal(db, personId, goalId);
   }
 });

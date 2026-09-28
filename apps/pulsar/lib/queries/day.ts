@@ -3,6 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveDay, type EvidenceByCommitment } from "@/lib/day/derive";
+import { latestFactByCommitment, type LoggedFact } from "@/lib/day/logged-fact";
 import type {
   Cadence,
   CommitmentPlan,
@@ -321,34 +322,17 @@ function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact 
   };
 }
 
-// The one fact `day-row.tsx` shows and undoes for a done commitment — the
-// most recently written one, when more than one landed the same day. Neither
-// `DaySlot` nor `deriveDay` (module 4) carries an id or a note: they answer
-// "is this satisfied", not "which row do I undo", so this map rides beside
-// `view` rather than inside it.
-export type LoggedFact = {
-  factId: string;
-  quantity: number | null;
-  note: string | null;
-};
-
-function latestFactByCommitment(facts: FactRow[]): Record<string, LoggedFact> {
-  const latest: Record<string, { row: FactRow }> = {};
-
-  for (const row of facts) {
-    if (row.commitment_id === null) continue;
-    const current = latest[row.commitment_id];
-    if (!current || row.written_at > current.row.written_at) {
-      latest[row.commitment_id] = { row };
-    }
-  }
-
-  return Object.fromEntries(
-    Object.entries(latest).map(([commitmentId, { row }]) => [
-      commitmentId,
-      { factId: row.id, quantity: row.quantity, note: row.note },
-    ]),
-  );
+// `LoggedFact` and the rule that picks it — the latest write, never the
+// first row — live in `lib/day/logged-fact.ts`, pure and DB-free so a plain
+// `node:test` can pin that rule with no database behind it.
+function toFactForCommitment(row: FactRow) {
+  return {
+    id: row.id,
+    commitmentId: row.commitment_id,
+    writtenAt: row.written_at,
+    quantity: row.quantity,
+    note: row.note,
+  };
 }
 
 // Evidence arrives keyed by source, never by commitment (RNP-10: a source
@@ -437,6 +421,6 @@ export async function loadDay(day: string): Promise<{
       .map(toOneOffSummary),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),
-    factsByCommitment: latestFactByCommitment(row.facts),
+    factsByCommitment: latestFactByCommitment(row.facts.map(toFactForCommitment)),
   };
 }

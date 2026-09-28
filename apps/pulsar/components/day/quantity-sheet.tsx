@@ -112,6 +112,11 @@ export function QuantitySheet({
         commitmentId,
         quantity,
         note: trimmedNote.length > 0 ? trimmedNote : undefined,
+        // "Cambiar", not "Anotar": a row already carrying a fact today
+        // replaces it whole, server-side, in one transaction — never a
+        // second `declareFact` beside the first (the defect the validator
+        // proved live: 25 and 30 both landing in `goals.facts`).
+        replace: factId != null,
       }).then((result) => {
         if (result.ok) onOpenChange(false);
         else setError(result.error);
@@ -189,7 +194,7 @@ export function QuantitySheet({
       ) : null}
 
       <Button block onClick={handleAccept} disabled={pending}>
-        {t("day.quantitySheet.accept")}
+        {factId ? t("day.quantitySheet.change") : t("day.quantitySheet.accept")}
       </Button>
       {factId ? (
         <Button block variant="outline" onClick={handleUndo} disabled={pending}>
