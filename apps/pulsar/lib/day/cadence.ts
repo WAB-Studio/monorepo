@@ -1,5 +1,23 @@
-import { civilDateToDate, weekOf } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, weekOf } from "@/lib/zone";
 import type { CommitmentPlan, DeclaredFact } from "./types";
+
+// `plan.retiredAt` is the raw ISO instant a `timestamptz` column renders as
+// (`retired_at`, read back through `to_jsonb`), never a civil day on its
+// own — comparing it bare against a `YYYY-MM-DD` string the way a prior
+// version of this file did lexically favoured the session's own UTC render,
+// the same defect `lib/queries/day.ts` and `lib/queries/week.ts` carried in
+// their own SQL filter. Converted once per instant seen — `deriveWeek` calls
+// `asksOn` on the same plan up to seven times, once per day of the week — and
+// cached here rather than recomputed on every one of those calls.
+const retiredCivilDayCache = new Map<string, string>();
+
+function retiredCivilDay(retiredAt: string): string {
+  const cached = retiredCivilDayCache.get(retiredAt);
+  if (cached !== undefined) return cached;
+  const civilDay = civilDateInZone(new Date(retiredAt));
+  retiredCivilDayCache.set(retiredAt, civilDay);
+  return civilDay;
+}
 
 // Whole civil days between two `YYYY-MM-DD` strings, positive when `to` is
 // later. Both sides go through midday UTC, so no local offset moves it.
@@ -39,14 +57,15 @@ function completedBefore(
 }
 
 // Whether `plan` asks for anything on `day`, given the facts recorded for it
-// so far. A retired commitment asks nothing from the day it was retired
-// onward; every day before that keeps asking exactly as it did (RP-13).
+// so far. A retired commitment still asks on the civil day it was retired —
+// the same day `lib/queries/day.ts`'s and `lib/queries/week.ts`'s own SQL
+// filter still admits — and asks nothing on any day after that (RP-13).
 export function asksOn(
   plan: CommitmentPlan,
   day: string,
   facts: DeclaredFact[],
 ): boolean {
-  if (plan.retiredAt !== null && day > plan.retiredAt) return false;
+  if (plan.retiredAt !== null && day > retiredCivilDay(plan.retiredAt)) return false;
 
   switch (plan.cadence.kind) {
     case "daily":
