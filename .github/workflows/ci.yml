@@ -169,6 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       orbit: ${{ steps.filter.outputs.orbit }}
+      pulsar: ${{ steps.filter.outputs.pulsar }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -177,15 +178,23 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # `packages/` and the lockfile reach orbit; so does this workflow.
-          paths="apps/orbit packages package-lock.json .github/workflows/ci.yml"
+          # `packages/` and the lockfile reach both apps; so does this workflow.
+          orbit_paths="apps/orbit packages package-lock.json .github/workflows/ci.yml"
+          pulsar_paths="apps/pulsar packages package-lock.json .github/workflows/ci.yml"
           if [ -z "$BASE_SHA" ]; then
-            echo "orbit=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "orbit=true" >> "$GITHUB_OUTPUT"
+            echo "pulsar=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          if git diff --quiet "$BASE_SHA" HEAD -- $paths; then
+          if git diff --quiet "$BASE_SHA" HEAD -- $orbit_paths; then
             echo "orbit=false" >> "$GITHUB_OUTPUT"
           else
             echo "orbit=true" >> "$GITHUB_OUTPUT"
+          fi
+          if git diff --quiet "$BASE_SHA" HEAD -- $pulsar_paths; then
+            echo "pulsar=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pulsar=true" >> "$GITHUB_OUTPUT"
           fi
 
   # `next build` for orbit runs nowhere else since #57 turned off preview
@@ -276,6 +285,95 @@ jobs:
           fi
 
       - run: npm run build -w apps/pulsar
+
+  # `apps/pulsar`'s own browser suite, against `next build && next start` —
+  # never `next dev`, for the reason `playwright.config.ts`'s own head gives.
+  # Its own lane (8: local lanes are 1-5, orbit's CI lane is 9 — nothing in
+  # pulsar's harness forbids it) and its own concurrency group, never orbit's
+  # `e2e-remote-db`: this suite mints no row and reads no policy that group
+  # exists to serialize, and sharing it would only lengthen orbit's queue.
+  # `cancel-in-progress: false` so two pulsar runs never seed the same lane
+  # at once.
+  pulsar-e2e:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       needs.changes.outputs.pulsar == 'true')
+    timeout-minutes: 10
+    concurrency:
+      group: pulsar-e2e
+      cancel-in-progress: false
+    env:
+      HARNESS_LANE: 8
+      PULSAR_BASE_URL: http://localhost:3207
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # `check:e2e`, `harness:mint-session` and `harness:seed-goal` all read
+      # `--env-file=.env.local`, not the job environment.
+      - name: Write .env.local from the secrets
+        working-directory: apps/pulsar
+        run: |
+          missing=""
+          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
+                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+            printf '%s=%s\n' "$name" "${!name}" >> .env.local
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secrets:$missing"
+            exit 1
+          fi
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run build -w apps/pulsar
+
+      # `--port` explicitly: the `start` script is a bare `next start`, which
+      # defaults to 3000 — only `dev` carries `--port ${PORT:-3200}`.
+      - name: Start the app and wait for it to answer
+        run: |
+          npm run start -w apps/pulsar -- --port 3207 > /tmp/pulsar.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3207/; then
+              echo "up after ${SECONDS}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "the server never answered"; tail -50 /tmp/pulsar.log; exit 1
+
+      # Lane 8's signed-in person and its seeded goal, minted the same way a
+      # local lane's are — no typed address, no email sent (RNP-09).
+      - run: npm run harness:mint-session -w apps/pulsar
+      - run: npm run harness:seed-goal -w apps/pulsar
+
+      - run: npm run check:e2e -w apps/pulsar
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-log
+          path: /tmp/pulsar.log
+
+      - name: Upload the Playwright artefacts
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-playwright-results
+          path: apps/pulsar/private/playwright-results
 
   e2e:
     runs-on: ubuntu-latest
