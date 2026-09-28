@@ -87,26 +87,26 @@ const cadenceSchema = z.discriminatedUnion("cadenceKind", [
   z.object({
     cadenceKind: z.literal("times_per_week"),
     cadenceN: z
-      .number({ error: "plan.errors.cadenceNInvalid" })
-      .int({ error: "plan.errors.cadenceNInvalid" })
-      .positive({ error: "plan.errors.cadenceNInvalid" })
-      .max(1_000, { error: "plan.errors.cadenceNInvalid" }),
+      .number({ error: "plan.errors.timesPerWeekInvalid" })
+      .int({ error: "plan.errors.timesPerWeekInvalid" })
+      .positive({ error: "plan.errors.timesPerWeekInvalid" })
+      .max(1_000, { error: "plan.errors.timesPerWeekInvalid" }),
   }),
   z.object({
     cadenceKind: z.literal("every_n_days"),
     cadenceN: z
-      .number({ error: "plan.errors.cadenceNInvalid" })
-      .int({ error: "plan.errors.cadenceNInvalid" })
-      .positive({ error: "plan.errors.cadenceNInvalid" })
-      .max(1_000, { error: "plan.errors.cadenceNInvalid" }),
+      .number({ error: "plan.errors.everyNDaysInvalid" })
+      .int({ error: "plan.errors.everyNDaysInvalid" })
+      .positive({ error: "plan.errors.everyNDaysInvalid" })
+      .max(1_000, { error: "plan.errors.everyNDaysInvalid" }),
   }),
   z.object({
     cadenceKind: z.literal("times_per_month"),
     cadenceN: z
-      .number({ error: "plan.errors.cadenceNInvalid" })
-      .int({ error: "plan.errors.cadenceNInvalid" })
-      .positive({ error: "plan.errors.cadenceNInvalid" })
-      .max(1_000, { error: "plan.errors.cadenceNInvalid" }),
+      .number({ error: "plan.errors.timesPerMonthInvalid" })
+      .int({ error: "plan.errors.timesPerMonthInvalid" })
+      .positive({ error: "plan.errors.timesPerMonthInvalid" })
+      .max(1_000, { error: "plan.errors.timesPerMonthInvalid" }),
   }),
 ]);
 

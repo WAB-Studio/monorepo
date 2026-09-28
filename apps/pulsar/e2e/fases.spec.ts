@@ -88,6 +88,7 @@ test("a fresh goal draws its own way in solid; the first phase added lists as se
     const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
     await expect(addPhaseLink).toBeVisible();
     await expect(addPhaseLink).toHaveClass(/\bsolid\b/);
+    await expect(page.getByText("cero fases")).toBeVisible();
 
     // A goal just opened has nothing before it: the first span defaults to
     // weeks 1–4, counted from its own opening (today).
@@ -100,6 +101,7 @@ test("a fresh goal draws its own way in solid; the first phase added lists as se
 
     await expect(page.getByText(aim)).toBeVisible();
     await expect(page.getByText("semanas 1–4")).toBeVisible();
+    await expect(page.getByText("una fase", { exact: true })).toBeVisible();
 
     // The day this phase covers names it (RP-15): a goal's own opening day
     // falls in week 1, so today's screen reads this phase's own aim.
