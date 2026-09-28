@@ -82,7 +82,11 @@ type PhaseRow = {
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
 // bare quantity, never its own unit (`db/schema/commitments.ts`'s own
 // comment — "the unit belongs here, never to the fact that repeats it").
+// `id` rides in from `to_jsonb(f)` like every other bare column here — it was
+// read out from the start, only never named on this type before module 34
+// needed a row's own fact to undo (RP-05).
 type FactRow = {
+  id: string;
   commitment_id: string | null;
   one_off_id: string | null;
   day: string;
@@ -317,6 +321,36 @@ function toDeclaredFact(row: FactRow & { commitment_id: string }): DeclaredFact 
   };
 }
 
+// The one fact `day-row.tsx` shows and undoes for a done commitment — the
+// most recently written one, when more than one landed the same day. Neither
+// `DaySlot` nor `deriveDay` (module 4) carries an id or a note: they answer
+// "is this satisfied", not "which row do I undo", so this map rides beside
+// `view` rather than inside it.
+export type LoggedFact = {
+  factId: string;
+  quantity: number | null;
+  note: string | null;
+};
+
+function latestFactByCommitment(facts: FactRow[]): Record<string, LoggedFact> {
+  const latest: Record<string, { row: FactRow }> = {};
+
+  for (const row of facts) {
+    if (row.commitment_id === null) continue;
+    const current = latest[row.commitment_id];
+    if (!current || row.written_at > current.row.written_at) {
+      latest[row.commitment_id] = { row };
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(latest).map(([commitmentId, { row }]) => [
+      commitmentId,
+      { factId: row.id, quantity: row.quantity, note: row.note },
+    ]),
+  );
+}
+
 // Evidence arrives keyed by source, never by commitment (RNP-10: a source
 // answers for the person, not for one commitment). This is the one place
 // that turns it into the per-commitment map `deriveDay` expects, matching
@@ -359,6 +393,7 @@ export async function loadDay(day: string): Promise<{
   oneOffs: OneOffSummary[];
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
+  factsByCommitment: Record<string, LoggedFact>;
 }> {
   const person = await getPerson();
   if (!person) throw new Error("loadDay called without a verified session");
@@ -402,5 +437,6 @@ export async function loadDay(day: string): Promise<{
       .map(toOneOffSummary),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),
+    factsByCommitment: latestFactByCommitment(row.facts),
   };
 }

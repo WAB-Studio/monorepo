@@ -35,7 +35,8 @@ import { OneOffRow } from "./one-off-row";
 export async function DayScreen() {
   const t = await getTranslations();
   const day = todayInZone();
-  const { view, evidence, goals, oneOffs, commitments, phases } = await loadDay(day);
+  const { view, evidence, goals, oneOffs, commitments, phases, factsByCommitment } =
+    await loadDay(day);
 
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
@@ -74,21 +75,27 @@ export async function DayScreen() {
                     {goalPhase.name}
                   </Text>
                 ) : null}
-                {rows.map(({ commitment, slot }) => (
-                  <DayRow
-                    key={commitment.id}
-                    commitmentId={commitment.id}
-                    name={commitment.name}
-                    kind={commitment.kind}
-                    markState={slot.satisfiedBy === "evidence" ? "evidence" : slot.satisfied ? "declared" : "empty"}
-                    sourceName={
-                      slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
-                    }
-                    target={commitment.target}
-                    unit={commitment.unit}
-                    cadence={commitment.cadence}
-                  />
-                ))}
+                {rows.map(({ commitment, slot }) => {
+                  const logged = factsByCommitment[commitment.id];
+                  return (
+                    <DayRow
+                      key={commitment.id}
+                      commitmentId={commitment.id}
+                      name={commitment.name}
+                      kind={commitment.kind}
+                      markState={slot.satisfiedBy === "evidence" ? "evidence" : slot.satisfied ? "declared" : "empty"}
+                      sourceName={
+                        slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
+                      }
+                      target={commitment.target}
+                      unit={commitment.unit}
+                      cadence={commitment.cadence}
+                      factId={logged?.factId}
+                      loggedQuantity={logged?.quantity ?? null}
+                      note={logged?.note ?? null}
+                    />
+                  );
+                })}
                 {oneOffs
                   .filter((oneOff): oneOff is OneOffSummary => oneOff.goalId === goal.id)
                   .map((oneOff) => (

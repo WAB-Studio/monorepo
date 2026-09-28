@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
-import { declareFact } from "@/app/actions/facts";
+import { declareFact, undoFact } from "@/app/actions/facts";
 import type { Cadence } from "@/lib/day/types";
 import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
@@ -29,6 +29,16 @@ export type DayRowProps = {
   target?: number | null;
   unit?: string | null;
   cadence?: Cadence;
+  // Today's own fact for this commitment, the most recent one when more than
+  // one landed (`lib/queries/day.ts`'s `LoggedFact`) — undefined while the
+  // row is still empty, which is exactly when there is nothing to undo yet.
+  factId?: string;
+  // What a `quantity` commitment actually logged, read back rather than the
+  // plan's own target (RP-04's own "a done row shows what was logged").
+  loggedQuantity?: number | null;
+  // The line the person wrote alongside the fact (RP-04), drawn quiet under
+  // the row when there is one.
+  note?: string | null;
 };
 
 // The row's own mono second line for a `quantity` commitment — `HoyCantidad
@@ -39,6 +49,13 @@ export type DayRowProps = {
 // person never typed.
 function quantityMeta(target: number, unit: string, cadence: Cadence, t: ReturnType<typeof useTranslations>): string {
   return `${target} ${unit} · ${cadenceLabel(cadence, t)}`;
+}
+
+// A done row's own second line (decided 2026-09-27, `docs/pulsar/DESIGN.md`
+// "Decisions taken here"): what the person actually logged, never the plan's
+// target — "25 minutos", not "10 minutos · diario".
+function loggedMeta(quantity: number, unit: string): string {
+  return `${quantity} ${unit}`;
 }
 
 function cadenceLabel(cadence: Cadence, t: ReturnType<typeof useTranslations>): string {
@@ -62,12 +79,16 @@ function cadenceLabel(cadence: Cadence, t: ReturnType<typeof useTranslations>): 
 }
 
 /**
- * One commitment's row (RP-01, RP-02, RP-08). A `tap` commitment is
- * satisfied outright; a `quantity` row's tap opens `QuantitySheet` rather
- * than calling `declareFact` bare — that would only ever come back
- * `day.errors.quantityRequired`, a dead end dressed as a working button. An
- * `evidence` row is never tappable at all, satisfied or not: nothing here
- * calls `declareFact` for it.
+ * One commitment's row (RP-01, RP-02, RP-05, RP-08). A `tap` commitment is
+ * satisfied outright, and a second tap on a done one undoes it through
+ * `undoFact` — the same gesture that made it unmakes it, no confirm sheet
+ * (RP-05, decided 2026-09-27). A `quantity` row's tap always opens
+ * `QuantitySheet`, done or not: calling `declareFact` bare would only ever
+ * come back `day.errors.quantityRequired`, and a done row needs the sheet
+ * anyway to show what it logged and offer `Deshacer`. An `evidence` row is
+ * never tappable at all, satisfied or not: nothing here calls `declareFact`
+ * or `undoFact` for it (RP-05: a derived fact belongs to the app that
+ * recorded it).
  */
 export function DayRow({
   commitmentId,
@@ -78,6 +99,9 @@ export function DayRow({
   target,
   unit,
   cadence,
+  factId,
+  loggedQuantity,
+  note,
 }: DayRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
@@ -85,9 +109,14 @@ export function DayRow({
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const tappable = kind !== "evidence";
+  const done = markState === "declared";
   const meta =
-    kind === "quantity" && target != null && unit != null && cadence
-      ? quantityMeta(target, unit, cadence, t)
+    kind === "quantity"
+      ? done && loggedQuantity != null && unit != null
+        ? loggedMeta(loggedQuantity, unit)
+        : target != null && unit != null && cadence
+          ? quantityMeta(target, unit, cadence, t)
+          : sourceName
       : sourceName;
 
   function handleTap() {
@@ -100,7 +129,10 @@ export function DayRow({
     }
 
     startTransition(() => {
-      void declareFact({ commitmentId }).then((result) => {
+      // Done already: this tap undoes it, never declares a second fact
+      // beside it (the bug the critic measured 2026-09-27).
+      const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId });
+      void action.then((result) => {
         if (!result.ok) setError(result.error);
       });
     });
@@ -115,6 +147,11 @@ export function DayRow({
         onClick={handleTap}
         disabled={!tappable || pending}
       />
+      {note ? (
+        <Text as="p" tone="quiet" variant="meta">
+          {note}
+        </Text>
+      ) : null}
       {error ? (
         <Text as="p" tone="muted" variant="meta">
           {t(error)}
@@ -128,6 +165,9 @@ export function DayRow({
           name={name}
           target={target ?? 0}
           unit={unit ?? ""}
+          factId={done ? factId : undefined}
+          loggedQuantity={done ? loggedQuantity : undefined}
+          loggedNote={done ? note : undefined}
         />
       ) : null}
     </>

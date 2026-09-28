@@ -29,7 +29,8 @@
     "customLabel": "Otra cantidad",
     "noteLabel": "Una línea, si quieres",
     "notePlaceholder": "¿Qué pasó?",
-    "accept": "Anotar"
+    "accept": "Anotar",
+    "undo": "Deshacer"
   },
   "cadence": {
     "daily": "diario",
