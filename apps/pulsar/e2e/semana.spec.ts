@@ -26,13 +26,18 @@ function todayLabel(): string {
   return civilLabel(new Date());
 }
 
-// A day guaranteed not to be today, so its dots are asserted independently
-// of whatever the "complete the one-off" test below does to today's own row.
+// A day guaranteed not to be today and inside today's own week, so its dots
+// are asserted independently of whatever the "complete the one-off" test below
+// does to today's own row. Yesterday on a Monday belongs to the week before.
 function otherDayLabel(): string {
-  const other = new Date();
-  other.setUTCDate(other.getUTCDate() - 1);
-  const label = civilLabel(other);
-  return label === todayLabel() ? civilLabel(new Date(other.getTime() - 86_400_000)) : label;
+  const today = todayLabel();
+  const isMonday = today.startsWith(`${WEEKDAY_SHORT[0]} `);
+  const step = isMonday ? 1 : -1;
+  for (let hours = 24; hours <= 48; hours += 12) {
+    const label = civilLabel(new Date(Date.now() + step * hours * 3_600_000));
+    if (label !== today) return label;
+  }
+  throw new Error("no other day of this week found");
 }
 
 // The state `components/ui/mark.tsx` should have painted for a given dot,

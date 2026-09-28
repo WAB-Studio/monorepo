@@ -90,13 +90,17 @@ export async function CommitmentList({
   commitments: GoalCommitment[];
 }) {
   const t = await getTranslations();
+  // A retired commitment stays in the list — never hidden (RP-13) — but it
+  // no longer asks anything of the goal, so the count above it names only
+  // what is still active, not the whole history the list itself keeps.
+  const activeCount = commitments.filter((commitment) => commitment.retiredAt === null).length;
 
   return (
     <section>
       <SectionLabel>
         {t("goal.detail.commitmentsCount", {
-          word: countWord(commitments.length, t),
-          count: commitments.length,
+          word: countWord(activeCount, t),
+          count: activeCount,
         })}
       </SectionLabel>
       {commitments.map((commitment) => (

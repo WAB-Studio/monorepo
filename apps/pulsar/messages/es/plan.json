@@ -25,6 +25,14 @@
     "thresholdLabel": "umbral",
     "submit": "Añadirlo"
   },
+  "phaseForm": {
+    "title": "Fase nueva",
+    "aimLabel": "qué busca",
+    "weeksLabel": "qué semanas",
+    "fromLabel": "desde la semana",
+    "toLabel": "hasta la semana",
+    "submit": "Añadirla"
+  },
   "retireSheet": {
     "title": "¿Retirarlo?",
     "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y los {days, plural, one {# día} other {# días}} en que lo hiciste siguen ahí.",
@@ -47,6 +55,9 @@
     "startsOnInvalid": "Esa fecha de inicio no es válida.",
     "endsOnInvalid": "Esa fecha de fin no es válida.",
     "phaseBackwards": "La fase termina antes de empezar.",
+    "phaseOverlap": "Esas semanas ya tienen una fase. Elige otras.",
+    "phasePastHorizon": "Esa fase pasa del horizonte de la meta. Elige semanas dentro de él.",
+    "weekInvalid": "Escribe un número entero de semana, mayor que cero.",
     "weekdayInvalid": "Ese día no es válido.",
     "weekdaysEmpty": "Elige al menos un día.",
     "cadenceNInvalid": "Escribe un número entero entre 1 y 1000.",

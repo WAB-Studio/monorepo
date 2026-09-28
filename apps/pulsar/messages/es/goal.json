@@ -21,6 +21,9 @@
     "retired": "retirado",
     "add": "Añadir un compromiso"
   },
+  "phases": {
+    "add": "Añadir una fase"
+  },
   "cadence": {
     "daily": "todos los días",
     "weekdayFull": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
