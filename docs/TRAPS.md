@@ -2394,3 +2394,26 @@ connection caches, not with the code.
   `npm run` default (`PULSAR_BASE_URL=http://localhost:320<n-1>`), the way `docs/TRAPS.md`'s own
   voyager entry already names this shape for that app: "`worktree.sh` derives a suite's base-URL
   variable from the app's name." `HARNESS_BASE_URL` alone is not that variable for this app.
+
+## A migration's dedupe is only as safe as the day it was measured
+
+- **What.** `apps/pulsar/db/migrations/0003_swift_toro.sql`'s `DELETE` ahead of
+  `facts_commitment_day_unique` reaches `auth.users.email like 'harness%@example.invalid'` alone,
+  because that is what a hand-run count against the live database showed on 2026-09-27: every
+  `(commitment_id, day)` group with more than one fact belonged to a harness identity, none to a
+  real person. The migration itself asserts nothing — it just deletes rows matching that one
+  pattern and then creates the index. On a database where a real person already holds a duplicate
+  (a sibling environment, a restore from an earlier backup, a different day's data), the dedupe
+  silently leaves that person's duplicate untouched and `CREATE UNIQUE INDEX` then fails outright,
+  aborting the whole migration with a constraint-violation error — the least informative way this
+  could fail, naming neither the row nor the person.
+- **Measured 2026-09-27**, module 38 round 1: 2 duplicate groups (4 rows), all under one harness
+  identity (`harness-pulsar-97eb4572-…@example.invalid`); 0 duplicate groups on `one_off_id`. The
+  precondition — "no non-harness duplicate exists" — was checked by hand, once, and is true today.
+  Nothing in the migration re-checks it before or after.
+- **Do.** Next time a migration deletes rows to make an index buildable, assert the precondition
+  inside the migration itself and raise a named error if it fails (a `DO $$ ... RAISE EXCEPTION`
+  block counting rows outside the intended scope before the `DELETE` runs), or widen the dedupe to
+  keep the latest row for every identity, not only harness ones. Either reads as a deliberate
+  decision on the next database this migration meets; today it reads as a fact true only because
+  someone measured it by hand, once, on 2026-09-27, and never asked the question again.
