@@ -11,6 +11,7 @@ import {
   addPhaseSchema,
   createGoalSchema,
   phasesOverlap,
+  phaseWithinHorizon,
   retireCommitmentSchema,
   type AddCommitmentInput,
   type AddPhaseInput,
@@ -80,6 +81,16 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
  * theirs, so a foreign id would otherwise attach silently. The read runs
  * inside the same settled transaction, so `goals_select_self` — not a `where`
  * this function writes — is what actually hides someone else's goal.
+ *
+ * The very first statement of the transaction is a `pg_advisory_xact_lock`
+ * keyed on this goal's own id (never a migration, an extension or a grant —
+ * both functions are built in and callable by any role). Without it, two
+ * concurrent `addPhase` calls on the same goal each read "no overlap yet"
+ * under `READ COMMITTED` and both insert — driven live, two overlapping spans
+ * both landed. The lock serialises every call for one goal: the second one
+ * blocks until the first commits or rolls back, then re-reads the phases the
+ * first one just wrote and is refused if it overlaps. Released automatically
+ * at commit or rollback, never held past this function's own return.
  */
 export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
   const parsed = addPhaseSchema.safeParse(input);
@@ -92,8 +103,18 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
 
   try {
     const phaseId = await withGoalsDb(async (tx) => {
-      const [goal] = await tx.select({ id: goals.id }).from(goals).where(eq(goals.id, goalId));
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${goalId}::text, 0))`);
+
+      const [goal] = await tx
+        .select({ id: goals.id, horizon: goals.horizon })
+        .from(goals)
+        .where(eq(goals.id, goalId));
       if (!goal) throw new NamedError("plan.errors.goalNotFound");
+
+      // A goal names one horizon; a phase is a span of it, never past it.
+      if (!phaseWithinHorizon({ startsOn, endsOn }, goal.horizon)) {
+        throw new NamedError("plan.errors.phasePastHorizon");
+      }
 
       // Refused here, not by a CHECK: two spans covering one day would make
       // `phaseOn` (lib/day/derive.ts) guess which one a day belongs to.

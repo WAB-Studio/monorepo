@@ -43,6 +43,7 @@ export default async function NewPhasePage({
       goalId={goal.id}
       goalName={goal.name}
       openedOn={openedOn}
+      horizon={goal.horizon}
       defaultFromWeek={defaultFromWeek}
       defaultToWeek={defaultToWeek}
       existingPhases={goal.phases.map((phase) => ({

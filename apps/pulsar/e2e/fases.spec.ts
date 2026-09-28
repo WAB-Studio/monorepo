@@ -1,14 +1,21 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { weekIndex } from "@/components/goal/phase-weeks";
+import { civilDateInZone, dateToCivilDate } from "@/lib/zone";
+
+import { test, expect, laneNumber } from "./fixtures";
 
 // Opens `/metas/nueva`, the least it takes to open a goal (RP-11) — the same
 // helper `compromiso.spec.ts` and `varias-metas.spec.ts` each keep their own
 // copy of, never a shared import: an e2e file owns its own fixtures.
-async function createGoal(page: Page, name: string): Promise<string> {
+async function createGoal(page: Page, name: string, horizonWeeks?: string): Promise<string> {
   await page.goto("/metas/nueva");
   await page.getByLabel("nombre").fill(name);
+  if (horizonWeeks) await page.getByLabel("horizonte").fill(horizonWeeks);
   await page.getByRole("button", { name: "Abrirla" }).click();
   await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
   return page.url().split("/metas/")[1];
@@ -36,76 +43,166 @@ async function phaseCount(db: postgres.Sql, goalId: string): Promise<number> {
   return Number(row.count);
 }
 
+// Mints a throwaway identity at a lane number no real lane uses, the same
+// door `varias-metas.spec.ts`'s own "empty week" test opens (a real `GET
+// /auth/confirm` redemption, never a typed address — RNP-09) — offset by
+// 500 from its own `9000 + laneNumber()` so the two specs, run together
+// under `workers: 2`, never mint at the same disposable lane. Its goal and
+// phase are never deleted through this app's own doors either, but
+// `harness:reap`'s own delete of the identity's `auth.users` row cascades
+// through `goals.goals.user_id`'s own `ON DELETE CASCADE` (`db/schema/
+// goals.ts`) — a superuser statement, not a grant this role holds — so
+// nothing here accumulates past that identity's own stale heartbeat. Kept
+// separate from the lane's own reused goal below: the "solid button, empty
+// goal" state cannot be reproduced on a goal any rerun has already given a
+// phase to.
+function mintDisposableSession(lane: number, baseUrl: string): void {
+  execFileSync(
+    process.execPath,
+    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
+    {
+      env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl },
+      stdio: "pipe",
+    },
+  );
+}
+
+test("a fresh goal draws its own way in solid; the first phase added lists as semanas 1–4 and the day names it", async ({
+  browser,
+  baseURL,
+}) => {
+  const disposableLane = 9500 + laneNumber();
+  mintDisposableSession(disposableLane, baseURL ?? "http://localhost:3200");
+
+  const context = await browser.newContext({
+    storageState: resolve(process.cwd(), `private/session-${disposableLane}.json`),
+  });
+  try {
+    const page = await context.newPage();
+    const goalName = `Meta fases desechable ${Date.now()}`;
+    const aim = `Primer objetivo ${Date.now()}`;
+    const goalId = await createGoal(page, goalName);
+
+    // No phase yet: the way in is solid, the only thing this screen asks for.
+    const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
+    await expect(addPhaseLink).toBeVisible();
+    await expect(addPhaseLink).toHaveClass(/\bsolid\b/);
+
+    // A goal just opened has nothing before it: the first span defaults to
+    // weeks 1–4, counted from its own opening (today).
+    await openNewPhaseForm(page, goalId);
+    await expect(page.getByLabel("desde la semana")).toHaveValue("1");
+    await expect(page.getByLabel("hasta la semana")).toHaveValue("4");
+    await page.getByLabel("qué busca").fill(aim);
+    await page.getByRole("button", { name: "Añadirla" }).click();
+    await page.waitForURL(`**/metas/${goalId}`);
+
+    await expect(page.getByText(aim)).toBeVisible();
+    await expect(page.getByText("semanas 1–4")).toBeVisible();
+
+    // The day this phase covers names it (RP-15): a goal's own opening day
+    // falls in week 1, so today's screen reads this phase's own aim.
+    await page.goto("/");
+    await expect(page.getByText(aim)).toBeVisible();
+
+    // With one phase in effect, the way in is no longer the only thing this
+    // screen asks for.
+    await page.goto(`/metas/${goalId}`);
+    await expect(addPhaseLink).toHaveClass(/\boutline\b/);
+  } finally {
+    await context.close();
+  }
+});
+
 // `goals.phases` grants no DELETE (`scripts/check-policies.ts`'s own P38):
-// every phase this spec writes stays forever, so this goal is created and
-// left standing, never deleted — unlike every other spec's own `deleteGoal`,
-// which would otherwise cascade a delete this app can never undo through its
-// own doors. Dates are relative to this goal's own opening (today, for a
-// goal just created), so a rerun's own fresh goal never collides with a past
-// run's phases: each run's weeks are counted from its own goal, never a
-// shared one.
-test("a goal gains its phases one span at a time: none, then one, a second prefilled after it, and a third refused for overlapping", async ({
+// a fresh goal every run would grow this lane's own count without bound —
+// measured at 30 goals and 24 phases before this fix. One goal is reused
+// per lane instead, found by an exact marker in its name, scoped to this
+// lane's own `personId`, created only the first time this spec ever runs
+// for that lane — with a 500-week horizon, so the one real phase this test
+// adds each run (four weeks, right after the last one already there) has
+// well over a hundred reruns of headroom before it could ever reach that
+// horizon for real; the deliberate horizon-refusal attempt below asks for
+// week 501, past it on purpose, and is refused before it ever writes a row.
+test("a goal that already has a phase prefills the next span right after it, refuses one that overlaps, and refuses one past its own horizon", async ({
   page,
   db,
+  personId,
 }) => {
-  const goalName = `Meta fases ${Date.now()}`;
-  const firstAim = `Primer objetivo ${Date.now()}`;
-  const secondAim = `Segundo objetivo ${Date.now()}`;
-  const goalId = await createGoal(page, goalName);
+  const lane = laneNumber();
+  const goalName = `Meta fases · fixture lane ${lane}`;
 
-  // No phase yet: the way in is solid, the only thing this screen asks for.
-  const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
-  await expect(addPhaseLink).toBeVisible();
-  await expect(addPhaseLink).toHaveClass(/\bsolid\b/);
+  const [existingGoal] = await db<{ id: string }[]>`
+    select id from goals.goals where user_id = ${personId} and name = ${goalName}
+  `;
+  const goalId = existingGoal ? existingGoal.id : await createGoal(page, goalName, "500");
 
-  // A goal just opened has nothing before it: the first span defaults to
-  // weeks 1–4, counted from its own opening (today).
-  await openNewPhaseForm(page, goalId);
-  await expect(page.getByLabel("desde la semana")).toHaveValue("1");
-  await expect(page.getByLabel("hasta la semana")).toHaveValue("4");
-  await page.getByLabel("qué busca").fill(firstAim);
-  await page.getByRole("button", { name: "Añadirla" }).click();
-  await page.waitForURL(`**/metas/${goalId}`);
+  const before = await phaseCount(db, goalId);
 
-  await expect(page.getByText(firstAim)).toBeVisible();
-  await expect(page.getByText("semanas 1–4")).toBeVisible();
-  expect(await phaseCount(db, goalId)).toBe(1);
-
-  // The day this phase covers names it (RP-15): a goal's own opening day
-  // falls in week 1, so today's screen reads this phase's own aim.
-  await page.goto("/");
-  await expect(page.getByText(firstAim)).toBeVisible();
-
-  // With one phase in effect, the way in is no longer the only thing this
-  // screen asks for.
+  // With one phase in effect, the way in is already outlined; with none
+  // (this lane's very first run of this spec), it is solid.
   await page.goto(`/metas/${goalId}`);
-  await expect(addPhaseLink).toHaveClass(/\boutline\b/);
+  const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
+  await expect(addPhaseLink).toHaveClass(before === 0 ? /\bsolid\b/ : /\boutline\b/);
 
-  // A second phase prefills right after the first one's own end — week 5,
-  // four weeks long — never a week the first phase already covers.
+  // The prefill, proved against the goal's own last phase rather than a
+  // hardcoded number: right after it, four weeks long — 1–4 the first time,
+  // whatever comes after on every rerun.
+  const [openedRow] = await db<{ created_at: Date }[]>`
+    select created_at from goals.goals where id = ${goalId}
+  `;
+  const openedOn = civilDateInZone(openedRow.created_at);
+  const [lastPhaseRow] = await db<{ ends_on: Date }[]>`
+    select ends_on from goals.phases where goal_id = ${goalId} order by ends_on desc limit 1
+  `;
+  const expectedFrom = lastPhaseRow ? weekIndex(openedOn, dateToCivilDate(lastPhaseRow.ends_on)) + 1 : 1;
+  // 500 weeks of horizon, four weeks a run: proof the lane's own goal has
+  // not silently drifted onto the horizon-refusal path this test also
+  // exercises on purpose below.
+  expect(expectedFrom).toBeLessThan(500);
+
   await openNewPhaseForm(page, goalId);
-  await expect(page.getByLabel("desde la semana")).toHaveValue("5");
-  await expect(page.getByLabel("hasta la semana")).toHaveValue("8");
-  await page.getByLabel("qué busca").fill(secondAim);
+  const fromField = page.getByLabel("desde la semana");
+  const toField = page.getByLabel("hasta la semana");
+  await expect(fromField).toHaveValue(String(expectedFrom));
+  const from = Number(await fromField.inputValue());
+  const to = Number(await toField.inputValue());
+  expect(to).toBeGreaterThanOrEqual(from);
+
+  const aim = `Objetivo lane ${lane} ${Date.now()}`;
+  await page.getByLabel("qué busca").fill(aim);
   await page.getByRole("button", { name: "Añadirla" }).click();
   await page.waitForURL(`**/metas/${goalId}`);
 
-  await expect(page.getByText(secondAim)).toBeVisible();
-  await expect(page.getByText("semanas 5–8")).toBeVisible();
-  expect(await phaseCount(db, goalId)).toBe(2);
+  await expect(page.getByText(aim)).toBeVisible();
+  await expect(page.getByText(`semanas ${from}–${to}`)).toBeVisible();
+  expect(await phaseCount(db, goalId)).toBe(before + 1);
 
-  // Weeks 3–6 share days with both spans already on the goal (1–4 and
-  // 5–8): the day would no longer name a single phase, so this is refused
-  // on screen, with no navigation and no third row written.
+  // Overlapping the phase just added: the day would no longer name a single
+  // phase, so this is refused on screen, with no navigation and no extra row.
   await openNewPhaseForm(page, goalId);
-  await page.getByLabel("qué busca").fill(`Objetivo rechazado ${Date.now()}`);
-  await page.getByLabel("desde la semana").fill("3");
-  await page.getByLabel("hasta la semana").fill("6");
+  await page.getByLabel("qué busca").fill(`Objetivo solapado ${Date.now()}`);
+  await page.getByLabel("desde la semana").fill(String(from));
+  await page.getByLabel("hasta la semana").fill(String(to));
   await page.getByRole("button", { name: "Añadirla" }).click();
 
   await expect(page.getByText("Esas semanas ya tienen una fase. Elige otras.")).toBeVisible();
   expect(page.url()).toContain(`/metas/${goalId}/fases/nueva`);
-  expect(await phaseCount(db, goalId)).toBe(2);
+  expect(await phaseCount(db, goalId)).toBe(before + 1);
+
+  // Past the goal's own 500-week horizon: refused the same way, never a
+  // silent acceptance.
+  await openNewPhaseForm(page, goalId);
+  await page.getByLabel("qué busca").fill(`Objetivo tardío ${Date.now()}`);
+  await page.getByLabel("desde la semana").fill("501");
+  await page.getByLabel("hasta la semana").fill("504");
+  await page.getByRole("button", { name: "Añadirla" }).click();
+
+  await expect(
+    page.getByText("Esa fase pasa del horizonte de la meta. Elige semanas dentro de él."),
+  ).toBeVisible();
+  expect(page.url()).toContain(`/metas/${goalId}/fases/nueva`);
+  expect(await phaseCount(db, goalId)).toBe(before + 1);
 });
 
 // The goal's own header (`commitment-list.tsx`'s section label) counts what

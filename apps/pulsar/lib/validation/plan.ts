@@ -49,6 +49,15 @@ export function phasesOverlap(a: PhaseSpan, b: PhaseSpan): boolean {
   return a.startsOn <= b.endsOn && b.startsOn <= a.endsOn;
 }
 
+// Whether a span's own last day still falls within the goal's horizon
+// (RP-11, RP-15): a goal names one horizon, and a phase is a span *of* it,
+// never past it. Compared as civil dates, never as week numbers — the
+// horizon is stored as a date, and this holds regardless of which week
+// convention drew the span.
+export function phaseWithinHorizon(span: PhaseSpan, horizon: string): boolean {
+  return span.endsOn <= horizon;
+}
+
 // RP-12's five cadences, keyed on `cadenceKind` so an impossible column never
 // reaches the database: `weekdays` asks for the days it names and nothing
 // else, the three counted kinds ask for their count and nothing else, and

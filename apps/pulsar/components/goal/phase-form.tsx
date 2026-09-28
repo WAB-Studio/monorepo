@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { addPhase } from "@/app/actions/plan";
-import { addPhaseSchema, phasesOverlap, type PhaseSpan } from "@/lib/validation/plan";
+import { addPhaseSchema, phasesOverlap, phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
 import { Button, Field, Flex, Page, SectionLabel, Text } from "@/components/ui";
 
 import { weeksToPhaseSpan } from "./phase-weeks";
@@ -18,6 +18,9 @@ export type PhaseFormProps = {
   // (`civilDateInZone`) by the page: `weeksToPhaseSpan` is a pure function
   // over civil dates alone, never the browser's own zone.
   openedOn: string;
+  // A goal names one horizon (RP-11); a phase past it is refused here first,
+  // then again, authoritative, inside `addPhase`'s own transaction.
+  horizon: string;
   defaultFromWeek: number;
   defaultToWeek: number;
   // Every phase the goal already has, spans alone: what the overlap refusal
@@ -44,6 +47,7 @@ export function PhaseForm({
   goalId,
   goalName,
   openedOn,
+  horizon,
   defaultFromWeek,
   defaultToWeek,
   existingPhases,
@@ -72,6 +76,10 @@ export function PhaseForm({
     }
 
     const span = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data);
+    if (!phaseWithinHorizon(span, horizon)) {
+      setError("plan.errors.phasePastHorizon");
+      return;
+    }
     if (existingPhases.some((phase) => phasesOverlap(span, phase))) {
       setError("plan.errors.phaseOverlap");
       return;

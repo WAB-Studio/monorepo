@@ -781,6 +781,57 @@ async function runMeasureRenameCheck(): Promise<void> {
   );
 }
 
+/**
+ * RP-15's own race, driven live 2026-09-27: two tabs submitting overlapping
+ * spans (1–4 and 2–5) on the same goal both landed under `READ COMMITTED`,
+ * each reading "no overlap yet" before either had committed. `addPhase`'s own
+ * `pg_advisory_xact_lock`, keyed on the goal's id and taken as the first
+ * statement of its transaction, serialises the two calls: the second blocks
+ * until the first commits, then re-reads the phases the first one just wrote
+ * and is refused. A fresh goal, created here and never reused, so no other
+ * lane's own phases can be in the way — `addPhase`'s overlap read is scoped
+ * to this `goalId` alone regardless.
+ */
+async function runPhaseOverlapRaceCheck(): Promise<void> {
+  const { addPhase, createGoal } = await import("@/app/actions/plan");
+
+  const goal = await createGoal({
+    name: "check-goal.ts probe — phase overlap race",
+    horizon: "2099-12-31",
+  });
+  if (!goal.ok) throw new Error(`runPhaseOverlapRaceCheck: createGoal failed: ${goal.error}`);
+
+  const [first, second] = await Promise.all([
+    addPhase({
+      goalId: goal.goalId,
+      aim: "race a",
+      startsOn: "2030-01-01",
+      endsOn: "2030-01-28",
+    }),
+    addPhase({
+      goalId: goal.goalId,
+      aim: "race b",
+      startsOn: "2030-01-08",
+      endsOn: "2030-02-04",
+    }),
+  ]);
+
+  const results = [first, second];
+  const landed = results.filter((result) => result.ok);
+  const refused = results.filter((result) => !result.ok);
+
+  assert(
+    "exactly one of two concurrent addPhase calls with overlapping spans lands on the same goal (RP-15)",
+    landed.length === 1 && refused.length === 1,
+    `results = ${JSON.stringify(results)}`,
+  );
+  assert(
+    "the refused call names the overlap, never a generic failure",
+    refused.length === 1 && !refused[0].ok && refused[0].error === "plan.errors.phaseOverlap",
+    `refused = ${JSON.stringify(refused[0])}`,
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -860,6 +911,7 @@ async function runMain(): Promise<void> {
   );
 
   await runMeasureRenameCheck();
+  await runPhaseOverlapRaceCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
