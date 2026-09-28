@@ -20,6 +20,7 @@
     "writtenOn": "anotado el {weekday} {day}"
   },
   "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
+  "unreadableEvidencePast": "No pudimos leer una fuente. Lo que declaraste ese día sigue aquí.",
   "theme": {
     "toLight": "Cambiar a modo claro",
     "toDark": "Cambiar a modo oscuro"

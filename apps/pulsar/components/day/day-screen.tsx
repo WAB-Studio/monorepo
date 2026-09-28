@@ -134,7 +134,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         />
       )}
 
-      {evidence === "unreadable" ? <EvidenceNote text={t("day.unreadableEvidence")} /> : null}
+      {evidence === "unreadable" ? (
+        <EvidenceNote text={past ? t("day.unreadableEvidencePast") : t("day.unreadableEvidence")} />
+      ) : null}
 
       {goals.length === 0 ? (
         <EmptyDay title={t("day.empty.title")} action={t("day.empty.action")} />
