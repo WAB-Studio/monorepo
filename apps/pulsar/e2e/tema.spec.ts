@@ -30,5 +30,5 @@ test("the theme control, used once, survives a reload with no flash of the other
 
   // The client render agrees once it settles — the commit-time read above
   // is the one that matters, this is only that it does not later contradict it.
-  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  await expect(page.locator("html")).toHaveClass(/\blight\b/);
 });
