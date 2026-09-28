@@ -2377,3 +2377,20 @@ connection caches, not with the code.
   `harness-pulsar-*` identities, while other lanes were running suites.
 - **Do.** Scope every write a probe makes by its own `user_id`, or by the ids its own run returned.
   Never clean up by name.
+
+## `check:e2e` reads `PULSAR_BASE_URL`, and a lane running `HARNESS_BASE_URL` alone never notices
+
+- **What.** `apps/pulsar/playwright.config.ts` reads `process.env.PULSAR_BASE_URL`, never
+  `HARNESS_BASE_URL`, and falls back to `http://localhost:3200` — lane 1's port — when it is unset.
+  A lane invoking `check:e2e` by hand with only `HARNESS_BASE_URL` set drives whatever server already
+  answers 3200 instead of its own build, and a mutation applied only to the lane's own checkout never
+  reaches the suite: both the "baseline" and the "mutated" run pass, identically, for the same reason
+  — neither one ever left port 3200.
+- **Measured 2026-09-27** by the mutator (`private/reportes/pulsar-mutaciones.md`): caught by an
+  `ss -ltnp` on 3200 showing a `next-server` nobody in that session had started, confirmed by a direct
+  `curl` plus cookie against the real lane port, which showed the mutation's effect where the suite
+  run against 3200 had shown none.
+- **Do.** Set `PULSAR_BASE_URL` explicitly for every `check:e2e` invocation outside the lane's own
+  `npm run` default (`PULSAR_BASE_URL=http://localhost:320<n-1>`), the way `docs/TRAPS.md`'s own
+  voyager entry already names this shape for that app: "`worktree.sh` derives a suite's base-URL
+  variable from the app's name." `HARNESS_BASE_URL` alone is not that variable for this app.
