@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
+import { todayInZone } from "@/lib/zone";
 
 // Seeded by `harness:seed-goal`: target 10 `minutos`, daily (RP-03).
 const QUANTITY_COMMITMENT = "Anki";
@@ -22,8 +23,9 @@ async function commitmentId(db: postgres.Sql, personId: string, name: string): P
 }
 
 async function clearFactsFor(db: postgres.Sql, commitmentId: string): Promise<void> {
+  // `todayInZone()`, never `current_date`: see `dia.spec.ts`'s own comment.
   const rows = await db<{ id: string }[]>`
-    select id from goals.facts where commitment_id = ${commitmentId} and day = current_date
+    select id from goals.facts where commitment_id = ${commitmentId} and day = ${todayInZone()}::date
   `;
   if (rows.length > 0) {
     await db`delete from goals.facts where id = any(${rows.map((row) => row.id)})`;
@@ -33,7 +35,7 @@ async function clearFactsFor(db: postgres.Sql, commitmentId: string): Promise<vo
 async function latestQuantity(db: postgres.Sql, commitmentId: string): Promise<number | null> {
   const [row] = await db<{ quantity: number | null }[]>`
     select quantity from goals.facts
-    where commitment_id = ${commitmentId} and day = current_date
+    where commitment_id = ${commitmentId} and day = ${todayInZone()}::date
     order by written_at desc
     limit 1
   `;

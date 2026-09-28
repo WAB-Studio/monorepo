@@ -122,6 +122,12 @@ type EvidenceOutcome = {
  * scoped to the caller's own rows by RLS alone — no `user_id` filter is
  * written here, the same choice `lib/evidence/reading-lookups.ts` took, so
  * the policy is the reason the rows are safe, not a second copy of it.
+ *
+ * `retired_at` is `timestamptz`: read as `::date` bare it renders in the
+ * session's own zone (UTC here), so a commitment retired after 19:00 Bogotá
+ * would still ask for one more day. `at time zone ${TIME_ZONE}` first turns
+ * it into the person's own civil day before the cast, the same move
+ * `lib/queries/goal.ts`'s `goalSpan` already makes on `created_at`.
  */
 async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
@@ -134,7 +140,7 @@ async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRo
                ) order by c.created_at), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
-         where c.retired_at is null or c.retired_at::date >= ${day}::date) as commitments,
+         where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${day}::date) as commitments,
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
          from "goals"."phases" p
          where p.starts_on <= ${day}::date

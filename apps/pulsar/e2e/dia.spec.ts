@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
+import { todayInZone } from "@/lib/zone";
 
 // Seeded by `harness:seed-goal` (module 20): a plain `tap` commitment, daily,
 // with no quantity and no evidence behind it — the one row a single click
@@ -21,8 +22,11 @@ async function commitmentId(db: postgres.Sql, personId: string, name: string): P
 // Deletes by the exact ids a lookup just named, never by a blanket
 // `user_id` — other pulsar lanes can share this identity.
 async function clearFactsFor(db: postgres.Sql, commitmentId: string): Promise<void> {
+  // `todayInZone()`, never `current_date`: the app writes the Bogotá civil
+  // day, and Postgres's own `current_date` renders in the session's zone
+  // (UTC), which is a day ahead from 19:00 Bogotá on.
   const rows = await db<{ id: string }[]>`
-    select id from goals.facts where commitment_id = ${commitmentId} and day = current_date
+    select id from goals.facts where commitment_id = ${commitmentId} and day = ${todayInZone()}::date
   `;
   if (rows.length > 0) {
     await db`delete from goals.facts where id = any(${rows.map((row) => row.id)})`;

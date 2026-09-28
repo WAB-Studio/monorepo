@@ -75,6 +75,11 @@ type EvidenceOutcome = {
  * days it lived through), every phase touching the week, and every fact of
  * the week's seven civil days. No `user_id` filter: RLS alone decides, the
  * same choice `lib/queries/day.ts` and `lib/evidence/reading-lookups.ts` took.
+ *
+ * `retired_at` is `timestamptz`; `at time zone ${TIME_ZONE}` reads it as the
+ * person's own civil day before the `::date` cast, the same fix `lib/queries/
+ * day.ts` applies — a bare cast renders in the session's zone (UTC), which
+ * would keep a commitment retired after 19:00 Bogotá live one day too long.
  */
 async function queryGoalsRow(
   tx: Transaction,
@@ -89,7 +94,7 @@ async function queryGoalsRow(
                )), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
-         where c.retired_at is null or c.retired_at::date >= ${weekStart}::date) as commitments,
+         where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${weekStart}::date) as commitments,
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
          from "goals"."phases" p
          where p.starts_on <= ${weekEnd}::date
