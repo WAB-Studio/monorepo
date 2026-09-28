@@ -56,6 +56,9 @@ function loadCookies(): StoredCookie[] {
   return state.cookies.map(({ name, value }) => ({ name, value }));
 }
 
+// Every path the `next/cache` stub received, in call order.
+const revalidated: string[] = [];
+
 function installStubs(cookies: StoredCookie[]): void {
   const untyped = Module as unknown as {
     _load: (request: string, parent: unknown, isMain: boolean) => unknown;
@@ -67,7 +70,7 @@ function installStubs(cookies: StoredCookie[]): void {
       return { cookies: async () => ({ getAll: () => cookies, set() {} }) };
     }
     if (request === "next/cache") {
-      return { revalidatePath() {} };
+      return { revalidatePath: (path: string) => void revalidated.push(path) };
     }
     return originalLoad(request, parent, isMain);
   };
@@ -114,6 +117,7 @@ let youngCommitmentId: string;
 // fall after it.
 let retiredCommitmentId: string;
 let oneOffId: string;
+let fixtureGoalId: string;
 
 before(async () => {
   installStubs(loadCookies());
@@ -131,6 +135,7 @@ before(async () => {
 
   const goal = await createGoal({ name: "RP-06 fixture", horizon: shiftDay(today, 60) });
   if (!goal.ok) throw new Error(`createGoal: ${goal.error}`);
+  fixtureGoalId = goal.goalId;
 
   // `created_at`/`retired_at` at birth are out of `authenticated`'s own
   // grant (`db/migrations/0000_mighty_pet_avengers.sql`: "a commitment is
@@ -161,6 +166,8 @@ before(async () => {
 });
 
 after(async () => {
+  // Cascades to the fixture's commitments, one-off and facts.
+  if (fixtureGoalId) await sql`delete from goals.goals where id = ${fixtureGoalId}`;
   await sql.end();
 });
 
@@ -256,4 +263,47 @@ test("declareFact: a malformed day is refused gracefully, never thrown", async (
   const result = await declareFact({ commitmentId: oldCommitmentId, day: "2026-13-40" });
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.error, "day.errors.dayInvalid");
+});
+
+test("declareFact: a day on the commitment's own creation day is accepted and lands there", async () => {
+  // `youngCommitmentId` was born three days ago, at this very time of day.
+  const bornOn = shiftDay(today, -3);
+  const result = await declareFact({ commitmentId: youngCommitmentId, day: bornOn });
+  assert.equal(result.ok, true);
+  const rows = await sql<{ day: string }[]>`
+    select day::text as day from goals.facts where commitment_id = ${youngCommitmentId}`;
+  assert.deepEqual(
+    rows.map((row) => row.day),
+    [bornOn],
+  );
+});
+
+test("declareFact: a day on the commitment's own retirement day is accepted and lands there", async () => {
+  // `retiredCommitmentId` was retired two days ago, at this very time of day.
+  const retiredOn = shiftDay(today, -2);
+  const result = await declareFact({ commitmentId: retiredCommitmentId, day: retiredOn });
+  assert.equal(result.ok, true);
+  const rows = await sql<{ day: string }[]>`
+    select day::text as day from goals.facts where commitment_id = ${retiredCommitmentId}`;
+  assert.deepEqual(
+    rows.map((row) => row.day),
+    [retiredOn],
+  );
+});
+
+test("declareFact: day = today is accepted and lands on today", async () => {
+  const result = await declareFact({ commitmentId: oldCommitmentId, day: today });
+  assert.equal(result.ok, true);
+  const rows = await sql<{ day: string }[]>`
+    select day::text as day from goals.facts where commitment_id = ${oldCommitmentId} and day = ${today}`;
+  assert.equal(rows.length, 1);
+});
+
+test("declareFact: a past-day fact revalidates /semana and its own /dia/<day>", async () => {
+  const day = shiftDay(today, -4);
+  revalidated.length = 0;
+  const result = await declareFact({ commitmentId: oldCommitmentId, day });
+  assert.equal(result.ok, true);
+  assert.ok(revalidated.includes("/semana"), `revalidated: ${revalidated.join(", ")}`);
+  assert.ok(revalidated.includes(`/dia/${day}`), `revalidated: ${revalidated.join(", ")}`);
 });
