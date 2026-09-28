@@ -364,3 +364,14 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   until it is done or deleted. Not built yet; no board draws it. Decided by the user 2026-09-28.
 - **Pulsar has no Spanish not-found or error page yet.** Next's English one reaches a stale link.
   Shipped that way on purpose; the next slice draws both. Decided by the user 2026-09-28.
+- **The review's columns are semana, the measure, fase and nota.** The wide board's second figure
+  column («monólogo sin parar») is not built: no data feeds it. The phone shows the measure and the
+  note alone. A week with nothing reads «0», never «—» and never hidden; the review stops at the
+  current week, whose note reads «en curso». Decided 2026-09-28 by the coordinator, the user having
+  delegated it.
+- **The way into the review is a ghost «Ver por semana» under the goal's measure figure.** No board
+  draws one; it shows only on a goal with a measure. Decided 2026-09-28 by the coordinator, the user
+  having delegated it.
+- **The review is the one screen wider than 640 px.** `Page` takes `width="wide"`, which lifts the
+  cap to 1020 past the kit's 700 px breakpoint, as `RevisionEscritorio.dc.html` draws. Decided
+  2026-09-28 by the coordinator, the user having delegated it.
