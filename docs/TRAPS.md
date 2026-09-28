@@ -2354,3 +2354,26 @@ connection caches, not with the code.
 - **Do.** Prove the evidence path with the reader stubbed in a child process, the way
   `scripts/check-day.ts` degrades it, and say in the report that the screen half is unproven. Never
   insert into `reading.lookups` to close the gap, and never sign in as the real reader.
+
+## A timestamptz read as a day lands on tomorrow every evening in Bogotá
+
+- **What.** `retired_at::date` casts in the session zone, UTC. From 19:00 to 24:00 Bogotá the UTC day
+  is already the next one, so a commitment retired that evening kept asking the day after. The same
+  class in JS: `asksOn` compared `"2026-09-28" > "2026-09-28T01:00Z"` as strings, false, so Thursday
+  still asked after a Wednesday-evening retirement. And three specs asserted `day = current_date`,
+  Postgres's UTC day, while the app writes `todayInZone()`.
+- **Measured 2026-09-27**, 19:15 Bogotá, by module 18's validator: retired today, tomorrow asked. The
+  specs were red every evening and green every morning, so a morning run proved nothing.
+- **Do.** Read an instant as a day only through `lib/zone.ts`: `(col at time zone ${TIME_ZONE})::date`
+  in SQL, `civilDateInZone(new Date(instant))` in JS. Never compare an instant string with a day
+  string. Compare a spec's rows against `todayInZone()`, never `current_date`. Prove a day boundary
+  with an instant at 23:30 Bogotá, which is red at any hour the suite runs.
+
+## A cleanup keyed by a fixture's name deletes every lane's fixtures
+
+- **What.** Every harness identity seeds the same goal and commitment names — `Anki`, `check-day…`.
+  A `DELETE` over `DATABASE_URL`, which bypasses RLS, filtered by name and day reaches all of them.
+- **Measured 2026-09-27**, module 31: 21 `goals.facts` rows deleted, belonging to many
+  `harness-pulsar-*` identities, while other lanes were running suites.
+- **Do.** Scope every write a probe makes by its own `user_id`, or by the ids its own run returned.
+  Never clean up by name.
