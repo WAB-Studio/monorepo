@@ -66,6 +66,12 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <Figure value={goal.measureTotal} unit={goal.measureUnit} variant="measure" />
       ) : null}
 
+      {goal.measureUnit ? (
+        <Button asChild variant="ghost">
+          <Link href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</Link>
+        </Button>
+      ) : null}
+
       {goal.measureUnit && goal.evidence === "unreadable" ? (
         <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
       ) : null}
