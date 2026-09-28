@@ -18,7 +18,8 @@
     "unreadableEvidence": "No pudimos leer una fuente. Lo declarado sigue aquí."
   },
   "commitments": {
-    "retired": "retirado"
+    "retired": "retirado",
+    "add": "Añadir un compromiso"
   },
   "cadence": {
     "daily": "todos los días",

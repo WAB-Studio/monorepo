@@ -1,8 +1,11 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
-import { Flex, Row, SectionLabel, Text } from "@/components/ui";
+import { Button, Flex, SectionLabel, Text } from "@/components/ui";
+
+import { CommitmentRow } from "./retire-sheet";
 
 export type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -73,9 +76,19 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): string {
  * `Meta.dc.html`'s commitment rows (RP-12, RP-13, RP-14): the name on the
  * left, the cadence over the satisfaction right-aligned in mono. A retired
  * commitment stays in the list — never hidden — marked in its own second
- * line rather than by hue, since this design has none for it.
+ * line rather than by hue, since this design has none for it. Below the
+ * rows, the goal's own way into `CompromisoNuevo.dc.html` (docs/pulsar/
+ * DESIGN.md "A goal adds a commitment from its own screen"): solid while the
+ * list is empty, because then it is the only thing the screen asks for;
+ * outlined once a first commitment already carries the goal.
  */
-export async function CommitmentList({ commitments }: { commitments: GoalCommitment[] }) {
+export async function CommitmentList({
+  goalId,
+  commitments,
+}: {
+  goalId: string;
+  commitments: GoalCommitment[];
+}) {
   const t = await getTranslations();
 
   return (
@@ -87,10 +100,13 @@ export async function CommitmentList({ commitments }: { commitments: GoalCommitm
         })}
       </SectionLabel>
       {commitments.map((commitment) => (
-        <Row
+        <CommitmentRow
           key={commitment.id}
+          commitmentId={commitment.id}
           name={commitment.name}
-          meta={commitment.retiredAt ? t("goal.commitments.retired") : undefined}
+          retired={commitment.retiredAt !== null}
+          retiredLabel={t("goal.commitments.retired")}
+          factDayCount={commitment.factDayCount}
           trailing={
             <Flex direction="column" align="end" gap="1">
               <Text as="span" variant="meta" tone="muted">
@@ -101,9 +117,11 @@ export async function CommitmentList({ commitments }: { commitments: GoalCommitm
               </Text>
             </Flex>
           }
-          disabled
         />
       ))}
+      <Button asChild variant={commitments.length > 0 ? "outline" : "solid"} block>
+        <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>
+      </Button>
     </section>
   );
 }

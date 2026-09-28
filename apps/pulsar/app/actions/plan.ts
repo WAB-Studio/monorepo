@@ -181,8 +181,23 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
     return { ok: true, commitmentId };
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: error.message };
+    // `addCommitmentSchema`'s own `.max()`s refuse an oversized cadenceN,
+    // targetQuantity or threshold before the insert runs; this is the second
+    // line, the way `declareFact` catches the same code — a number the schema
+    // missed for any reason still meets `integer`'s ceiling as a message,
+    // never a 500.
+    if (isNumericRangeError(error)) return { ok: false, error: "plan.errors.valueOutOfRange" };
     throw error;
   }
+}
+
+function isNumericRangeError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "22003"
+  );
 }
 
 /**

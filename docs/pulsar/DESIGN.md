@@ -170,6 +170,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **The moment a phase ends (RP-15)** and the review's own act — recording the answer again. Not drawn.
 - **A read-only field.** No board shows one; "Decisions taken here" says what it looks like anyway,
   because the kit needed the answer before any screen asked for it.
+- **The goal's entry to a new commitment.** Decided under "Decisions taken here", built, not drawn
+  on `Meta.dc.html`.
 - **«Escribir otra cantidad», typed.** `HoyCantidad.dc.html` draws the chips alone; the typed field
   the tap on that button opens — the exception this design already allows — is built and not drawn.
 
@@ -222,6 +224,14 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A read-only field reads exactly as a disabled one.** Muted ink, a `line` ring, no fill of its
   own — one form for "this does not move," not two half-dressed states a reader would have to tell
   apart. No board draws a read-only field; this decision has none. Taken by the user 2026-09-22.
+- **A goal adds a commitment from its own screen.** `Meta.dc.html` draws the list and no way into
+  `CompromisoNuevo.dc.html`, and a goal is born with no commitment. A block button «Añadir un
+  compromiso» sits under the goal's list: outlined while the list holds one, solid while it is empty,
+  because then it is the only thing the screen asks for. Decided 2026-09-27 by the coordinator, the
+  user having delegated it.
+- **«N veces al mes» has no chip.** The schema and the engine accept `times_per_month`; the new
+  commitment's screen offers the four cadences `CompromisoNuevo.dc.html` draws, and one already
+  stored still reads on the goal. Taken by the user 2026-09-27: no chip until someone needs it.
 - **The quantity sheet's question is neutral, never gendered by the unit.** «¿Cuántos {unit}?» read
   «¿Cuántos páginas?» for a feminine unit; the heading is now «¿Cuánto hiciste hoy?», the unit named
   once beside the chips instead of inside the sentence. Decided 2026-09-27 by the coordinator, the

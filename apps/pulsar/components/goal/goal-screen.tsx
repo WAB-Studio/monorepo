@@ -78,7 +78,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
       ) : null}
 
-      <CommitmentList commitments={goal.commitments} />
+      <CommitmentList goalId={goal.id} commitments={goal.commitments} />
 
       <section>
         <SectionLabel>
