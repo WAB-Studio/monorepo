@@ -10,6 +10,7 @@ import {
   addCommitmentSchema,
   addPhaseSchema,
   createGoalSchema,
+  phasesOverlap,
   retireCommitmentSchema,
   type AddCommitmentInput,
   type AddPhaseInput,
@@ -93,6 +94,16 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
     const phaseId = await withGoalsDb(async (tx) => {
       const [goal] = await tx.select({ id: goals.id }).from(goals).where(eq(goals.id, goalId));
       if (!goal) throw new NamedError("plan.errors.goalNotFound");
+
+      // Refused here, not by a CHECK: two spans covering one day would make
+      // `phaseOn` (lib/day/derive.ts) guess which one a day belongs to.
+      const existing = await tx
+        .select({ startsOn: phases.startsOn, endsOn: phases.endsOn })
+        .from(phases)
+        .where(eq(phases.goalId, goalId));
+      if (existing.some((phase) => phasesOverlap({ startsOn, endsOn }, phase))) {
+        throw new NamedError("plan.errors.phaseOverlap");
+      }
 
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${phases} (user_id, goal_id, aim, starts_on, ends_on)

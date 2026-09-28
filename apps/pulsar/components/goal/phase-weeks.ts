@@ -1,0 +1,46 @@
+import { addWeeksToCivilDate, civilDateToDate, dateToCivilDate } from "@/lib/zone";
+
+// Whole civil days between two `YYYY-MM-DD` strings, at midday UTC so no
+// zone offset can shift the count by one — the same technique `lib/day/
+// cadence.ts`'s own `daysBetween` uses.
+export function daysBetween(from: string, to: string): number {
+  const ms = civilDateToDate(to).getTime() - civilDateToDate(from).getTime();
+  return Math.round(ms / 86_400_000);
+}
+
+// The 1-based week `day` falls in, counted from the goal's own opening —
+// what `Meta.dc.html` calls "semanas 1–4" for a phase's own span. The one
+// convention every screen that counts a goal's weeks reuses; never a second
+// one (module 36's own instruction not to invent one).
+export function weekIndex(openedOn: string, day: string): number {
+  return Math.floor(daysBetween(openedOn, day) / 7) + 1;
+}
+
+// How many whole weeks a horizon holds. A horizon is always set in exact
+// weeks (`NewGoalForm`'s own conversion), so this lands on a whole number,
+// never a fraction rounded away.
+export function horizonWeeks(openedOn: string, horizon: string): number {
+  return Math.round(daysBetween(openedOn, horizon) / 7);
+}
+
+function dayBefore(day: string): string {
+  const date = civilDateToDate(day);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateToCivilDate(date);
+}
+
+// The inverse of `weekIndex`: the civil dates a 1-based week span covers,
+// counted from the goal's own opening. Week `N` opens `(N - 1) * 7` days
+// after `openedOn` and closes the day before week `N + 1` opens — never
+// `lib/zone.ts`'s `weekOf`, which counts the real Monday-to-Sunday week and
+// has nothing to do with a goal's own opening day.
+export function weeksToPhaseSpan(
+  openedOn: string,
+  fromWeek: number,
+  toWeek: number,
+): { startsOn: string; endsOn: string } {
+  return {
+    startsOn: addWeeksToCivilDate(openedOn, fromWeek - 1),
+    endsOn: dayBefore(addWeeksToCivilDate(openedOn, toWeek)),
+  };
+}

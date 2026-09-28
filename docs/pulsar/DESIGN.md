@@ -178,6 +178,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   because the kit needed the answer before any screen asked for it.
 - **The goal's entry to a new commitment.** Decided under "Decisions taken here", built, not drawn
   on `Meta.dc.html`.
+- **`Fase nueva`** (RP-15). Decided under "Decisions taken here", built in `CompromisoNuevo.dc.html`'s
+  own shape, not drawn on any board. Decided 2026-09-27 by the coordinator, the user having
+  delegated it.
 - **«Escribir otra cantidad», typed.** `HoyCantidad.dc.html` draws the chips alone; the typed field
   the tap on that button opens — the exception this design already allows — is built and not drawn.
 - **A done row with its note.** No board draws a commitment's second and third lines once it is
@@ -290,3 +293,35 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A done row's second line shows what was logged** («25 minutos») instead of the target, and the
   note, when there is one, as a third quiet line (the type role already named `quiet` in the token
   table; no new role). Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **A goal adds a phase from its own screen, the same pattern as a commitment** (RP-15). Under the
+  phase list, a block outlined `Button` «Añadir una fase» → `/metas/[goalId]/fases/nueva`; solid
+  while the goal has no phase yet, outlined once it carries one — `commitment-list.tsx`'s own
+  block-button rule, never a second one invented for a phase. Decided 2026-09-27 by the coordinator,
+  the user having delegated it.
+- **`Fase nueva` is a full screen in `CompromisoNuevo.dc.html`'s own shape** (RP-15): overline the
+  goal's name, h1 «Fase nueva», a field «qué busca» for the aim, a section «qué semanas» with two
+  numeric fields «desde la semana» / «hasta la semana», counted from the goal's own opening week
+  exactly as `goal-screen.tsx`'s own `phaseSpanLabel` already counts (`components/goal/phase-
+  weeks.ts`'s `weekIndex`, shared rather than reimplemented). Prefilled: from the week after the
+  last phase's own end (week 1 with none), four weeks long, never past the goal's own horizon.
+  Primary «Añadirla». Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **A week span converts to civil dates in one pure function, `weeksToPhaseSpan`**
+  (`components/goal/phase-weeks.ts`), the inverse of `weekIndex`: week `N` opens `(N - 1) * 7` days
+  after the goal's own opening and closes the day before week `N + 1` opens. Proved by its own unit
+  test at both ends of a span and across a month boundary — never `lib/zone.ts`'s `weekOf`, which
+  counts the real Monday-to-Sunday week and has nothing to do with a goal's own opening day. Decided
+  2026-09-27 by the coordinator, the user having delegated it.
+- **An overlapping phase is refused, never silently accepted** (RP-15): the day names one phase
+  (`phaseOn`, `lib/day/derive.ts`), so two spans covering one day would make it guess which one.
+  `phasesOverlap` (`lib/validation/plan.ts`) is a plain function, not part of `addPhaseSchema` — the
+  schema alone cannot see a goal's other phases — checked on the client against the phases the page
+  already loaded, and again inside `addPhase`'s own transaction, authoritative, against a fresh
+  `select` of the goal's own phases. A `EXCLUDE USING gist` constraint on `(goal_id, daterange(starts
+  _on, ends_on, '[]'))` would close the same race two concurrent inserts could still slip through
+  under `READ COMMITTED`, but costs a migration, `btree_gist` enabled in the `goals` schema, and a
+  second place this rule is stated — not built, this being a single-editor screen with no such race
+  observed. Decided 2026-09-27 by the coordinator, the user having delegated it.
+- **The goal's own header counts active commitments only** (RP-13): a retired commitment stays in
+  `commitment-list.tsx`'s own list — dimmed, marked, never hidden — but the count above the list
+  names only what still asks something of the goal, not the whole history the list itself keeps.
+  Decided 2026-09-27 by the coordinator, the user having delegated it.

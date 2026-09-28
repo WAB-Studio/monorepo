@@ -39,6 +39,16 @@ export const addPhaseSchema = z
 
 export type AddPhaseInput = z.infer<typeof addPhaseSchema>;
 
+export type PhaseSpan = { startsOn: string; endsOn: string };
+
+// Whether two phases would share a day (RP-15): `phaseOn` (lib/day/derive.ts)
+// answers "which phase is today in" by taking the first span that covers the
+// day, so two spans covering the same day would make it guess. Inclusive at
+// both ends — a phase ending the day another starts still shares that day.
+export function phasesOverlap(a: PhaseSpan, b: PhaseSpan): boolean {
+  return a.startsOn <= b.endsOn && b.startsOn <= a.endsOn;
+}
+
 // RP-12's five cadences, keyed on `cadenceKind` so an impossible column never
 // reaches the database: `weekdays` asks for the days it names and nothing
 // else, the three counted kinds ask for their count and nothing else, and

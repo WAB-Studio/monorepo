@@ -1,26 +1,15 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { phaseOn } from "@/lib/day/derive";
 import { loadGoal } from "@/lib/queries/goal";
-import { civilDateInZone, civilDateToDate, todayInZone, TIME_ZONE } from "@/lib/zone";
-import { Figure, Flex, Mark, Page, Row, SectionLabel, Text } from "@/components/ui";
+import { civilDateInZone, todayInZone, TIME_ZONE } from "@/lib/zone";
+import { Button, Figure, Flex, Mark, Page, Row, SectionLabel, Text } from "@/components/ui";
 
 import { CommitmentList, countWord, type Translator } from "./commitment-list";
-
-// Whole civil days between two `YYYY-MM-DD` strings, the same midday-UTC
-// technique `lib/day/cadence.ts`'s own `daysBetween` uses.
-function daysBetween(from: string, to: string): number {
-  const ms = civilDateToDate(to).getTime() - civilDateToDate(from).getTime();
-  return Math.round(ms / 86_400_000);
-}
-
-// The 1-based week `day` falls in, counted from the goal's own opening —
-// what `Meta.dc.html` calls "semanas 1–4" for a phase's own span.
-function weekIndex(openedOn: string, day: string): number {
-  return Math.floor(daysBetween(openedOn, day) / 7) + 1;
-}
+import { horizonWeeks, weekIndex } from "./phase-weeks";
 
 // "22 de septiembre": the day the goal was opened, in the person's own zone
 // (RNP-06) and in words, never a locale this design does not otherwise use.
@@ -53,7 +42,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const t = await getTranslations();
   const today = todayInZone();
   const openedOn = civilDateInZone(new Date(goal.createdAt));
-  const totalWeeks = Math.round(daysBetween(openedOn, goal.horizon) / 7);
+  const totalWeeks = horizonWeeks(openedOn, goal.horizon);
   const currentPhase = phaseOn(goal.phases, today);
 
   return (
@@ -102,6 +91,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             disabled
           />
         ))}
+        <Button asChild variant={goal.phases.length > 0 ? "outline" : "solid"} block>
+          <Link href={`/metas/${goal.id}/fases/nueva`}>{t("goal.phases.add")}</Link>
+        </Button>
       </section>
     </Page>
   );
