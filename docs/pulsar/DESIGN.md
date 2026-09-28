@@ -229,6 +229,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   compromiso» sits under the goal's list: outlined while the list holds one, solid while it is empty,
   because then it is the only thing the screen asks for. Decided 2026-09-27 by the coordinator, the
   user having delegated it.
+- **«N veces al mes» has no chip.** The schema and the engine accept `times_per_month`; the new
+  commitment's screen offers the four cadences `CompromisoNuevo.dc.html` draws, and one already
+  stored still reads on the goal. Taken by the user 2026-09-27: no chip until someone needs it.
 - **The quantity sheet's question is neutral, never gendered by the unit.** «¿Cuántos {unit}?» read
   «¿Cuántos páginas?» for a feminine unit; the heading is now «¿Cuánto hiciste hoy?», the unit named
   once beside the chips instead of inside the sentence. Decided 2026-09-27 by the coordinator, the
