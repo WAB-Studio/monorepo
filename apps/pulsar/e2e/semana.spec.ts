@@ -124,10 +124,13 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
 
     // Completed from the day screen (`OneOffRow`, `app/actions/one-
     // offs.ts`), never by writing the fact directly — the same gesture a
-    // person uses.
+    // person uses. The mark, not the name (RP-22 split the row in two: the
+    // name alone opens the delete sheet).
     await page.goto("/");
-    await page.locator("button", { hasText: ONE_OFF_NAME }).click();
-    await expect(page.locator("button", { hasText: ONE_OFF_NAME })).toHaveCount(0);
+    const nameButton = page.locator("button", { hasText: ONE_OFF_NAME });
+    const rowContainer = nameButton.locator("xpath=ancestor::div[1]");
+    await rowContainer.getByRole("button", { name: "Marcar como hecho" }).click();
+    await expect(nameButton).toHaveCount(0);
 
     await page.goto("/semana");
     const afterRow = goalSection.locator("button", { hasText: todayLabel() });

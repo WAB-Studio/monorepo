@@ -25,19 +25,44 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // Drops the hairline for the last row of a group, where the group's own
   // spacing already separates it.
   rule?: boolean;
+  // Splits the row into two real buttons — the leading mark and the rest —
+  // for a row whose mark does a different act than its name
+  // (`one-off-row.tsx`'s mark still finishes it; its name opens the sheet
+  // that deletes it, RP-22). Absent, the row stays the one button it always
+  // was. Names the mark's own button for a reader that has no visible text
+  // to read there.
+  onLeadingClick?: () => void;
+  leadingLabel?: string;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
-  { leading, name, meta, trailing, rule = true, className, type = "button", ...props },
+  {
+    leading,
+    name,
+    meta,
+    trailing,
+    rule = true,
+    onLeadingClick,
+    leadingLabel,
+    className,
+    type = "button",
+    disabled,
+    onClick,
+    ...props
+  },
   ref,
 ) {
-  const merged = [styles.row, rule ? undefined : styles.flush, className]
+  const merged = [
+    styles.row,
+    rule ? undefined : styles.flush,
+    onLeadingClick ? styles.split : undefined,
+    className,
+  ]
     .filter(Boolean)
     .join(" ");
 
-  return (
-    <button ref={ref} type={type} className={merged} {...props}>
-      {leading ? <span className={styles.leading}>{leading}</span> : null}
+  const body = (
+    <>
       <span className={styles.body}>
         <Text as="span" variant="name">
           {name}
@@ -49,6 +74,41 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
         ) : null}
       </span>
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
+    </>
+  );
+
+  if (onLeadingClick) {
+    return (
+      <div className={merged}>
+        {leading ? (
+          <button
+            type="button"
+            className={styles.leadingButton}
+            onClick={onLeadingClick}
+            disabled={disabled}
+            aria-label={leadingLabel}
+          >
+            {leading}
+          </button>
+        ) : null}
+        <button
+          ref={ref}
+          type={type}
+          className={styles.bodyButton}
+          onClick={onClick}
+          disabled={disabled}
+          {...props}
+        >
+          {body}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button ref={ref} type={type} className={merged} disabled={disabled} onClick={onClick} {...props}>
+      {leading ? <span className={styles.leading}>{leading}</span> : null}
+      {body}
     </button>
   );
 });

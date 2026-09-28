@@ -2,21 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import { goals, oneOffs } from "@/db/schema";
+import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
   createOneOffSchema,
   completeOneOffSchema,
+  deleteOneOffSchema,
   type CreateOneOffInput,
   type CompleteOneOffInput,
+  type DeleteOneOffInput,
 } from "@/lib/validation/one-off";
 
 import { declareFact, type DeclareFactResult } from "./facts";
 
 export type CreateOneOffResult = { ok: true; oneOffId: string } | { ok: false; error: string };
 export type CompleteOneOffResult = DeclareFactResult;
+export type DeleteOneOffResult = { ok: true } | { ok: false; error: string };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -78,4 +81,46 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
 
   return declareFact({ oneOffId: parsed.data.oneOffId });
+}
+
+/**
+ * Deletes a one-off written by mistake (RP-22): it never happened, so there
+ * is no fact to keep. `facts.one_off_id`'s own FK is `ON DELETE cascade`
+ * (`db/schema/facts.ts`), not `restrict` — changing that would be a second
+ * migration this module does not carry — so the refusal below is an
+ * application check, read before the delete, never the FK's own error code:
+ * unchecked, the statement would succeed and silently take the fact with it,
+ * which is exactly what RP-22 says must not happen to a day that did occur.
+ */
+export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneOffResult> {
+  const parsed = deleteOneOffSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "day.errors.signedOut" };
+
+  const { oneOffId } = parsed.data;
+
+  try {
+    const deleted = await withGoalsDb(async (tx) => {
+      const [existingFact] = await tx
+        .select({ id: facts.id })
+        .from(facts)
+        .where(eq(facts.oneOffId, oneOffId));
+      if (existingFact) throw new NamedError("day.errors.oneOffHasFact");
+
+      return tx
+        .delete(oneOffs)
+        .where(and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id)))
+        .returning({ id: oneOffs.id });
+    });
+
+    if (deleted.length === 0) return { ok: false, error: "day.errors.notFound" };
+
+    revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof NamedError) return { ok: false, error: error.message };
+    throw error;
+  }
 }
