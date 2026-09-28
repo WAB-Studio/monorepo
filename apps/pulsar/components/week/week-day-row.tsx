@@ -13,6 +13,9 @@ export type WeekDayRowProps = {
   // the caller, everyone else's in muted (`Semana.dc.html`).
   label: string;
   isToday: boolean;
+  // Present only on a past day the person may still open (`/dia/<day>`),
+  // with the name a reader hears for it; absent, the label is plain text.
+  link?: { href: string; label: string };
   dots: WeekDot[];
   // "5 de 6" on a day already lived, "hoy" on today, absent on a day yet to
   // come or on the last row of a group — `rule` below drops its own hairline
@@ -37,12 +40,14 @@ export type WeekDayRowProps = {
  * mark, module 16), 6px apart — `gap="6px"` is a plain CSS string, a value
  * `Flex`'s own `gap` prop already accepts, not a new class.
  */
-export function WeekDayRow({ label, isToday, dots, note, rule = true }: WeekDayRowProps) {
+export function WeekDayRow({ label, isToday, link, dots, note, rule = true }: WeekDayRowProps) {
   return (
     <Row
       rule={rule}
+      leadingHref={link?.href}
+      leadingLabel={link?.label}
       leading={
-        <Text as="span" variant="meta" tone={isToday ? "ink" : "muted"}>
+        <Text as="span" variant="meta" tone={link ? "accent" : isToday ? "ink" : "muted"}>
           {label}
         </Text>
       }

@@ -3,7 +3,8 @@ import { getTranslations } from "next-intl/server";
 import { Page, SectionLabel, Text, type MarkState } from "@/components/ui";
 import type { DaySlot } from "@/lib/day/types";
 import { loadWeek, type CommitmentGoal, type GoalSummary, type OneOffFact } from "@/lib/queries/week";
-import { todayInZone } from "@/lib/zone";
+import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
@@ -34,6 +35,15 @@ function formatWeekRange(start: string, end: string, t: Translate): string {
 function dayLabel(day: string, weekdayNames: string[]): string {
   const weekday = weekdayNames[(new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7];
   return `${weekday} ${Number(day.slice(8, 10))}`;
+}
+
+// Past and within `PAST_DAY_LIMIT` of today: the days `/dia/[fecha]` draws.
+// Civil dates compare as strings; the floor goes through `Date` to cross months.
+function openableFrom(today: string): (day: string) => boolean {
+  const floor = civilDateToDate(today);
+  floor.setUTCDate(floor.getUTCDate() - PAST_DAY_LIMIT);
+  const oldest = dateToCivilDate(floor);
+  return (day) => day < today && day >= oldest;
 }
 
 // "5 de 6" once the day is already lived, "hoy" on today, nothing on a day
@@ -105,6 +115,16 @@ export async function WeekScreen() {
   const { view, evidence, goals, commitments, oneOffFacts } = await loadWeek(today);
 
   const weekdayNames = t.raw("week.weekdayShort") as string[];
+  const weekdayLong = t.raw("week.weekdayLong") as string[];
+  const isOpenable = openableFrom(today);
+  function linkFor(day: string) {
+    if (!isOpenable(day)) return undefined;
+    const weekday = weekdayLong[(civilDateToDate(day).getUTCDay() + 6) % 7];
+    return {
+      href: `/dia/${day}`,
+      label: t("week.openDay", { weekday, day: Number(day.slice(8, 10)) }),
+    };
+  }
   const slotsByDay = new Map(view.days.map((dayView) => [dayView.day, dayView.slots]));
 
   function dotsFor(goalId: string, day: string): WeekDot[] {
@@ -145,6 +165,7 @@ export async function WeekScreen() {
               key={dayView.day}
               label={dayLabel(dayView.day, weekdayNames)}
               isToday={dayView.day === today}
+              link={linkFor(dayView.day)}
               dots={dots}
               note={noteFor(dayView.day, today, filled, dots.length, t)}
               rule={index < view.days.length - 1}
@@ -189,6 +210,7 @@ export async function WeekScreen() {
                 key={dayView.day}
                 label={dayLabel(dayView.day, weekdayNames)}
                 isToday={dayView.day === today}
+              link={linkFor(dayView.day)}
                 dots={dots}
                 note={goallessNoteFor(dayView.day, today, count, t)}
                 rule={index < view.days.length - 1}

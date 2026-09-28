@@ -138,3 +138,23 @@
   max-inline-size: 45%;
   text-align: end;
 }
+
+/* A leading label that is the row's link: accent, underlined, and a 44px
+   target (`Semana.dc.html`). */
+.leadingLink {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-block-size: 44px;
+  color: var(--pulsar-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.leadingLink:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
