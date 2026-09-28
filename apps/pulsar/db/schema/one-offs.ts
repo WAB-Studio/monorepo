@@ -30,10 +30,22 @@ export const oneOffs = goalsSchema.table(
       to: authenticatedRole,
       withCheck: sql`${authUid} = ${t.userId}`,
     }),
+    // RP-22: a one-off that already carries a fact is never deleted, by
+    // whatever door reaches this row — the policy is the enforcement, not
+    // `deleteOneOff`'s own check alone (round 2, 2026-09-28: driven bare,
+    // under a settled session, with no server action in the way, the old
+    // policy let the row go and the fact cascaded with it). The subquery
+    // runs under the caller's own RLS on `goals.facts`
+    // (`facts_select_self`): a person's own fact is always visible to them
+    // there, so this never passes vacuously for the row it is meant to
+    // guard — never `"goals".facts` through the `facts` table object,
+    // which would close an import cycle back to this file.
     pgPolicy("one_offs_delete_self", {
       for: "delete",
       to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId}`,
+      using: sql`${authUid} = ${t.userId} and not exists (
+        select 1 from "goals"."facts" f where f.one_off_id = ${t.id}
+      )`,
     }),
   ],
 );

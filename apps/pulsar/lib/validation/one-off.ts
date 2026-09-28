@@ -25,3 +25,9 @@ export const completeOneOffSchema = z.object({
 });
 
 export type CompleteOneOffInput = z.infer<typeof completeOneOffSchema>;
+
+export const deleteOneOffSchema = z.object({
+  oneOffId: z.uuid({ error: "day.errors.invalid" }),
+});
+
+export type DeleteOneOffInput = z.infer<typeof deleteOneOffSchema>;

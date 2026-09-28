@@ -571,6 +571,129 @@ async function checkRealDoor(): Promise<void> {
   assert("P34", threw, `real withGoalsDb with no session, threw = ${threw}`);
 }
 
+// Module 25's own grant (RP-22): `one_offs_delete_self` (0000) stood inert
+// until this migration's `GRANT DELETE`. Own connection, own transaction,
+// own forced rollback — nothing this seeds survives it, the same shape as
+// `checkPoliciesAndGrants`.
+async function checkOneOffDeleteGrant(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const [mine] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'suelto de prueba') returning id`;
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta de prueba', '2026-12-31') returning id`;
+
+      await enterUserContext(tx, intruder);
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${intruder}, 'ajeno') returning id`;
+
+      await enterUserContext(tx, subject);
+
+      // -- delete another person's one-off: the grant now lets the
+      // statement run, RLS still filters it to zero rows --
+      const deleteForeign = await tx`delete from goals.one_offs where id = ${theirs.id}`;
+      assert(
+        "P35",
+        deleteForeign.count === 0,
+        `delete another person's one-off, rows deleted = ${deleteForeign.count}`,
+      );
+
+      // -- delete a one-off of one's own: this is the grant this migration
+      // adds, driven for real rather than read from the migration file --
+      const deleteOwn = await tx<{ id: string }[]>`
+        delete from goals.one_offs where id = ${mine.id} returning id`;
+      assert("P36", deleteOwn.length === 1, `delete own one-off, rows deleted = ${deleteOwn.length}`);
+
+      // -- the grant this migration adds names `one_offs` alone: `goals`,
+      // already covered for phases (P19) and commitments (P18), still
+      // refuses a DELETE with 42501 too --
+      const deleteGoal = await attempt(tx, (sp) => sp`delete from goals.goals where id = ${goal.id}`);
+      assert("P37", deleteGoal.code === "42501", `delete own goal, sqlstate = ${deleteGoal.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // Read the grant back from the catalogue, never from the migration file:
+  // `facts` already carried DELETE (0000, "undoing a tap is a delete of the
+  // whole row"); this migration adds `one_offs` beside it and nothing else —
+  // `goals`, `phases` and `commitments` still carry none.
+  const grants = await sql<{ table_name: string }[]>`
+    select table_name from information_schema.role_table_grants
+    where table_schema = 'goals' and grantee = 'authenticated' and privilege_type = 'DELETE'`;
+  const tablesWithDelete = grants.map((row) => row.table_name).sort();
+  assert(
+    "P38",
+    tablesWithDelete.length === 2 &&
+      tablesWithDelete[0] === "facts" &&
+      tablesWithDelete[1] === "one_offs",
+    `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
+  );
+
+  await sql.end();
+}
+
+// Round 2, 2026-09-28: an independent validator drove a bare `DELETE` under
+// a settled session, no server action in the way, and an own one-off that
+// carried a fact went — the invariant lived in `deleteOneOff`'s own check
+// alone, never in the grant layer. `one_offs_delete_self`'s own `USING`
+// (migration 0002) is what closes that: this drives the very same bare
+// statement the validator did, never `deleteOneOff`, so a regression in any
+// future writer is caught here too, not only in this app's own action.
+async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject})`;
+      await enterUserContext(tx, subject);
+
+      const [oneOff] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'suelto con hecho') returning id`;
+      await tx`
+        insert into goals.facts (user_id, one_off_id, day)
+        values (${subject}, ${oneOff.id}, '2026-09-22')`;
+
+      // Bare, under the caller's own settled claims — no `deleteOneOff`, no
+      // server action: exactly what the round-2 validator drove.
+      const deleted = await tx<{ id: string }[]>`
+        delete from goals.one_offs where id = ${oneOff.id} returning id`;
+      assert(
+        "P39",
+        deleted.length === 0,
+        `bare delete of an own one-off carrying a fact, rows deleted = ${deleted.length}`,
+      );
+
+      const stillThere = await tx<{ id: string }[]>`
+        select id from goals.facts where one_off_id = ${oneOff.id}`;
+      assert(
+        "P40",
+        stillThere.length === 1,
+        `the fact after the refused delete, rows visible = ${stillThere.length}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   const sql = postgres(DATABASE_URL!, {
     prepare: false,
@@ -585,6 +708,8 @@ async function main(): Promise<void> {
   await checkStatementAttributionByConnection();
   await checkRealClientRejectsBadTokens();
   await checkRealDoor();
+  await checkOneOffDeleteGrant();
+  await checkOneOffWithFactRefusedByPolicy();
 
   if (failed) process.exit(1);
 }

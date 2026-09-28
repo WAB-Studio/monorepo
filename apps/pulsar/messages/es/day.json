@@ -10,7 +10,14 @@
     "action": "Crear una meta"
   },
   "oneOffs": {
-    "title": "Sueltas"
+    "title": "Sueltas",
+    "markLabel": "Marcar como hecho",
+    "delete": {
+      "title": "¿Borrarla?",
+      "description": "No llegó a pasar nada, así que no queda nada de ella. Si ya la hiciste, márcala hecha en vez de borrarla: eso sí deja constancia.",
+      "confirm": "Borrarla",
+      "cancel": "Dejarla"
+    }
   },
   "newOneOff": {
     "label": "Algo suelto",
@@ -43,6 +50,7 @@
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "oneOffNameEmpty": "Escribe qué es lo suelto.",
     "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
-    "oneOffDayInvalid": "Ese día no es válido."
+    "oneOffDayInvalid": "Ese día no es válido.",
+    "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra."
   }
 }
