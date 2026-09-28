@@ -23,6 +23,8 @@ export type QuantitySheetProps = {
   factId?: string;
   loggedQuantity?: number | null;
   loggedNote?: string | null;
+  // The past day the row stands on (RP-06); absent on Hoy.
+  day?: string;
 };
 
 // Four consecutive integers, the target second — `HoyCantidad.dc.html`'s own
@@ -54,6 +56,7 @@ export function QuantitySheet({
   factId,
   loggedQuantity,
   loggedNote,
+  day,
 }: QuantitySheetProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
@@ -129,6 +132,7 @@ export function QuantitySheet({
         // second `declareFact` beside the first (the defect the validator
         // proved live: 25 and 30 both landing in `goals.facts`).
         replace: factId != null,
+        day,
       });
       settle(result);
     });
@@ -151,7 +155,7 @@ export function QuantitySheet({
       open={open}
       onOpenChange={onOpenChange}
       label={name}
-      title={t("day.quantitySheet.question")}
+      title={day ? t("day.quantitySheet.questionPast") : t("day.quantitySheet.question")}
     >
       <Flex gap="2" wrap="wrap" align="center">
         {chips.map((value) => (

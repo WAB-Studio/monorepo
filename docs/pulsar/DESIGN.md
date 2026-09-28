@@ -377,3 +377,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **The review is the one screen wider than 640 px.** `Page` takes `width="wide"`, which lifts the
   cap to 1020 past the kit's 700 px breakpoint, as `RevisionEscritorio.dc.html` draws. Decided
   2026-09-28 by the coordinator, the user having delegated it.
+- **Six boards drawn for the slice «la revisión», approved by the user 2026-09-28.** `Hoy.dc.html`
+  (redrawn: a step back to yesterday before the date), `Semana.dc.html` (redrawn: past days within
+  seven are links; no footer, no «descanso deliberado»), `HoySueltaAtrasada.dc.html` (a carried
+  one-off reads «del sábado 19» under its text, before today's), `DiaPasado.dc.html` (step back,
+  «volver a hoy», «anotado el lunes 21» on a late fact, no step back on the seventh day, no one-offs),
+  `NoEncontrada.dc.html` and `Fallo.dc.html` (no tab marked: neither is a place in the app).

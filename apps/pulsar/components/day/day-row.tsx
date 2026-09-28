@@ -39,6 +39,13 @@ export type DayRowProps = {
   // The line the person wrote alongside the fact (RP-04), drawn quiet under
   // the row when there is one.
   note?: string | null;
+  // The past day this row stands on (RP-06): every fact it writes names that
+  // day. Absent on Hoy, where the action decides today itself.
+  day?: string;
+  // «anotado el lunes 21», set only when the fact was written on a later day
+  // than the one drawn: the day it counts for and the day it was written are
+  // never read as one (RP-06).
+  writtenLabel?: string;
 };
 
 // The row's own mono second line for a `quantity` commitment — `HoyCantidad
@@ -102,6 +109,8 @@ export function DayRow({
   factId,
   loggedQuantity,
   note,
+  day,
+  writtenLabel,
 }: DayRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
@@ -110,7 +119,7 @@ export function DayRow({
 
   const tappable = kind !== "evidence";
   const done = markState === "declared";
-  const meta =
+  const baseMeta =
     kind === "quantity"
       ? done && loggedQuantity != null && unit != null
         ? loggedMeta(loggedQuantity, unit)
@@ -118,6 +127,7 @@ export function DayRow({
           ? quantityMeta(target, unit, cadence, t)
           : sourceName
       : sourceName;
+  const meta = [baseMeta, writtenLabel].filter(Boolean).join(" · ") || undefined;
 
   function handleTap() {
     if (!tappable || pending) return;
@@ -131,7 +141,7 @@ export function DayRow({
     startTransition(() => {
       // Done already: this tap undoes it, never declares a second fact
       // beside it (the bug the critic measured 2026-09-27).
-      const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId });
+      const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId, day });
       void action.then((result) => {
         if (!result.ok) setError(result.error);
       });
@@ -168,6 +178,7 @@ export function DayRow({
           factId={done ? factId : undefined}
           loggedQuantity={done ? loggedQuantity : undefined}
           loggedNote={done ? note : undefined}
+          day={day}
         />
       ) : null}
     </>

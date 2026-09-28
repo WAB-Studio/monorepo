@@ -11,6 +11,9 @@ import { OneOffDeleteSheet } from "./one-off-delete-sheet";
 export type OneOffRowProps = {
   oneOffId: string;
   name: string;
+  // «del sábado 19»: set only on a one-off carried from a day before the one
+  // drawn (RP-19), so today's own read with no second line.
+  carriedFrom?: string;
 };
 
 /**
@@ -23,7 +26,7 @@ export type OneOffRowProps = {
  * (`onLeadingClick`), the name opens the sheet that deletes it (`onClick`) —
  * `Row`'s own split, so neither tap reaches the other's act by mistake.
  */
-export function OneOffRow({ oneOffId, name }: OneOffRowProps) {
+export function OneOffRow({ oneOffId, name, carriedFrom }: OneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +49,7 @@ export function OneOffRow({ oneOffId, name }: OneOffRowProps) {
         leading={<Mark state="empty" />}
         leadingLabel={t("day.oneOffs.markLabel")}
         name={name}
+        meta={carriedFrom}
         onLeadingClick={handleComplete}
         onClick={() => setDeleteOpen(true)}
         disabled={pending}
