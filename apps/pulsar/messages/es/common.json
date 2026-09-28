@@ -9,7 +9,6 @@
   "notFound": {
     "kicker": "no está",
     "title": "Esta página no existe",
-    "body": "Si era una meta, puede que esté archivada: la encuentras en Meta.",
     "primaryAction": "Ir a hoy",
     "secondaryAction": "Ver las metas"
   },

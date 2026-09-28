@@ -53,6 +53,11 @@
   "units": {
     "searches": "{count, plural, one {búsqueda} other {búsquedas}}"
   },
+  "countWordsFeminine": [
+    "cero",
+    "una",
+    "dos"
+  ],
   "countWords": [
     "cero",
     "un",

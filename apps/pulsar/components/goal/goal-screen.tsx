@@ -85,7 +85,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <section>
         <SectionLabel>
           {t("goal.detail.phasesCount", {
-            word: countWord(goal.phases.length, t),
+            word: countWord(goal.phases.length, t, true),
             count: goal.phases.length,
           })}
         </SectionLabel>
