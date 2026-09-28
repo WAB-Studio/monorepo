@@ -10,11 +10,8 @@ test("a large number reads with its groups separated, never as one run of digits
   const formatted = formatFigureValue(1_000_039);
   assert.equal(typeof formatted, "string");
   assert.notEqual(formatted, "1000039");
-  // The separator itself is `Intl`'s own call for "es" (a period, not a
-  // literal space) — asserting the digits and their grouping is what proves
-  // the fix; asserting one exact punctuation mark would pin an ICU detail
-  // this file does not own.
-  assert.match(formatted as string, /^1\D000\D039$/);
+  // The exact string pins the locale: "en-US" groups in threes too.
+  assert.equal(formatted, "1.000.039");
 });
 
 test("a small number still reads with no separator to insert", () => {
