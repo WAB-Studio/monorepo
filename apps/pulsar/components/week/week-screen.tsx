@@ -3,7 +3,8 @@ import { getTranslations } from "next-intl/server";
 import { Page, SectionLabel, Text, type MarkState } from "@/components/ui";
 import type { DaySlot } from "@/lib/day/types";
 import { loadWeek, type CommitmentGoal, type GoalSummary, type OneOffFact } from "@/lib/queries/week";
-import { todayInZone } from "@/lib/zone";
+import { weekDayHref } from "@/lib/day/week-href";
+import { civilDateToDate, todayInZone } from "@/lib/zone";
 
 import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
@@ -105,6 +106,16 @@ export async function WeekScreen() {
   const { view, evidence, goals, commitments, oneOffFacts } = await loadWeek(today);
 
   const weekdayNames = t.raw("week.weekdayShort") as string[];
+  const weekdayLong = t.raw("week.weekdayLong") as string[];
+  function linkFor(day: string) {
+    const href = weekDayHref(day, today);
+    if (!href) return undefined;
+    const weekday = weekdayLong[(civilDateToDate(day).getUTCDay() + 6) % 7];
+    return {
+      href,
+      label: t("week.openDay", { weekday, day: Number(day.slice(8, 10)) }),
+    };
+  }
   const slotsByDay = new Map(view.days.map((dayView) => [dayView.day, dayView.slots]));
 
   function dotsFor(goalId: string, day: string): WeekDot[] {
@@ -145,6 +156,7 @@ export async function WeekScreen() {
               key={dayView.day}
               label={dayLabel(dayView.day, weekdayNames)}
               isToday={dayView.day === today}
+              link={linkFor(dayView.day)}
               dots={dots}
               note={noteFor(dayView.day, today, filled, dots.length, t)}
               rule={index < view.days.length - 1}
@@ -189,6 +201,7 @@ export async function WeekScreen() {
                 key={dayView.day}
                 label={dayLabel(dayView.day, weekdayNames)}
                 isToday={dayView.day === today}
+                link={linkFor(dayView.day)}
                 dots={dots}
                 note={goallessNoteFor(dayView.day, today, count, t)}
                 rule={index < view.days.length - 1}

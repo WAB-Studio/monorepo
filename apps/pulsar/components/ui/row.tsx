@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { Text } from "./text";
@@ -32,6 +33,10 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // was. Names the mark's own button for a reader that has no visible text
   // to read there.
   onLeadingClick?: () => void;
+  // Turns the leading block into the row's one link (`Semana.dc.html`'s past
+  // day) and the row into a plain `div`: a link cannot sit inside a
+  // `<button>`. `leadingLabel` names it for a reader.
+  leadingHref?: string;
   leadingLabel?: string;
 };
 
@@ -43,6 +48,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     trailing,
     rule = true,
     onLeadingClick,
+    leadingHref,
     leadingLabel,
     className,
     type = "button",
@@ -76,6 +82,17 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
     </>
   );
+
+  if (leadingHref) {
+    return (
+      <div className={merged}>
+        <Link href={leadingHref} className={styles.leadingLink} aria-label={leadingLabel}>
+          {leading}
+        </Link>
+        {body}
+      </div>
+    );
+  }
 
   if (onLeadingClick) {
     return (

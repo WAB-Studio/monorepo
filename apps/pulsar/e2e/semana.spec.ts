@@ -52,6 +52,12 @@ function expectedStateFor(label: string): string {
   return "evidence";
 }
 
+// A past day's row is a `div` with a link (`Semana.dc.html`), today's and a
+// future day's a `button`: the label's own text finds either.
+function dayRow(section: Locator, label: string): Locator {
+  return section.locator("button, div").filter({ hasText: label });
+}
+
 async function dotStates(locator: Locator): Promise<{ label: string | null; state: string | null }[]> {
   return locator.locator('[role="img"]').evaluateAll((els) =>
     els.map((el) => ({ label: el.getAttribute("aria-label"), state: el.getAttribute("data-state") })),
@@ -80,7 +86,7 @@ test("seven rows per goal at 360px, no horizontal overflow (RP-16)", async ({ pa
 
   const goalSection = page.locator("section", { hasText: GOAL_NAME });
   await expect(goalSection).toBeVisible();
-  await expect(goalSection.getByRole("button")).toHaveCount(7);
+  await expect(goalSection.locator("button, a")).toHaveCount(7);
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(360);
@@ -90,7 +96,7 @@ test("a day with no facts carries no filled dot (RP-16)", async ({ page }) => {
   await page.goto("/semana");
 
   const goalSection = page.locator("section", { hasText: GOAL_NAME });
-  const row = goalSection.locator("button", { hasText: otherDayLabel() });
+  const row = dayRow(goalSection, otherDayLabel());
   await expect(row).toBeVisible();
 
   const dots = await dotStates(row);
@@ -123,7 +129,7 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
   try {
     await page.goto("/semana");
     const goalSection = page.locator("section", { hasText: GOAL_NAME });
-    const todayRow = goalSection.locator("button", { hasText: todayLabel() });
+    const todayRow = dayRow(goalSection, todayLabel());
     await expect(todayRow).toBeVisible();
     const before = await todayRow.locator('[role="img"]').count();
 
@@ -138,7 +144,7 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
     await expect(nameButton).toHaveCount(0);
 
     await page.goto("/semana");
-    const afterRow = goalSection.locator("button", { hasText: todayLabel() });
+    const afterRow = dayRow(goalSection, todayLabel());
     await expect(afterRow.locator('[role="img"]')).toHaveCount(before + 1);
 
     const dots = await dotStates(afterRow);
@@ -191,7 +197,7 @@ test("a one-off belonging to nothing, done today, fills a dot in the Sueltas row
     // goal still has a day, so this group draws even with no goal open.
     const sueltas = page.locator("section", { hasText: "Sueltas" });
     await expect(sueltas).toBeVisible();
-    const todayRow = sueltas.locator("button", { hasText: todayLabel() });
+    const todayRow = dayRow(sueltas, todayLabel());
     await expect(todayRow).toBeVisible();
 
     const dots = await dotStates(todayRow);
