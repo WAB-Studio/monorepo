@@ -2343,17 +2343,18 @@ overlap in time") is true most of the time, and failing to reproduce a serialize
 the first try does not disprove this entry: the effect comes and goes with the host's own
 connection caches, not with the code.
 
-## No harness identity can reach an evidence-satisfied row, so that row has no end-to-end proof
+## A harness identity may own its own `reading.lookups` rows, and nobody else's
 
-- **What.** A pulsar row satisfied by evidence reads `reading.lookups`. The only rows there — 55, written
-  on 2026-09-11 — belong to one real voyager reader. A harness identity has none, and writing that
-  table is forbidden: it is global and belongs to `apps/voyager`.
-- **Measured 2026-09-27**, module 13. The day screen was driven at 360 px for every other state; the
-  source name on an evidence-satisfied row was proven only through a direct `deriveDay` call with a
-  synthetic `EvidenceDay`.
-- **Do.** Prove the evidence path with the reader stubbed in a child process, the way
-  `scripts/check-day.ts` degrades it, and say in the report that the screen half is unproven. Never
-  insert into `reading.lookups` to close the gap, and never sign in as the real reader.
+- **What.** A pulsar row satisfied by evidence reads `reading.lookups`. Until 2026-09-28 the only rows
+  there belonged to one real voyager reader, so no harness identity could reach an evidence-satisfied
+  row and the screen half of RP-09 had no proof.
+- **Decided by the user 2026-09-28.** `reading.lookups` is per person (`user_id`, `ON DELETE CASCADE`
+  to `auth.users`, measured), not global like `reading.word_texts` and `reading.model_spend`. A
+  registered harness identity may insert rows under its own `user_id`.
+- **Do.** Insert under your lane's own identity only, delete by the ids you created, and let the
+  identity purge be the backstop. Count the rows that are not yours before and after; the number must
+  not move. Never sign in as the real reader. `reading.word_texts` and `reading.model_spend` stay off
+  limits.
 
 ## A timestamptz read as a day lands on tomorrow every evening in Bogotá
 
