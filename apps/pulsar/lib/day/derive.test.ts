@@ -148,6 +148,18 @@ test("phaseOn: null before any phase starts", () => {
   assert.equal(phaseOn(phases, "2025-12-31"), null);
 });
 
+test("phaseOn: the phase still shows on its own last day, and not the day after", () => {
+  const phases = [phase("unlock", "2026-01-01", "2026-01-28")];
+  assert.equal(phaseOn(phases, "2026-01-28")?.id, "unlock");
+  assert.equal(phaseOn(phases, "2026-01-29"), null);
+});
+
+test("phaseOn: the phase shows on its own first day, and not the day before", () => {
+  const phases = [phase("unlock", "2026-01-01", "2026-01-28")];
+  assert.equal(phaseOn(phases, "2026-01-01")?.id, "unlock");
+  assert.equal(phaseOn(phases, "2025-12-31"), null);
+});
+
 // --- measureOf ---
 
 test("measureOf: sums only the quantities carrying the measure's own unit", () => {

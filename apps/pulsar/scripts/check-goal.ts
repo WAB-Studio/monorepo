@@ -713,6 +713,74 @@ function runChildProcess(mode: "stub" | "degraded", goalId: string): ChildResult
   return JSON.parse(line.slice(CHILD_MARKER.length)) as ChildResult;
 }
 
+/**
+ * RP-14: a goal names one measure, set by "the first commitment that
+ * measures something" and never again. A second `quantity` commitment
+ * naming another unit must neither rename `goals.measure_name`/`measure_unit`
+ * nor make the goal's own total stop counting the first commitment's own
+ * facts — `measureOf` sums by unit, so a silent rename would zero a real
+ * declared history the moment a second measure is added. Built through
+ * `createGoal`, `addCommitment` and `declareFact` alone, the same doors a
+ * person's own screen uses; the measure columns are read back with one plain
+ * `select`, never through `addCommitment` again.
+ */
+async function runMeasureRenameCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const { withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const today = todayInZone();
+  const goal = await createGoal({
+    name: "check-goal.ts probe — RP-14 measure guard",
+    horizon: addDays(today, 30),
+  });
+  if (!goal.ok) throw new Error(`runMeasureRenameCheck: createGoal failed: ${goal.error}`);
+
+  const first = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-goal.ts probe — minutos",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 10,
+    unit: "min",
+  });
+  if (!first.ok) throw new Error(`runMeasureRenameCheck: addCommitment(first) failed: ${first.error}`);
+
+  const FIRST_QUANTITY = 5;
+  const fact = await declareFact({ commitmentId: first.commitmentId, quantity: FIRST_QUANTITY });
+  if (!fact.ok) throw new Error(`runMeasureRenameCheck: declareFact failed: ${fact.error}`);
+
+  const second = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-goal.ts probe — tarjetas",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 10,
+    unit: "cards",
+  });
+  if (!second.ok) throw new Error(`runMeasureRenameCheck: addCommitment(second) failed: ${second.error}`);
+
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ measure_name: string | null; measure_unit: string | null }>(
+      sql`select measure_name, measure_unit from "goals"."goals" where id = ${goal.goalId}`,
+    ),
+  );
+  assert(
+    "a goal's measure is named once, by its first quantity commitment, and a second one in another unit never renames it (RP-14)",
+    row?.measure_name === "check-goal.ts probe — minutos" && row?.measure_unit === "min",
+    `measure_name=${row?.measure_name} measure_unit=${row?.measure_unit}`,
+  );
+
+  const view = await loadGoal(goal.goalId);
+  assert(
+    "the goal's own total still counts the first commitment's own facts once a second commitment names another unit",
+    view.measureTotal === FIRST_QUANTITY && view.measureUnit === "min",
+    `measureTotal=${view.measureTotal} measureUnit=${view.measureUnit}`,
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -790,6 +858,8 @@ async function runMain(): Promise<void> {
     degraded.measureTotal === DECLARED_QUANTITY,
     `expected ${DECLARED_QUANTITY} (the declared fact alone), got ${degraded.measureTotal}`,
   );
+
+  await runMeasureRenameCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

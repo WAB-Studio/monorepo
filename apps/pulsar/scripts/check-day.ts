@@ -34,6 +34,7 @@
 // itself as a child with `--degraded-child`, the one place `./reading-
 // lookups` is stubbed to reject, and reads the child's one line of JSON back.
 import { execFileSync } from "node:child_process";
+import { randomInt } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
@@ -671,6 +672,174 @@ async function runWeekCommitmentsZoneCheck(): Promise<void> {
   );
 }
 
+// Whole civil days added to a `YYYY-MM-DD` string, by midday UTC — the same
+// technique `scripts/harness/seed-goal.ts` and `lib/zone.ts`'s own `weekOf`
+// use.
+function addDays(day: string, days: number): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
+}
+
+// The Monday of the week that starts at least `days` after `after` — always
+// strictly later than `after` itself, whatever civil day `after` names.
+function mondayAtLeastAfter(after: string, days: number): string {
+  const candidate = addDays(after, days);
+  const weekday = new Date(`${candidate}T12:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
+  const backToMonday = weekday === 0 ? 6 : weekday - 1;
+  return addDays(candidate, -backToMonday);
+}
+
+/**
+ * A Monday later than any phase this identity's own probes have ever seeded
+ * (`goals.phases` grants no DELETE — RP-15 has no retirement of its own —
+ * so every past run's own phase is still live), plus a further random offset
+ * so two runs racing this check never land on the same day either. A fixed
+ * or independently-random day both failed here: a fixed day accumulates one
+ * phase per run forever, and `deriveWeek`'s own `phaseOn` keeps only the
+ * first phase covering a day when two overlap it, so a later run compared
+ * against a stranger's own already-seeded phase, never the one it just made
+ * — and a day chosen independent of what already exists still falls, most of
+ * the time, inside an earlier run's own wide `[2017-12-01, ends_on]` span,
+ * for the same reason. Confirmed by running this check twice in a row before
+ * this fix, both showing the same, wrong, already-seeded phase.
+ */
+async function pickFreshPhaseMonday(): Promise<string> {
+  const { withGoalsDb } = await import("@/lib/session");
+  const { sql } = await import("drizzle-orm");
+
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ max_ends_on: string | null }>(
+      sql`select max(ends_on) as max_ends_on from "goals"."phases"`,
+    ),
+  );
+  const floor = row?.max_ends_on ?? "1970-01-05";
+  const anchor = mondayAtLeastAfter(floor, 7);
+  return addDays(anchor, randomInt(0, 500) * 7);
+}
+
+/**
+ * Proves `lib/queries/week.ts`'s own `p.ends_on >= weekStart` bound: a phase
+ * ending exactly on the week's own Monday must still be that Monday's phase
+ * in `loadWeek`'s own view — the row-selection layer this bound guards,
+ * never `phaseOn`'s own inclusive check (`runMain`'s cold/warm calls and
+ * `lib/day/derive.test.ts` cover that half; a phase excluded from the row set
+ * entirely never reaches `phaseOn` to be misjudged either way).
+ */
+async function runPhaseWeekBoundCheck(): Promise<void> {
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { createGoal, addPhase } = await import("@/app/actions/plan");
+
+  const monday = await pickFreshPhaseMonday();
+
+  const goal = await createGoal({ name: "check-day phase week-bound probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runPhaseWeekBoundCheck: createGoal failed: ${goal.error}`);
+
+  const phase = await addPhase({
+    goalId: goal.goalId,
+    aim: "check-day phase week-bound probe",
+    startsOn: addDays(monday, -7),
+    endsOn: monday,
+  });
+  if (!phase.ok) throw new Error(`runPhaseWeekBoundCheck: addPhase failed: ${phase.error}`);
+
+  const week = await loadWeek(monday);
+  const mondayView = week.view.days.find((day) => day.day === monday);
+  if (!mondayView) {
+    throw new Error(`runPhaseWeekBoundCheck: loadWeek derived no day "${monday}"`);
+  }
+
+  assert(
+    "a phase ending on a week's own Monday is in that week's loadWeek phases (RP-15)",
+    mondayView.phase?.id === phase.phaseId,
+    `phase = ${JSON.stringify(mondayView.phase)}`,
+  );
+}
+
+/**
+ * Proves `loadDay`'s own `view.slots[].satisfied`, which neither `runMain`'s
+ * own cold/warm assertions nor `check:goal` ever read (both stop at slot ids,
+ * statement counts and measure totals — independent validation's own
+ * mutation over `lib/queries/day.ts`'s fact filter survived exactly this
+ * blind spot). A tap commitment's slot for today starts unsatisfied and
+ * flips the moment `declareFact` writes today's fact — the one round trip a
+ * person's own tap actually drives.
+ */
+async function runFactSatisfactionCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const today = todayInZone();
+  const goal = await createGoal({ name: "check-day fact-satisfaction probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runFactSatisfactionCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day fact-satisfaction probe",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!commitment.ok) {
+    throw new Error(`runFactSatisfactionCheck: addCommitment failed: ${commitment.error}`);
+  }
+  const testId = commitment.commitmentId;
+
+  const before = await loadDay(today);
+  const slotBefore = before.view.slots.find((slot) => slot.commitmentId === testId);
+  assert(
+    "a tap commitment with no fact declared today has an unsatisfied slot",
+    slotBefore?.satisfied === false,
+    `slot = ${JSON.stringify(slotBefore)}`,
+  );
+
+  const fact = await declareFact({ commitmentId: testId });
+  if (!fact.ok) throw new Error(`runFactSatisfactionCheck: declareFact failed: ${fact.error}`);
+
+  const after = await loadDay(today);
+  const slotAfter = after.view.slots.find((slot) => slot.commitmentId === testId);
+  assert(
+    "declaring a fact makes that commitment's slot for today satisfied",
+    slotAfter?.satisfied === true,
+    `slot = ${JSON.stringify(slotAfter)}`,
+  );
+}
+
+/**
+ * Proves `declareFact`'s own refusal (RP-05, `app/actions/facts.ts`): a fact
+ * for a commitment satisfied by evidence would have no day of its own to
+ * explain, since that day is drawn from the source, never written here.
+ * `day-row.tsx`'s own `tappable = kind !== "evidence"` means no screen ever
+ * sends this call, so this is the one place today that reaches it at all.
+ */
+async function runEvidenceRefusalCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+
+  const goal = await createGoal({ name: "check-day evidence-refusal probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runEvidenceRefusalCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day evidence-refusal probe",
+    cadenceKind: "daily",
+    satisfaction: "evidence",
+    sourceKey: "reading_lookups",
+    threshold: 1,
+  });
+  if (!commitment.ok) {
+    throw new Error(`runEvidenceRefusalCheck: addCommitment failed: ${commitment.error}`);
+  }
+
+  const result = await declareFact({ commitmentId: commitment.commitmentId });
+  assert(
+    "declareFact refuses a fact for a commitment satisfied by evidence (RP-05)",
+    !result.ok && result.error === "day.errors.evidenceOnly",
+    JSON.stringify(result),
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -732,6 +901,9 @@ async function runMain(): Promise<void> {
   await runZoneCheck();
   await runCadenceZoneCheck();
   await runWeekCommitmentsZoneCheck();
+  await runPhaseWeekBoundCheck();
+  await runFactSatisfactionCheck();
+  await runEvidenceRefusalCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
