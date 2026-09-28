@@ -362,8 +362,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   nothing, so RP-16's «no score» does not forbid it. Decided by the user 2026-09-28.
 - **A one-off left undone carries to the next day.** It reads on Hoy, marked as from an earlier day,
   until it is done or deleted. Not built yet; no board draws it. Decided by the user 2026-09-28.
-- **Pulsar has no Spanish not-found or error page yet.** Next's English one reaches a stale link.
-  Shipped that way on purpose; the next slice draws both. Decided by the user 2026-09-28.
+- **Pulsar's not-found and error pages speak Spanish**, as `NoEncontrada.dc.html` and `Fallo.dc.html`
+  draw. The not-found marks no tab. An error inside the app keeps the nav of the layout it broke in,
+  so a crash on Hoy shows Hoy marked: the error happened in that place. The quiet accent link is
+  `Button tone="accent"`. Decided 2026-09-28 by the coordinator, the user having delegated it.
 - **The review's columns are semana, the measure, fase and nota.** The wide board's second figure
   column («monólogo sin parar») is not built: no data feeds it. The phone shows the measure and the
   note alone. A week with nothing reads «0», never «—» and never hidden; the review stops at the
