@@ -200,6 +200,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
+- Push a worker's branch from the main session when the environment denied the worker's push.
+  A working branch only, never `main` or `integracion`; say it in the report. Decided by the user
+  2026-09-27.
 - **Point every PR at `integracion`. Never at `main`.**
 - **Take `integracion` to `main` once per slice, at most once a day.** That merge is the deploy.
   Both apps ship from `main` alone (`apps/*/vercel.json`, `deploymentEnabled` `main` only), so every
