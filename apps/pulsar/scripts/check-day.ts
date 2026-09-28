@@ -840,6 +840,87 @@ async function runEvidenceRefusalCheck(): Promise<void> {
   );
 }
 
+/**
+ * Proves module 38's own contract: a `tap` commitment holds at most one fact
+ * a day, whatever the device. Two concurrent `declareFact` calls race on the
+ * pool (`max: 8`, `db/client.ts`), so `Promise.all` genuinely opens two
+ * connections rather than one queued behind the other — the shape the
+ * assignment names, not a stand-in for it.
+ *
+ * The raw second insert bypasses `declareFact`'s own `on conflict … do
+ * nothing` on purpose: it is the negative control for the index itself,
+ * proved as the person under RLS (`withGoalsDb`, never a privileged
+ * connection) rather than asserted from the migration (`AGENTS.md`
+ * «## Verification»).
+ */
+async function runFactUniqueCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { facts } = await import("@/db/schema");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runFactUniqueCheck: no verified session");
+
+  const goal = await createGoal({ name: "check-day unique-fact probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runFactUniqueCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day unique-fact probe",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!commitment.ok) {
+    throw new Error(`runFactUniqueCheck: addCommitment failed: ${commitment.error}`);
+  }
+  const testId = commitment.commitmentId;
+  const today = todayInZone();
+
+  const [first, second] = await Promise.all([
+    declareFact({ commitmentId: testId }),
+    declareFact({ commitmentId: testId }),
+  ]);
+  assert(
+    "two concurrent declareFact calls for the same tap commitment and day both report ok",
+    first.ok && second.ok,
+    `first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+  );
+
+  const [{ count }] = await withGoalsDb((tx) =>
+    tx.execute<{ count: string }>(
+      sql`select count(*)::int as count from ${facts} where commitment_id = ${testId} and day = ${today}`,
+    ),
+  );
+  assert(
+    "two concurrent declareFact calls for the same commitment and day leave exactly one fact",
+    Number(count) === 1,
+    `count = ${count}`,
+  );
+
+  let rawInsertCode: string | undefined;
+  try {
+    await withGoalsDb((tx) =>
+      tx.execute(sql`
+        insert into ${facts} (user_id, commitment_id, one_off_id, goal_id, day)
+        values (${person.id}, ${testId}, null, ${goal.goalId}, ${today})
+      `),
+    );
+  } catch (error) {
+    // `PgPreparedQuery#queryWithCache` (`pg-core/session.ts`) wraps the raw
+    // `postgres` error in a `DrizzleQueryError`, whose own `.code` is
+    // undefined — the code that matters is on `.cause`, the real driver error.
+    rawInsertCode = (error as { cause?: { code?: string } }).cause?.code;
+  }
+  assert(
+    "a raw second insert for the same commitment and day fails with the unique violation (23505)",
+    rawInsertCode === "23505",
+    `code = ${rawInsertCode ?? "none — the insert succeeded"}`,
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -904,6 +985,7 @@ async function runMain(): Promise<void> {
   await runPhaseWeekBoundCheck();
   await runFactSatisfactionCheck();
   await runEvidenceRefusalCheck();
+  await runFactUniqueCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

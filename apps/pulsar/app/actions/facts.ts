@@ -77,6 +77,8 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
         goalId = oneOff.goalId;
       }
 
+      const day = todayInZone();
+
       // "Cambiar" (`quantity-sheet.tsx`), never "Anotar": a row that already
       // carries a fact today is replaced whole, in the same transaction as
       // the insert below — delete-then-insert, never an UPDATE (`facts`
@@ -89,7 +91,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           delete from ${facts}
           where user_id = ${person.id}
             and commitment_id = ${commitmentId}
-            and day = ${todayInZone()}::date
+            and day = ${day}::date
         `);
       }
 
@@ -98,16 +100,37 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // checks the grant on a column named that way too — `written_at` is
       // deliberately withheld from `authenticated`, left to the column's own
       // `now()` (RP-06).
+      //
+      // `facts_commitment_day_unique` (module 38) is the arbiter for a
+      // `commitmentId` insert: two taps racing from two devices both reach
+      // this statement, one lands and one conflicts, and `on conflict …
+      // do nothing` turns the second into a no-op rather than a 500 — a
+      // one-off's insert never carries a `commitmentId`, so it never matches
+      // that partial index and always returns a row here.
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${facts}
           (user_id, commitment_id, one_off_id, goal_id, day, quantity, note)
         values
           (${person.id}, ${commitmentId ?? null}, ${oneOffId ?? null}, ${goalId},
-           ${todayInZone()}, ${quantity ?? null}, ${note ?? null})
+           ${day}, ${quantity ?? null}, ${note ?? null})
+        on conflict (commitment_id, day) where commitment_id is not null do nothing
         returning id
       `);
 
-      return inserted.id;
+      if (inserted) return inserted.id;
+
+      // The index refused this insert: another device's tap for the same
+      // commitment and day landed first. Read back its id rather than fail —
+      // a second tap from another device is a no-op, never an error.
+      const [existing] = await tx.execute<{ id: string }>(sql`
+        select id from ${facts}
+        where commitment_id = ${commitmentId} and day = ${day}
+      `);
+      if (!existing) {
+        // Unreachable: the conflict that just fired proves a row is there.
+        throw new NamedError("day.errors.notFound");
+      }
+      return existing.id;
     });
 
     revalidatePath("/");
