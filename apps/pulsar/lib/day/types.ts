@@ -27,6 +27,9 @@ export type CommitmentPlan = {
   // A civil date, or null while active. Retired, never deleted (RP-13): a
   // week already lived keeps asking exactly as it did before this was set.
   retiredAt: string | null;
+  // The civil day the commitment was written. It asks nothing before it: a
+  // day lived before the commitment existed never gains a slot afterwards.
+  createdOn: string;
 };
 
 // A span of weeks with its own single aim (RP-15). `endsOn` is null for a
