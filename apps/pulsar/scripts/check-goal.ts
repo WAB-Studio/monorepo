@@ -607,6 +607,12 @@ type ChildResult = {
   // `measureTotal` so `runWeeksCheck` can prove `weeks` survives the same
   // degraded reading transaction `measureTotal` already survives (RNP-04).
   weeksCount: number;
+  // `view.weeks.map(w => w.total)`: `weeksCount` alone cannot tell a degraded
+  // run that still reads three rows apart from one that reads three rows of
+  // `0` — a bug that drops the declared half along with the unreadable
+  // evidence half would still pass a bare length check. `runWeeksCheck`
+  // compares this against the goal's own declared-only totals.
+  weekTotals: number[];
 };
 
 /**
@@ -702,6 +708,7 @@ async function runChild(mode: "stub" | "degraded", goalId: string): Promise<void
     measureTotal: view.measureTotal,
     measureUnit: view.measureUnit,
     weeksCount: view.weeks.length,
+    weekTotals: view.weeks.map((week) => week.total),
   };
   console.log(`${CHILD_MARKER}${JSON.stringify(result)}`);
 }
@@ -874,9 +881,16 @@ const OPENED_DAYS_BACK = 20;
  * uses (`day`, `quantity` — never `written_at`), never through the action.
  * `loadGoal` still issues four statements against this goal (module 28's own
  * "no new statement" promise), and the reading transaction forced to throw
- * still returns three weeks — the declared half alone, RNP-04 carried from
- * `measureTotal` into the review. The seed is torn down by its own goal id,
- * which cascades to the commitment and the three facts alike (`ON DELETE
+ * still returns three weeks whose own totals still match the declared seed
+ * — the declared half alone, RNP-04 carried from `measureTotal` into the
+ * review, never a length that happens to be three while every total reads
+ * `0`. A second, smaller goal proves the other half of RP-17's own evidence
+ * path: two commitments naming the same evidence source must not double its
+ * rows into one week's own total, the one case `matchingSourceKeys`'s `Set`
+ * exists for (`lib/queries/goal.ts`) — proven through the `stub` child mode,
+ * the only door onto a known evidence quantity at all (no harness identity
+ * carries a real `reading.lookups` row). Both goals are torn down by their
+ * own id, which cascades to their commitments and facts alike (`ON DELETE
  * CASCADE` on both foreign keys) — `goals.goals` grants no DELETE to
  * `authenticated` at all, so the session pooler is the only door out too.
  */
@@ -909,6 +923,11 @@ async function runWeeksCheck(): Promise<void> {
     unit: "min",
   });
   if (!commitment.ok) throw new Error(`runWeeksCheck: addCommitment failed: ${commitment.error}`);
+
+  // Torn down in `finally` alongside `goalId` — set only once the dedupe
+  // fixture below actually lands, so a failure partway through still leaves
+  // nothing behind.
+  let dedupeGoalId: string | null = null;
 
   const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   try {
@@ -961,8 +980,71 @@ async function runWeeksCheck(): Promise<void> {
       degraded.weeksCount === 3,
       `weeksCount = ${degraded.weeksCount}`,
     );
+    // This fixture names no evidence commitment, so its declared-only totals
+    // are `WEEK_TOTALS` whether the reading transaction is read or unreadable
+    // — a bug that drops the declared half along with the unreadable
+    // evidence half (RNP-04's own failure to carry into `weeks`) would zero
+    // these instead, and `weeksCount` alone would never catch it.
+    assert(
+      "with the reading transaction forced to throw, each week's own total still matches the fact seeded on its own known day",
+      JSON.stringify(degraded.weekTotals) === JSON.stringify(WEEK_TOTALS),
+      `expected ${JSON.stringify(WEEK_TOTALS)}, got ${JSON.stringify(degraded.weekTotals)}`,
+    );
+
+    // The evidence half of RP-17: a fresh, unbackdated goal (so it holds
+    // exactly one week), named after `reading_lookups` — the only source
+    // this app knows, unit `searches` (`evidence_sources` seed row) — by
+    // *two* commitments, the one case `matchingSourceKeys`'s `Set`
+    // (`lib/queries/goal.ts`) exists for: an array in its place would walk
+    // the same three stub rows twice and double the week's own total. The
+    // quantity commitment sets the goal's own measure to `searches` (RP-14,
+    // the first one wins) and carries no fact of its own, so the week's
+    // total is the evidence half alone, never mixed with a declared one.
+    const dedupeGoal = await createGoal({
+      name: "check-goal.ts probe — RP-17 evidencia duplicada",
+      horizon: addDays(today, 30),
+    });
+    if (!dedupeGoal.ok) throw new Error(`runWeeksCheck: createGoal (dedupe) failed: ${dedupeGoal.error}`);
+    dedupeGoalId = dedupeGoal.goalId;
+
+    const dedupeMeasure = await addCommitment({
+      goalId: dedupeGoalId,
+      name: "check-goal.ts probe — RP-17 medida evidencia",
+      cadenceKind: "daily",
+      satisfaction: "quantity",
+      targetQuantity: 1,
+      unit: "searches",
+    });
+    if (!dedupeMeasure.ok) {
+      throw new Error(`runWeeksCheck: addCommitment (dedupe measure) failed: ${dedupeMeasure.error}`);
+    }
+
+    for (const label of ["primera", "segunda"]) {
+      const evidence = await addCommitment({
+        goalId: dedupeGoalId,
+        name: `check-goal.ts probe — RP-17 evidencia (${label})`,
+        cadenceKind: "daily",
+        satisfaction: "evidence",
+        sourceKey: "reading_lookups",
+        threshold: 1,
+      });
+      if (!evidence.ok) throw new Error(`runWeeksCheck: addCommitment (dedupe ${label}) failed: ${evidence.error}`);
+    }
+
+    const dedupeStub = runChildProcess("stub", dedupeGoalId);
+    assert(
+      "RP-17: two commitments naming the same evidence source still count its rows once, not twice",
+      dedupeStub.weeksCount === 1 && JSON.stringify(dedupeStub.weekTotals) === JSON.stringify([STUB_TOTAL]),
+      `weeksCount=${dedupeStub.weeksCount}, weekTotals=${JSON.stringify(dedupeStub.weekTotals)}, expected [${STUB_TOTAL}]`,
+    );
+    assert(
+      "RP-17: the same dedupe holds for measureTotal, not only for weeks[].total",
+      dedupeStub.measureTotal === STUB_TOTAL,
+      `expected ${STUB_TOTAL}, got ${dedupeStub.measureTotal}`,
+    );
   } finally {
     await migrationDb`delete from goals.goals where id = ${goalId}`;
+    if (dedupeGoalId) await migrationDb`delete from goals.goals where id = ${dedupeGoalId}`;
     await migrationDb.end();
   }
 }
