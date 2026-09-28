@@ -2431,3 +2431,26 @@ connection caches, not with the code.
   a month) must derive its direction from where today itself sits in that window, never assume
   "yesterday" or "tomorrow" is always inside it — the boundary day is exactly the one on which that
   assumption breaks, and a suite run any other day of the week will not catch it.
+
+## A pulsar spec's own database connection drops with `CONNECTION_ENDED` while other lanes load the pooler
+
+- **What.** A pulsar e2e fixture that opens its own `postgres(MIGRATION_DATABASE_URL)` connection
+  fails with `write CONNECTION_ENDED` mid-test. The app's own pool is untouched, and
+  `pg_stat_activity` shows no hung transaction behind it.
+- **Measured.** Three times on 2026-09-27 (`semana` RP-20, `deshacer`), and on 2026-09-28
+  `e2e/deshacer.spec.ts` «changing a done quantity row's amount…» went red 4 of 4, solo reruns
+  included, while the module 37 validator drove policies and e2e from the same lane. Once it also hit
+  `archivar.spec.ts`. Never in CI. Every time, another suite was running against the shared pooler.
+- **Do.** Read it as load, not as the spec: rerun that one spec once with nothing else running.
+  Never add a retry or a `sleep` to buy quiet. Save the log the first time it shows up in CI.
+
+## A `notFound()` after the page has streamed still answers 200
+
+- **What.** `response?.status()` reads 200 on a pulsar route that correctly calls `notFound()`: the
+  route's shell has already streamed, so Next cannot change the status and swaps in the not-found UI
+  instead. See `node_modules/next/dist/docs/01-app/02-guides/streaming.md`, «Status codes».
+- **Measured 2026-09-28** by module 37's tester on `/metas/<archived>/fases/nueva` and
+  `/metas/<archived>/compromisos/nuevo`.
+- **Do.** Assert a not-found by what the page draws («This page could not be found.») and by the
+  form's title being absent, never by the status code. Run such a spec against `next build && next
+  start`, as `playwright.config.ts` says.
