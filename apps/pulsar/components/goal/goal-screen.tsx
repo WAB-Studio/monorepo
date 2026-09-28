@@ -38,7 +38,7 @@ function phaseSpanLabel(openedOn: string, startsOn: string, endsOn: string | nul
  * show and nothing to sum.
  */
 export async function GoalScreen({ goalId }: { goalId: string }) {
-  const goal = await loadGoal(goalId).catch(() => null);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
   const t = await getTranslations();
