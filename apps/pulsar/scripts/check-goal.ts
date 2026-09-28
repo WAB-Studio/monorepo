@@ -1049,6 +1049,43 @@ async function runWeeksCheck(): Promise<void> {
   }
 }
 
+/**
+ * A goal created at 23:30 Bogotá is 04:30 UTC of the next day: its first
+ * week must still open on the Bogotá day the person made it, never the UTC one.
+ */
+async function runLateNightOpenCheck(): Promise<void> {
+  const { createGoal } = await import("@/app/actions/plan");
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const openedOn = addDays(todayInZone(), -3);
+
+  const goal = await createGoal({
+    name: "check-goal.ts probe — abierta a las 23:30",
+    horizon: addDays(openedOn, 60),
+  });
+  if (!goal.ok) throw new Error(`runLateNightOpenCheck: createGoal failed: ${goal.error}`);
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    // Bogotá is UTC-5 all year.
+    const createdAt = new Date(`${openedOn}T23:30:00-05:00`);
+    await migrationDb`update goals.goals set created_at = ${createdAt} where id = ${goal.goalId}`;
+
+    const view = await loadGoal(goal.goalId);
+    if (!view) throw new Error(`runLateNightOpenCheck: loadGoal(${goal.goalId}) returned null`);
+
+    assert(
+      "a goal created at 23:30 Bogotá opens its first week on that Bogotá day, not the UTC one",
+      view.weeks[0]?.startsOn === openedOn,
+      `expected startsOn ${openedOn}, weeks = ${JSON.stringify(view.weeks.map((week) => week.startsOn))}`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goal.goalId}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -1132,6 +1169,7 @@ async function runMain(): Promise<void> {
   await runMeasureRenameCheck();
   await runPhaseOverlapRaceCheck();
   await runWeeksCheck();
+  await runLateNightOpenCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

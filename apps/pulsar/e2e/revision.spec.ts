@@ -191,3 +191,9 @@ test("a goal id that resolves to nothing 404s the review, never a blank screen",
   await page.goto("/metas/00000000-0000-0000-0000-000000000000/revision");
   await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
 });
+
+test("an id that is no uuid 404s the review on a live database, never the failure page", async ({ page }) => {
+  await page.goto("/metas/not-a-uuid/revision");
+  await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toHaveCount(0);
+});

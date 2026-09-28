@@ -159,3 +159,23 @@ test("measureByWeek: current is true only for the row holding today, false for e
   assert.equal(weeks[0].current, false);
   assert.equal(weeks[1].current, true);
 });
+
+test("measureByWeek: evidence on a week's last day counts in that week, not the next", () => {
+  const weeks = measureByWeek({
+    openedOn: OPENED_ON_TUESDAY,
+    horizon: FAR_HORIZON,
+    today: "2026-10-06",
+    unit: "searches",
+    facts: [],
+    evidence: [
+      evidenceDay("2026-10-05", 7, "searches"), // week 1's own last day
+      evidenceDay("2026-10-06", 4, "searches"), // week 2's first day
+    ],
+    phases: [],
+  });
+
+  assert.deepEqual(
+    weeks.map((week) => week.total),
+    [7, 4],
+  );
+});

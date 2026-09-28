@@ -39,6 +39,10 @@ import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
 
+// The session pooler, loaded here before `installStubs` runs so it is never
+// the wrapped, counted `postgres` — used only to delete a probe's own goal.
+import postgres from "postgres";
+
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
   if (!raw) return 1;
@@ -1173,6 +1177,42 @@ async function runFactWrittenOnCheck(): Promise<void> {
   await withGoalsDb((tx) => tx.execute(sql`delete from ${facts} where id = ${factRow.id}`));
 }
 
+/**
+ * Proves `lib/queries/day.ts`'s own `p.ends_on >= day` bound: a phase ending
+ * on day D is in `loadDay(D).phases`. The week-bound check above proves the
+ * same edge for `loadWeek`; this is `loadDay`'s own statement.
+ */
+async function runPhaseDayBoundCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { createGoal, addPhase } = await import("@/app/actions/plan");
+
+  const endsOn = await pickFreshPhaseMonday();
+
+  const goal = await createGoal({ name: "check-day phase day-bound probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runPhaseDayBoundCheck: createGoal failed: ${goal.error}`);
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const phase = await addPhase({
+      goalId: goal.goalId,
+      aim: "check-day phase day-bound probe",
+      startsOn: addDays(endsOn, -7),
+      endsOn,
+    });
+    if (!phase.ok) throw new Error(`runPhaseDayBoundCheck: addPhase failed: ${phase.error}`);
+
+    const day = await loadDay(endsOn);
+    assert(
+      "a phase ending on day D is in loadDay(D).phases (RP-15)",
+      day.phases.some((candidate) => candidate.id === phase.phaseId),
+      `phases = ${JSON.stringify(day.phases.map((candidate) => candidate.id))}, wanted ${phase.phaseId}`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goal.goalId}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -1241,6 +1281,7 @@ async function runMain(): Promise<void> {
   await runReplaceRaceCheck();
   await runOneOffCarryCheck();
   await runFactWrittenOnCheck();
+  await runPhaseDayBoundCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
