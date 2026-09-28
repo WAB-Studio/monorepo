@@ -232,6 +232,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **«N veces al mes» has no chip.** The schema and the engine accept `times_per_month`; the new
   commitment's screen offers the four cadences `CompromisoNuevo.dc.html` draws, and one already
   stored still reads on the goal. Taken by the user 2026-09-27: no chip until someone needs it.
+- **The week draws no footer and no «descanso deliberado».** `Semana.dc.html` closes on a
+  paragraph that only explains an empty day, and marks a day asking one thing as a deliberate rest.
+  The first is cut as text a person does not act on; the second has no data behind it — nothing
+  tells a rest the person chose from a day the plan simply asks little of. Also taken: one 8 px
+  `dot` mark instead of the board's 9, the 56 px `Row` instead of 54, and «semana N de M» on each
+  goal's label rather than once above the week, which reads right with several goals of different
+  horizons. Decided 2026-09-27 by the coordinator, the user having delegated it.
 - **The quantity sheet's question is neutral, never gendered by the unit.** «¿Cuántos {unit}?» read
   «¿Cuántos páginas?» for a feminine unit; the heading is now «¿Cuánto hiciste hoy?», the unit named
   once beside the chips instead of inside the sentence. Decided 2026-09-27 by the coordinator, the
