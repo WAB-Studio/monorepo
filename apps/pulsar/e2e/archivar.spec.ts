@@ -82,6 +82,15 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
   const goalId = await findOrCreateGoal(page, db, personId, marker);
   await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
 
+  // Open, before archiving: `listGoalsForMetas` (`lib/queries/goal.ts`)
+  // draws the open list bare, outside the "Archivadas" `<section>`
+  // (`app/metas/page.tsx`) — a swapped open/archived split would instead
+  // land this goal inside that section while it is still open.
+  await page.goto("/metas");
+  const openLink = page.getByRole("link", { name: marker });
+  await expect(openLink).toBeVisible();
+  await expect(openLink.locator("xpath=ancestor::section")).toHaveCount(0);
+
   // A fact this goal carries, so "its facts stay" has something real to
   // check — a one-off's, never a commitment's: this goal may or may not
   // carry a commitment depending on which other spec ran against it first,
@@ -113,7 +122,14 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
 
     await page.goto("/metas");
     await expect(page.getByText("Archivadas")).toBeVisible();
-    await expect(page.getByRole("link", { name: marker })).toBeVisible();
+    // Not just present somewhere on the screen: inside the "Archivadas"
+    // `<section>` specifically, never among the open buttons above it — the
+    // same split `listGoalsForMetas` draws its two arrays from.
+    const archivedLink = page.getByRole("link", { name: marker });
+    await expect(archivedLink).toBeVisible();
+    const archivedSection = archivedLink.locator("xpath=ancestor::section");
+    await expect(archivedSection).toHaveCount(1);
+    await expect(archivedSection.getByText("Archivadas")).toBeVisible();
 
     const stillThere = await db<{ id: string }[]>`select id from goals.facts where id = ${fact.id}`;
     expect(stillThere.length).toBe(1);
@@ -147,4 +163,61 @@ test("reopening an archived goal through its own screen brings it back to Hoy (R
 
   await page.goto("/");
   await expect(page.getByText(marker)).toBeVisible();
+});
+
+test("an archived goal offers no way to add a phase, direct visit included (RP-24)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const lane = laneNumber();
+  const marker = goalMarker(lane);
+  const goalId = await findOrCreateGoal(page, db, personId, marker);
+
+  try {
+    // On its own screen: `goal-screen.tsx` draws no "Añadir una fase" link
+    // once archived.
+    await db`update goals.goals set archived_at = now(), name = ${marker} where id = ${goalId}`;
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByRole("link", { name: "Añadir una fase" })).toHaveCount(0);
+
+    // Typed straight into the address bar, the door `loadGoal`'s own
+    // `archivedAt` guard (`app/metas/[goalId]/fases/nueva/page.tsx`) is what
+    // refuses — not merely a link nowhere drawing it. The status itself
+    // stays 200 (Next's own streamed shell already committed it, `next/
+    // dist/docs/.../not-found.md` "Status codes"); what proves the guard
+    // fired is Next's own not-found boundary in the body, the phase form
+    // nowhere in it.
+    await page.goto(`/metas/${goalId}/fases/nueva`);
+    await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+    await expect(page.getByText("Fase nueva")).toHaveCount(0);
+  } finally {
+    await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
+  }
+});
+
+test("an archived goal offers no way to add a commitment, direct visit included (RP-24)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const lane = laneNumber();
+  const marker = goalMarker(lane);
+  const goalId = await findOrCreateGoal(page, db, personId, marker);
+
+  try {
+    await db`update goals.goals set archived_at = now(), name = ${marker} where id = ${goalId}`;
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveCount(0);
+
+    // `listGoals` (`lib/queries/goal.ts`) is this route's own lookup
+    // (`app/metas/[goalId]/compromisos/nuevo/page.tsx`): open-only, an
+    // archived goal is absent from it and `notFound()` fires — read off the
+    // body, never the status (see the phase test above).
+    await page.goto(`/metas/${goalId}/compromisos/nuevo`);
+    await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+    await expect(page.getByText("Compromiso nuevo")).toHaveCount(0);
+  } finally {
+    await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
+  }
 });
