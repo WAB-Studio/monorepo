@@ -22,11 +22,18 @@ type TapSize = 44 | 48;
 // with them — both name a hue this design does not have.
 type Variant = "solid" | "outline" | "ghost";
 
+// `NoEncontrada.dc.html`'s own second action: a ghost that reads as a link
+// rather than a way out, so its ink is the accent instead of `ghost`'s own
+// muted. The only tone this design names; a screen reaching for another one
+// is asking for a colour the token table does not have.
+type Tone = "accent";
+
 type PulsarControlProps = {
   tap?: TapSize;
   // Runs the control to the row's full width, for a sheet's own commit button.
   block?: boolean;
   variant?: Variant;
+  tone?: Tone;
 };
 
 type Narrowed<P> = Omit<P, "variant" | "color" | "highContrast" | "radius">;
@@ -38,13 +45,14 @@ const variants: Record<Variant, string | undefined> = {
 };
 
 function classes(
-  { tap, block, variant = "solid" }: PulsarControlProps,
+  { tap, block, variant = "solid", tone }: PulsarControlProps,
   className: string | undefined,
 ): string {
   return [
     styles.control,
     tap === 44 ? styles.tap44 : styles.tap48,
     variants[variant],
+    tone === "accent" ? styles.accentTone : undefined,
     block ? styles.block : undefined,
     className,
   ]
@@ -53,13 +61,13 @@ function classes(
 }
 
 export const Button = forwardRef<HTMLButtonElement, Narrowed<ButtonProps> & PulsarControlProps>(
-  function Button({ tap, block, variant = "solid", className, ...props }, ref) {
+  function Button({ tap, block, variant = "solid", tone, className, ...props }, ref) {
     return (
       <ThemesButton
         ref={ref}
         {...props}
         variant={variant}
-        className={classes({ tap, block, variant }, className)}
+        className={classes({ tap, block, variant, tone }, className)}
       />
     );
   },

@@ -189,7 +189,7 @@ test("an archived goal offers no way to add a phase, direct visit included (RP-2
     // fired is Next's own not-found boundary in the body, the phase form
     // nowhere in it.
     await page.goto(`/metas/${goalId}/fases/nueva`);
-    await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
     await expect(page.getByText("Fase nueva")).toHaveCount(0);
   } finally {
     await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
@@ -215,7 +215,7 @@ test("an archived goal offers no way to add a commitment, direct visit included 
     // archived goal is absent from it and `notFound()` fires — read off the
     // body, never the status (see the phase test above).
     await page.goto(`/metas/${goalId}/compromisos/nuevo`);
-    await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
     await expect(page.getByText("Compromiso nuevo")).toHaveCount(0);
   } finally {
     await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;

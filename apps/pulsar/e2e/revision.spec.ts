@@ -189,5 +189,5 @@ test("a goal with no measure yet says so on its review, with no way in and no ta
 
 test("a goal id that resolves to nothing 404s the review, never a blank screen", async ({ page }) => {
   await page.goto("/metas/00000000-0000-0000-0000-000000000000/revision");
-  await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
 });
