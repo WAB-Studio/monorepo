@@ -358,3 +358,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   every goal archived, that subquery returns nothing and the screen's own `goals.length === 0`
   branch already draws `HoyVacio.dc.html` / the empty week. Decided 2026-09-27 by the coordinator,
   the user having delegated it.
+- **The week's «N de M» per day is a count, not a score.** It says how much was done and judges
+  nothing, so RP-16's «no score» does not forbid it. Decided by the user 2026-09-28.
+- **A one-off left undone carries to the next day.** It reads on Hoy, marked as from an earlier day,
+  until it is done or deleted. Not built yet; no board draws it. Decided by the user 2026-09-28.
+- **Pulsar has no Spanish not-found or error page yet.** Next's English one reaches a stale link.
+  Shipped that way on purpose; the next slice draws both. Decided by the user 2026-09-28.
