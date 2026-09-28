@@ -619,6 +619,58 @@ async function runCadenceZoneCheck(): Promise<void> {
   );
 }
 
+/**
+ * Proves `lib/queries/week.ts`'s own `loadWeek(...).commitments` — the raw
+ * `CommitmentGoal[]` module 17's screen groups a week's dots under, built
+ * straight off `row.commitments` and never passed through `asksOn` — carries
+ * the same zone fix `runZoneCheck` proved on `view.days` alone. A commitment
+ * retired at 23:30 Bogotá on `ZONE_TEST_DAY` (a Sunday) must be gone from
+ * `loadWeek(ZONE_NEXT_DAY)`'s own list: `deriveWeek`'s `asksOn` would still
+ * keep this commitment out of every day's slots even under a bare
+ * `retired_at::date` cast (`ZONE_TEST_DAY` sits in the week before), so that
+ * check alone cannot catch a filter regressed back to the bare cast — only
+ * reading `commitments` itself, before `asksOn` ever runs, can.
+ */
+async function runWeekCommitmentsZoneCheck(): Promise<void> {
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { TIME_ZONE } = await import("@/lib/zone");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runWeekCommitmentsZoneCheck: no verified session");
+
+  const goal = await createGoal({ name: "check-day week-commitments zone probe", horizon: "2019-12-31" });
+  if (!goal.ok) throw new Error(`runWeekCommitmentsZoneCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day week-commitments zone probe",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!commitment.ok) {
+    throw new Error(`runWeekCommitmentsZoneCheck: addCommitment failed: ${commitment.error}`);
+  }
+  const testId = commitment.commitmentId;
+
+  const retiredAt = instantAtLocalTime(ZONE_TEST_DAY, 23, 30, TIME_ZONE);
+  await withGoalsDb((tx) =>
+    tx.execute(
+      sql`update "goals"."commitments" set retired_at = ${retiredAt.toISOString()}::timestamptz where id = ${testId}`,
+    ),
+  );
+
+  const week = await loadWeek(ZONE_NEXT_DAY);
+  const presentInCommitments = week.commitments.some((row) => row.id === testId);
+  assert(
+    "loadWeek's own commitments list never admits a commitment retired the civil day before its week starts",
+    !presentInCommitments,
+    `commitment ${presentInCommitments ? "present" : "absent"} in loadWeek("${ZONE_NEXT_DAY}").commitments`,
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -679,6 +731,7 @@ async function runMain(): Promise<void> {
 
   await runZoneCheck();
   await runCadenceZoneCheck();
+  await runWeekCommitmentsZoneCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
