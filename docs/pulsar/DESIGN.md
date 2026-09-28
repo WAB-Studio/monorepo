@@ -383,3 +383,15 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   one-off reads «del sábado 19» under its text, before today's), `DiaPasado.dc.html` (step back,
   «volver a hoy», «anotado el lunes 21» on a late fact, no step back on the seventh day, no one-offs),
   `NoEncontrada.dc.html` and `Fallo.dc.html` (no tab marked: neither is a place in the app).
+- **A past day lists only what existed that day.** A commitment created after the day drawn is not
+  on `/dia/<fecha>`; with nothing left, the day says it asked for nothing. Not built yet. Decided by
+  the user 2026-09-28, over allowing a backfill before the commitment existed.
+- **A week is Monday to Sunday, on Semana and in the review alike.** A goal's week 1 is the partial
+  week up to its first Sunday. Replaces «the review's week is the goal's own», taken the same morning.
+  Not built yet. Decided by the user 2026-09-28, over 7-day runs from the opening day, and over
+  printing both with dates.
+- **A done one-off stays on Hoy, in a «hechas hoy» list, and a second tap undoes it**, as a
+  commitment's fact does. Not built yet; no board draws it. Decided by the user 2026-09-28, over an
+  undo toast and over leaving it.
+- **A goal's horizon can be moved from the goal screen**, which keeps «Se puede mover después» true.
+  Not built yet; no board draws it. Decided by the user 2026-09-28, over changing the copy.
