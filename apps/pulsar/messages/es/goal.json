@@ -1,0 +1,74 @@
+{
+  "new": {
+    "overline": "meta nueva",
+    "title": "¿Qué quieres sostener?",
+    "nameLabel": "nombre",
+    "horizonLabel": "horizonte",
+    "horizonHint": "cuántas semanas le das. Se puede mover después.",
+    "submit": "Abrirla",
+    "explain": "Los compromisos se añaden después, uno a uno, y el primero que mida algo —minutos, páginas— le pone la cifra a la meta. Ninguno es obligatorio para abrirla."
+  },
+  "detail": {
+    "overline": "meta · abierta el {date}",
+    "horizonAndMeasure": "{weeks} semanas · mide {measure}",
+    "horizonOnly": "{weeks} semanas",
+    "commitmentsCount": "{word} {count, plural, one {compromiso} other {compromisos}}",
+    "phasesCount": "{word} {count, plural, one {fase} other {fases}}",
+    "phaseSpan": "semanas {start}–{end}",
+    "unreadableEvidence": "No pudimos leer una fuente. Lo declarado sigue aquí.",
+    "rename": "Renombrar",
+    "archive": "Archivar esta meta",
+    "reopen": "Reabrir"
+  },
+  "commitments": {
+    "retired": "retirado",
+    "add": "Añadir un compromiso"
+  },
+  "phases": {
+    "add": "Añadir una fase"
+  },
+  "cadence": {
+    "daily": "todos los días",
+    "weekdayFull": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
+    "timesPerWeek": "{count} veces por semana",
+    "everyNDays": "cada {n} días",
+    "timesPerMonth": "{count} veces al mes"
+  },
+  "satisfaction": {
+    "tap": "toque"
+  },
+  "units": {
+    "searches": "{count, plural, one {búsqueda} other {búsquedas}}"
+  },
+  "countWords": [
+    "cero",
+    "un",
+    "dos",
+    "tres",
+    "cuatro",
+    "cinco",
+    "seis",
+    "siete",
+    "ocho",
+    "nueve",
+    "diez",
+    "once",
+    "doce",
+    "trece",
+    "catorce",
+    "quince",
+    "dieciséis",
+    "diecisiete",
+    "dieciocho",
+    "diecinueve",
+    "veinte"
+  ],
+  "list": {
+    "title": "tus metas",
+    "addAnother": "Abrir otra meta",
+    "archivedTitle": "Archivadas"
+  },
+  "errors": {
+    "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520."
+  }
+}

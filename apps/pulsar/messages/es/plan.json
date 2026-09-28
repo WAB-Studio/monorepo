@@ -1,0 +1,82 @@
+{
+  "commitmentForm": {
+    "overline": "{goal}",
+    "title": "Compromiso nuevo",
+    "whatLabel": "qué es",
+    "whenLabel": "cada cuándo",
+    "cadence": {
+      "daily": "todos los días",
+      "weekdays": "días sueltos",
+      "times_per_week": "N por semana",
+      "every_n_days": "cada N días"
+    },
+    "timesPerWeekLabel": "veces por semana",
+    "everyNDaysLabel": "cada cuántos días",
+    "doneByLabel": "qué lo da por hecho",
+    "satisfaction": {
+      "tap": "un toque",
+      "quantity": "un número",
+      "evidence": "lo que ya sabe otra app"
+    },
+    "quantityLabel": "cantidad",
+    "unitLabel": "unidad",
+    "noMeasureYet": "Esta meta todavía no tiene cifra: «{unit}» se la pone.",
+    "sourceLabel": "fuente",
+    "thresholdLabel": "umbral",
+    "submit": "Añadirlo"
+  },
+  "phaseForm": {
+    "title": "Fase nueva",
+    "aimLabel": "qué busca",
+    "weeksLabel": "qué semanas",
+    "fromLabel": "desde la semana",
+    "toLabel": "hasta la semana",
+    "submit": "Añadirla"
+  },
+  "retireSheet": {
+    "title": "¿Retirarlo?",
+    "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y los {days, plural, one {# día} other {# días}} en que lo hiciste siguen ahí.",
+    "descriptionNoDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual.",
+    "confirm": "Retirarlo",
+    "cancel": "Dejarlo como está"
+  },
+  "renameSheet": {
+    "title": "Renombrarla",
+    "confirm": "Guardarlo",
+    "cancel": "Dejarlo como está"
+  },
+  "archiveSheet": {
+    "title": "¿Archivarla?",
+    "description": "Sus hechos, las semanas que gobernó y sus compromisos siguen aquí. Sale de Hoy y de Semana, y puedes reabrirla desde Metas.",
+    "confirm": "Archivarla",
+    "cancel": "Dejarla abierta"
+  },
+  "errors": {
+    "signedOut": "Tu sesión terminó. Entra otra vez.",
+    "goalNotFound": "Esa meta ya no existe.",
+    "sourceNotFound": "Esa fuente no existe.",
+    "notFound": "Eso ya no existe.",
+    "goalInvalid": "Esa meta no es válida.",
+    "commitmentInvalid": "Ese compromiso no es válido.",
+    "nameEmpty": "Escribe un nombre.",
+    "nameTooLong": "El nombre es muy largo. Escribe máximo 120 caracteres.",
+    "horizonInvalid": "Esa fecha no es válida.",
+    "aimEmpty": "Escribe un objetivo.",
+    "aimTooLong": "El objetivo es muy largo. Escribe máximo 200 caracteres.",
+    "startsOnInvalid": "Esa fecha de inicio no es válida.",
+    "endsOnInvalid": "Esa fecha de fin no es válida.",
+    "phaseBackwards": "La fase termina antes de empezar.",
+    "phaseOverlap": "Esas semanas ya tienen una fase. Elige otras.",
+    "phasePastHorizon": "Esa fase pasa del horizonte de la meta. Elige semanas dentro de él.",
+    "weekInvalid": "Escribe un número entero de semana, mayor que cero.",
+    "weekdayInvalid": "Ese día no es válido.",
+    "weekdaysEmpty": "Elige al menos un día.",
+    "cadenceNInvalid": "Escribe un número entero entre 1 y 1000.",
+    "targetQuantityInvalid": "Escribe un número entero entre 1 y 1 000 000.",
+    "unitEmpty": "Escribe qué se cuenta.",
+    "unitTooLong": "Eso es muy largo. Escribe máximo 40 caracteres.",
+    "sourceKeyEmpty": "Elige una fuente.",
+    "thresholdInvalid": "Escribe un número entero entre 1 y 1 000 000.",
+    "valueOutOfRange": "Ese número es demasiado grande."
+  }
+}

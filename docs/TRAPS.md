@@ -241,6 +241,61 @@ itself, a `created_at` serialised wrong on the way out, and the download cursor 
 
 Measured 2026-09-08.
 
+### `array_length` on an empty array is NULL, so a CHECK built on it admits the row
+
+`array_length('{}'::smallint[], 1)` is **NULL**, not 0 — an empty array has no first dimension.
+A CHECK whose predicate goes NULL is satisfied: Postgres refuses a row only when the constraint
+reads **false**.
+
+`commitments_weekdays_for_weekdays` in `apps/pulsar/db/migrations/0000_*.sql` was written as an
+equality between two predicates:
+
+```
+(cadence_kind = 'weekdays') = (cadence_weekdays is not null and array_length(cadence_weekdays, 1) > 0)
+```
+
+Measured 2026-09-22, before the schema had a single row: a `weekdays` commitment carrying `'{}'`
+**inserted** and read back with zero days, and a `daily` commitment carrying `'{}'` inserted too.
+The constraint's own comment claimed the array was non-empty for `weekdays` and absent for every
+other kind; it enforced neither.
+
+`coalesce(array_length(a, 1), 0) > 0` is the total form. Note that it alone does not close the
+second hole — with it, `daily` plus `'{}'` still reads false = false — so the repair is a CASE
+that says what the other kinds must hold:
+
+```
+case when cadence_kind = 'weekdays'
+     then coalesce(array_length(cadence_weekdays, 1), 0) > 0
+     else cadence_weekdays is null end
+```
+
+Audit any CHECK whose truth passes through a function that answers NULL on an empty or absent
+value. `length(note) <= 280` and `a <@ array[...]` are the same shape and are correct only because
+a null there is legal and a **total** constraint beside them decides whether it may be null at all.
+
+### `postgres@3` parses a `date` column into a local `Date`
+
+`postgres.js` gives OID 1082 a parser that builds a JS `Date`, so a `date` read through the raw
+driver arrives as midnight **in the process's zone** and prints as the day before for any zone west
+of UTC.
+
+```
+goals.facts.day = 2026-09-22  ->  Mon Sep 21 2026 19:00:00 GMT-0500
+```
+
+Measured 2026-09-22 in `apps/pulsar`, on a probe that read back the fact it had just written.
+
+Drizzle's `date()` column is string mode and is **not** affected: through `db`, `2026-09-22` stays
+`"2026-09-22"`. **It protects more than its own columns.** `drizzle()` patches `client.options.parsers`
+in place when it is constructed (`node_modules/drizzle-orm/postgres-js/driver.js:17`, OID 1082), so
+on the pool `db` was built over, a raw `` sql`…` `` and `sql.unsafe` return the string too. Measured
+the same day, on one pool, before and after.
+
+**So the trap bites a pool with no `drizzle()` over it — a script's own**, which is exactly where it
+was found. That is where RNP-06 lives, because the day a fact belongs to is the person's day and a
+`Date` in the server's zone is not it. Compare and carry days as strings, or cast `::text` in the
+SQL. Do not read this as licence to distrust `db`.
+
 ### `now()` is the transaction's clock, so one INSERT stamps every row identically
 
 `now()` is the transaction start time, not the statement's. A batch insert is one statement in one
@@ -482,7 +537,7 @@ registry's 30-second heartbeat: `heartbeat_at` never advanced and the failure wa
 directions — no error, no row change. `.catch(() => {})` is enough to dispatch it, and is what a
 fire-and-forget statement wants anyway.
 
-### Unconfirmed: claims may survive a connection through the pooler
+### Confirmed 2026-09-22: claims (and role) can survive a connection through the pooler
 
 **Not reproduced in a real suite, and not root-caused. Written down so it is not lost, not so it is
 believed.** On 2026-09-06, three ad-hoc probe scripts — fresh connections, nothing open in
@@ -501,6 +556,91 @@ It did **not** reproduce inside the e2e suite's single persistent connection, an
 the identity Postgres sees. If a claim can outlive its connection, a policy test can pass under the
 wrong identity and prove nothing. Chase it with two scripts and one connection string before
 trusting any single-statement identity swap again.
+
+**Confirmed, with numbers, 2026-09-22, by `apps/pulsar/scripts/check-policies.ts`'s own validation.**
+This is the one assertion in that script that reads a shared physical resource — the Supavisor pool
+behind one `DATABASE_URL` — rather than a single self-contained transaction, and it is exactly the
+one that flakes. Three repros, same connection string, `max: 1` pools throughout:
+
+1. **On correct code, no load: reliable.** Ten consecutive runs of `check:policies`, nothing else
+   hitting the database on purpose (five other lanes' ambient traffic aside): P27 (the assertion that
+   nothing settled with `is_local = true` survives past its own transaction) passed all ten.
+2. **On correct code, under a second client hammering `select 1` in five parallel loops on the same
+   `DATABASE_URL`: unreliable.** Ten runs, same P27, same correct code: **5 of 10 failed** — a false
+   red, the settle really did not survive, but only because the fresh connection `check:policies`
+   itself opened for its "bare, unsettled" query landed on a *different* physical backend than the one
+   its own settled transaction had just used two statements earlier. The identity did not leak; the
+   assertion's assumption that "this pool, `max: 1`" means "one physical backend for this whole
+   process" does not hold under contention.
+3. **On a real regression (`is_local` flipped `false` in all four `set_config` calls of
+   `settleSessionSql`), no artificial load beyond the other four lanes' ambient traffic: mostly
+   caught, not always.** Ten runs: **8 of 10 failed red** (caught), **2 of 10 passed green** — a false
+   green, on a genuinely broken settle. The two misses are not distinguishable from case 1's "reliable
+   when idle": they happened when this script's own two connections (the settled one and the bare
+   check) happened to land on the *same* backend, which is exactly when a session-scoped leak is
+   visible, and did not when they did not.
+
+**The signal that survives this is not any one numbered assertion — it is that a false result runs in
+both directions, on the same mechanism, depending on unrelated contention.** Trust `check:policies`'
+exit code as reported by one run, and re-run once before concluding a `FAIL` on `P27` alone is real;
+never conclude a settle bug is *absent* from ten green runs of `P27` under load, and never conclude a
+correct settle is *broken* from one red one taken alone. A different assertion in the same script
+never showed this: `P26` (does the settle work at all, checked inside its own transaction, on its own
+connection, in one round trip) caught the settle-dropped mutation ten times out of ten runs — because
+it never depends on which backend a *later*, separate connection happens to draw.
+
+**A second, more serious confirmation, found by accident while running the drill above.** After the
+`is_local` mutation runs, fresh connections opened afterwards — new scripts, no relation to the
+mutated code, which had already been reverted in the source — kept drawing role `authenticated`
+instead of the login role `postgres`: **7 of 20** fresh, single-use connections measured `current_user
+= authenticated` immediately after connecting, with nothing of this session's asking for that role.
+The physical backend Supavisor handed back still carried the *session-scoped* `role` a earlier,
+already-finished process had set with `is_local = false`. `RESET ALL` on that connection fixed it
+**1 of 7** times; `DISCARD ALL` fixed it **7 of 7**. Forty fresh connections issuing `DISCARD ALL`
+before closing found the pool clean (`0` dirty) on the next two follow-up passes of forty each.
+
+**Practically:** a mutation to `is_local` — even one applied to a file for thirty seconds and reverted
+before the next command — can leave the *shared* Supavisor pool behind one `DATABASE_URL` carrying a
+stuck role for an unrelated, later connection, on a resource every lane's dev server and every other
+lane's suite draws from. `DISCARD ALL` (not `RESET ALL`) is what clears a poisoned backend. A worker
+running this specific mutation again should immediately follow it with a flush of a few dozen fresh
+connections issuing `DISCARD ALL`, and should not assume `RESET ALL` inside its own test connection is
+enough.
+
+**This is a working rule now, not a curiosity — escalated twice in one day, 2026-09-22.**
+
+A second validation pass repeated the drill above and made every number worse. Its own measurement of
+`P27` against the real `is_local` regression, with no load beyond the other lanes' ambient traffic:
+**7 of 10 caught**, worse than the first pass's 8 of 10. Its own pool-poisoning measurement: **17 of
+20** fresh connections dirty after ten repetitions of the mutation, against a **0 of 20** baseline
+taken immediately before touching anything — worse than the first pass's 7 of 20, from more
+repetitions of the identical mutation.
+
+**The fix applied for `P27`:** read `pg_backend_pid()` from the settled transaction and from the bare
+query that follows it; if the two pids disagree, retry the bare query once; if they still disagree,
+report `INCONCLUSIVE` — never `PASS` — instead of comparing roles across backends that were never the
+same connection. Measured after the fix, ten more repetitions of the real `is_local` regression, same
+ambient conditions: **10 of 10 caught**, zero `INCONCLUSIVE`. The gate does not eliminate the
+underlying pooler behaviour — it stops the assertion from drawing a conclusion when it cannot tell
+whether it measured anything.
+
+**The poisoning itself got worse under repetition, in the same session that fixed the assertion.**
+Immediately after those ten repetitions (the pid-gated ones, code correct, mutation reverted before
+running them): **20 of 20** fresh connections dirty — every single one measured, not a subset. Two
+follow-up passes of forty connections each, every one issuing `DISCARD ALL` before closing, brought it
+to **0 of 40**, confirmed by a fresh measurement of **0 of 20** immediately after, and by three
+subsequent runs of `check:policies` on correct code all showing `P27 PASS` on a clean backend. Before
+the flush, three runs of `check:policies` on correct, unmutated code **all failed `P27`** — not because
+the settle broke, but because the bare query on those runs kept landing on a backend still poisoned
+from the mutation drill ten runs earlier, in the same session.
+
+**The rule this makes, not a suggestion:** anyone who flips `is_local` on this shared `DATABASE_URL` —
+to reproduce this trap, to test a fix for it, for any reason — must flush the pool with several dozen
+`DISCARD ALL` connections **before ending their session**, not only "if convenient." The pool is shared
+with the other four lanes' dev servers and suites; leaving it dirty hands the next unrelated query on
+any of them a stuck role, and the only symptom is a permission error or an `RLS` result that makes no
+sense for code nobody just changed. A measurement of "clean before, clean after" belongs in that
+worker's own report, not an assumption.
 
 ### A trusted-pointer check turns `on delete set null` into a refusal
 
@@ -2071,6 +2211,19 @@ cualquier `next build`, lo borra. `.next` no está versionado, así que no deja 
 Cuesta minutos cada vez que alguien lo lee como un rojo suyo: lo tropezaron el worker del módulo 8,
 su validador y el rebase de RL-49.
 
+Vuelve en Next 16 con otra ruta y otro nombre de archivo. Medido el 2026-09-22 en `apps/pulsar`,
+lane 4, después de que un validador creara `app/uicheck9x/page.tsx` para medir la pantalla y la
+borrara al terminar:
+
+```
+.next/dev/types/validator.ts(51,39): error TS2307: Cannot find module '../../../app/uicheck9x/page.js'
+```
+
+Ahora los tipos del servidor de desarrollo viven en `.next/dev/types`, no en `.next/types`, y
+`rm -rf .next/dev/types` basta: no hace falta tirar `.next` entero ni volver a construir. **Una
+ruta de prueba que se borra deja su entrada detrás**, así que el rojo aparece en el árbol del
+siguiente que corra `typecheck`, no en el del que la creó.
+
 ## Un censo sobre el asset crudo no dice lo que la pantalla dibuja
 
 Medido el 2026-09-20, escribiendo el contrato de `RL-51`. La misma pregunta — cuántas cabeceras
@@ -2100,3 +2253,204 @@ implementarlo, no la revisión. El censo barato además se dejó `bass`, `desert
 **La regla:** mide la afirmación sobre una pantalla por la función que alimenta esa pantalla. Si la
 afirmación habla de cabeceras, pásala por el índice; si habla de orden, pásala por el comparador.
 Un `JSON.parse` del asset y un `Map` a mano responden otra pregunta parecida y más barata.
+
+## Drizzle's insert builder names every column, so a column-scoped GRANT refuses it
+
+`apps/pulsar/db/migrations/0000_mighty_pet_avengers.sql` grants INSERT on `goals.facts` over eight
+named columns and deliberately leaves out `written_at`, so that a fact's writing time is the
+column's `now()` and nobody's parameter. A `declareFact` that never mentions `written_at` still
+fails:
+
+```
+insert into "goals"."facts" ("id","user_id","commitment_id","one_off_id","goal_id","day","written_at","quantity","note")
+values (default, $1, $2, $3, $4, $5, default, $6, $7)
+-- PostgresError: permission denied for table facts · 42501
+```
+
+`db.insert(facts).values({...})` names **every** column of the table and fills the omitted ones with
+the bare keyword `default`. Postgres checks the column privilege on every column the rewritten
+INSERT names, and **naming a column is not the same as writing to it**: `default` is still a
+mention, and a mention is what the check reads. The raw statement that lists only the seven granted
+columns never trips it.
+
+Measured 2026-09-22 by module 10's validator, inside a real settled transaction —
+`current_setting('role')` read `authenticated` and `auth.uid()` the caller's own id, so the refusal
+is the grant and not a misrouted session.
+
+**It bites any table in this repo with a column-scoped `GRANT INSERT`.** Write the statement, name
+the granted columns, and leave the rest out of the SQL entirely.
+
+## A pulsar lane mints no identity, so every lane writes the same `goals` rows
+
+`scripts/worktree.sh`'s table gives `pulsar` an `.env.local` and **no harness identities**, so a lane
+opened with `--app pulsar` has no `harness-<n>@example.invalid` of its own. Every pulsar track that
+needs a person to write as reaches for the same registered pair, `harness-5@example.invalid` and
+`harness-member-5@example.invalid` — and `HARNESS_LANE` does not scope `goals.goals`,
+`goals.commitments`, `goals.phases`, `goals.facts` or `goals.one_offs`. Two tracks seeding fixtures
+at once are writing the same person's rows.
+
+Measured 2026-09-22: module 8's verification saw rows appear and vanish under it while module 10's
+lane was seeding the same identity. Both reports were honest; the database was one.
+
+Two rules follow, and the second is the one that bites:
+
+- **Delete a fixture by its exact id. Never by `user_id`.** A cleanup scoped to the person takes the
+  other lane's rows with it, and that lane then reports a failure it did not cause.
+- **Count rows before and after your own run, and treat a moving count as a neighbour, not a bug** —
+  until you have checked which lanes are live.
+
+It is the same shape as «One database behind every harness lane» above, one schema over.
+
+## A cold pool sometimes makes a real `Promise.all` fan-out measure as a chain
+
+Measured 2026-09-22, module 8's `apps/pulsar/lib/queries/day.ts`. `loadDay` opens
+`withGoalsDb` and `withReadingDb` in the same `Promise.all([...])`, with no await between
+them and no data dependency from one to the other — the fan-out is real in the code. A
+fresh process can still, sometimes, measure two spans that barely touch or do not touch
+at all — and other fresh processes, on the same commit, overlap cleanly.
+
+With `apps/pulsar/db/client.ts`'s pool already warm — a query or two already run on it —
+both transactions begin **0.2 ms** apart and their two data queries fire within about a
+millisecond of each other. Three separate cold processes gave three different pictures:
+
+- One: the `goals` transaction ran `begin 2871.89 → end 3339.22` — **467.3 ms** of its own
+  work — and the `reading` transaction's `begin` did not land until `3361.70`. Start to
+  start that is **489.8 ms** late, but the actual dead gap, `end` to `begin`, is only
+  **22.5 ms**: almost all of the lateness is the first transaction genuinely running, not
+  idle time between the two.
+- Two others overlapped normally, same as the warm pool: `3563.24` / `3569.06` (5.8 ms
+  apart) and `3341.15` / `3342.40` (1.25 ms apart).
+
+The serialization is **real but intermittent**, not a property of every fresh process. The
+likely reason: a "cold" `postgres()` pool object can still ride a warm OS-level DNS/TCP
+route to the same host from an earlier connection this session made, so most fresh
+processes behave like the warm pool and only some pay a real handshake.
+
+When it does show up, the cause is `idle_timeout: 20` on the pool: after 20 s with no
+traffic, the next statement redials a fresh TCP connection and repeats the TLS handshake
+before it can send `begin`. **No line in `day.ts` can shorten a handshake neither
+transaction has run yet.** `max: 8` rules out the other plausible cause — the two
+transactions queuing behind one shared connection — which was checked and is not what
+happens here; that queuing is the actual bug this measurement would otherwise be mistaken
+for.
+
+**Decided by the user 2026-09-22: pay it, don't hide it.** Nobody raises `idle_timeout` in
+`db/client.ts` and nobody pre-warms the pool on boot. The day screen's first paint
+sometimes pays one handshake; most requests, cold process or not, do not. A future session
+that measures two transactions running in series on a fresh process has not necessarily
+found a regression in `day.ts` — module 8's own done criterion ("the two transactions
+overlap in time") is true most of the time, and failing to reproduce a serialized run on
+the first try does not disprove this entry: the effect comes and goes with the host's own
+connection caches, not with the code.
+
+## No harness identity can reach an evidence-satisfied row, so that row has no end-to-end proof
+
+- **What.** A pulsar row satisfied by evidence reads `reading.lookups`. The only rows there — 55, written
+  on 2026-09-11 — belong to one real voyager reader. A harness identity has none, and writing that
+  table is forbidden: it is global and belongs to `apps/voyager`.
+- **Measured 2026-09-27**, module 13. The day screen was driven at 360 px for every other state; the
+  source name on an evidence-satisfied row was proven only through a direct `deriveDay` call with a
+  synthetic `EvidenceDay`.
+- **Do.** Prove the evidence path with the reader stubbed in a child process, the way
+  `scripts/check-day.ts` degrades it, and say in the report that the screen half is unproven. Never
+  insert into `reading.lookups` to close the gap, and never sign in as the real reader.
+
+## A timestamptz read as a day lands on tomorrow every evening in Bogotá
+
+- **What.** `retired_at::date` casts in the session zone, UTC. From 19:00 to 24:00 Bogotá the UTC day
+  is already the next one, so a commitment retired that evening kept asking the day after. The same
+  class in JS: `asksOn` compared `"2026-09-28" > "2026-09-28T01:00Z"` as strings, false, so Thursday
+  still asked after a Wednesday-evening retirement. And three specs asserted `day = current_date`,
+  Postgres's UTC day, while the app writes `todayInZone()`.
+- **Measured 2026-09-27**, 19:15 Bogotá, by module 18's validator: retired today, tomorrow asked. The
+  specs were red every evening and green every morning, so a morning run proved nothing.
+- **Do.** Read an instant as a day only through `lib/zone.ts`: `(col at time zone ${TIME_ZONE})::date`
+  in SQL, `civilDateInZone(new Date(instant))` in JS. Never compare an instant string with a day
+  string. Compare a spec's rows against `todayInZone()`, never `current_date`. Prove a day boundary
+  with an instant at 23:30 Bogotá, which is red at any hour the suite runs.
+
+## A cleanup keyed by a fixture's name deletes every lane's fixtures
+
+- **What.** Every harness identity seeds the same goal and commitment names — `Anki`, `check-day…`.
+  A `DELETE` over `DATABASE_URL`, which bypasses RLS, filtered by name and day reaches all of them.
+- **Measured 2026-09-27**, module 31: 21 `goals.facts` rows deleted, belonging to many
+  `harness-pulsar-*` identities, while other lanes were running suites.
+- **Do.** Scope every write a probe makes by its own `user_id`, or by the ids its own run returned.
+  Never clean up by name.
+
+## `check:e2e` reads `PULSAR_BASE_URL`, and a lane running `HARNESS_BASE_URL` alone never notices
+
+- **What.** `apps/pulsar/playwright.config.ts` reads `process.env.PULSAR_BASE_URL`, never
+  `HARNESS_BASE_URL`, and falls back to `http://localhost:3200` — lane 1's port — when it is unset.
+  A lane invoking `check:e2e` by hand with only `HARNESS_BASE_URL` set drives whatever server already
+  answers 3200 instead of its own build, and a mutation applied only to the lane's own checkout never
+  reaches the suite: both the "baseline" and the "mutated" run pass, identically, for the same reason
+  — neither one ever left port 3200.
+- **Measured 2026-09-27** by the mutator (`private/reportes/pulsar-mutaciones.md`): caught by an
+  `ss -ltnp` on 3200 showing a `next-server` nobody in that session had started, confirmed by a direct
+  `curl` plus cookie against the real lane port, which showed the mutation's effect where the suite
+  run against 3200 had shown none.
+- **Do.** Set `PULSAR_BASE_URL` explicitly for every `check:e2e` invocation outside the lane's own
+  `npm run` default (`PULSAR_BASE_URL=http://localhost:320<n-1>`), the way `docs/TRAPS.md`'s own
+  voyager entry already names this shape for that app: "`worktree.sh` derives a suite's base-URL
+  variable from the app's name." `HARNESS_BASE_URL` alone is not that variable for this app.
+
+## A migration's dedupe is only as safe as the day it was measured
+
+- **What.** `apps/pulsar/db/migrations/0003_swift_toro.sql`'s `DELETE` ahead of
+  `facts_commitment_day_unique` reaches `auth.users.email like 'harness%@example.invalid'` alone,
+  because that is what a hand-run count against the live database showed on 2026-09-27: every
+  `(commitment_id, day)` group with more than one fact belonged to a harness identity, none to a
+  real person. The migration itself asserts nothing — it just deletes rows matching that one
+  pattern and then creates the index. On a database where a real person already holds a duplicate
+  (a sibling environment, a restore from an earlier backup, a different day's data), the dedupe
+  silently leaves that person's duplicate untouched and `CREATE UNIQUE INDEX` then fails outright,
+  aborting the whole migration with a constraint-violation error — the least informative way this
+  could fail, naming neither the row nor the person.
+- **Measured 2026-09-27**, module 38 round 1: 2 duplicate groups (4 rows), all under one harness
+  identity (`harness-pulsar-97eb4572-…@example.invalid`); 0 duplicate groups on `one_off_id`. The
+  precondition — "no non-harness duplicate exists" — was checked by hand, once, and is true today.
+  Nothing in the migration re-checks it before or after.
+- **Do.** Next time a migration deletes rows to make an index buildable, assert the precondition
+  inside the migration itself and raise a named error if it fails (a `DO $$ ... RAISE EXCEPTION`
+  block counting rows outside the intended scope before the `DELETE` runs), or widen the dedupe to
+  keep the latest row for every identity, not only harness ones. Either reads as a deliberate
+  decision on the next database this migration meets; today it reads as a fact true only because
+  someone measured it by hand, once, on 2026-09-27, and never asked the question again.
+
+## A spec's own "another day" was yesterday, which on a Monday belongs to the week before
+
+- **What.** `apps/pulsar/e2e/semana.spec.ts` picked a day "guaranteed not to be today" by subtracting
+  24 hours from now, unconditionally. On every day but Monday that lands inside the current
+  Monday-to-Sunday week; on a Monday it lands on the Sunday before, a day `lib/zone.ts`'s `weekOf`
+  places in the *previous* week — the spec then asserted against a day `/semana` never draws at all.
+- **Measured 2026-09-28**, 00:08 Bogotá — the first Monday the suite ran after it landed. Fixed the
+  same day in `#250`: `otherDayLabel()` steps forward a day instead of back when today is itself a
+  Monday, so "another day of this week" always stays inside the week it means to test.
+- **Do.** A spec that picks "some other day near today" to stay inside one civil-day window (a week,
+  a month) must derive its direction from where today itself sits in that window, never assume
+  "yesterday" or "tomorrow" is always inside it — the boundary day is exactly the one on which that
+  assumption breaks, and a suite run any other day of the week will not catch it.
+
+## A pulsar spec's own database connection drops with `CONNECTION_ENDED` while other lanes load the pooler
+
+- **What.** A pulsar e2e fixture that opens its own `postgres(MIGRATION_DATABASE_URL)` connection
+  fails with `write CONNECTION_ENDED` mid-test. The app's own pool is untouched, and
+  `pg_stat_activity` shows no hung transaction behind it.
+- **Measured.** Three times on 2026-09-27 (`semana` RP-20, `deshacer`), and on 2026-09-28
+  `e2e/deshacer.spec.ts` «changing a done quantity row's amount…» went red 4 of 4, solo reruns
+  included, while the module 37 validator drove policies and e2e from the same lane. Once it also hit
+  `archivar.spec.ts`. Never in CI. Every time, another suite was running against the shared pooler.
+- **Do.** Read it as load, not as the spec: rerun that one spec once with nothing else running.
+  Never add a retry or a `sleep` to buy quiet. Save the log the first time it shows up in CI.
+
+## A `notFound()` after the page has streamed still answers 200
+
+- **What.** `response?.status()` reads 200 on a pulsar route that correctly calls `notFound()`: the
+  route's shell has already streamed, so Next cannot change the status and swaps in the not-found UI
+  instead. See `node_modules/next/dist/docs/01-app/02-guides/streaming.md`, «Status codes».
+- **Measured 2026-09-28** by module 37's tester on `/metas/<archived>/fases/nueva` and
+  `/metas/<archived>/compromisos/nuevo`.
+- **Do.** Assert a not-found by what the page draws («This page could not be found.») and by the
+  form's title being absent, never by the status code. Run such a spec against `next build && next
+  start`, as `playwright.config.ts` says.

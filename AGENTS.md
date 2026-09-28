@@ -28,6 +28,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   which assertions cannot fail, which surfaces nobody drives, and which facts are paid for twice.
   `mutator` judges the lines a branch changed; only this one judges the suite as a whole.
 - Put the critic's questions to the user, in their own words. Never answer one for them.
+- Ask the user only what they alone can decide. Ask it whole: what it is, the options, what each
+  costs, and your pick. Decide everything else and report it. Decided by the user 2026-09-27,
+  after seven questions in one message, five of them unreadable without the session behind them.
 - Never close a slice on a report of greens alone. A slice with no criticism in it was not reviewed.
 - Keep plans in `private/`.
 - Use the credential the user hands you. Configure with it and move on.
@@ -56,6 +59,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `node_modules` hoists to the root. A script that names a binary by path reaches it as `../../node_modules/...`.
 - Promote nothing to `packages/` until a second app asks for it.
 - `apps/voyager` is the reading dictionary. Its contract is `docs/voyager/SPEC.md`; its `RL` and `RNL` codes share no number with the finances `RF`/`RNF` series.
+- Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in
+  by email first deploys. Without it the link lands on orbit's Site URL.
 - Give every app its own design. `docs/DESIGN.md` governs `apps/orbit` alone; `docs/voyager/DESIGN.md`
   governs `apps/voyager`. Never carry a pattern across because it exists next door.
 
@@ -85,6 +90,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 ### The canvases
 
 - `apps/voyager` — «Diccionario de lectura», https://claude.ai/code/artifact/92f7291c-d0f3-4134-b652-be4affe98521
+- `apps/pulsar` — «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
 - `apps/orbit` — **none yet.** Its screens were built before this rule. The next orbit screen opens
   one and names it here.
 - Add the URL here the day a canvas is created. A canvas nobody can find is a canvas nobody uses.
@@ -156,6 +162,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run the RNF-09 timing alone. A second lane on the same server inflates it.
 - Land a fresh token when a lane's session file is lost: `HARNESS_LANE=2 npm run harness:token`.
 - Never run a lane's suite while another track holds that lane.
+- Never age a harness run by hand to make `harness:reap` fire. `heartbeat_at`, `started_at` and
+  `finished_at` in `harness.runs` are written by `@repo/harness-registry` and nothing else. A check
+  that needs a dead run waits the real threshold, or asserts the delete path on a run it created
+  dead. The same `UPDATE` with another `WHERE` prunes a live lane's identity out from under it.
 
 ## Git
 
@@ -192,6 +202,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
+- Push a worker's branch from the main session when the environment denied the worker's push.
+  A working branch only, never `main` or `integracion`; say it in the report. Decided by the user
+  2026-09-27.
 - **Point every PR at `integracion`. Never at `main`.**
 - **Take `integracion` to `main` once per slice, at most once a day.** That merge is the deploy.
   Both apps ship from `main` alone (`apps/*/vercel.json`, `deploymentEnabled` `main` only), so every

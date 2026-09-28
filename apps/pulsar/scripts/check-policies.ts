@@ -1,0 +1,905 @@
+/**
+ * Drives every policy and grant on `goals` against the real database — and the
+ * guard-and-settle body `lib/session.ts`'s `withGoalsDb` runs before every
+ * query — instead of reading either from a migration (AGENTS.md,
+ * "Verification").
+ *
+ * Three parts, in the shape of `apps/voyager/scripts/check-sync.ts`:
+ *
+ * Part 1 drives RLS and grants. Two `randomUUID()` subjects, their
+ * `auth.users` rows inserted inside one transaction that always throws at the
+ * end to force a ROLLBACK, so nothing survives it and `harness:census` does
+ * not move — `@repo/harness-registry` is never needed. Every risky attempt
+ * runs inside its own savepoint, so one `42501` never aborts the ones after
+ * it. `anon` is driven too and refused everything.
+ *
+ * Part 2 calls `withSettledTransaction` (`@/lib/settled-transaction`)
+ * directly — the exact function `withGoalsDb` calls, not a copy of it — so a
+ * mutation *inside that function* turns this script red, from either call
+ * site. This alone does **not** prove `lib/session.ts` still calls it, or
+ * calls it correctly: a rewrite of `withSettledDb` that skips
+ * `withSettledTransaction` entirely, or hands it an adapter that never
+ * executes the statement it is given, is invisible to Part 2 — neither
+ * mutation touches the function Part 2 imports. `P27` also reads a *second*,
+ * later connection on the same pool to check nothing leaked past the first
+ * one's commit; that comparison is only meaningful when both queries land on
+ * the same physical backend — measured (`docs/TRAPS.md`, "claims (and role)
+ * can survive a connection through the pooler") to land on a *different* one
+ * often enough, under Supavisor's transaction pooling, to both flag correct
+ * code and miss a real regression. `P27` reads `pg_backend_pid()` from both
+ * queries, retries the bare one once on a mismatch, and reports
+ * `INCONCLUSIVE` — never `PASS` — if the two still disagree: an unmeasured
+ * comparison must never look like a clean one. `P26`, which checks the settle
+ * from inside its own single transaction on its own connection, needs none of
+ * this.
+ *
+ * Part 3 closes the Part-2 gap: it imports `withGoalsDb`/`withReadingDb`
+ * themselves from `lib/session.ts` and drives them for real, so a rewrite
+ * that skips `withSettledTransaction` — invisible to Part 2 — turns this red
+ * too (and, as it happens, also breaks the no-session guard, which is what
+ * `P34` below catches). `verifiedClaims` is the one thing genuinely out of
+ * reach here — it needs `next/headers`'s `cookies()`, which throws outside a
+ * request (the same wall module 3's own validator hit for orbit) — so
+ * `@repo/supabase-auth` is mocked with `node:test`'s `mock.module`
+ * (`--experimental-test-module-mocks`, the same flag `check:unit` already
+ * runs under) to hand back a canned session without ever calling
+ * `createSupabaseServerClient`. `server-only`, which `lib/session.ts` and
+ * `@/db/client` both import at their top, is not mockable that way —
+ * `mock.module` still resolves the real specifier first — so `NODE_PATH`
+ * points this script alone at `scripts/node-stubs/server-only`, a local
+ * no-op stand-in `next dev`/`next build` never sees (they never read
+ * `NODE_PATH`, and nothing under `scripts/` is on their module path). What
+ * runs after that is `lib/session.ts` itself, unmodified, importing the real
+ * `@/db/client` and calling the real `withSettledTransaction`.
+ */
+import { randomUUID } from "node:crypto";
+import { mock } from "node:test";
+
+import { createClient } from "@supabase/supabase-js";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import postgres from "postgres";
+
+import { withSettledTransaction } from "@/lib/settled-transaction";
+
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error("DATABASE_URL is not set");
+
+let failed = false;
+
+function assert(label: string, ok: boolean, detail: string): void {
+  console.log(`${ok ? "PASS" : "FAIL"}  ${label} — ${detail}`);
+  if (!ok) failed = true;
+}
+
+// Nothing here goes through drizzle, so the driver's own PostgresError is the
+// thrown value — no cause chain to walk.
+function pgCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  const { code } = error as { code: unknown };
+  return typeof code === "string" ? code : undefined;
+}
+
+// Runs `fn` in its own savepoint, so a `42501` it throws never aborts the
+// attempts that follow inside the same outer transaction.
+async function attempt(
+  tx: postgres.TransactionSql,
+  fn: (sp: postgres.TransactionSql) => Promise<unknown>,
+): Promise<{ code?: string }> {
+  let code: string | undefined;
+  await tx.savepoint((sp) => fn(sp)).catch((error: unknown) => {
+    code = pgCode(error);
+  });
+  return { code };
+}
+
+// The same shape as `attempt`, keeping the rows a successful statement
+// `returning`s — module 37's own checks need to read back what a rename or
+// an archive actually wrote, not only whether it was refused. Also what
+// keeps this suite from crashing outright when run *before* `0004` is
+// applied: `archived_at` does not exist yet, so a bare `update ... set
+// archived_at = ...` would abort the whole outer transaction without a
+// savepoint under it.
+async function attemptRows<T>(
+  tx: postgres.TransactionSql,
+  fn: (sp: postgres.TransactionSql) => Promise<T[]>,
+): Promise<{ rows: T[]; code?: string }> {
+  let rows: T[] = [];
+  let code: string | undefined;
+  await tx.savepoint(async (sp) => {
+    rows = await fn(sp);
+  }).catch((error: unknown) => {
+    code = pgCode(error);
+  });
+  return { rows, code };
+}
+
+// Same shape again, for an UPDATE with no `returning`: what a cross-identity
+// attempt needs, since post-`0004` it is refused by RLS alone — a real
+// statement that runs and affects zero rows, never an error — while
+// pre-`0004` the same statement is refused by the grant (`name`) or by a
+// column that does not exist yet (`archived_at`), which does throw. `count`
+// stays `0` either way, so "0 rows or 42501" (the contract's own words) is
+// one assertion regardless of which side of the migration this runs on.
+async function attemptCount(
+  tx: postgres.TransactionSql,
+  fn: (sp: postgres.TransactionSql) => Promise<{ count: number }>,
+): Promise<{ count: number; code?: string }> {
+  let count = 0;
+  let code: string | undefined;
+  await tx.savepoint(async (sp) => {
+    count = (await fn(sp)).count;
+  }).catch((error: unknown) => {
+    code = pgCode(error);
+  });
+  return { count, code };
+}
+
+// Mirrors `withGoalsDb` (`apps/pulsar/lib/session.ts`): one statement, not
+// four, and transaction-local (`true`), so re-pointing mid-transaction is
+// safe — it never reaches across a reused connection.
+async function enterUserContext(tx: postgres.TransactionSql, subject: string): Promise<void> {
+  const claims = JSON.stringify({ sub: subject, role: "authenticated", aud: "authenticated" });
+  await tx`select
+    set_config('request.jwt.claims', ${claims}, true),
+    set_config('statement_timeout', '8000', true),
+    set_config('search_path', 'goals, public', true),
+    set_config('role', 'authenticated', true)`;
+}
+
+type Fixtures = {
+  goalId: string;
+  phaseId: string;
+  commitmentId: string;
+  factId: string;
+  oneOffId: string;
+};
+
+// One row of each of the four nouns, plus a phase, for a subject already
+// settled into its own context — enough for every cross-identity check below,
+// `phases` and `commitments` included (module 27's hole: "driven through the
+// door at all").
+async function seedFixtures(tx: postgres.TransactionSql, userId: string): Promise<Fixtures> {
+  const [goal] = await tx<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon)
+    values (${userId}, 'meta de prueba', '2026-12-31') returning id`;
+  const [phase] = await tx<{ id: string }[]>`
+    insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+    values (${userId}, ${goal.id}, 'fase de prueba', '2026-01-01', '2026-12-31') returning id`;
+  const [commitment] = await tx<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+    values (${userId}, ${goal.id}, 'compromiso de prueba', 'daily', 'tap') returning id`;
+  const [fact] = await tx<{ id: string }[]>`
+    insert into goals.facts (user_id, commitment_id, day)
+    values (${userId}, ${commitment.id}, '2026-09-22') returning id`;
+  const [oneOff] = await tx<{ id: string }[]>`
+    insert into goals.one_offs (user_id, name) values (${userId}, 'suelto de prueba') returning id`;
+
+  return {
+    goalId: goal.id,
+    phaseId: phase.id,
+    commitmentId: commitment.id,
+    factId: fact.id,
+    oneOffId: oneOff.id,
+  };
+}
+
+async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  // Scoped to these two synthetic ids, never a bare `count(*)`: five lanes
+  // share this database and another one's own facts land in this table while
+  // this runs (measured live: a `harness-5@example.invalid` row mid-run).
+  const [before] = await sql<{ count: string }[]>`
+    select count(*)::text as count from goals.facts where user_id in (${subject}, ${intruder})`;
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const a = await seedFixtures(tx, subject);
+
+      await enterUserContext(tx, intruder);
+      const b = await seedFixtures(tx, intruder);
+
+      await enterUserContext(tx, subject);
+
+      // -- SELECT another person's row of every noun: filtered to zero rows,
+      // never an error (RNP-05) --
+      const foreignGoal = await tx<{ id: string }[]>`select id from goals.goals where id = ${b.goalId}`;
+      assert("P01", foreignGoal.length === 0, `another person's goal, rows visible = ${foreignGoal.length}`);
+
+      const foreignPhase = await tx<{ id: string }[]>`select id from goals.phases where id = ${b.phaseId}`;
+      assert("P02", foreignPhase.length === 0, `another person's phase, rows visible = ${foreignPhase.length}`);
+
+      const foreignCommitment = await tx<{ id: string }[]>`
+        select id from goals.commitments where id = ${b.commitmentId}`;
+      assert(
+        "P03",
+        foreignCommitment.length === 0,
+        `another person's commitment, rows visible = ${foreignCommitment.length}`,
+      );
+
+      const foreignFact = await tx<{ id: string }[]>`select id from goals.facts where id = ${b.factId}`;
+      assert("P04", foreignFact.length === 0, `another person's fact, rows visible = ${foreignFact.length}`);
+
+      const foreignOneOff = await tx<{ id: string }[]>`select id from goals.one_offs where id = ${b.oneOffId}`;
+      assert("P05", foreignOneOff.length === 0, `another person's one-off, rows visible = ${foreignOneOff.length}`);
+
+      // -- cross-identity INSERT refused by `WITH CHECK`, one per owned table:
+      // module 21 named this for `facts` alone, module 27's hole names it as
+      // structurally unseen everywhere else `WITH CHECK` also guards --
+      const insertGoal = await attempt(
+        tx,
+        (sp) => sp`insert into goals.goals (user_id, name, horizon)
+          values (${intruder}, 'ajena', '2026-01-01')`,
+      );
+      assert("P06", insertGoal.code === "42501", `insert goal as another user, sqlstate = ${insertGoal.code ?? "none"}`);
+
+      const insertPhase = await attempt(
+        tx,
+        (sp) => sp`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+          values (${intruder}, ${a.goalId}, 'ajena', '2026-01-01', '2026-01-02')`,
+      );
+      assert(
+        "P07",
+        insertPhase.code === "42501",
+        `insert phase as another user, sqlstate = ${insertPhase.code ?? "none"}`,
+      );
+
+      const insertCommitment = await attempt(
+        tx,
+        (sp) => sp`insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+          values (${intruder}, ${a.goalId}, 'ajeno', 'daily', 'tap')`,
+      );
+      assert(
+        "P08",
+        insertCommitment.code === "42501",
+        `insert commitment as another user, sqlstate = ${insertCommitment.code ?? "none"}`,
+      );
+
+      const insertOneOff = await attempt(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, name) values (${intruder}, 'ajeno')`,
+      );
+      assert(
+        "P09",
+        insertOneOff.code === "42501",
+        `insert one-off as another user, sqlstate = ${insertOneOff.code ?? "none"}`,
+      );
+
+      const insertFact = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, commitment_id, day)
+          values (${intruder}, ${a.commitmentId}, '2026-09-22')`,
+      );
+      assert("P10", insertFact.code === "42501", `insert fact as another user, sqlstate = ${insertFact.code ?? "none"}`);
+
+      // -- UPDATE: the grant layer narrows every column, not the policy alone --
+      const updateFact = await attempt(tx, (sp) => sp`update goals.facts set note = 'x' where id = ${a.factId}`);
+      assert("P11", updateFact.code === "42501", `update a fact at all, sqlstate = ${updateFact.code ?? "none"}`);
+
+      const updateCommitmentName = await attempt(
+        tx,
+        (sp) => sp`update goals.commitments set name = 'renombrado' where id = ${a.commitmentId}`,
+      );
+      assert(
+        "P12",
+        updateCommitmentName.code === "42501",
+        `update commitment.name, sqlstate = ${updateCommitmentName.code ?? "none"}`,
+      );
+
+      const retireCommitment = await attempt(
+        tx,
+        (sp) => sp`update goals.commitments set retired_at = now() where id = ${a.commitmentId} returning id`,
+      );
+      assert(
+        "P13",
+        retireCommitment.code === undefined,
+        `update commitment.retired_at, sqlstate = ${retireCommitment.code ?? "none (succeeded)"}`,
+      );
+
+      // `phases` holds a `phases_delete_self` policy but no `UPDATE` grant at
+      // all — driving it for real, per module 27's hole, is what turns that
+      // gap from a claim in the migration into a measurement.
+      const updatePhase = await attempt(tx, (sp) => sp`update goals.phases set aim = 'cambiada' where id = ${a.phaseId}`);
+      assert("P14", updatePhase.code === "42501", `update a phase at all, sqlstate = ${updatePhase.code ?? "none"}`);
+
+      const updateGoalMeasure = await attempt(
+        tx,
+        (sp) => sp`update goals.goals set measure_name = 'km', measure_unit = 'km' where id = ${a.goalId}`,
+      );
+      assert(
+        "P15",
+        updateGoalMeasure.code === undefined,
+        `update goal's measure pair, sqlstate = ${updateGoalMeasure.code ?? "none (succeeded)"}`,
+      );
+
+      // Module 37 (RP-23): `name` is now grantable to the owner alone — the
+      // grant `0004_melodic_dreadnoughts.sql` adds, proved here rather than
+      // only in `checkGoalRenameArchiveGrant` below, so a regression to
+      // "column not granted" still turns this very P-number red. Red before
+      // that migration applies (permission denied), green after.
+      const updateGoalName = await attemptRows<{ id: string; name: string }>(
+        tx,
+        (sp) => sp`update goals.goals set name = 'renombrada' where id = ${a.goalId} returning id, name`,
+      );
+      assert(
+        "P16",
+        updateGoalName.code === undefined &&
+          updateGoalName.rows.length === 1 &&
+          updateGoalName.rows[0].name === "renombrada",
+        `update own goal.name, sqlstate = ${updateGoalName.code ?? "none"}, rows = ${updateGoalName.rows.length}`,
+      );
+
+      // -- DELETE: another person's row never disappears, and "retired, never
+      // deleted" is a fact of the grant layer even before RLS is asked --
+      const deleteForeignFact = await tx`delete from goals.facts where id = ${b.factId}`;
+      assert("P17", deleteForeignFact.count === 0, `delete another person's fact, rows deleted = ${deleteForeignFact.count}`);
+
+      const deleteCommitment = await attempt(tx, (sp) => sp`delete from goals.commitments where id = ${a.commitmentId}`);
+      assert(
+        "P18",
+        deleteCommitment.code === "42501",
+        `delete own commitment, sqlstate = ${deleteCommitment.code ?? "none"}`,
+      );
+
+      // Same shape as `commitments`: a `phases_delete_self` policy exists,
+      // no `DELETE` grant backs it, so the door never opens.
+      const deletePhase = await attempt(tx, (sp) => sp`delete from goals.phases where id = ${a.phaseId}`);
+      assert("P19", deletePhase.code === "42501", `delete own phase, sqlstate = ${deletePhase.code ?? "none"}`);
+
+      // -- evidence_sources: configuration, read-only to everyone --
+      const insertSource = await attempt(
+        tx,
+        (sp) => sp`insert into goals.evidence_sources (key, label_key, unit) values ('forged', 'x', 'x')`,
+      );
+      assert("P20", insertSource.code === "42501", `insert evidence source, sqlstate = ${insertSource.code ?? "none"}`);
+
+      const readSources = await tx<{ key: string }[]>`select key from goals.evidence_sources`;
+      assert(
+        "P21",
+        readSources.some((row) => row.key === "reading_lookups"),
+        `evidence sources visible = ${readSources.map((row) => row.key).join(",") || "none"}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // `anon` holds no `USAGE` on the `goals` schema at all — denied before RLS
+  // is ever asked, for a read and for a write alike.
+  await sql
+    .begin(async (tx) => {
+      await tx`select set_config('role', 'anon', true)`;
+
+      const anonSelectGoals = await attempt(tx, (sp) => sp`select 1 from goals.goals limit 1`);
+      assert("P22", anonSelectGoals.code === "42501", `anon select goals, sqlstate = ${anonSelectGoals.code ?? "none"}`);
+
+      const anonSelectFacts = await attempt(tx, (sp) => sp`select 1 from goals.facts limit 1`);
+      assert("P23", anonSelectFacts.code === "42501", `anon select facts, sqlstate = ${anonSelectFacts.code ?? "none"}`);
+
+      const anonInsertFact = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, commitment_id, day)
+          values (${randomUUID()}, ${randomUUID()}, '2026-09-22')`,
+      );
+      assert("P24", anonInsertFact.code === "42501", `anon insert fact, sqlstate = ${anonInsertFact.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  const [after] = await sql<{ count: string }[]>`
+    select count(*)::text as count from goals.facts where user_id in (${subject}, ${intruder})`;
+  assert(
+    "P25",
+    before.count === "0" && after.count === "0",
+    `facts for these two subjects, before = ${before.count}, after = ${after.count}`,
+  );
+}
+
+// The two adapters `withSettledTransaction` needs to run on a raw `postgres`
+// connection instead of drizzle's: `begin` opens this driver's own
+// transaction (the same `UnwrapPromiseArray` cast `lib/session.ts` needs for
+// `db.transaction`), `run` turns the `SQL` object `settleSessionSql` returns
+// into the text-and-params `tx.unsafe` takes.
+function beginOn(sql: postgres.Sql) {
+  return <T>(fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> => sql.begin(fn) as Promise<T>;
+}
+
+async function runOn(tx: postgres.TransactionSql, statement: SQL): Promise<unknown> {
+  const query = new PgDialect().sqlToQuery(statement);
+  return tx.unsafe(query.sql, query.params as string[]);
+}
+
+async function checkSettleMechanism(): Promise<void> {
+  const wire: { connId: number; sql: string }[] = [];
+  const sql = postgres(DATABASE_URL!, {
+    prepare: false,
+    max: 1,
+    debug: (connId, query) => wire.push({ connId, sql: query }),
+  });
+
+  const session = { claims: { sub: randomUUID(), role: "authenticated", aud: "authenticated" } };
+
+  // With a session: the real `withSettledTransaction` actually seats the role
+  // and drops BYPASSRLS, driven end to end rather than asserted from the file
+  // — the very function `withGoalsDb` calls, not a copy of it.
+  const [seated] = await withSettledTransaction<
+    postgres.TransactionSql,
+    { role: string; bypasses: boolean; pid: number }[]
+  >(session, "check-policies", "goals, public", beginOn(sql), runOn, (tx) =>
+    tx<{ role: string; bypasses: boolean; pid: number }[]>`
+      select current_user as role,
+             (select rolbypassrls from pg_roles where rolname = current_user) as bypasses,
+             pg_backend_pid() as pid`,
+  );
+  assert(
+    "P26",
+    seated.role === "authenticated" && seated.bypasses === false,
+    `role = ${seated.role}, bypassrls = ${seated.bypasses}`,
+  );
+
+  // `is_local = true` (the third argument to every `set_config` in
+  // `settleSessionSql`) is what keeps the settle from surviving its own
+  // transaction. `max: 1` keeps one persistent client socket open for `sql`'s
+  // whole life, but under Supavisor's transaction pooling that socket can
+  // still be handed a *different* upstream backend for this bare query than
+  // `seated` ran on — measured (`docs/TRAPS.md`, "claims (and role) can
+  // survive a connection through the pooler") to both flag correct code and
+  // miss a real regression under contention. The comparison below only means
+  // something when both queries land on the same backend: read
+  // `pg_backend_pid()` from both, retry the bare query once on a mismatch,
+  // and report inconclusive — never a PASS — if it still does not match. An
+  // unearned PASS is what lets the regression through; a visible
+  // "inconclusive" does not.
+  async function bareRoleAndPid(): Promise<{ role: string; pid: number }> {
+    const [row] = await sql<{ role: string; pid: number }[]>`select current_user as role, pg_backend_pid() as pid`;
+    return row;
+  }
+
+  let bare = await bareRoleAndPid();
+  if (bare.pid !== seated.pid) bare = await bareRoleAndPid();
+
+  if (bare.pid !== seated.pid) {
+    console.log(
+      `INCONCLUSIVE  P27 — seated on backend pid ${seated.pid}, the bare query landed on pid ${bare.pid} twice; ` +
+        `nothing measured about whether the settle leaked`,
+    );
+  } else {
+    assert("P27", bare.role !== "authenticated", `role on backend pid ${bare.pid} after commit = ${bare.role}`);
+  }
+
+  // Without a session: the guard must throw before `sql.begin` ever runs, so
+  // zero statements reach the wire — read from this pool's own instrumented
+  // log, not inferred from a flat log's first "begin" (module 27's hole:
+  // that method cannot tell one transaction's statements from another's).
+  const sentBefore = wire.length;
+  let threw = false;
+  await withSettledTransaction(null, "check-policies", "goals, public", beginOn(sql), runOn, async () => undefined).catch(
+    () => {
+      threw = true;
+    },
+  );
+  const sentWithNoSession = wire.length - sentBefore;
+  assert(
+    "P28",
+    threw && sentWithNoSession === 0,
+    `threw = ${threw}, statements sent while unauthenticated = ${sentWithNoSession}`,
+  );
+
+  await sql.end();
+}
+
+// Module 27's hole: a statement count must read its own connection, not
+// assume the first "begin" in a merged log belongs to the transaction under
+// test. Two real, concurrently open connections (`max: 1` each, run
+// interleaved) prove the technique: every entry in one client's own debug log
+// carries that client's own connection id and no other's, so counting "this
+// transaction's statements" by filtering on id — never by scanning for the
+// first literal "begin" — survives concurrency a flat log cannot represent.
+async function checkStatementAttributionByConnection(): Promise<void> {
+  const wireA: { connId: number; sql: string }[] = [];
+  const wireB: { connId: number; sql: string }[] = [];
+  const sqlA = postgres(DATABASE_URL!, { prepare: false, max: 1, debug: (id, query) => wireA.push({ connId: id, sql: query }) });
+  const sqlB = postgres(DATABASE_URL!, { prepare: false, max: 1, debug: (id, query) => wireB.push({ connId: id, sql: query }) });
+
+  const [[pidA], [pidB]] = await Promise.all([
+    sqlA.begin(async (tx) => {
+      await tx`select pg_sleep(0.05)`;
+      return tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+    }),
+    sqlB.begin(async (tx) => {
+      await tx`select pg_sleep(0.05)`;
+      return tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+    }),
+  ]);
+
+  const idsA = new Set(wireA.map((entry) => entry.connId));
+  const idsB = new Set(wireB.map((entry) => entry.connId));
+  const disjoint = ![...idsA].some((id) => idsB.has(id));
+
+  assert(
+    "P29",
+    pidA.pid !== pidB.pid && idsA.size === 1 && idsB.size === 1 && disjoint,
+    `two interleaved transactions, backend pids ${pidA.pid} / ${pidB.pid}, ` +
+      `wire connection ids {${[...idsA]}} / {${[...idsB]}}, disjoint = ${disjoint}`,
+  );
+
+  await sqlA.end();
+  await sqlB.end();
+}
+
+// Module 27's hole: the real `@supabase/supabase-js` client, not a stub whose
+// notion of "verified" is an environment variable.
+async function checkRealClientRejectsBadTokens(): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are not set");
+
+  const client = createClient(url, key);
+
+  // A real network round trip against Supabase's own JWKS/verification
+  // endpoint — the same call `verifiedClaims` makes — rejects a token that
+  // never had a valid signature to begin with.
+  const garbage = await client.auth.getClaims("this.is-not.a-jwt");
+  assert("P30", garbage.error !== null, `getClaims on a malformed token, error = ${garbage.error?.message ?? "none"}`);
+
+  // Anonymous sign-in is off at the project level. This app's own `lib/env.ts`
+  // holds no service-role key on purpose ("a service_role key would bypass
+  // every RLS policy"), so a script here has no way to delete a row it might
+  // mint by actually signing in anonymously — RNP-09 forbids minting one
+  // this app cannot register and clean up. The boundary is proven at the
+  // settings door, live against the real project, instead.
+  const settings = (await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } }).then((response) =>
+    response.json(),
+  )) as { external?: { anonymous_users?: boolean } };
+  assert(
+    "P31",
+    settings.external?.anonymous_users === false,
+    `external.anonymous_users = ${settings.external?.anonymous_users}`,
+  );
+}
+
+type RealDoorSession = { claims: Record<string, unknown>; user: { id: string; email: string } };
+
+// Mutable so `verifiedClaims`'s mock — registered once, below — can hand back
+// a different answer per call without re-registering the mock: `mock.module`
+// must land before `@/lib/session` is ever imported, so this closes over a
+// variable this function sets before each call to the real door.
+let realDoorSession: RealDoorSession | null = null;
+
+// Closes the gap Part 2 cannot: `withSettledTransaction` being real and
+// shared proves a mutation *inside* it is caught from every call site, but
+// proves nothing about whether `lib/session.ts` still calls it, calls it with
+// a working adapter, or calls it at all. This part imports the real
+// `withGoalsDb`/`withReadingDb` and drives them — see the module docstring
+// for how `server-only` and `verifiedClaims` are gotten out of the way
+// without touching `lib/session.ts` itself.
+async function checkRealDoor(): Promise<void> {
+  mock.module("@repo/supabase-auth", {
+    namedExports: {
+      createSupabaseServerClient: () => {
+        throw new Error("checkRealDoor: createSupabaseServerClient must not be called — verifiedClaims is mocked");
+      },
+      verifiedClaims: async () => realDoorSession,
+    },
+  });
+
+  const { withGoalsDb, withReadingDb } = await import("@/lib/session");
+
+  const subject = randomUUID();
+  realDoorSession = {
+    claims: { sub: subject, role: "authenticated", aud: "authenticated" },
+    user: { id: subject, email: "check-policies@example.invalid" },
+  };
+
+  const roleQuery = `select current_user as role,
+    (select rolbypassrls from pg_roles where rolname = current_user) as bypasses`;
+
+  const [goalsSeat] = await withGoalsDb((tx) => tx.execute<{ role: string; bypasses: boolean }>(roleQuery));
+  assert(
+    "P32",
+    goalsSeat.role === "authenticated" && goalsSeat.bypasses === false,
+    `real withGoalsDb, role = ${goalsSeat.role}, bypassrls = ${goalsSeat.bypasses}`,
+  );
+
+  const [readingSeat] = await withReadingDb((tx) => tx.execute<{ role: string; bypasses: boolean }>(roleQuery));
+  assert(
+    "P33",
+    readingSeat.role === "authenticated" && readingSeat.bypasses === false,
+    `real withReadingDb, role = ${readingSeat.role}, bypassrls = ${readingSeat.bypasses}`,
+  );
+
+  realDoorSession = null;
+  let threw = false;
+  await withGoalsDb(async () => undefined).catch(() => {
+    threw = true;
+  });
+  assert("P34", threw, `real withGoalsDb with no session, threw = ${threw}`);
+}
+
+// Module 25's own grant (RP-22): `one_offs_delete_self` (0000) stood inert
+// until this migration's `GRANT DELETE`. Own connection, own transaction,
+// own forced rollback — nothing this seeds survives it, the same shape as
+// `checkPoliciesAndGrants`.
+async function checkOneOffDeleteGrant(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const [mine] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'suelto de prueba') returning id`;
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta de prueba', '2026-12-31') returning id`;
+
+      await enterUserContext(tx, intruder);
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${intruder}, 'ajeno') returning id`;
+
+      await enterUserContext(tx, subject);
+
+      // -- delete another person's one-off: the grant now lets the
+      // statement run, RLS still filters it to zero rows --
+      const deleteForeign = await tx`delete from goals.one_offs where id = ${theirs.id}`;
+      assert(
+        "P35",
+        deleteForeign.count === 0,
+        `delete another person's one-off, rows deleted = ${deleteForeign.count}`,
+      );
+
+      // -- delete a one-off of one's own: this is the grant this migration
+      // adds, driven for real rather than read from the migration file --
+      const deleteOwn = await tx<{ id: string }[]>`
+        delete from goals.one_offs where id = ${mine.id} returning id`;
+      assert("P36", deleteOwn.length === 1, `delete own one-off, rows deleted = ${deleteOwn.length}`);
+
+      // -- the grant this migration adds names `one_offs` alone: `goals`,
+      // already covered for phases (P19) and commitments (P18), still
+      // refuses a DELETE with 42501 too --
+      const deleteGoal = await attempt(tx, (sp) => sp`delete from goals.goals where id = ${goal.id}`);
+      assert("P37", deleteGoal.code === "42501", `delete own goal, sqlstate = ${deleteGoal.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // Read the grant back from the catalogue, never from the migration file:
+  // `facts` already carried DELETE (0000, "undoing a tap is a delete of the
+  // whole row"); this migration adds `one_offs` beside it and nothing else —
+  // `goals`, `phases` and `commitments` still carry none.
+  const grants = await sql<{ table_name: string }[]>`
+    select table_name from information_schema.role_table_grants
+    where table_schema = 'goals' and grantee = 'authenticated' and privilege_type = 'DELETE'`;
+  const tablesWithDelete = grants.map((row) => row.table_name).sort();
+  assert(
+    "P38",
+    tablesWithDelete.length === 2 &&
+      tablesWithDelete[0] === "facts" &&
+      tablesWithDelete[1] === "one_offs",
+    `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
+  );
+
+  await sql.end();
+}
+
+// Round 2, 2026-09-28: an independent validator drove a bare `DELETE` under
+// a settled session, no server action in the way, and an own one-off that
+// carried a fact went — the invariant lived in `deleteOneOff`'s own check
+// alone, never in the grant layer. `one_offs_delete_self`'s own `USING`
+// (migration 0002) is what closes that: this drives the very same bare
+// statement the validator did, never `deleteOneOff`, so a regression in any
+// future writer is caught here too, not only in this app's own action.
+async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject})`;
+      await enterUserContext(tx, subject);
+
+      const [oneOff] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'suelto con hecho') returning id`;
+      await tx`
+        insert into goals.facts (user_id, one_off_id, day)
+        values (${subject}, ${oneOff.id}, '2026-09-22')`;
+
+      // Bare, under the caller's own settled claims — no `deleteOneOff`, no
+      // server action: exactly what the round-2 validator drove.
+      const deleted = await tx<{ id: string }[]>`
+        delete from goals.one_offs where id = ${oneOff.id} returning id`;
+      assert(
+        "P39",
+        deleted.length === 0,
+        `bare delete of an own one-off carrying a fact, rows deleted = ${deleted.length}`,
+      );
+
+      const stillThere = await tx<{ id: string }[]>`
+        select id from goals.facts where one_off_id = ${oneOff.id}`;
+      assert(
+        "P40",
+        stillThere.length === 1,
+        `the fact after the refused delete, rows visible = ${stillThere.length}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
+// Module 37 (RP-23, RP-24): the grant `0004_melodic_dreadnoughts.sql` adds —
+// `UPDATE (name, archived_at)` on `goals.goals`, to the owner alone — driven
+// for real rather than read from the migration. Own connection, own
+// transaction, own forced rollback, the same shape as `checkOneOffDeleteGrant`.
+// Every statement below goes through `attempt`/`attemptRows`: before `0004`
+// applies, `archived_at` does not exist and the grant on `name` does not
+// either, so the owner's own rename/archive/reopen attempts are refused —
+// this suite is meant to read red at that point, not crash. After it
+// applies, they succeed and the assertions read green.
+async function checkGoalRenameArchiveGrant(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta original', '2026-12-31') returning id`;
+
+      // -- the owner renames their own goal --
+      const renamed = await attemptRows<{ id: string; name: string }>(
+        tx,
+        (sp) => sp`update goals.goals set name = 'meta renombrada' where id = ${goal.id} returning id, name`,
+      );
+      assert(
+        "P41",
+        renamed.code === undefined && renamed.rows.length === 1 && renamed.rows[0].name === "meta renombrada",
+        `owner rename, sqlstate = ${renamed.code ?? "none"}, rows = ${renamed.rows.length}`,
+      );
+
+      // -- the owner archives their own goal --
+      const archived = await attemptRows<{ id: string; archived_at: string | null }>(
+        tx,
+        (sp) => sp`update goals.goals set archived_at = now() where id = ${goal.id} returning id, archived_at`,
+      );
+      assert(
+        "P42",
+        archived.code === undefined && archived.rows.length === 1 && archived.rows[0].archived_at !== null,
+        `owner archive, sqlstate = ${archived.code ?? "none"}, rows = ${archived.rows.length}`,
+      );
+
+      // -- and reopens it, the same grant running the other way --
+      const reopened = await attemptRows<{ id: string; archived_at: string | null }>(
+        tx,
+        (sp) => sp`update goals.goals set archived_at = null where id = ${goal.id} returning id, archived_at`,
+      );
+      assert(
+        "P43",
+        reopened.code === undefined && reopened.rows.length === 1 && reopened.rows[0].archived_at === null,
+        `owner reopen, sqlstate = ${reopened.code ?? "none"}, rows = ${reopened.rows.length}`,
+      );
+
+      // -- another person can neither rename nor archive: RLS narrows the
+      // UPDATE to zero rows, never an error, the same shape P17's foreign
+      // DELETE already takes --
+      await enterUserContext(tx, intruder);
+      const intruderRename = await attemptCount(
+        tx,
+        (sp) => sp`update goals.goals set name = 'ajena' where id = ${goal.id}`,
+      );
+      assert(
+        "P44",
+        intruderRename.count === 0,
+        `another person renames it, sqlstate = ${intruderRename.code ?? "none"}, rows affected = ${intruderRename.count}`,
+      );
+
+      const intruderArchive = await attemptCount(
+        tx,
+        (sp) => sp`update goals.goals set archived_at = now() where id = ${goal.id}`,
+      );
+      assert(
+        "P45",
+        intruderArchive.count === 0,
+        `another person archives it, sqlstate = ${intruderArchive.code ?? "none"}, rows affected = ${intruderArchive.count}`,
+      );
+
+      // -- the owner cannot move `user_id`, `horizon` or `created_at`
+      // through this grant: neither column is ever named in it --
+      await enterUserContext(tx, subject);
+      const changeUserId = await attempt(
+        tx,
+        (sp) => sp`update goals.goals set user_id = ${intruder} where id = ${goal.id}`,
+      );
+      assert("P46", changeUserId.code === "42501", `owner updates goal.user_id, sqlstate = ${changeUserId.code ?? "none"}`);
+
+      const changeHorizon = await attempt(
+        tx,
+        (sp) => sp`update goals.goals set horizon = '2099-01-01' where id = ${goal.id}`,
+      );
+      assert("P47", changeHorizon.code === "42501", `owner updates goal.horizon, sqlstate = ${changeHorizon.code ?? "none"}`);
+
+      const changeCreatedAt = await attempt(
+        tx,
+        (sp) => sp`update goals.goals set created_at = now() where id = ${goal.id}`,
+      );
+      assert(
+        "P48",
+        changeCreatedAt.code === "42501",
+        `owner updates goal.created_at, sqlstate = ${changeCreatedAt.code ?? "none"}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // Read the grant back from the catalogue, never from the migration file:
+  // `goals` already carried `UPDATE (measure_name, measure_unit)` (0000);
+  // this migration adds `name` and `archived_at` beside them and nothing
+  // else.
+  const columns = await sql<{ column_name: string }[]>`
+    select column_name from information_schema.column_privileges
+    where table_schema = 'goals' and table_name = 'goals'
+      and grantee = 'authenticated' and privilege_type = 'UPDATE'`;
+  const updatable = columns.map((row) => row.column_name).sort();
+  assert(
+    "P49",
+    updatable.length === 4 &&
+      updatable.join(",") === ["archived_at", "measure_name", "measure_unit", "name"].sort().join(","),
+    `columns of goals.goals updatable by authenticated = ${updatable.join(", ") || "none"}`,
+  );
+
+  await sql.end();
+}
+
+async function main(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, {
+    prepare: false,
+    max: 1,
+    connection: { search_path: "goals, public" },
+  });
+
+  await checkPoliciesAndGrants(sql);
+  await sql.end();
+
+  await checkSettleMechanism();
+  await checkStatementAttributionByConnection();
+  await checkRealClientRejectsBadTokens();
+  await checkRealDoor();
+  await checkOneOffDeleteGrant();
+  await checkOneOffWithFactRefusedByPolicy();
+  await checkGoalRenameArchiveGrant();
+
+  if (failed) process.exit(1);
+}
+
+main();

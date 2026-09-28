@@ -1,0 +1,9 @@
+{
+  "appName": "Bitácora",
+  "tagline": "Lo que pasó, cuándo y quién lo escribió.",
+  "nav": {
+    "today": "Hoy",
+    "week": "Semana",
+    "goal": "Meta"
+  }
+}

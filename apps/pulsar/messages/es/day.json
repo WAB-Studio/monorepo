@@ -1,0 +1,58 @@
+{
+  "title": "Hoy",
+  "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
+  "theme": {
+    "toLight": "Cambiar a modo claro",
+    "toDark": "Cambiar a modo oscuro"
+  },
+  "empty": {
+    "title": "Todavía no tienes una meta abierta.",
+    "action": "Crear una meta"
+  },
+  "oneOffs": {
+    "title": "Sueltas",
+    "markLabel": "Marcar como hecho",
+    "delete": {
+      "title": "¿Borrarla?",
+      "description": "No llegó a pasar nada, así que no queda nada de ella. Si ya la hiciste, márcala hecha en vez de borrarla: eso sí deja constancia.",
+      "confirm": "Borrarla",
+      "cancel": "Dejarla"
+    }
+  },
+  "newOneOff": {
+    "label": "Algo suelto",
+    "placeholder": "Escribe algo suelto..."
+  },
+  "quantitySheet": {
+    "question": "¿Cuánto hiciste hoy?",
+    "otherAmount": "Escribir otra cantidad",
+    "customLabel": "Otra cantidad",
+    "noteLabel": "Una línea, si quieres",
+    "notePlaceholder": "¿Qué pasó?",
+    "accept": "Anotar",
+    "change": "Cambiar",
+    "undo": "Deshacer"
+  },
+  "cadence": {
+    "daily": "diario",
+    "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
+    "timesPerWeek": "{count}×/semana",
+    "everyNDays": "cada {n} días",
+    "timesPerMonth": "{count}×/mes"
+  },
+  "errors": {
+    "notFound": "Eso ya no existe. Recarga la página.",
+    "evidenceOnly": "Eso lo cierra una fuente, no un toque.",
+    "quantityRequired": "Ese compromiso pide una cantidad.",
+    "subjectInvalid": "Falta decir a qué compromiso o suelta pertenece esto.",
+    "noteEmpty": "La nota no puede quedar en blanco.",
+    "noteTooLong": "La nota es muy larga. Escribe máximo 280 caracteres.",
+    "quantityInvalid": "Escribe un número entero entre 1 y 1 000 000.",
+    "invalid": "Eso no es válido.",
+    "signedOut": "Tu sesión terminó. Entra otra vez.",
+    "oneOffNameEmpty": "Escribe qué es lo suelto.",
+    "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
+    "oneOffDayInvalid": "Ese día no es válido.",
+    "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra."
+  }
+}

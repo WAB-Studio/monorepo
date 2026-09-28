@@ -1,0 +1,941 @@
+// Proves module 28's `loadGoal` fan-out the same way `scripts/check-day.ts`
+// proves `loadDay`'s: by counting statements off the driver's own wire, not
+// off `goal.ts`'s source text, and by redeeming this lane's own
+// `private/session-<lane>.json` cookie rather than typing anything into
+// `/entrar`. Read that file first — the technique below (debug-hook
+// instrumentation, one begin/one commit per connection, an exact match on
+// `postgres`'s own type-fetch text, capped at one per connection and zero
+// warm) is copied from it verbatim, not reinvented.
+//
+// This closes the holes module 28's own validator and this module's own
+// first round each found. First (module 28's gitignored probe, a copy sits
+// at `private/reportes/check-goal.modulo28.ts`): its SQL-text assertion only
+// tested that `"goals"."goals"` appears *somewhere* in the reading
+// statement, so a `from` bound rewritten as a hardcoded
+// `sql`'0001-01-01'::date`` still passed — the `to` bound's own reference
+// carried the whole assertion. `assertReadingBounds` below extracts the
+// `between <from> and <to>` clause `goalSpan`'s own two subqueries land in
+// (`lib/queries/goal.ts`) and checks each side on its own. Second: that same
+// text-only check also passes a bound that names `"goals"."goals"` but reads
+// the wrong row or the wrong column — both bounds on `horizon`, say. Text
+// alone cannot tell; `assertBoundsResolveToGoalRow` below replays the exact
+// `from`/`to` fragments the wire carried, values included, and compares what
+// they resolve to against the goal's own `created_at` and `horizon`, fetched
+// independently.
+//
+// The fixture also used to retire its only quantity commitment, forcing
+// `declaredTotal` to zero on purpose — the same value a mutation that zeroes
+// `declaredTotal` whenever evidence is unreadable also produces, so the
+// degraded child's own assertion could never tell the two apart. It now
+// keeps that commitment active with one real declared fact instead
+// (`seedMixedMeasureGoal`), so the degraded child's declared-total assertion
+// has a nonzero number a bug can actually miss.
+//
+// This script seeds its own goal every run — through `createGoal`,
+// `addCommitment` and `declareFact`, never a raw INSERT — the same doors a
+// person's own screen uses.
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import Module from "node:module";
+import { resolve } from "node:path";
+
+// A plain npm package, not a `@/`-rooted specifier: safe to import before
+// `installStubs` runs, the same way `lib/queries/goal.ts` itself imports it.
+import { sql, type SQL } from "drizzle-orm";
+
+function laneNumber(): number {
+  const raw = process.env.HARNESS_LANE?.trim();
+  if (!raw) return 1;
+  if (!/^[1-9][0-9]*$/.test(raw)) {
+    throw new Error(`HARNESS_LANE must be a positive integer, not "${raw}"`);
+  }
+  return Number(raw);
+}
+
+const lane = laneNumber();
+
+function sessionFile(): string {
+  return resolve(process.cwd(), `private/session-${lane}.json`);
+}
+
+type StoredCookie = { name: string; value: string };
+
+// `mint-session.ts`'s own file, read the same way `check-day.ts` reads it.
+function loadCookies(): StoredCookie[] {
+  const file = sessionFile();
+  let state: { cookies: StoredCookie[] };
+  try {
+    state = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    throw new Error(`no session at ${file} — run harness:mint-session first`);
+  }
+  if (state.cookies.length === 0) {
+    throw new Error(`${file} carries no cookie — the mint did not land one`);
+  }
+  return state.cookies.map(({ name, value }) => ({ name, value }));
+}
+
+type DebugCall = { at: number; connection: number; query: string; parameters: unknown[] };
+
+const wireCalls: DebugCall[] = [];
+
+type PostgresFactory = (url: string, options?: Record<string, unknown>) => unknown;
+
+// "none": the real registry reader, against the real (empty, for a fresh
+// identity) `reading.lookups`. "stub": the reader replaced with three known
+// rows, to prove the sum against a number no real row on this database can
+// produce for any harness identity. "degraded": the reader replaced with one
+// that always rejects, to prove RNP-04's failure path.
+type StubMode = "none" | "stub" | "degraded";
+
+const STUB_QUANTITIES = [5, 3, 2];
+const STUB_TOTAL = STUB_QUANTITIES.reduce((a, b) => a + b, 0);
+
+function todayInBogota(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+}
+
+/**
+ * Installs every stub `@/lib/queries/goal.ts`'s own import chain needs to run
+ * outside Next, the reader override named by `mode` included. Has to run
+ * before the first `@/`-rooted import — `check-day.ts`'s own warning, word
+ * for word: `_load` binds each `require` once, and a module already required
+ * is a module this cannot reach again.
+ */
+function installStubs(cookies: StoredCookie[], mode: StubMode): void {
+  const untyped = Module as unknown as {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+  };
+  const originalLoad = untyped._load;
+
+  untyped._load = (request, parent, isMain) => {
+    if (request === "server-only") return {};
+    if (request === "next/headers") {
+      return { cookies: async () => ({ getAll: () => cookies, set() {} }) };
+    }
+    if (request === "next/cache") {
+      return { revalidatePath() {} };
+    }
+    // The one reader `lib/evidence/registry.ts` names today (RNP-10). Only
+    // that file imports this relative specifier, so matching the bare string
+    // carries no risk of catching an unrelated module.
+    if (mode === "degraded" && request === "./reading-lookups") {
+      return {
+        readReadingLookups: async () => {
+          throw new Error("check-goal.ts: simulated reading-lookups failure");
+        },
+      };
+    }
+    if (mode === "stub" && request === "./reading-lookups") {
+      return {
+        readReadingLookups: async () => {
+          const day = todayInBogota();
+          return STUB_QUANTITIES.map((quantity) => ({
+            day,
+            quantity,
+            unit: "searches",
+            labelKey: "sources.readingLookups",
+          }));
+        },
+      };
+    }
+    // Wraps `postgres` itself once, so every statement `db/client.ts`'s pool
+    // sends is counted — `prepare`, `max` and `idle_timeout` pass through
+    // untouched, the pool under measurement stays the pool `loadGoal` gets.
+    if (request === "postgres") {
+      const real = originalLoad(request, parent, isMain) as PostgresFactory;
+      const wrapped: PostgresFactory = (url, options) =>
+        real(url, {
+          ...options,
+          debug: (connection: number, query: string, parameters: unknown[]) => {
+            wireCalls.push({ at: Date.now(), connection, query, parameters });
+          },
+        });
+      return wrapped;
+    }
+    return originalLoad(request, parent, isMain);
+  };
+}
+
+function normalizeStatement(query: string): string {
+  return query.trim().toLowerCase();
+}
+
+// `postgres`'s own default `fetch_types: true` (never set in `db/client.ts`)
+// sends exactly this query the first time a physical connection is ever
+// used — read verbatim off `node_modules/postgres/src/connection.js`'s own
+// `fetchArrayTypes`, the same text `check-day.ts` matches. An exact match on
+// the whole statement, whitespace collapsed: a bare `pg_catalog.pg_type`
+// substring match would let a statement that merely *mentions* that catalog
+// net itself out of the count it is supposed to inflate.
+const TYPE_FETCH_QUERY_TEXT =
+  "select b.oid, b.typarray from pg_catalog.pg_type a left join pg_catalog.pg_type b " +
+  "on b.oid = a.typelem where a.typcategory = 'a' group by b.oid, b.typarray order by b.oid";
+
+function isTypeFetchText(query: string): boolean {
+  return query.replace(/\s+/g, " ").trim().toLowerCase() === TYPE_FETCH_QUERY_TEXT;
+}
+
+// The settle statement's third `set_config` argument is the search path
+// `withGoalsDb`/`withReadingDb` chose (`lib/session.ts`) — read from
+// `parameters`, not guessed from the query text.
+function labelConnection(calls: DebugCall[]): string {
+  const settle = calls.find((call) => /set_config/i.test(call.query));
+  const searchPath = typeof settle?.parameters[2] === "string" ? settle.parameters[2] : "";
+  if (searchPath.startsWith("goals")) return "goals";
+  if (searchPath.startsWith("reading")) return "reading";
+  return "unknown";
+}
+
+function groupByConnection(calls: DebugCall[]): Map<number, DebugCall[]> {
+  const groups = new Map<number, DebugCall[]>();
+  for (const call of calls) {
+    const list = groups.get(call.connection) ?? [];
+    list.push(call);
+    groups.set(call.connection, list);
+  }
+  return groups;
+}
+
+type GroupAnalysis = {
+  connection: number;
+  label: string;
+  window: { start: number; end: number };
+  beginCount: number;
+  commitCount: number;
+  rollbackCount: number;
+  typeFetchCount: number;
+  // Net of the transaction's own bracket and of the type-fetch `postgres`
+  // sends on a connection's first-ever use — what `loadGoal` itself chose to
+  // send. The settle (`set_config`) statement is not netted out here: it is
+  // one of `loadGoal`'s own two statements per connection, the same way
+  // `check-day.ts` counts it for `loadDay`.
+  applicationCount: number;
+  bracketOk: boolean;
+};
+
+function analyzeGroup(connection: number, calls: DebugCall[]): GroupAnalysis {
+  const label = labelConnection(calls);
+  const times = calls.map((call) => call.at);
+  const window = { start: Math.min(...times), end: Math.max(...times) };
+
+  const beginCount = calls.filter((call) => normalizeStatement(call.query).startsWith("begin")).length;
+  const commitCount = calls.filter((call) => normalizeStatement(call.query) === "commit").length;
+  const rollbackCount = calls.filter((call) => normalizeStatement(call.query) === "rollback").length;
+  const typeFetchCount = calls.filter((call) => isTypeFetchText(call.query)).length;
+  const applicationCount = calls.length - beginCount - commitCount - rollbackCount - typeFetchCount;
+  const bracketOk = beginCount === 1 && commitCount === 1 && rollbackCount === 0;
+
+  return { connection, label, window, beginCount, commitCount, rollbackCount, typeFetchCount, applicationCount, bracketOk };
+}
+
+let failed = false;
+
+function assert(label: string, ok: boolean, detail: string): void {
+  console.log(`${ok ? "PASS" : "FAIL"}  ${label} — ${detail}`);
+  if (!ok) failed = true;
+}
+
+function countOccurrences(text: string, needle: string): number {
+  let count = 0;
+  let index = 0;
+  for (;;) {
+    index = text.indexOf(needle, index);
+    if (index === -1) return count;
+    count++;
+    index += needle.length;
+  }
+}
+
+/**
+ * Splits the reading statement's own `between <from> and <to>` clause
+ * (`reading-lookups.ts`'s `civilDay between ${from} and ${to}`) into the two
+ * bound expressions `goalSpan` built (`lib/queries/goal.ts`), by tracking
+ * paren depth rather than assuming either side is wrapped in one: a bound
+ * rewritten as a bare literal (the mutation this function exists to catch)
+ * has no parens of its own, and a naive `(select ...)` match would silently
+ * skip right past it. Returns `null` when no top-level `and` is found at all
+ * — a shape this file has never seen sent, and one this function must fail
+ * closed on rather than guess at.
+ */
+function splitBetweenBounds(query: string): { from: string; to: string } | null {
+  const between = /\bbetween\b/i.exec(query);
+  if (!between) return null;
+
+  let i = between.index + between[0].length;
+  const fromStart = i;
+  let depth = 0;
+  let andIndex = -1;
+  for (; i < query.length; i++) {
+    const ch = query[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      if (depth === 0) break;
+      depth--;
+    } else if (depth === 0 && /^\s+and\b/i.test(query.slice(i))) {
+      andIndex = i;
+      break;
+    }
+  }
+  if (andIndex === -1) return null;
+  const fromText = query.slice(fromStart, andIndex).trim();
+
+  const andWord = /^\s+and\b/i.exec(query.slice(andIndex));
+  if (!andWord) return null;
+  let j = andIndex + andWord[0].length;
+  const toStart = j;
+  depth = 0;
+  let toEnd = query.length;
+  for (; j < query.length; j++) {
+    const ch = query[j];
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      if (depth === 0) {
+        toEnd = j;
+        break;
+      }
+      depth--;
+    }
+  }
+  const toText = query.slice(toStart, toEnd).trim();
+
+  return { from: fromText, to: toText };
+}
+
+// The reading connection's own application statement, net of its settle,
+// its bracket and any type-fetch — the one statement `readReadingLookups`
+// sends, found the same bounded way `analyzeGroup` bounds everything else.
+function findReadingAppCall(calls: DebugCall[]): DebugCall | undefined {
+  for (const [, groupCalls] of groupByConnection(calls)) {
+    if (labelConnection(groupCalls) !== "reading") continue;
+    return groupCalls.find((call) => {
+      const normalized = normalizeStatement(call.query);
+      return (
+        !normalized.startsWith("begin") &&
+        normalized !== "commit" &&
+        normalized !== "rollback" &&
+        !/set_config/i.test(call.query) &&
+        !isTypeFetchText(call.query)
+      );
+    });
+  }
+  return undefined;
+}
+
+/**
+ * The assertion module 28's own probe did not make: `"goals"."goals"` named
+ * once in the `from` bound and once in the `to` bound, checked independently
+ * rather than counted across the whole statement. A count of two across the
+ * whole statement would still pass if one bound carried both references and
+ * the other none — this reads the two bounds apart first, the way `goalSpan`
+ * itself built them apart, and fails on either alone missing its reference.
+ */
+function assertReadingBounds(label: string, calls: DebugCall[]): void {
+  const call = findReadingAppCall(calls);
+  if (!call) {
+    assert(`${label} run's reading statement bounds "goals"."goals" on both from and to`, false, "no reading application statement found on the wire");
+    return;
+  }
+  const bounds = splitBetweenBounds(call.query);
+  if (!bounds) {
+    assert(
+      `${label} run's reading statement bounds "goals"."goals" on both from and to`,
+      false,
+      `no "between ... and ..." clause found in: ${call.query.replace(/\s+/g, " ").trim()}`,
+    );
+    return;
+  }
+  const fromOk = countOccurrences(bounds.from, `"goals"."goals"`) === 1;
+  const toOk = countOccurrences(bounds.to, `"goals"."goals"`) === 1;
+  assert(
+    `${label} run's reading statement bounds "goals"."goals" on both from and to`,
+    fromOk && toOk,
+    `from = ${bounds.from} | to = ${bounds.to}`,
+  );
+}
+
+/**
+ * Turns a bound fragment's own wire text — `$3`, `$4`, literal SQL and
+ * all — back into an `SQL` object drizzle can execute, bound to the exact
+ * values `call.parameters` carried, not to values this file already knows
+ * from having built the goal itself. Splitting on `$<digits>` and rebuilding
+ * with `sql.raw` for the literal pieces and `${...}` for each value is what
+ * lets this replay a hardcoded id or a swapped column exactly as sent —
+ * `sql.raw` alone cannot bind a value, and hand-formatting the value into the
+ * string would trust this file's own escaping instead of drizzle's.
+ */
+function rebuildAsSql(text: string, allParams: unknown[]): SQL {
+  const parts = text.split(/\$(\d+)/);
+  let result: SQL = sql.raw(parts[0] ?? "");
+  for (let i = 1; i < parts.length; i += 2) {
+    const paramIndex = Number(parts[i]) - 1;
+    const literalAfter = parts[i + 1] ?? "";
+    result = sql`${result}${allParams[paramIndex]}${sql.raw(literalAfter)}`;
+  }
+  return result;
+}
+
+/**
+ * The assertion `assertReadingBounds` above cannot make: that a bound naming
+ * `"goals"."goals"` actually *resolves* to the goal's own row and the right
+ * column. A bound rewritten to read a hardcoded id, or to read `horizon`
+ * on both sides, still names `"goals"."goals"` once each — the text-only
+ * check goes green either way. This replays the exact `from`/`to` fragments
+ * `readReadingLookups` sent, values included, inside a fresh `withReadingDb`
+ * transaction — "the way the reading transaction sees them" — and compares
+ * the result to the goal's own `created_at` and `horizon`, fetched
+ * independently through `withGoalsDb`. Never by calling `goalSpan` again:
+ * that would just repeat whatever bug it carries, not catch it.
+ */
+async function assertBoundsResolveToGoalRow(goalId: string, calls: DebugCall[]): Promise<void> {
+  const label = "the reading statement's bounds resolve to the goal's own created_at and horizon";
+  const call = findReadingAppCall(calls);
+  if (!call) {
+    assert(label, false, "no reading application statement found on the wire");
+    return;
+  }
+  const bounds = splitBetweenBounds(call.query);
+  if (!bounds) {
+    assert(label, false, `no "between ... and ..." clause found in: ${call.query.replace(/\s+/g, " ").trim()}`);
+    return;
+  }
+
+  const { withGoalsDb, withReadingDb } = await import("@/lib/session");
+  const { TIME_ZONE } = await import("@/lib/zone");
+
+  const fromFragment = rebuildAsSql(bounds.from, call.parameters);
+  const toFragment = rebuildAsSql(bounds.to, call.parameters);
+
+  const [resolved] = await withReadingDb((tx) =>
+    tx.execute<{ from_value: string | null; to_value: string | null }>(
+      sql`select ${fromFragment} as from_value, ${toFragment} as to_value`,
+    ),
+  );
+
+  const [expected] = await withGoalsDb((tx) =>
+    tx.execute<{ expected_from: string; expected_to: string }>(sql`
+      select (g.created_at at time zone ${TIME_ZONE})::date as expected_from, g.horizon as expected_to
+      from "goals"."goals" g where g.id = ${goalId}
+    `),
+  );
+
+  const ok =
+    !!resolved &&
+    !!expected &&
+    resolved.from_value === expected.expected_from &&
+    resolved.to_value === expected.expected_to;
+  assert(
+    label,
+    ok,
+    `resolved from=${resolved?.from_value} to=${resolved?.to_value} | ` +
+      `expected from=${expected?.expected_from} to=${expected?.expected_to}`,
+  );
+}
+
+/**
+ * Prints every connection's own window, bracket and statement counts, and
+ * asserts on all of it — the same shape `check-day.ts`'s `reportRun` asserts,
+ * plus `assertReadingBounds` above: every connection brackets exactly one
+ * `begin` and one `commit`, never a `rollback`, never a second one of
+ * either; at most one type-fetch statement per connection, none at all on a
+ * warm run; the application statements, net of that bracket and of any
+ * legitimate type-fetch, total exactly four — asserted on the cold run too;
+ * only when `isWarm`, the two windows overlap in wall-clock time; and the
+ * reading statement's own `from`/`to` bounds each name the goal's row.
+ */
+function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
+  const groups = [...groupByConnection(calls).entries()].map(([connection, groupCalls]) =>
+    analyzeGroup(connection, groupCalls),
+  );
+
+  const totalApplication = groups.reduce((sum, group) => sum + group.applicationCount, 0);
+  const totalTypeFetch = groups.reduce((sum, group) => sum + group.typeFetchCount, 0);
+
+  console.log(
+    `\n${label} run — ${calls.length} statement(s) on the wire across ${groups.length} connection(s), ` +
+      `${totalApplication} application statement(s), ${totalTypeFetch} type-fetch statement(s)`,
+  );
+  for (const group of groups) {
+    console.log(
+      `  ${group.label.padEnd(8)} cid=${group.connection} ` +
+        `${new Date(group.window.start).toISOString()} -> ${new Date(group.window.end).toISOString()} ` +
+        `(${(group.window.end - group.window.start).toFixed(1)}ms), ` +
+        `begin=${group.beginCount} commit=${group.commitCount} rollback=${group.rollbackCount}, ` +
+        `application=${group.applicationCount}, type-fetch=${group.typeFetchCount}`,
+    );
+  }
+
+  const [a, b] = groups.map((group) => group.window);
+  const overlaps = a !== undefined && b !== undefined && Math.max(a.start, b.start) < Math.min(a.end, b.end);
+  const gapMs =
+    a !== undefined && b !== undefined
+      ? a.start <= b.start
+        ? b.start - a.end
+        : a.start - b.end
+      : NaN;
+  console.log(`  overlap = ${overlaps}${overlaps ? "" : `, gap = ${gapMs.toFixed(1)}ms`}`);
+
+  const badBrackets = groups.filter((group) => !group.bracketOk);
+  assert(
+    `${label} run's connections bracket exactly one begin and one commit, no rollback`,
+    badBrackets.length === 0,
+    badBrackets.length === 0
+      ? `${groups.length} connection(s), each begin=1 commit=1 rollback=0`
+      : badBrackets
+          .map(
+            (group) =>
+              `cid=${group.connection} (${group.label}) begin=${group.beginCount} commit=${group.commitCount} rollback=${group.rollbackCount}`,
+          )
+          .join("; "),
+  );
+
+  const overCapped = groups.filter((group) => group.typeFetchCount > 1);
+  assert(
+    `${label} run's connections send at most one type-fetch statement each`,
+    overCapped.length === 0,
+    overCapped.length === 0
+      ? `${groups.length} connection(s), each type-fetch <= 1`
+      : overCapped.map((group) => `cid=${group.connection} (${group.label}) type-fetch=${group.typeFetchCount}`).join("; "),
+  );
+
+  if (isWarm) {
+    const unexpectedTypeFetch = groups.filter((group) => group.typeFetchCount > 0);
+    assert(
+      `${label} run's connections send no type-fetch statement`,
+      unexpectedTypeFetch.length === 0,
+      unexpectedTypeFetch.length === 0
+        ? `${groups.length} connection(s), each type-fetch = 0`
+        : unexpectedTypeFetch
+            .map((group) => `cid=${group.connection} (${group.label}) type-fetch=${group.typeFetchCount}`)
+            .join("; "),
+    );
+  }
+
+  assert(
+    `${label} run issues four application statements, no more`,
+    totalApplication === 4,
+    `${totalApplication} application statement(s) of ${calls.length} on the wire, ${totalTypeFetch} netted out as type-fetch`,
+  );
+
+  if (isWarm) {
+    assert(
+      `${label} run's two transactions overlap in wall-clock time`,
+      overlaps,
+      overlaps ? "the second starts before the first ends" : `no overlap, gap = ${gapMs.toFixed(1)}ms`,
+    );
+  }
+
+  assertReadingBounds(label, calls);
+}
+
+// Whole civil days added to a `YYYY-MM-DD` string, by midday UTC — the same
+// technique `seed-goal.ts` and `lib/zone.ts`'s own `weekOf` use.
+function addDays(day: string, days: number): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
+}
+
+// The declared half of `measureTotal`: a real fact, written through
+// `declareFact` like any other, never a row this file inserts by hand.
+const DECLARED_QUANTITY = 7;
+
+/**
+ * A goal measured in one unit ("searches") by two commitments at once, both
+ * active: a quantity commitment carrying one real declared fact, and an
+ * evidence commitment naming the same unit. Retiring the quantity commitment
+ * used to be how this fixture forced `declaredTotal` to zero — which is
+ * exactly the value a mutation that zeroes `declaredTotal` whenever evidence
+ * is unreadable can also produce, so the validator's own assertion could
+ * never tell the two apart. Keeping the quantity commitment active, with a
+ * nonzero fact, is what makes the degraded child's declared total (7) a
+ * number that mutation cannot fake. Never a raw INSERT: `createGoal`,
+ * `addCommitment` and `declareFact` are the same three actions a person's
+ * own screen drives.
+ */
+async function seedMixedMeasureGoal(): Promise<string> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const today = todayInZone();
+  const goal = await createGoal({
+    name: "check-goal.ts probe — medida mixta",
+    horizon: addDays(today, 30),
+  });
+  if (!goal.ok) throw new Error(`createGoal: ${goal.error}`);
+
+  const counter = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-goal.ts probe — contador manual",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 1,
+    unit: "searches",
+  });
+  if (!counter.ok) throw new Error(`addCommitment(counter): ${counter.error}`);
+
+  const fact = await declareFact({ commitmentId: counter.commitmentId, quantity: DECLARED_QUANTITY });
+  if (!fact.ok) throw new Error(`declareFact: ${fact.error}`);
+
+  const evidence = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-goal.ts probe — evidencia de lectura",
+    cadenceKind: "daily",
+    satisfaction: "evidence",
+    sourceKey: "reading_lookups",
+    threshold: 1,
+  });
+  if (!evidence.ok) throw new Error(`addCommitment(evidence): ${evidence.error}`);
+
+  return goal.goalId;
+}
+
+const CHILD_MARKER = "CHILD_JSON ";
+
+type ChildResult = { evidence: string; measureTotal: number; measureUnit: string | null };
+
+/**
+ * The child's own report: the goals connection's usual bracket, the reading
+ * connection's own (a normal commit for `stub`, a rollback for `degraded` —
+ * `sql.begin` answers a thrown callback with `rollback`, never `commit`,
+ * `node_modules/postgres/src/index.js`'s own `begin()`), and the total
+ * application-statement count — never left uncounted the way independent
+ * validation found `check-day.ts`'s own degraded child once did.
+ */
+function reportChildRun(label: string, calls: DebugCall[], expectReadingCommit: boolean): void {
+  const groups = [...groupByConnection(calls).entries()].map(([connection, groupCalls]) =>
+    analyzeGroup(connection, groupCalls),
+  );
+  const totalApplication = groups.reduce((sum, group) => sum + group.applicationCount, 0);
+
+  console.log(
+    `\n${label} child's own wire — ${calls.length} statement(s) across ${groups.length} connection(s), ` +
+      `${totalApplication} application statement(s)`,
+  );
+  for (const group of groups) {
+    console.log(
+      `  ${group.label.padEnd(8)} cid=${group.connection} begin=${group.beginCount} commit=${group.commitCount} ` +
+        `rollback=${group.rollbackCount}, application=${group.applicationCount}, type-fetch=${group.typeFetchCount}`,
+    );
+  }
+
+  const overCapped = groups.filter((group) => group.typeFetchCount > 1);
+  assert(
+    `${label} child's connections send at most one type-fetch statement each`,
+    overCapped.length === 0,
+    overCapped.length === 0
+      ? `${groups.length} connection(s), each type-fetch <= 1`
+      : overCapped.map((group) => `cid=${group.connection} (${group.label}) type-fetch=${group.typeFetchCount}`).join("; "),
+  );
+
+  const goalsGroups = groups.filter((group) => group.label === "goals");
+  const readingGroups = groups.filter((group) => group.label === "reading");
+  assert(
+    `${label} child opens exactly one goals connection and one reading connection`,
+    groups.length === 2 && goalsGroups.length === 1 && readingGroups.length === 1,
+    `${groups.length} connection(s): ${groups.map((group) => group.label).join(", ") || "none"}`,
+  );
+
+  const goals = goalsGroups[0];
+  if (goals) {
+    assert(
+      `${label} child's goals connection brackets exactly one begin and one commit, no rollback`,
+      goals.beginCount === 1 && goals.commitCount === 1 && goals.rollbackCount === 0,
+      `begin=${goals.beginCount} commit=${goals.commitCount} rollback=${goals.rollbackCount}`,
+    );
+  }
+
+  const reading = readingGroups[0];
+  if (reading) {
+    const readingOk = expectReadingCommit
+      ? reading.beginCount === 1 && reading.commitCount === 1 && reading.rollbackCount === 0
+      : reading.beginCount === 1 && reading.commitCount === 0 && reading.rollbackCount === 1;
+    assert(
+      `${label} child's reading connection brackets exactly one begin and one ${expectReadingCommit ? "commit" : "rollback"}`,
+      readingOk,
+      `begin=${reading.beginCount} commit=${reading.commitCount} rollback=${reading.rollbackCount}`,
+    );
+  }
+
+  // Neither `stub` nor `degraded` ever lets the reader's own statement reach
+  // the wire (the whole `readReadingLookups` module is replaced before
+  // `loadGoal` ever imports it), so both children total the goals
+  // connection's two statements (settle, query) plus the reading
+  // connection's settle alone — one round trip cheaper than the four
+  // `reportRun` bounds a real reader to, and a fact this file measures
+  // rather than assumes.
+  const expectedTotal = 3;
+  assert(
+    `${label} child issues ${expectedTotal} application statements, no more`,
+    totalApplication === expectedTotal,
+    `${totalApplication} application statement(s) of ${calls.length} on the wire`,
+  );
+}
+
+async function runChild(mode: "stub" | "degraded", goalId: string): Promise<void> {
+  installStubs(loadCookies(), mode);
+
+  const { loadGoal } = await import("@/lib/queries/goal");
+
+  const start = wireCalls.length;
+  const view = await loadGoal(goalId);
+  reportChildRun(mode, wireCalls.slice(start), mode === "stub");
+
+  const result: ChildResult = {
+    evidence: view.evidence,
+    measureTotal: view.measureTotal,
+    measureUnit: view.measureUnit,
+  };
+  console.log(`${CHILD_MARKER}${JSON.stringify(result)}`);
+}
+
+function runChildProcess(mode: "stub" | "degraded", goalId: string): ChildResult {
+  let output: string;
+  try {
+    output = execFileSync(
+      process.execPath,
+      ["--import", "tsx", "--env-file=.env.local", "scripts/check-goal.ts", `--child=${mode}`, `--goal=${goalId}`],
+      { cwd: process.cwd(), env: process.env, encoding: "utf8" },
+    );
+  } catch (error) {
+    // The child's own PASS/FAIL lines are on its stdout, lost the moment
+    // `execFileSync` throws unless printed here — the only place a caller of
+    // this function still has them.
+    const execError = error as { stdout?: string; stderr?: string; message: string };
+    if (execError.stdout) console.log(execError.stdout);
+    if (execError.stderr) console.error(execError.stderr);
+    throw new Error(`${mode} child process failed: ${execError.message}`);
+  }
+  console.log(output);
+  const line = output.split("\n").find((row) => row.startsWith(CHILD_MARKER));
+  if (!line) throw new Error(`${mode} child printed no result:\n${output}`);
+  return JSON.parse(line.slice(CHILD_MARKER.length)) as ChildResult;
+}
+
+/**
+ * RP-14: a goal names one measure, set by "the first commitment that
+ * measures something" and never again. A second `quantity` commitment
+ * naming another unit must neither rename `goals.measure_name`/`measure_unit`
+ * nor make the goal's own total stop counting the first commitment's own
+ * facts — `measureOf` sums by unit, so a silent rename would zero a real
+ * declared history the moment a second measure is added. Built through
+ * `createGoal`, `addCommitment` and `declareFact` alone, the same doors a
+ * person's own screen uses; the measure columns are read back with one plain
+ * `select`, never through `addCommitment` again.
+ */
+async function runMeasureRenameCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { declareFact } = await import("@/app/actions/facts");
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const { withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const today = todayInZone();
+  const goal = await createGoal({
+    name: "check-goal.ts probe — RP-14 measure guard",
+    horizon: addDays(today, 30),
+  });
+  if (!goal.ok) throw new Error(`runMeasureRenameCheck: createGoal failed: ${goal.error}`);
+
+  const first = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-goal.ts probe — minutos",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 10,
+    unit: "min",
+  });
+  if (!first.ok) throw new Error(`runMeasureRenameCheck: addCommitment(first) failed: ${first.error}`);
+
+  const FIRST_QUANTITY = 5;
+  const fact = await declareFact({ commitmentId: first.commitmentId, quantity: FIRST_QUANTITY });
+  if (!fact.ok) throw new Error(`runMeasureRenameCheck: declareFact failed: ${fact.error}`);
+
+  const second = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-goal.ts probe — tarjetas",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 10,
+    unit: "cards",
+  });
+  if (!second.ok) throw new Error(`runMeasureRenameCheck: addCommitment(second) failed: ${second.error}`);
+
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ measure_name: string | null; measure_unit: string | null }>(
+      sql`select measure_name, measure_unit from "goals"."goals" where id = ${goal.goalId}`,
+    ),
+  );
+  assert(
+    "a goal's measure is named once, by its first quantity commitment, and a second one in another unit never renames it (RP-14)",
+    row?.measure_name === "check-goal.ts probe — minutos" && row?.measure_unit === "min",
+    `measure_name=${row?.measure_name} measure_unit=${row?.measure_unit}`,
+  );
+
+  const view = await loadGoal(goal.goalId);
+  assert(
+    "the goal's own total still counts the first commitment's own facts once a second commitment names another unit",
+    view.measureTotal === FIRST_QUANTITY && view.measureUnit === "min",
+    `measureTotal=${view.measureTotal} measureUnit=${view.measureUnit}`,
+  );
+}
+
+/**
+ * RP-15's own race, driven live 2026-09-27: two tabs submitting overlapping
+ * spans (1–4 and 2–5) on the same goal both landed under `READ COMMITTED`,
+ * each reading "no overlap yet" before either had committed. `addPhase`'s own
+ * `pg_advisory_xact_lock`, keyed on the goal's id and taken as the first
+ * statement of its transaction, serialises the two calls: the second blocks
+ * until the first commits, then re-reads the phases the first one just wrote
+ * and is refused. A fresh goal, created here and never reused, so no other
+ * lane's own phases can be in the way — `addPhase`'s overlap read is scoped
+ * to this `goalId` alone regardless.
+ */
+async function runPhaseOverlapRaceCheck(): Promise<void> {
+  const { addPhase, createGoal } = await import("@/app/actions/plan");
+
+  const goal = await createGoal({
+    name: "check-goal.ts probe — phase overlap race",
+    horizon: "2099-12-31",
+  });
+  if (!goal.ok) throw new Error(`runPhaseOverlapRaceCheck: createGoal failed: ${goal.error}`);
+
+  const [first, second] = await Promise.all([
+    addPhase({
+      goalId: goal.goalId,
+      aim: "race a",
+      startsOn: "2030-01-01",
+      endsOn: "2030-01-28",
+    }),
+    addPhase({
+      goalId: goal.goalId,
+      aim: "race b",
+      startsOn: "2030-01-08",
+      endsOn: "2030-02-04",
+    }),
+  ]);
+
+  const results = [first, second];
+  const landed = results.filter((result) => result.ok);
+  const refused = results.filter((result) => !result.ok);
+
+  assert(
+    "exactly one of two concurrent addPhase calls with overlapping spans lands on the same goal (RP-15)",
+    landed.length === 1 && refused.length === 1,
+    `results = ${JSON.stringify(results)}`,
+  );
+  assert(
+    "the refused call names the overlap, never a generic failure",
+    refused.length === 1 && !refused[0].ok && refused[0].error === "plan.errors.phaseOverlap",
+    `refused = ${JSON.stringify(refused[0])}`,
+  );
+}
+
+async function runMain(): Promise<void> {
+  installStubs(loadCookies(), "none");
+
+  const { loadGoal } = await import("@/lib/queries/goal");
+
+  const goalId = await seedMixedMeasureGoal();
+  console.log(`seeded goal ${goalId}`);
+
+  // First call: whatever the pool's connections happen to be, cold after
+  // this process's own startup. Its bracket, its type-fetch cap, its
+  // statement count and its reading bounds are asserted like any other run;
+  // only its overlap is not — the user's own decided note names the cold
+  // dial, never a free pass on the rest.
+  const coldStart = wireCalls.length;
+  const cold = await loadGoal(goalId);
+  const coldCalls = wireCalls.slice(coldStart);
+  reportRun("cold", coldCalls, false);
+  await assertBoundsResolveToGoalRow(goalId, coldCalls);
+
+  // Five consecutive warm calls, each bounded on its own — the same number
+  // `check-day.ts` settled on: a fix that only holds for the first couple of
+  // warm calls is a fix a later screen the same minute would still be
+  // paying for.
+  const WARM_CALLS = 5;
+  const warmResults: Awaited<ReturnType<typeof loadGoal>>[] = [];
+  for (let i = 1; i <= WARM_CALLS; i++) {
+    const start = wireCalls.length;
+    const result = await loadGoal(goalId);
+    reportRun(`warm-${i}`, wireCalls.slice(start), true);
+    warmResults.push(result);
+    assert(`the warm-${i} run reads the source`, result.evidence === "read", `evidence = ${result.evidence}`);
+  }
+
+  const coldCommitmentIds = cold.commitments.map((commitment) => commitment.id).sort();
+  const warmCommitmentIdLists = warmResults.map((result) => result.commitments.map((commitment) => commitment.id).sort());
+  assert(
+    "the cold and every warm run declare the same commitments",
+    warmCommitmentIdLists.every((ids) => JSON.stringify(ids) === JSON.stringify(coldCommitmentIds)),
+    `cold ${coldCommitmentIds.length} commitment(s); warm ${warmCommitmentIdLists.map((ids) => ids.length).join(", ")} commitment(s)`,
+  );
+
+  assert(
+    "against the real (empty) reading.lookups, the goal sums to its declared total alone, not zero and not undefined",
+    cold.measureTotal === DECLARED_QUANTITY && warmResults.every((result) => result.measureTotal === DECLARED_QUANTITY),
+    `expected ${DECLARED_QUANTITY}, cold=${cold.measureTotal} warm=[${warmResults.map((result) => result.measureTotal).join(", ")}]`,
+  );
+  assert(
+    "the goal's own measure unit is the evidence source's own unit",
+    cold.measureUnit === "searches",
+    `measureUnit = ${cold.measureUnit}`,
+  );
+
+  // The registry's reader replaced in a child process (module 28's own
+  // dispatch): proves the sum against known rows, since no harness identity
+  // on this database carries a real `reading.lookups` row to sum instead.
+  const stubExpected = DECLARED_QUANTITY + STUB_TOTAL;
+  const stub = runChildProcess("stub", goalId);
+  console.log(`\nstub run — evidence = ${stub.evidence}, measureTotal = ${stub.measureTotal}`);
+  assert("the stub run reads the source", stub.evidence === "read", `evidence = ${stub.evidence}`);
+  assert(
+    "a goal measured by both a declared fact and an evidence commitment sums the two, not either alone",
+    stub.measureTotal === stubExpected,
+    `expected ${stubExpected} (${DECLARED_QUANTITY} declared + ${STUB_TOTAL} evidence: ${STUB_QUANTITIES.join("+")}), got ${stub.measureTotal}`,
+  );
+
+  const degraded = runChildProcess("degraded", goalId);
+  console.log(`\ndegraded run — evidence = ${degraded.evidence}, measureTotal = ${degraded.measureTotal}`);
+  assert(
+    "the degraded run reports the source unreadable, never throws",
+    degraded.evidence === "unreadable",
+    `evidence = ${degraded.evidence}`,
+  );
+  assert(
+    "the degraded run still returns the goal, with its declared total alone, never zeroed by the source's own failure",
+    degraded.measureTotal === DECLARED_QUANTITY,
+    `expected ${DECLARED_QUANTITY} (the declared fact alone), got ${degraded.measureTotal}`,
+  );
+
+  await runMeasureRenameCheck();
+  await runPhaseOverlapRaceCheck();
+
+  console.log("");
+  console.log(failed ? "REPORT  failed" : "REPORT  passed");
+  process.exit(failed ? 1 : 0);
+}
+
+void (async () => {
+  try {
+    const childArg = process.argv.find((arg) => arg.startsWith("--child="));
+    const goalArg = process.argv.find((arg) => arg.startsWith("--goal="));
+    if (childArg) {
+      const mode = childArg.slice("--child=".length) as "stub" | "degraded";
+      const goalId = goalArg?.slice("--goal=".length);
+      if (!goalId) throw new Error("--child needs --goal=<id>");
+      await runChild(mode, goalId);
+      // `failed` is this process's own — a fresh process per run, so this
+      // reads only what `reportChildRun` just asserted, nothing carried
+      // over from a previous invocation.
+      process.exit(failed ? 1 : 0);
+    } else {
+      await runMain();
+    }
+  } catch (error) {
+    console.error(`FAILED  ${(error as Error).message}`);
+    process.exit(1);
+  }
+})();
