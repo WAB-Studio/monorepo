@@ -4,7 +4,7 @@ import { Page, SectionLabel, Text } from "@/components/ui";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
-import { todayInZone } from "@/lib/zone";
+import { civilDateToDate, todayInZone } from "@/lib/zone";
 
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
@@ -12,6 +12,20 @@ import { EmptyDay } from "./empty-day";
 import { EvidenceNote } from "./evidence-note";
 import { NewOneOff } from "./new-one-off";
 import { OneOffRow } from "./one-off-row";
+
+type Translate = Awaited<ReturnType<typeof getTranslations>>;
+
+// Monday first, as `day.weekdayLong` lists them; `getUTCDay` is 0 for Sunday.
+function weekdayOf(day: string, t: Translate): string {
+  const names = t.raw("day.weekdayLong") as string[];
+  return names[(civilDateToDate(day).getUTCDay() + 6) % 7];
+}
+
+// «sábado 19» without a month: a carried one-off names a day inside the last
+// week, where the weekday already tells it apart.
+function shortDayParts(day: string, t: Translate) {
+  return { weekday: weekdayOf(day, t), day: civilDateToDate(day).getUTCDate() };
+}
 
 /**
  * Opens the app on today (RP-01): no tap, no choice, no screen before it —
@@ -30,7 +44,8 @@ import { OneOffRow } from "./one-off-row";
  * one the same way. A one-off that belongs to nothing draws in its own
  * "Sueltas" group below the last goal, with the field that writes one of
  * those — permanently visible either way, never behind a control that
- * reveals it (`one-off-row.tsx`, `new-one-off.tsx`).
+ * reveals it (`one-off-row.tsx`, `new-one-off.tsx`). A one-off undone since
+ * an earlier day rides first, naming the day it was meant for.
  */
 export async function DayScreen() {
   const t = await getTranslations();
@@ -39,6 +54,26 @@ export async function DayScreen() {
     await loadDay(day);
 
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
+
+  // Stable: within each kind, `loadDay`'s own creation order stands.
+  const carriedFirst = [...oneOffs].sort(
+    (a, b) => Number(!isCarried(a, day)) - Number(!isCarried(b, day)),
+  );
+
+  function oneOffRow(oneOff: OneOffSummary) {
+    return (
+      <OneOffRow
+        key={oneOff.id}
+        oneOffId={oneOff.id}
+        name={oneOff.name}
+        carriedFrom={
+          isCarried(oneOff, day)
+            ? t("day.oneOffs.carriedFrom", shortDayParts(oneOff.day, t))
+            : undefined
+        }
+      />
+    );
+  }
 
   return (
     <Page>
@@ -96,11 +131,7 @@ export async function DayScreen() {
                     />
                   );
                 })}
-                {oneOffs
-                  .filter((oneOff): oneOff is OneOffSummary => oneOff.goalId === goal.id)
-                  .map((oneOff) => (
-                    <OneOffRow key={oneOff.id} oneOffId={oneOff.id} name={oneOff.name} />
-                  ))}
+                {carriedFirst.filter((oneOff) => oneOff.goalId === goal.id).map(oneOffRow)}
                 <NewOneOff goalId={goal.id} />
               </section>
             );
@@ -113,13 +144,15 @@ export async function DayScreen() {
           no goal open yet, because RP-19 asks for no goal behind it either. */}
       <section>
         <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
-        {oneOffs
-          .filter((oneOff) => oneOff.goalId === null)
-          .map((oneOff) => (
-            <OneOffRow key={oneOff.id} oneOffId={oneOff.id} name={oneOff.name} />
-          ))}
+        {carriedFirst.filter((oneOff) => oneOff.goalId === null).map(oneOffRow)}
         <NewOneOff />
       </section>
     </Page>
   );
+}
+
+// A one-off meant for a day before the one drawn, still undone (RP-19):
+// `loadDay` carries it with its own `day`, never clamped to today's.
+function isCarried(oneOff: OneOffSummary, day: string): oneOff is OneOffSummary & { day: string } {
+  return oneOff.day !== null && oneOff.day < day;
 }

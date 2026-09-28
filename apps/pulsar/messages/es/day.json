@@ -1,5 +1,6 @@
 {
   "title": "Hoy",
+  "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
   "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
   "theme": {
     "toLight": "Cambiar a modo claro",
@@ -17,7 +18,8 @@
       "description": "No llegó a pasar nada, así que no queda nada de ella. Si ya la hiciste, márcala hecha en vez de borrarla: eso sí deja constancia.",
       "confirm": "Borrarla",
       "cancel": "Dejarla"
-    }
+    },
+    "carriedFrom": "del {weekday} {day}"
   },
   "newOneOff": {
     "label": "Algo suelto",
