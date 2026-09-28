@@ -28,4 +28,10 @@
     margin-inline: auto;
     width: 100%;
   }
+
+  /* The review alone (RP-17): `RevisionEscritorio.dc.html` draws 1020px, past
+     every other screen's 640px cap. */
+  .page.wide {
+    max-width: 1020px;
+  }
 }
