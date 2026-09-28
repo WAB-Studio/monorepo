@@ -681,6 +681,7 @@ async function runChild(mode: "stub" | "degraded", goalId: string): Promise<void
   const start = wireCalls.length;
   const view = await loadGoal(goalId);
   reportChildRun(mode, wireCalls.slice(start), mode === "stub");
+  if (!view) throw new Error(`runChild: loadGoal(${goalId}) returned null — the seeded goal is gone`);
 
   const result: ChildResult = {
     evidence: view.evidence,
@@ -774,6 +775,7 @@ async function runMeasureRenameCheck(): Promise<void> {
   );
 
   const view = await loadGoal(goal.goalId);
+  if (!view) throw new Error(`runMeasureRenameCheck: loadGoal(${goal.goalId}) returned null — the seeded goal is gone`);
   assert(
     "the goal's own total still counts the first commitment's own facts once a second commitment names another unit",
     view.measureTotal === FIRST_QUANTITY && view.measureUnit === "min",
@@ -850,17 +852,19 @@ async function runMain(): Promise<void> {
   const coldCalls = wireCalls.slice(coldStart);
   reportRun("cold", coldCalls, false);
   await assertBoundsResolveToGoalRow(goalId, coldCalls);
+  if (!cold) throw new Error(`runMain: loadGoal(${goalId}) returned null on the cold call — the seeded goal is gone`);
 
   // Five consecutive warm calls, each bounded on its own — the same number
   // `check-day.ts` settled on: a fix that only holds for the first couple of
   // warm calls is a fix a later screen the same minute would still be
   // paying for.
   const WARM_CALLS = 5;
-  const warmResults: Awaited<ReturnType<typeof loadGoal>>[] = [];
+  const warmResults: NonNullable<Awaited<ReturnType<typeof loadGoal>>>[] = [];
   for (let i = 1; i <= WARM_CALLS; i++) {
     const start = wireCalls.length;
     const result = await loadGoal(goalId);
     reportRun(`warm-${i}`, wireCalls.slice(start), true);
+    if (!result) throw new Error(`runMain: loadGoal(${goalId}) returned null on warm-${i} — the seeded goal is gone`);
     warmResults.push(result);
     assert(`the warm-${i} run reads the source`, result.evidence === "read", `evidence = ${result.evidence}`);
   }

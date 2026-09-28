@@ -13,3 +13,10 @@ const READERS: Record<string, EvidenceReader> = {
 export function readerFor(key: string): EvidenceReader | null {
   return READERS[key] ?? null;
 }
+
+// Every key a day, week or goal query has to fan `withReadingDb` out over,
+// in the order `READERS` declares them — the one list RNP-10 lets a second
+// source cost, instead of a copy edited in each of the three query files.
+export function knownSourceKeys(): readonly string[] {
+  return Object.keys(READERS);
+}

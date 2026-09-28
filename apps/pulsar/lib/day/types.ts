@@ -81,3 +81,16 @@ export type WeekView = {
   start: string;
   days: DayView[];
 };
+
+// One row of a goal's own review (RP-17): the week's 1-based index counted
+// from the goal's own opening, its span, its measure's total over that span
+// — `0` for a week with nothing, never absent (RP-16's gap, carried here) —
+// the phase it fell in, and whether it is the week holding `today`.
+export type ReviewWeek = {
+  index: number;
+  startsOn: string;
+  endsOn: string;
+  total: number;
+  phaseName: string | null;
+  current: boolean;
+};
