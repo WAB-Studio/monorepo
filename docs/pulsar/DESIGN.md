@@ -395,3 +395,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   undo toast and over leaving it.
 - **A goal's horizon can be moved from the goal screen**, which keeps «Se puede mover después» true.
   Not built yet; no board draws it. Decided by the user 2026-09-28, over changing the copy.
+- **A one-off's field takes a day, today by default.** One gesture still writes it for today; the
+  person may pick «mañana», a date, or «sin día», and a dayless one waits in its own list (RP-21).
+  Not built yet; no board draws it. Decided by the user 2026-09-28, over one-offs for today only.
+- **The seventh day back says why there is no step further.** One line from the catalogue; the limit
+  stays `PAST_DAY_LIMIT` = 7. Not built yet. Decided by the user 2026-09-28, over widening it to 14 or 30.
+- **The cadences take bounds a person means:** at most 7 times a week and every 365 days at most, and
+  the message says so. A commitment already stored outside them still reads. Not built yet. Decided
+  by the user 2026-09-28, over keeping 1 to 1 000.
+- **RP-17 is kept through the move to Monday–Sunday weeks.** Its text stays true; the change lives in
+  the decision above. Decided by the user 2026-09-28, over retiring it for a new code.
