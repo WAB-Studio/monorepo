@@ -361,6 +361,36 @@ jobs:
 
       - run: npm run check:e2e -w apps/pulsar
 
+      # The reaper lives in `apps/orbit` — `harness.identities` and
+      # `harness.runs` carry no app column, so the one script that owns
+      # tearing a dead run down reaches a pulsar-minted row exactly as it
+      # reaches its own. It reads its own `.env.local`, not pulsar's; the
+      # only variable its own import chain reaches through `process.env` is
+      # `DATABASE_URL` (`apps/orbit/scripts/harness/fixtures.ts`), already
+      # named present by this job's own secret check above.
+      - name: Write apps/orbit/.env.local for the reaper
+        working-directory: apps/orbit
+        run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env.local
+
+      # Same reasoning and the same BLOCKED handling as orbit's own `e2e`
+      # job's step of the same name — copied in behaviour, not repeated.
+      - name: Reap orphaned harness data
+        if: always()
+        run: |
+          set +e
+          npm run harness:reap -w apps/orbit -- --yes 2>&1 | tee /tmp/harness-reap.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if grep -q '^BLOCKED' /tmp/harness-reap.log; then
+            echo "::warning::harness:reap was blocked by a live run elsewhere; nothing reaped this run"
+            exit 0
+          fi
+          echo "::error::harness:reap failed for a reason other than a live run blocking it"
+          exit "$status"
+
       - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v5
