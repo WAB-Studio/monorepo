@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
+import { todayInZone } from "@/lib/zone";
 
 async function deleteOneOffsByName(db: postgres.Sql, personId: string, name: string): Promise<void> {
   const rows = await db<{ id: string }[]>`
@@ -42,9 +43,11 @@ test("the field at the foot of the day adds a one-off with no dialog and no navi
     expect(dialogFired).toBe(false);
     expect(page.url()).toBe(startingUrl);
 
+    // `todayInZone()`, never `current_date`: the field writes the Bogotá
+    // civil day, and `current_date` renders in the session's own zone (UTC).
     const rows = await db<{ id: string }[]>`
       select id from goals.one_offs
-      where user_id = ${personId} and name = ${name} and day = current_date
+      where user_id = ${personId} and name = ${name} and day = ${todayInZone()}::date
     `;
     expect(rows).toHaveLength(1);
   } finally {

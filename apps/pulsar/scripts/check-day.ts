@@ -146,6 +146,30 @@ function isTypeFetchText(query: string): boolean {
   return query.replace(/\s+/g, " ").trim().toLowerCase() === TYPE_FETCH_QUERY_TEXT;
 }
 
+// The UTC instant that reads as `hour:minute` in `zone` on `day` — read off
+// `Intl`'s own offset for that day (`timeZoneName: "longOffset"`, e.g.
+// "GMT-05:00"), never a hardcoded "-05:00": the same authority `lib/zone.ts`
+// already defers every civil-day render to. One pass is exact for a zone
+// whose offset does not move within a day, which is all this ever asks of it.
+function instantAtLocalTime(day: string, hour: number, minute: number, zone: string): Date {
+  const offsetText = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    timeZoneName: "longOffset",
+  })
+    .formatToParts(new Date(`${day}T12:00:00Z`))
+    .find((part) => part.type === "timeZoneName")?.value;
+
+  const match = offsetText ? /^GMT([+-])(\d{2}):(\d{2})$/.exec(offsetText) : null;
+  if (!match) throw new Error(`instantAtLocalTime: unreadable offset "${offsetText}" for ${zone}`);
+  const [, sign, offsetHours, offsetMinutes] = match;
+  const offsetMinutesTotal =
+    (sign === "-" ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes));
+
+  const instant = new Date(`${day}T00:00:00Z`);
+  instant.setUTCMinutes(instant.getUTCMinutes() + hour * 60 + minute - offsetMinutesTotal);
+  return instant;
+}
+
 // The settle statement's third `set_config` argument is the search path
 // `withGoalsDb`/`withReadingDb` chose (`lib/session.ts`) — read from
 // `parameters`, not guessed from the query text, which carries `$1`/`$2`/`$3`
@@ -434,6 +458,167 @@ function runDegradedChildProcess(): DegradedResult {
   return JSON.parse(line.slice(DEGRADED_MARKER.length)) as DegradedResult;
 }
 
+// `ZONE_TEST_DAY` (a Sunday) and `ZONE_NEXT_DAY` (the Monday right after it,
+// so it is also that week's own `weekStart`) are years before any date the
+// rest of this file ever asks for — retired, this row can never resurface in
+// the cold/warm/degraded assertions above, which all ask for `today` alone,
+// and neither `goals` nor `commitments` grant a DELETE at all, so it is never
+// cleaned up; picked once, reused by every run of this suite.
+const ZONE_TEST_DAY = "2019-11-03";
+const ZONE_NEXT_DAY = "2019-11-04";
+
+/**
+ * Proves `lib/queries/day.ts`'s and `lib/queries/week.ts`'s own `retired_at`
+ * filter reads the person's civil day, not the session's (UTC): a commitment
+ * retired at 23:30 in `TIME_ZONE` on `ZONE_TEST_DAY` is 04:30 UTC on
+ * `ZONE_NEXT_DAY` — a bare `retired_at::date` renders that as `ZONE_NEXT_DAY`
+ * already, one day early.
+ *
+ * `loadDay` proves the day-level filter: `ZONE_TEST_DAY >= ZONE_TEST_DAY`
+ * passes either way, so the defect never shows there — it is `ZONE_NEXT_DAY`
+ * where a bare cast wrongly keeps `retired_at::date (= ZONE_NEXT_DAY) >=
+ * ZONE_NEXT_DAY` true, asking one day too many.
+ *
+ * `loadWeek` proves the coarser week-level filter at its own `weekStart`
+ * (`ZONE_NEXT_DAY` here, a Monday): retired the Sunday before its week
+ * begins, the commitment must never enter that week's set at all. A bare
+ * cast renders `retired_at::date` as `ZONE_NEXT_DAY` too, so
+ * `>= weekStart` wrongly passes and the row rides into every day `deriveWeek`
+ * derives, `asksOn`'s own retirement check included — that check compares a
+ * civil day against `plan.retiredAt`'s full timestamp string and does not
+ * block a `daily` cadence here, so the leak reaches `view.days` as a slot on
+ * `ZONE_NEXT_DAY` itself under the bug, and never gets that far under the fix.
+ *
+ * Built through the app's own doors (`createGoal`, `addCommitment`) and one
+ * raw `UPDATE` for the one column their grant ever lets move afterward
+ * (`GRANT UPDATE (retired_at)`, `db/migrations/0000_mighty_pet_avengers.sql`)
+ * — never a privileged connection.
+ */
+async function runZoneCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { TIME_ZONE } = await import("@/lib/zone");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runZoneCheck: no verified session");
+
+  const goal = await createGoal({ name: "check-day zone probe", horizon: "2019-12-31" });
+  if (!goal.ok) throw new Error(`runZoneCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day zone probe",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!commitment.ok) throw new Error(`runZoneCheck: addCommitment failed: ${commitment.error}`);
+  const testId = commitment.commitmentId;
+
+  const retiredAt = instantAtLocalTime(ZONE_TEST_DAY, 23, 30, TIME_ZONE);
+  await withGoalsDb((tx) =>
+    tx.execute(
+      sql`update "goals"."commitments" set retired_at = ${retiredAt.toISOString()}::timestamptz where id = ${testId}`,
+    ),
+  );
+
+  const onRetirementDay = await loadDay(ZONE_TEST_DAY);
+  const dayAfter = await loadDay(ZONE_NEXT_DAY);
+  const presentOn = onRetirementDay.commitments.some((row) => row.id === testId);
+  const presentAfter = dayAfter.commitments.some((row) => row.id === testId);
+  assert(
+    "loadDay still asks for a commitment on the civil day it was retired",
+    presentOn,
+    `commitment ${presentOn ? "present" : "absent"} in loadDay("${ZONE_TEST_DAY}")`,
+  );
+  assert(
+    "loadDay stops asking for it the very next civil day",
+    !presentAfter,
+    `commitment ${presentAfter ? "present" : "absent"} in loadDay("${ZONE_NEXT_DAY}")`,
+  );
+
+  const week = await loadWeek(ZONE_NEXT_DAY);
+  const weekStartDay = week.view.days.find((day) => day.day === ZONE_NEXT_DAY);
+  if (!weekStartDay) throw new Error(`runZoneCheck: loadWeek derived no day "${ZONE_NEXT_DAY}"`);
+  const presentInWeek = weekStartDay.slots.some((slot) => slot.commitmentId === testId);
+  assert(
+    "loadWeek never admits a commitment retired the civil day before its week starts",
+    !presentInWeek,
+    `commitment ${presentInWeek ? "present" : "absent"} on loadWeek("${ZONE_NEXT_DAY}")'s own "${ZONE_NEXT_DAY}"`,
+  );
+}
+
+// A Wednesday in the same week `runZoneCheck` already uses (Monday
+// `ZONE_NEXT_DAY` .. Sunday), so `loadWeek` derives the same seven days from
+// a single fresh call, no new commitment span to reason about.
+const CADENCE_ZONE_WEDNESDAY = "2019-11-06";
+
+/**
+ * Proves `lib/day/cadence.ts`'s own `asksOn`, never `lib/queries/week.ts`'s
+ * SQL filter: retired mid-week, this commitment is `>= weekStart` regardless
+ * of which zone `retired_at::date` renders in, so it always rides into
+ * `deriveWeek`'s raw commitments set — round 1's fix does not touch this
+ * case at all. What used to decide Thursday–Sunday was `asksOn`'s own bare
+ * `day > plan.retiredAt` — a civil-date string compared lexically against a
+ * full ISO instant, which a Thursday date string reads as "not yet retired"
+ * for exactly the reason `lib/queries/day.ts` did: the instant's own UTC
+ * render lands on Thursday, and a bare compare never looks past that.
+ */
+async function runCadenceZoneCheck(): Promise<void> {
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { TIME_ZONE } = await import("@/lib/zone");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runCadenceZoneCheck: no verified session");
+
+  const goal = await createGoal({ name: "check-day cadence zone probe", horizon: "2019-12-31" });
+  if (!goal.ok) throw new Error(`runCadenceZoneCheck: createGoal failed: ${goal.error}`);
+
+  const commitment = await addCommitment({
+    goalId: goal.goalId,
+    name: "check-day cadence zone probe",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!commitment.ok) {
+    throw new Error(`runCadenceZoneCheck: addCommitment failed: ${commitment.error}`);
+  }
+  const testId = commitment.commitmentId;
+
+  const retiredAt = instantAtLocalTime(CADENCE_ZONE_WEDNESDAY, 23, 30, TIME_ZONE);
+  await withGoalsDb((tx) =>
+    tx.execute(
+      sql`update "goals"."commitments" set retired_at = ${retiredAt.toISOString()}::timestamptz where id = ${testId}`,
+    ),
+  );
+
+  const week = await loadWeek(CADENCE_ZONE_WEDNESDAY);
+  const askedDays = new Set(
+    week.view.days
+      .filter((day) => day.slots.some((slot) => slot.commitmentId === testId))
+      .map((day) => day.day),
+  );
+
+  assert(
+    "loadWeek still asks on the Wednesday a commitment was retired at 23:30 Bogotá",
+    askedDays.has(CADENCE_ZONE_WEDNESDAY),
+    `asked days: [${[...askedDays].join(", ")}]`,
+  );
+  const daysAfter = week.view.days
+    .map((day) => day.day)
+    .filter((day) => day > CADENCE_ZONE_WEDNESDAY);
+  assert(
+    "loadWeek asks on no day from Thursday through Sunday of that same week",
+    daysAfter.every((day) => !askedDays.has(day)),
+    `asked days: [${[...askedDays].join(", ")}], days after Wednesday: [${daysAfter.join(", ")}]`,
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -491,6 +676,9 @@ async function runMain(): Promise<void> {
     JSON.stringify(degraded.slotIds) === JSON.stringify(lastWarmSlotIds),
     `undegraded ${lastWarmSlotIds.length} slot(s), degraded ${degraded.slotIds.length} slot(s)`,
   );
+
+  await runZoneCheck();
+  await runCadenceZoneCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

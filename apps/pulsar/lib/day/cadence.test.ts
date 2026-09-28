@@ -149,3 +149,17 @@ test("a week already lived keeps its shape: each day is judged against its own d
   assert.equal(asksOn(p, "2026-03-09", []), true, "Monday, before retirement");
   assert.equal(asksOn(p, "2026-03-11", []), false, "Wednesday, after retirement");
 });
+
+// --- an evening retirement is still the retirement's own civil day, not UTC's ---
+
+test("retired at 23:30 Bogotá on a Wednesday still asks that Wednesday and stops asking Thursday", () => {
+  // 2026-03-04 is a Wednesday (`weekMondayToSunday` above); 23:30 in
+  // `America/Bogota` (UTC-5) on that day is 04:30 UTC the *next* day —
+  // exactly the shape `to_jsonb` hands back for a `timestamptz` column, and
+  // exactly the instant a bare `day > plan.retiredAt` string compare reads
+  // as "not yet retired" all the way through Thursday, the defect
+  // `lib/queries/day.ts`'s own SQL filter carried before its own fix.
+  const p = plan({ cadence: { kind: "daily" }, retiredAt: "2026-03-05T04:30:00Z" });
+  assert.equal(asksOn(p, "2026-03-04", []), true, "Wednesday, the day it was retired");
+  assert.equal(asksOn(p, "2026-03-05", []), false, "Thursday, the very next civil day");
+});
