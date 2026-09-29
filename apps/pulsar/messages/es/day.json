@@ -17,7 +17,10 @@
       "nada", "uno", "dos", "tres", "cuatro", "cinco", "seis",
       "siete", "ocho", "nueve", "diez", "once", "doce"
     ],
-    "writtenOn": "anotado el {weekday} {day}"
+    "writtenOn": "anotado el {weekday} {day}",
+    "nothingTitle": "Ese día no pedía nada",
+    "startedOn": "{goal} empezó el {weekday} {day}",
+    "limit": "Siete días atrás es lo más lejos que se anota."
   },
   "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
   "unreadableEvidencePast": "No pudimos leer una fuente. Lo que declaraste ese día sigue aquí.",
@@ -38,11 +41,27 @@
       "confirm": "Borrarla",
       "cancel": "Dejarla"
     },
-    "carriedFrom": "del {weekday} {day}"
+    "carriedFrom": "del {weekday} {day}",
+    "daylessLink": "{count} sin día"
+  },
+  "doneOneOffs": {
+    "title": "Hechas hoy",
+    "undoLabel": "Deshacer: {name}"
+  },
+  "choice": {
+    "label": "Para cuándo",
+    "today": "hoy",
+    "tomorrow": "mañana",
+    "other": "otro día",
+    "none": "sin día",
+    "dateLabel": "qué día"
   },
   "newOneOff": {
     "label": "Algo suelto",
-    "placeholder": "Escribe algo suelto..."
+    "placeholder": "Escribe algo suelto...",
+    "savedNone": "Anotada sin día: espera en «{count} sin día».",
+    "savedTomorrow": "Anotada para mañana, {weekday} {day}.",
+    "savedOther": "Anotada para el {weekday} {day}."
   },
   "quantitySheet": {
     "question": "¿Cuánto hiciste hoy?",
@@ -75,6 +94,7 @@
     "oneOffNameEmpty": "Escribe qué es lo suelto.",
     "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
     "oneOffDayInvalid": "Ese día no es válido.",
+    "oneOffDayPast": "Ese día ya pasó. Elige hoy o uno por venir.",
     "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra.",
     "dayInvalid": "Ese día no es válido.",
     "dayFuture": "Ese día todavía no llega.",

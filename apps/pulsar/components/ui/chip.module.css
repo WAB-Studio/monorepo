@@ -25,6 +25,25 @@
   padding: 0 16px;
 }
 
+/* A choice among a few, set in mono (`HoySueltaDia.dc.html`): a pill 40px tall
+   with a full radius. */
+.choice {
+  min-block-size: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  border-width: 1.5px;
+  border-color: var(--pulsar-border);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.choice.selected {
+  background: var(--pulsar-accent-soft);
+  border-color: var(--pulsar-accent);
+  color: var(--pulsar-ink);
+}
+
 /* One of seven in a row. At 360px the page leaves a 320px column, so seven of
    these take 308 and the row that holds them has 12px to spend on gaps: 2px
    between chips, and no more. Never shrinks below its floor — a row with a

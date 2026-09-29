@@ -6,13 +6,19 @@ import { useTranslations } from "next-intl";
 import { createOneOff } from "@/app/actions/one-offs";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { Field, Flex, Mark, Text } from "@/components/ui";
-import { todayInZone } from "@/lib/zone";
+import { civilDateToDate, todayInZone } from "@/lib/zone";
+
+import { DayChoice } from "./day-choice";
+import { DEFAULT_DAY_CHOICE, dayForChoice, type DayChoiceValue } from "./day-for-choice";
 
 export type NewOneOffProps = {
   // Absent, the one-off written here belongs to nothing (RP-20); given, it is
   // written from that goal's own group, the same gesture either way — there
   // is no second form for the goal-scoped case.
   goalId?: string;
+  // The dayless one-offs the person holds, so a write with no day can say
+  // which number it just raised.
+  daylessCount?: number;
 };
 
 /**
@@ -21,12 +27,31 @@ export type NewOneOffProps = {
  * sheet and no screen of its own (docs/pulsar/DESIGN.md "Decisions taken
  * here"). The mark beside it is the design's one dashed stroke, drawn empty
  * because this is the one row nothing has written yet.
+ *
+ * Once there is a name, «para cuándo» appears under it: today is already
+ * chosen, so Enter alone still writes today. A one-off written for another
+ * day, or none, does not draw on Hoy, so the field says where it went.
  */
-export function NewOneOff({ goalId }: NewOneOffProps) {
+export function NewOneOff({ goalId, daylessCount = 0 }: NewOneOffProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
+  const [choice, setChoice] = useState<DayChoiceValue>(DEFAULT_DAY_CHOICE);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  function savedMessage(kind: DayChoiceValue["kind"], day: string | null): string | null {
+    if (kind === "none") return t("day.newOneOff.savedNone", { count: daylessCount + 1 });
+    if (kind === "today" || day === null) return null;
+    const weekdays = t.raw("day.weekdayLong") as string[];
+    const parts = {
+      weekday: weekdays[(civilDateToDate(day).getUTCDay() + 6) % 7],
+      day: civilDateToDate(day).getUTCDate(),
+    };
+    return kind === "tomorrow"
+      ? t("day.newOneOff.savedTomorrow", parts)
+      : t("day.newOneOff.savedOther", parts);
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,27 +60,36 @@ export function NewOneOff({ goalId }: NewOneOffProps) {
     // second row: the field stays disabled for the same span.
     if (pending) return;
 
+    const day = dayForChoice(choice, todayInZone());
+
     // The same schema the server runs (`createOneOff`, `app/actions/one-
     // offs.ts`), run here first: a name this refuses never reaches the
     // network, the same discipline `QuantitySheet` already holds for a
     // quantity (`lib/validation/fact.ts`'s `quantitySchema`).
-    const parsed = createOneOffSchema.safeParse({ name, day: todayInZone(), goalId });
+    const parsed = createOneOffSchema.safeParse({ name, day, goalId });
     if (!parsed.success) {
       setError(parsed.error.issues[0].message);
       return;
     }
     setError(null);
+    setSaved(null);
 
     startTransition(() => {
       void createOneOff(parsed.data).then((result) => {
-        if (result.ok) setName("");
-        else setError(result.error);
+        if (result.ok) {
+          setName("");
+          setChoice(DEFAULT_DAY_CHOICE);
+          setSaved(savedMessage(choice.kind, day));
+        } else setError(result.error);
       });
     });
   }
 
+  const dateError = choice.kind === "other" && error?.startsWith("day.errors.oneOffDay") ? error : null;
+  const nameError = dateError ? null : error;
+
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} noValidate>
       <Flex align="center" gap="2">
         <Mark state="empty" dashed />
         <Field
@@ -63,13 +97,33 @@ export function NewOneOff({ goalId }: NewOneOffProps) {
           hideLabel
           placeholder={t("day.newOneOff.placeholder")}
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            setSaved(null);
+          }}
           disabled={pending}
         />
       </Flex>
-      {error ? (
+      {name.trim() !== "" ? (
+        <DayChoice
+          value={choice}
+          onChange={(next) => {
+            setChoice(next);
+            setError(null);
+          }}
+          allowNone
+          min={todayInZone()}
+          error={dateError}
+        />
+      ) : null}
+      {nameError ? (
         <Text as="p" tone="muted" variant="meta">
-          {t(error)}
+          {t(nameError)}
+        </Text>
+      ) : null}
+      {saved ? (
+        <Text as="p" role="status" tone="accent" variant="meta">
+          {saved}
         </Text>
       ) : null}
     </form>
