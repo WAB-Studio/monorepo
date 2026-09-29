@@ -1674,6 +1674,27 @@ async function runEndedGoalScheduledCheck(): Promise<void> {
         (monday === today || expectedDelta.some((n) => n === 1)),
       `delta = ${JSON.stringify(delta)}, expected ${JSON.stringify(expectedDelta)}`,
     );
+
+    // A commitment retired earlier this week still feeds the goal's week:
+    // `weekMeasure` must equal the goal's own current row. Impossible on a
+    // Monday, when nothing can have been retired earlier in the week.
+    if (monday !== today) {
+      const retiredGoal = await seedGoal("check-74 retired", "2099-12-31", { name: "minutos", unit: "min" });
+      const live = await seedCommitment(retiredGoal, "check-74 retired goal, live", true);
+      const gone = await seedCommitment(retiredGoal, "check-74 retired goal, gone", true);
+      await db`update goals.commitments set retired_at = now() - interval '1 day' where id = ${gone}`;
+      await seedFact(retiredGoal, gone, monday, 4);
+      await seedFact(retiredGoal, live, today, 5);
+      const retiredDay = await loadDay(today);
+      const retiredCurrent = (await loadGoal(retiredGoal))?.weeks.find((week) => week.current);
+      assert(
+        "weekMeasure still counts a commitment retired earlier this week, as loadGoal does",
+        retiredCurrent !== undefined &&
+          retiredCurrent.total === 9 &&
+          retiredDay.weekMeasure[retiredGoal] === retiredCurrent.total,
+        `loadGoal ${retiredCurrent?.total}, loadDay ${retiredDay.weekMeasure[retiredGoal]}, seeded 9`,
+      );
+    }
   } finally {
     if (oneOffIds.length > 0) {
       await db`delete from goals.one_offs where id in ${db(oneOffIds)} and user_id = ${userId}`;

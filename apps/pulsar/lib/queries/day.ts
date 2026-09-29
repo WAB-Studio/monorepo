@@ -3,6 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveDay } from "@/lib/day/derive";
+import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek } from "@/lib/day/review";
 import { latestFactByCommitment, type LoggedFact } from "@/lib/day/logged-fact";
 import type {
@@ -73,6 +74,7 @@ type FactRow = {
   id: string;
   commitment_id: string | null;
   one_off_id: string | null;
+  goal_id: string | null;
   day: string;
   written_at: string;
   quantity: number | null;
@@ -100,6 +102,15 @@ type DoneOneOffRow = {
   written_at: string;
 };
 
+// Every evidence commitment of a goal, retired ones included: the source keys
+// a goal's measure reads, as `loadGoal` reads them.
+type MeasureSourceRow = {
+  goal_id: string;
+  satisfaction: string;
+  source_key: string | null;
+  source_unit: string | null;
+};
+
 type GoalsQueryRow = {
   goals: GoalRow[];
   commitments: CommitmentRow[];
@@ -108,6 +119,7 @@ type GoalsQueryRow = {
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
   dayless_count: number;
+  measure_sources: MeasureSourceRow[];
   scheduled_count: number;
 };
 
@@ -159,6 +171,15 @@ async function queryGoalsRow(
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${day}::date) as commitments,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'goal_id', c.goal_id,
+                 'satisfaction', c.satisfaction,
+                 'source_key', s.key,
+                 'source_unit', s.unit
+               )), '[]'::json)
+         from "goals"."commitments" c
+         join "goals"."evidence_sources" s on s.id = c.source_id
+         where c.satisfaction = 'evidence') as measure_sources,
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
          from "goals"."phases" p
          where p.starts_on <= ${day}::date
@@ -364,21 +385,19 @@ function weekMeasureOf(
   for (const goal of goals) {
     const unit = goal.measure_unit;
     if (!unit) continue;
-    const own = row.commitments.filter((c) => c.goal_id === goal.id);
-    const ids = new Set(own.map((c) => c.id));
+    // By the fact's own `goal_id`, as `loadGoal` does: a commitment retired
+    // earlier this week still counts what it declared.
     const facts: DeclaredFact[] = row.facts
       .filter(
         (fact): fact is FactRow & { commitment_id: string } =>
-          fact.commitment_id !== null && ids.has(fact.commitment_id),
+          fact.goal_id === goal.id && fact.commitment_id !== null,
       )
       .map(toDeclaredFact);
-    const keys = new Set(
-      own
-        .filter((c) => c.satisfaction === "evidence" && c.source_key && c.source_unit === unit)
-        .map((c) => c.source_key as string),
+    const evidence = evidenceDaysFor(
+      unit,
+      row.measure_sources.filter((source) => source.goal_id === goal.id),
+      evidenceOutcome.bySourceKey,
     );
-    const evidence: EvidenceDay[] = [];
-    for (const key of keys) evidence.push(...(evidenceOutcome.bySourceKey[key] ?? []));
     const current = measureByWeek({
       openedOn: civilDateInZone(new Date(goal.created_at)),
       horizon: goal.horizon,
