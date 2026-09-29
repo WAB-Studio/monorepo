@@ -440,6 +440,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A goal past its end says «terminó el <día>» and leaves Hoy and Semana.** Its screen offers
   «Archivar» and «Mover el final»; `/metas` lists it under «terminadas». Not built; no board. Decided by
   the user 2026-09-28, over drawing it with a note and over leaving it open.
+- **A goal that ends mid-week stays in Semana until that Sunday**, with the days it lived and blank
+  days after its end; it leaves Hoy the day after its end and is gone from the next week. Not built.
+  Decided by the user 2026-09-29, over dropping it from Semana the day after its end.
 - **A one-off for another day is written with a visible «Anotar»**, shown with the chips once a day
   other than today is chosen, and Enter in the date field writes too. Decided by the user 2026-09-28.
 - **Tapping a done one-off's name undoes it**, the whole row, as a done commitment does. Decided by the
