@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { deleteOneOff } from "@/app/actions/one-offs";
-import { Button, Sheet, Text } from "@/components/ui";
+import { Button, Sheet, SheetActions, Text } from "@/components/ui";
 
 export type OneOffDeleteSheetProps = {
   open: boolean;
@@ -57,12 +57,14 @@ export function OneOffDeleteSheet({ open, onOpenChange, oneOffId, name }: OneOff
           {t(error)}
         </Text>
       ) : null}
-      <Button block onClick={handleDelete} disabled={pending}>
-        {t("day.oneOffs.delete.confirm")}
-      </Button>
-      <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
-        {t("day.oneOffs.delete.cancel")}
-      </Button>
+      <SheetActions>
+        <Button block onClick={handleDelete} disabled={pending}>
+          {t("day.oneOffs.delete.confirm")}
+        </Button>
+        <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          {t("day.oneOffs.delete.cancel")}
+        </Button>
+      </SheetActions>
     </Sheet>
   );
 }

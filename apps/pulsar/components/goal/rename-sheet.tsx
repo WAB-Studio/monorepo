@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { renameGoal } from "@/app/actions/plan";
 import { renameGoalSchema } from "@/lib/validation/plan";
-import { Button, Field, Sheet, Text } from "@/components/ui";
+import { Button, Field, Sheet, SheetActions, Text } from "@/components/ui";
 
 export type RenameGoalActionProps = {
   goalId: string;
@@ -75,12 +75,14 @@ export function RenameGoalAction({ goalId, name }: RenameGoalActionProps) {
             {t(error)}
           </Text>
         ) : null}
-        <Button block onClick={handleSave} disabled={pending}>
-          {t("plan.renameSheet.confirm")}
-        </Button>
-        <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-          {t("plan.renameSheet.cancel")}
-        </Button>
+        <SheetActions>
+          <Button block onClick={handleSave} disabled={pending}>
+            {t("plan.renameSheet.confirm")}
+          </Button>
+          <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+            {t("plan.renameSheet.cancel")}
+          </Button>
+        </SheetActions>
       </Sheet>
     </>
   );

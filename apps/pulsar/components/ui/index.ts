@@ -53,3 +53,5 @@ export { Face } from "./face";
 export { Split } from "./split";
 
 export { WeekTable } from "./week-table";
+
+export { SheetActions } from "./sheet-actions";

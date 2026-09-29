@@ -10,7 +10,7 @@ import {
   dayForChoice,
   type DayChoiceValue,
 } from "@/components/day/day-for-choice";
-import { Button, Sheet, Text } from "@/components/ui";
+import { Button, Sheet, SheetActions, Text } from "@/components/ui";
 import { scheduleOneOffSchema } from "@/lib/validation/one-off";
 import { todayInZone } from "@/lib/zone";
 
@@ -80,12 +80,14 @@ export function ScheduleSheet({ open, onOpenChange, oneOffId, name, onDelete }: 
           {t(otherError)}
         </Text>
       ) : null}
-      <Button block onClick={handleSchedule} disabled={pending}>
-        {t("oneOffs.schedule.confirm")}
-      </Button>
-      <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
-        {t("oneOffs.schedule.keep")}
-      </Button>
+      <SheetActions>
+        <Button block onClick={handleSchedule} disabled={pending}>
+          {t("oneOffs.schedule.confirm")}
+        </Button>
+        <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          {t("oneOffs.schedule.keep")}
+        </Button>
+      </SheetActions>
       <Button tap={44} variant="ghost" onClick={onDelete} disabled={pending}>
         <Text variant="meta" tone="muted">
           {t("oneOffs.schedule.delete")}

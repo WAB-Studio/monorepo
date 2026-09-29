@@ -103,6 +103,16 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
     const centred = await box(page, "[role=dialog]");
     expect(Math.abs(centred.x + centred.width / 2 - 640)).toBeLessThanOrEqual(1);
     expect(Math.abs(centred.y + centred.height / 2 - 400)).toBeLessThanOrEqual(1);
+
+    // The actions are one row at the right edge, the secondary before the primary.
+    const actions = dialog.getByRole("button");
+    await expect(actions).toHaveCount(2);
+    const primary = (await actions.filter({ hasText: "Guardarlo" }).boundingBox())!;
+    const secondary = (await actions.filter({ hasText: "Dejarlo como está" }).boundingBox())!;
+    expect(Math.abs(secondary.y - primary.y)).toBeLessThanOrEqual(1);
+    expect(secondary.x + secondary.width).toBeLessThan(primary.x);
+    expect(primary.width).toBeLessThan(240);
+    expect(Math.abs(centred.x + centred.width - 1 - 30 - (primary.x + primary.width))).toBeLessThanOrEqual(1);
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
 
@@ -116,6 +126,13 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
       expect(pinned.y + pinned.height).toBeCloseTo(740, 0);
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
+    }
+
+    // Nothing scrolls sideways from 1024, the review's table included.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    for (const path of ["/", "/semana", `/metas/${goalId}`, `/metas/${goalId}/revision`]) {
+      await page.goto(path);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth), path).toBe(1024);
     }
 
     await page.setViewportSize({ width: 1280, height: 800 });
