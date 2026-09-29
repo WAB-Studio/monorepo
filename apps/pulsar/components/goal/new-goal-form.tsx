@@ -7,7 +7,8 @@ import { z } from "zod";
 
 import { createGoal } from "@/app/actions/plan";
 import { createGoalSchema } from "@/lib/validation/plan";
-import { addWeeksToCivilDate, todayInZone } from "@/lib/zone";
+import { horizonForWeeks } from "@/lib/day/weeks";
+import { todayInZone } from "@/lib/zone";
 import { Button, Field, Page, Text } from "@/components/ui";
 
 // The board's own default (`MetaNueva.dc.html` draws "12 semanas" already
@@ -47,7 +48,7 @@ export function NewGoalForm() {
       return;
     }
 
-    const horizon = addWeeksToCivilDate(todayInZone(), weeksResult.data);
+    const horizon = horizonForWeeks(todayInZone(), weeksResult.data);
     const parsed = createGoalSchema.safeParse({ name, horizon });
     if (!parsed.success) {
       setError(parsed.error.issues[0].message);

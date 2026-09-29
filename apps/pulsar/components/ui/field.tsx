@@ -14,10 +14,12 @@ type FieldProps = Omit<TextField.RootProps, "size" | "variant" | "color" | "radi
   label: string;
   hideLabel?: boolean;
   hint?: ReactNode;
+  // The refusal reads in the hint's place, in ink, and the ring darkens.
+  invalid?: boolean;
 };
 
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
-  { label, hideLabel, hint, id, className, ...props },
+  { label, hideLabel, hint, invalid, id, className, ...props },
   ref,
 ) {
   const generated = useId();
@@ -39,11 +41,12 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         size="3"
         variant="surface"
         aria-describedby={hint ? hintId : undefined}
+        aria-invalid={invalid ? true : undefined}
         {...props}
         className={[styles.control, className].filter(Boolean).join(" ")}
       />
       {hint ? (
-        <span id={hintId} className={styles.hint}>
+        <span id={hintId} className={invalid ? styles.refusal : styles.hint}>
           {hint}
         </span>
       ) : null}

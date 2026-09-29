@@ -68,3 +68,14 @@ export function weekOf(day: string): string[] {
   }
   return days;
 }
+
+// "13 de diciembre", or "domingo 13 de diciembre" with `weekday`: a civil day
+// in words, read from its own midday-UTC instant so no offset shifts it.
+export function civilDateLabel(day: string, weekday = false): string {
+  return new Intl.DateTimeFormat("es-CO", {
+    weekday: weekday ? "long" : undefined,
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(civilDateToDate(day));
+}

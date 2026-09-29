@@ -47,6 +47,19 @@
   color: var(--pulsar-muted);
 }
 
+/* A refused value: the ring goes to ink and the sentence to ink at 14/500 —
+   this design has no colour for failure. */
+.control.control:has(input[aria-invalid="true"]) {
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-ink);
+}
+
+.refusal {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--pulsar-ink);
+}
+
 /* docs/pulsar/DESIGN.md "The controls": disabled and read-only both drop the
    fill and read as one thing — "this does not move" — muted ink over the
    surface behind them, with a `line` ring; a field never leaves the two half

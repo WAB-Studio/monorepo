@@ -6,11 +6,13 @@ import { ArchiveGoalAction, ReopenGoalButton } from "@/components/goal/archive-s
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { phaseOn } from "@/lib/day/derive";
 import { loadGoal } from "@/lib/queries/goal";
-import { civilDateInZone, todayInZone, TIME_ZONE } from "@/lib/zone";
+import { dayBefore } from "@/lib/day/weeks";
+import { civilDateInZone, civilDateLabel, todayInZone, TIME_ZONE } from "@/lib/zone";
 import { Button, Figure, Flex, Mark, Page, Row, SectionLabel, Text } from "@/components/ui";
 
 import { CommitmentList, countWord, type Translator } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
+import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";
 
 // "22 de septiembre": the day the goal was opened, in the person's own zone
@@ -56,11 +58,28 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         {goal.name}
       </Text>
       <RenameGoalAction goalId={goal.id} name={goal.name} />
-      <Text as="p" variant="meta" tone="muted">
-        {goal.measureUnit
-          ? t("goal.detail.horizonAndMeasure", { weeks: totalWeeks, measure: goal.measureName ?? "" })
-          : t("goal.detail.horizonOnly", { weeks: totalWeeks })}
-      </Text>
+      <Flex justify="between" align="center">
+        <Text as="p" variant="meta" tone="muted">
+          {t("goal.detail.horizonUntil", {
+            weeks: totalWeeks,
+            date: civilDateLabel(dayBefore(goal.horizon)),
+          })}
+        </Text>
+        {goal.archivedAt === null ? (
+          <MoveHorizonAction
+            goalId={goal.id}
+            name={goal.name}
+            openedOn={openedOn}
+            weeks={totalWeeks}
+            phases={goal.phases}
+          />
+        ) : null}
+      </Flex>
+      {goal.measureUnit ? (
+        <Text as="p" variant="meta" tone="muted">
+          {t("goal.detail.measures", { measure: goal.measureName ?? "" })}
+        </Text>
+      ) : null}
 
       {goal.measureUnit ? (
         <Figure value={goal.measureTotal} unit={goal.measureUnit} variant="measure" />
