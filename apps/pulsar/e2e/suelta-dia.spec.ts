@@ -23,15 +23,6 @@ async function dropByName(db: postgres.Sql, personId: string, name: string): Pro
   if (rows.length > 0) await db`delete from goals.one_offs where id = any(${rows.map((r) => r.id)})`;
 }
 
-async function daylessCount(db: postgres.Sql, personId: string): Promise<number> {
-  const [row] = await db<{ n: number }[]>`
-    select count(*)::int as n from goals.one_offs o
-    where o.user_id = ${personId} and o.day is null
-      and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
-  `;
-  return row.n;
-}
-
 test("Enter alone writes a one-off for today that draws on Hoy, and the chips default to hoy (RP-19)", async ({
   page,
   db,
@@ -75,14 +66,13 @@ test("«mañana» writes tomorrow's day, does not draw, and says where it went (
   }
 });
 
-test("«sin día» writes a null day, does not draw, and the count rises by one (RP-21)", async ({
+test("«sin día» writes a null day, does not draw, and the way into the list shows (RP-21)", async ({
   page,
   db,
   personId,
 }) => {
   const name = `Suelta sin día ${Date.now()}`;
   try {
-    const before = await daylessCount(db, personId);
     await page.goto("/");
     const field = page.getByLabel("Algo suelto").last();
     await field.fill(name);
@@ -92,7 +82,9 @@ test("«sin día» writes a null day, does not draw, and the count rises by one 
     await expect(page.getByRole("status")).toContainText("Anotada sin día");
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
     expect(await rowsNamed(db, personId, name)).toMatchObject([{ day: null }]);
-    await expect(page.getByRole("link", { name: `${before + 1} sin día` })).toHaveAttribute(
+    // The count is the identity's, and `sueltas.spec.ts` moves it in parallel:
+    // the row above proves the write, the link proves the way in.
+    await expect(page.getByRole("link", { name: /^\d+ sin día$/ })).toHaveAttribute(
       "href",
       "/sueltas",
     );
