@@ -443,3 +443,57 @@ test("moveHorizon: another person's goal answers notFound and is unchanged", asy
     await sql`delete from goals.goals where id = ${foreign.id}`;
   }
 });
+
+test("scheduleOneOff: a one-off dated after today moves; one dated today is refused; another person's is notFound", async () => {
+  const ids: string[] = [];
+  const [member] = await sql<{ id: string }[]>`
+    select id from auth.users where email = ${`harness-member-${lane}@example.invalid`}`;
+  if (!member) throw new Error("no member identity — run harness:token for this lane");
+  try {
+    const made = await createOneOff({ name: "RP-21 mover", day: shiftDay(today, 1) });
+    if (!made.ok) throw new Error(made.error);
+    ids.push(made.oneOffId);
+
+    revalidated.length = 0;
+    const moved = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, 2) });
+    assert.equal(moved.ok, true);
+    assert.equal(await oneOffDay(made.oneOffId), shiftDay(today, 2));
+    assert.ok(revalidated.includes("/") && revalidated.includes("/sueltas"), revalidated.join(", "));
+
+    const toToday = await scheduleOneOff({ oneOffId: made.oneOffId, day: today });
+    assert.equal(toToday.ok, true);
+    assert.equal(await oneOffDay(made.oneOffId), today);
+    const { loadDay } = await import("@/lib/queries/day");
+    const loaded = await loadDay(today);
+    assert.ok(loaded.oneOffs.some((o) => o.id === made.oneOffId));
+
+    const dated = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, 3) });
+    assert.equal(dated.ok, false);
+    if (!dated.ok) assert.equal(dated.error, "day.errors.oneOffAlreadyDated");
+    assert.equal(await oneOffDay(made.oneOffId), today);
+
+    const [withFact] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, name, day)
+      values (${personId}, 'RP-21 futura con hecho', ${shiftDay(today, 1)}) returning id`;
+    ids.push(withFact.id);
+    await sql`insert into goals.facts (user_id, one_off_id, day) values (${personId}, ${withFact.id}, ${today})`;
+    const refused = await scheduleOneOff({ oneOffId: withFact.id, day: shiftDay(today, 2) });
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.equal(refused.error, "day.errors.oneOffHasFact");
+    assert.equal(await oneOffDay(withFact.id), shiftDay(today, 1));
+
+    const [foreign] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, name, day)
+      values (${member.id}, 'RP-21 ajena', ${shiftDay(today, 1)}) returning id`;
+    ids.push(foreign.id);
+    const other = await scheduleOneOff({ oneOffId: foreign.id, day: shiftDay(today, 2) });
+    assert.equal(other.ok, false);
+    if (!other.ok) assert.equal(other.error, "day.errors.notFound");
+    assert.equal(await oneOffDay(foreign.id), shiftDay(today, 1));
+  } finally {
+    if (ids.length) {
+      await sql`delete from goals.facts where one_off_id in ${sql(ids)}`;
+      await sql`delete from goals.one_offs where id in ${sql(ids)}`;
+    }
+  }
+});
