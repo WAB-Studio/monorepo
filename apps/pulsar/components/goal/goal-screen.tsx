@@ -146,7 +146,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       {goal.measureUnit ? (
         <Panel>
           <Text as="p" variant="meta" tone="muted">
-            {t("goal.detail.measures", { measure: goal.measureName ?? "" })}
+            {t("goal.detail.measures", { unit: goal.measureUnit })}
           </Text>
           {phoneActs}
 

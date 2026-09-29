@@ -111,11 +111,11 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
 
     await page.goto(`/metas/${goalId}/revision`);
 
-    // Header: the goal's own name as the kicker, the measure's name as the
+    // Header: the goal's own name as the kicker, the measure's unit as the
     // one heading — a `<p>` each, so the wide table's own `<th>` repeating
     // the same string never collides with this lookup.
     await expect(page.locator("p", { hasText: goalName })).toHaveCount(1);
-    await expect(page.locator("p", { hasText: measureName })).toHaveCount(1);
+    await expect(page.locator("p", { hasText: unit })).toHaveCount(1);
     await expect(page.getByText("la única cifra que predice el progreso")).toHaveCount(0);
 
     // The phone face, `Revision.dc.html`: three rows, the lead figure and

@@ -12,7 +12,7 @@
     "overline": "meta · abierta el {date}",
     "archivedOverline": "meta · archivada el {date}",
     "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
-    "measures": "mide {measure}",
+    "measures": "suma {unit}",
     "moveHorizon": "mover el final",
     "moveHorizonEnded": "Mover el final",
     "commitmentsCount": "{word} {count, plural, one {compromiso} other {compromisos}}",
@@ -31,6 +31,7 @@
     "caption": "por semana",
     "columns": {
       "week": "semana",
+      "total": "total",
       "phase": "fase",
       "note": "nota"
     },
