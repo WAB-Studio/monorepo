@@ -244,7 +244,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   );
 
   return (
-    <Page>
+    <Page width="full">
       <Text as="p" variant="meta" tone="muted">
         {goal.archivedAt
           ? t("goal.detail.archivedOverline", { date: longDateLabel(goal.archivedAt) })

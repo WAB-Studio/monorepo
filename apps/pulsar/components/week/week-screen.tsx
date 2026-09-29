@@ -194,7 +194,7 @@ export async function WeekScreen() {
   const hasGoalless = oneOffFacts.some((fact) => fact.goalId === null);
 
   return (
-    <Page>
+    <Page width="full">
       <WeekTitle start={view.start} end={view.days[6]?.day ?? view.start} t={t} />
 
       {evidence === "unreadable" ? (
