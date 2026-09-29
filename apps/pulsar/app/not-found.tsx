@@ -2,22 +2,33 @@ import { getTranslations } from "next-intl/server";
 
 import { BottomNav } from "@/components/ui";
 
+import { civilDateLabel, todayInZone } from "@/lib/zone";
+
 import AppNotFound from "./(app)/not-found";
 
 /**
  * Any URL this app does not route at all, `/no-existe` included, and a
  * `notFound()` with no nearer boundary. Outside `app/(app)/layout.tsx`, so the
- * nav is drawn here by hand; this page's own path never matches `/`,
- * `/semana` or `/metas`, so no tab reads active. Inside the app,
+ * nav is drawn here by hand; `AppNotFound` marks no tab. Inside the app,
  * `app/(app)/not-found.tsx` takes over and the layout's nav is the only one.
  */
 export default async function NotFound() {
   const nav = await getTranslations("common.nav");
+  const common = await getTranslations("common");
+  const theme = await getTranslations("day.theme");
 
   return (
     <>
       <AppNotFound />
-      <BottomNav todayLabel={nav("today")} weekLabel={nav("week")} goalLabel={nav("goal")} />
+      <BottomNav
+        todayLabel={nav("today")}
+        weekLabel={nav("week")}
+        goalLabel={nav("goal")}
+        appName={common("appName")}
+        goalsLabel={nav("goals")}
+        date={civilDateLabel(todayInZone(), true)}
+        theme={{ toLightLabel: theme("toLight"), toDarkLabel: theme("toDark") }}
+      />
     </>
   );
 }

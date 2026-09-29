@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { Button, Page, Text } from "@/components/ui";
+import { Button, NoTabMarked, Page, Text } from "@/components/ui";
 
 /**
  * `NoEncontrada.dc.html` (RNP-01). Reached from inside the app — `/dia/zzz`,
@@ -15,6 +15,7 @@ export default async function NotFound() {
 
   return (
     <Page>
+      <NoTabMarked />
       <Text as="p" variant="meta" tone="muted">
         {t("kicker")}
       </Text>
