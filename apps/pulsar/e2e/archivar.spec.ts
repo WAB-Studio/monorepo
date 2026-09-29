@@ -58,10 +58,10 @@ test("renaming a goal on screen reads everywhere: its own screen, Hoy and Semana
     await sheet.getByRole("button", { name: "Guardarlo" }).click();
     await expect(sheet).toBeHidden();
 
-    await expect(page.getByText(renamed)).toBeVisible();
+    await expect(page.getByText(renamed, { exact: true })).toBeVisible();
 
     await page.goto("/");
-    await expect(page.getByText(renamed)).toBeVisible();
+    await expect(page.getByText(renamed, { exact: true })).toBeVisible();
 
     await page.goto("/semana");
     await expect(page.getByText(renamed)).toBeVisible();
@@ -115,10 +115,10 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
     await expect(page.getByRole("button", { name: "Archivar esta meta" })).toHaveCount(0);
 
     await page.goto("/");
-    await expect(page.getByText(marker)).toHaveCount(0);
+    await expect(page.getByText(marker, { exact: true })).toHaveCount(0);
 
     await page.goto("/semana");
-    await expect(page.getByText(marker)).toHaveCount(0);
+    await expect(page.getByText(marker, { exact: true })).toHaveCount(0);
 
     await page.goto("/metas");
     await expect(page.getByText("Archivadas")).toBeVisible();
@@ -162,7 +162,7 @@ test("reopening an archived goal through its own screen brings it back to Hoy (R
   await expect(page.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
 
   await page.goto("/");
-  await expect(page.getByText(marker)).toBeVisible();
+  await expect(page.getByText(marker, { exact: true })).toBeVisible();
 });
 
 test("an archived goal offers no way to add a phase, direct visit included (RP-24)", async ({

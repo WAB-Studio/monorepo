@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // RP-19's carry (`HoySueltaAtrasada.dc.html`): a one-off undone since an
 // earlier day reads on Hoy, first, with «del sábado 19» under it. Each test
@@ -20,7 +20,11 @@ function pastDay(daysAgo: number): string {
 function carriedLabel(day: string): string {
   const date = civilDateToDate(day);
   const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
-  return `del ${weekday} ${date.getUTCDate()}`;
+  const month = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" }).format(date);
+  // The month appears only outside the week of today.
+  return weekOf(todayInZone()).includes(day)
+    ? `del ${weekday} ${date.getUTCDate()}`
+    : `del ${weekday} ${date.getUTCDate()} de ${month}`;
 }
 
 async function seedOneOff(db: postgres.Sql, personId: string, name: string, day: string): Promise<string> {

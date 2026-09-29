@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
-import { Button, Flex, IconButton, Text, ThemeToggle } from "@/components/ui";
+import { Button, Face, Flex, IconButton, Text, ThemeToggle } from "@/components/ui";
 
 type HeaderLink = { href: string; label: string };
 
@@ -54,7 +54,11 @@ export function DayHeader({
             </Link>
           </Button>
         ) : null}
-        {theme ? <ThemeToggle toLightLabel={theme.toLightLabel} toDarkLabel={theme.toDarkLabel} /> : null}
+        {theme ? (
+          <Face on="phone">
+            <ThemeToggle toLightLabel={theme.toLightLabel} toDarkLabel={theme.toDarkLabel} />
+          </Face>
+        ) : null}
       </Flex>
       {limitNote ? (
         <Text as="p" variant="meta" tone="muted">

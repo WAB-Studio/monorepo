@@ -204,12 +204,12 @@ test("a commitment created today and a goal opened today are absent from yesterd
     `;
 
     await page.goto("/");
-    await expect(page.getByText(goalName)).toBeVisible();
+    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
     await expect(page.locator("button", { hasText: commitmentName })).toBeVisible();
 
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
-    await expect(page.getByText(goalName)).toHaveCount(0);
+    await expect(page.getByText(goalName, { exact: true })).toHaveCount(0);
     await expect(page.locator("button", { hasText: commitmentName })).toHaveCount(0);
   } finally {
     await deleteGoal(db, personId, goal.id);
