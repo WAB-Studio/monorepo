@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 
 import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
+import { todayInZone } from "@/lib/zone";
 import {
   createOneOffSchema,
   completeOneOffSchema,
@@ -73,9 +74,9 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
 }
 
 /**
- * Gives a dayless one-off a day (RP-21). The row is read first only to name
- * the refusal; the enforcement is `day is null` in the UPDATE and
- * `one_offs_update_self`, so a fact landing between the two statements still
+ * Gives a one-off a day, or moves one dated after today (RP-21). The row is
+ * read first only to name the refusal; the enforcement is
+ * `day is null or day > today` in the UPDATE and `one_offs_update_self`, so a fact landing between the two statements still
  * writes nothing — 0 rows is reported as `oneOffHasFact`.
  */
 export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<ScheduleOneOffResult> {
@@ -86,6 +87,7 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
   const { oneOffId, day } = parsed.data;
+  const today = todayInZone();
 
   try {
     await withGoalsDb(async (tx) => {
@@ -94,7 +96,7 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
         .from(oneOffs)
         .where(eq(oneOffs.id, oneOffId));
       if (!row) throw new NamedError("day.errors.notFound");
-      if (row.day != null) throw new NamedError("day.errors.oneOffAlreadyDated");
+      if (row.day != null && row.day <= today) throw new NamedError("day.errors.oneOffAlreadyDated");
 
       const [existingFact] = await tx
         .select({ id: facts.id })
@@ -106,7 +108,11 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
         .update(oneOffs)
         .set({ day })
         .where(
-          and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id), isNull(oneOffs.day)),
+          and(
+            eq(oneOffs.id, oneOffId),
+            eq(oneOffs.userId, person.id),
+            or(isNull(oneOffs.day), gt(oneOffs.day, today)),
+          ),
         )
         .returning({ id: oneOffs.id });
       if (updated.length === 0) throw new NamedError("day.errors.oneOffHasFact");
