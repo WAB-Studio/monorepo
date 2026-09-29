@@ -1092,6 +1092,78 @@ async function runLateNightOpenCheck(): Promise<void> {
   }
 }
 
+/**
+ * RP-26: a goal ends on the day before its horizon. `horizon = today` is the
+ * edge both comparisons must cross; archived wins over ended.
+ */
+async function runEndedCheck(): Promise<void> {
+  const { createGoal } = await import("@/app/actions/plan");
+  const { loadGoal, listGoals, listGoalsForMetas } = await import("@/lib/queries/goal");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const today = todayInZone();
+  const seeded: string[] = [];
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    for (const name of ["terminada", "en curso", "archivada"]) {
+      const goal = await createGoal({ name: `check-goal.ts probe — RP-26 ${name}`, horizon: addDays(today, 60) });
+      if (!goal.ok) throw new Error(`runEndedCheck: createGoal failed: ${goal.error}`);
+      seeded.push(goal.goalId);
+    }
+    const [endedId, openId, archivedId] = seeded;
+    await migrationDb`update goals.goals set horizon = ${today} where id = ${endedId}`;
+    await migrationDb`update goals.goals set horizon = ${addDays(today, 1)} where id = ${openId}`;
+    await migrationDb`update goals.goals set horizon = ${addDays(today, -5)}, archived_at = now() where id = ${archivedId}`;
+
+    const ended = await loadGoal(endedId);
+    const open = await loadGoal(openId);
+    assert(
+      "a goal whose horizon is today reads endedOn = yesterday",
+      ended?.endedOn === addDays(today, -1),
+      `endedOn = ${ended?.endedOn}`,
+    );
+    assert("a goal whose horizon is tomorrow reads endedOn = null", open?.endedOn === null, `endedOn = ${open?.endedOn}`);
+
+    const before = wireCalls.length;
+    const split = await listGoalsForMetas();
+    const metasCalls = wireCalls.slice(before);
+    // Net of begin/commit and type-fetch: the settle plus the one select.
+    const statements = [...groupByConnection(metasCalls).entries()].reduce(
+      (sum, [connection, calls]) => sum + analyzeGroup(connection, calls).applicationCount,
+      0,
+    );
+    const where = (list: { id: string }[], id: string) => list.some((goal) => goal.id === id);
+    assert(
+      "listGoalsForMetas puts the horizon-today goal in ended alone",
+      where(split.ended, endedId) && !where(split.open, endedId) && !where(split.archived, endedId),
+      `open=${where(split.open, endedId)} ended=${where(split.ended, endedId)} archived=${where(split.archived, endedId)}`,
+    );
+    assert(
+      "listGoalsForMetas puts the horizon-tomorrow goal in open alone",
+      where(split.open, openId) && !where(split.ended, openId) && !where(split.archived, openId),
+      `open=${where(split.open, openId)} ended=${where(split.ended, openId)} archived=${where(split.archived, openId)}`,
+    );
+    assert(
+      "an archived goal with a past horizon sits in archived alone",
+      where(split.archived, archivedId) && !where(split.ended, archivedId) && !where(split.open, archivedId),
+      `open=${where(split.open, archivedId)} ended=${where(split.ended, archivedId)} archived=${where(split.archived, archivedId)}`,
+    );
+    assert("listGoalsForMetas stays one query behind its settle (two application statements)",
+      statements === 2,
+      `${statements} application statement(s)`);
+
+    const listed = await listGoals();
+    assert(
+      "listGoals omits the ended and the archived goal and keeps the open one",
+      !where(listed, endedId) && !where(listed, archivedId) && where(listed, openId),
+      `ended=${where(listed, endedId)} archived=${where(listed, archivedId)} open=${where(listed, openId)}`,
+    );
+  } finally {
+    for (const id of seeded) await migrationDb`delete from goals.goals where id = ${id}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -1176,6 +1248,7 @@ async function runMain(): Promise<void> {
   await runPhaseOverlapRaceCheck();
   await runWeeksCheck();
   await runLateNightOpenCheck();
+  await runEndedCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
