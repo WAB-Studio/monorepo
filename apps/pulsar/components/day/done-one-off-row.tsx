@@ -44,13 +44,7 @@ export function DoneOneOffRow({ factId, name, time }: DoneOneOffRowProps) {
             {name}
           </Text>
         }
-        trailing={
-          time ? (
-            <Text as="span" tone="muted" variant="meta">
-              {time}
-            </Text>
-          ) : undefined
-        }
+        meta={time}
         onClick={handleUndo}
         disabled={pending}
       />
