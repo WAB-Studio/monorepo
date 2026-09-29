@@ -121,6 +121,22 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // Every goal ended and none open (`HoyTodasTerminadas.dc.html`).
   const lastEnded = !past && openGoals.length === 0 ? loaded.lastEnded : null;
 
+  // Only today, and only while some goal is open: the all-ended card already
+  // names the last one (`HoyMetaTerminada.dc.html`).
+  const endedLines =
+    past || openGoals.length === 0
+      ? []
+      : loaded.endedThisWeek.map((goal) => ({
+          id: goal.id,
+          text:
+            goal.lastDay === shiftCivilDay(day, -1)
+              ? t("day.ended.yesterday", { goal: goal.name })
+              : dayPhrase("day.ended.on", goal.lastDay, t, { goal: goal.name }),
+          href: `/metas/${goal.id}`,
+          see: t("day.ended.see"),
+          seeLabel: t("day.ended.seeLabel", { goal: goal.name }),
+        }));
+
   const waiting = daylessCount + scheduledCount;
 
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
@@ -328,6 +344,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           title={t("day.title")}
           back={{ href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }}
           theme={{ toLightLabel: t("day.theme.toLight"), toDarkLabel: t("day.theme.toDark") }}
+          ended={endedLines}
         />
       )}
 

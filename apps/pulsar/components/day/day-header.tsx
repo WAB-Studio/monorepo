@@ -18,6 +18,7 @@ export function DayHeader({
   limitNote,
   toToday,
   theme,
+  ended,
 }: {
   date: string;
   title?: string;
@@ -27,6 +28,8 @@ export function DayHeader({
   limitNote?: string;
   toToday?: HeaderLink;
   theme?: { toLightLabel: string; toDarkLabel: string };
+  // One quiet line per goal that ended this week, under the title.
+  ended?: { id: string; text: string; href: string; see: string; seeLabel: string }[];
 }) {
   return (
     <>
@@ -70,6 +73,20 @@ export function DayHeader({
           {title}
         </Text>
       ) : null}
+      {ended?.map((line) => (
+        <Flex key={line.id} align="center" gap="1" wrap="wrap">
+          <Text as="p" variant="meta" tone="muted">
+            {line.text}
+          </Text>
+          <Button asChild tap={44} variant="ghost">
+            <Link href={line.href} aria-label={line.seeLabel}>
+              <Text variant="meta" tone="accent">
+                {line.see}
+              </Text>
+            </Link>
+          </Button>
+        </Flex>
+      ))}
     </>
   );
 }
