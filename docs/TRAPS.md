@@ -2521,3 +2521,15 @@ fixture's `db` closed under the pending query.
 - Read the `error-context.md` page snapshot before the error line. A timeout plus `CONNECTION_ENDED`
   is a locator that never matched.
 - Grep `e2e/` for a string a module renames in `messages/`; a spec that types a label rots silently.
+
+## `linkInvalid` from a spec's disposable person is not yet explained
+
+Measured 2026-09-29 in `apps/pulsar`: specs that mint a person through `mint-session.ts` failed at
+`GET /auth/confirm … error=linkInvalid` 17 and 26 times in two full `check:e2e` runs of module 88, and
+repeatedly under the mutator, while other lanes ran suites. The same suite passed 182/182 after a few
+idle minutes, and a bare mint never failed. `linkInvalid` folds every completed rejection, a rate
+limit included, into one word.
+
+- Read the server log for `magic link verification failed linkInvalid <name · status · code · message>`
+  before calling it anything. The route logs Auth's own answer since this entry.
+- Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
