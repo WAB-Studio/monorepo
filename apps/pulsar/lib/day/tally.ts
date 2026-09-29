@@ -1,14 +1,18 @@
 import { civilDateInZone } from "@/lib/zone";
-import type { WeekView } from "@/lib/day/types";
+import type { Cadence, WeekView } from "@/lib/day/types";
 
 // What `tallyDays` reads of `loadWeek`'s answer, spelled structurally so this
 // file stays pure and DB-free.
 type TallyInput = {
   view: WeekView;
   goals: { id: string; horizon: string; createdAt: string }[];
-  commitments: { id: string; goalId: string }[];
+  commitments: { id: string; goalId: string; cadence?: Cadence }[];
   oneOffFacts: { day: string; goalId: string | null }[];
 };
+
+export function isFlexible(cadence: Cadence): boolean {
+  return cadence.kind === "times_per_week" || cadence.kind === "times_per_month";
+}
 
 export type DayTally = { day: string; done: number; total: number };
 
@@ -18,6 +22,11 @@ export type DayTally = { day: string; done: number; total: number };
 // fact. An archived goal never reaches `goals`, so it counts nowhere.
 export function tallyDays(week: TallyInput): DayTally[] {
   const goalOf = new Map(week.commitments.map((c) => [c.id, c.goalId]));
+  // A commitment counted by the week or the month has no daily ask: its own
+  // row says «1 de 3 esta semana», so it stays out of «hechos N de M».
+  const flexible = new Set(
+    week.commitments.filter((c) => c.cadence && isFlexible(c.cadence)).map((c) => c.id),
+  );
   const goals = new Map(
     week.goals.map((g) => [g.id, { openedOn: civilDateInZone(new Date(g.createdAt)), horizon: g.horizon }]),
   );
@@ -28,6 +37,7 @@ export function tallyDays(week: TallyInput): DayTally[] {
 
   return week.view.days.map((view) => {
     const slots = view.slots.filter((slot) => {
+      if (flexible.has(slot.commitmentId)) return false;
       const goalId = goalOf.get(slot.commitmentId);
       return goalId !== undefined && openOn(goalId, view.day);
     });

@@ -520,7 +520,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Hoy says when a goal ended**, in one quiet line for the days after its end. Board to draw.
   Decided 2026-09-29 by the user.
 - **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the
-  daily «hechos» and their row reads «1 de 2 esta semana». Board to draw. Decided 2026-09-29 by the user.
+  daily «hechos» and their row says the cadence and the count: «3 veces por semana · 1 de 3 esta
+  semana», «4 al mes · 3 de 4 este mes». On the table the days not done read the quiet «·»; on the
+  phone they sit in a group «{meta} · por semana y por mes» under the day rows. Boards
+  `SemanaFlexible.dc.html` and `SemanaEscritorioFlexible.dc.html`, approved by the user 2026-09-29.
+  Decided 2026-09-29 by the user.
 - **A one-column screen caps at 640 px from 1024.** Decided 2026-09-29 by the user.
 - **Hoy builds what `HoyEscritorio.dc.html` draws**: «Hoy pide N», each row's cadence, a flexible
   commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.

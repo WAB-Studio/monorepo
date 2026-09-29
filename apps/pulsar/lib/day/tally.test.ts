@@ -74,3 +74,38 @@ test("tallyDays: a one-off fact of no goal counts, one of an ended goal does not
   assert.deepEqual(tally[1], { day: "2026-09-29", done: 2, total: 2 });
   assert.deepEqual(tally[2], { day: "2026-09-30", done: 0, total: 0 });
 });
+
+test("tallyDays: a commitment counted by the week or the month leaves the daily count", () => {
+  const view = week((d) => [
+    ["daily", d === DAYS[0]],
+    ["weekly", d === DAYS[0]],
+    ["monthly", d === DAYS[0]],
+  ]);
+  const goals = [{ id: "g1", horizon: "2027-01-01", createdAt: "2026-09-01T12:00:00Z" }];
+  const tally = tallyDays({
+    view,
+    goals,
+    commitments: [
+      { id: "daily", goalId: "g1", cadence: { kind: "daily" } },
+      { id: "weekly", goalId: "g1", cadence: { kind: "times_per_week", count: 3 } },
+      { id: "monthly", goalId: "g1", cadence: { kind: "times_per_month", count: 4 } },
+    ],
+    oneOffFacts: [],
+  });
+  assert.deepEqual(tally[0], { day: DAYS[0], done: 1, total: 1 });
+  assert.deepEqual(tally[1], { day: DAYS[1], done: 0, total: 1 });
+});
+
+test("tallyDays: weekday and every-n-days commitments still count by the day", () => {
+  const view = week(() => [["a", true], ["b", false]]);
+  const tally = tallyDays({
+    view,
+    goals: [{ id: "g1", horizon: "2027-01-01", createdAt: "2026-09-01T12:00:00Z" }],
+    commitments: [
+      { id: "a", goalId: "g1", cadence: { kind: "weekdays", days: [1, 2, 3, 4, 5, 6, 7] } },
+      { id: "b", goalId: "g1", cadence: { kind: "every_n_days", n: 1, anchor: "2026-09-01" } },
+    ],
+    oneOffFacts: [],
+  });
+  assert.deepEqual(tally[2], { day: DAYS[2], done: 1, total: 2 });
+});

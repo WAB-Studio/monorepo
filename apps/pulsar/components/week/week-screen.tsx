@@ -1,6 +1,7 @@
+import { Fragment } from "react";
 import { getTranslations } from "next-intl/server";
 
-import { Face, Page, SectionLabel, Text, type MarkState } from "@/components/ui";
+import { Face, Page, Row, SectionLabel, Text, type MarkState } from "@/components/ui";
 import type { DaySlot } from "@/lib/day/types";
 import { loadWeek, type CommitmentGoal, type GoalSummary, type OneOffFact } from "@/lib/queries/week";
 import { weekDayHref } from "@/lib/day/week-href";
@@ -8,7 +9,7 @@ import { civilDateToDate, todayInZone } from "@/lib/zone";
 
 import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
-import { goalWeekProgress } from "./week-progress";
+import { flexibleWords, goalWeekProgress } from "./week-progress";
 import { WeekTableFace } from "./week-table-face";
 
 type Translate = Awaited<ReturnType<typeof getTranslations>>;
@@ -141,7 +142,9 @@ export async function WeekScreen() {
     if (day >= goal.horizon) return [];
     const goalId = goal.id;
     const goalCommitments = new Map(
-      commitments.filter((c) => c.goalId === goalId).map((c) => [c.id, c] as [string, CommitmentGoal]),
+      commitments
+        .filter((c) => c.goalId === goalId && flexibleWords(c, t) === null)
+        .map((c) => [c.id, c] as [string, CommitmentGoal]),
     );
     const slots = (slotsByDay.get(day) ?? []).filter((slot) => goalCommitments.has(slot.commitmentId));
     const oneOffs = oneOffFacts.filter((fact) => fact.goalId === goalId && fact.day === day);
@@ -155,6 +158,34 @@ export async function WeekScreen() {
     ];
   }
 
+  // A commitment counted by the week or the month: its own row, under the
+  // goal's days, with its cadence and the period's count (`SemanaFlexible.dc.html`).
+  function flexibleSection(goal: GoalSummary) {
+    const rows = commitments.flatMap((c) => {
+      const words = c.goalId === goal.id ? flexibleWords(c, t) : null;
+      return words ? [{ commitment: c, words }] : [];
+    });
+    if (rows.length === 0) return null;
+    return (
+      <section key={`${goal.id}-flexible`}>
+        <SectionLabel>{t("week.flexible.group", { name: goal.name })}</SectionLabel>
+        {rows.map(({ commitment, words }, index) => (
+          <Row
+            key={commitment.id}
+            name={commitment.name}
+            meta={words.cadence}
+            trailing={
+              <Text as="span" variant="meta">
+                {words.progress}
+              </Text>
+            }
+            rule={index < rows.length - 1}
+          />
+        ))}
+      </section>
+    );
+  }
+
   function goalSection(goal: GoalSummary) {
     const progress = goalWeekProgress(goal, view.start);
     // The page's own overline is the date range alone (`Semana.dc.html`
@@ -166,26 +197,35 @@ export async function WeekScreen() {
       ? t("week.sectionLabel", { name: goal.name, week: progress.week, total: progress.total })
       : goal.name;
 
+    const hasDaily =
+      commitments.some((c) => c.goalId === goal.id && flexibleWords(c, t) === null) ||
+      oneOffFacts.some((fact) => fact.goalId === goal.id);
+    const flexible = flexibleSection(goal);
+    if (!hasDaily) return flexible;
+
     return (
-      <section key={goal.id}>
-        <SectionLabel>{sectionLabel}</SectionLabel>
-        {view.days.map((dayView, index) => {
-          const dots = dotsFor(goal, dayView.day);
-          const ended = dayView.day >= goal.horizon;
-          const filled = dots.filter((dot) => dot.state !== "empty").length;
-          return (
-            <WeekDayRow
-              key={dayView.day}
-              label={dayLabel(dayView.day, weekdayNames)}
-              isToday={dayView.day === today}
-              link={linkFor(dayView.day)}
-              dots={dots}
-              note={ended ? undefined : noteFor(dayView.day, today, filled, dots.length, t)}
-              rule={index < view.days.length - 1}
-            />
-          );
-        })}
-      </section>
+      <Fragment key={goal.id}>
+        <section>
+          <SectionLabel>{sectionLabel}</SectionLabel>
+          {view.days.map((dayView, index) => {
+            const dots = dotsFor(goal, dayView.day);
+            const ended = dayView.day >= goal.horizon;
+            const filled = dots.filter((dot) => dot.state !== "empty").length;
+            return (
+              <WeekDayRow
+                key={dayView.day}
+                label={dayLabel(dayView.day, weekdayNames)}
+                isToday={dayView.day === today}
+                link={linkFor(dayView.day)}
+                dots={dots}
+                note={ended ? undefined : noteFor(dayView.day, today, filled, dots.length, t)}
+                rule={index < view.days.length - 1}
+              />
+            );
+          })}
+        </section>
+        {flexible}
+      </Fragment>
     );
   }
 

@@ -8,6 +8,14 @@
     "footer": "hechos"
   },
   "ratio": "{done} de {total}",
+  "flexible": {
+    "group": "{name} · por semana y por mes",
+    "week": "{count, plural, one {# vez por semana} other {# veces por semana}}",
+    "month": "{count} al mes",
+    "weekProgress": "{done} de {total} esta semana",
+    "monthProgress": "{done} de {total} este mes",
+    "detail": "{cadence} · {progress}"
+  },
   "unreadableEvidence": "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.",
   "weekdayShort": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
   "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
