@@ -15,15 +15,24 @@
   white-space: nowrap;
 }
 
+/* The day columns are what a week is read by: at 1024 the name column gives
+   way to them before a header or a tally wraps. */
 .nameColumn {
-  inline-size: 260px;
+  inline-size: 168px;
+}
+
+@media (min-width: 1280px) {
+  .nameColumn {
+    inline-size: 200px;
+  }
 }
 
 .day {
-  padding: 8px;
+  padding: 8px 4px;
   text-align: center;
+  white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--pulsar-muted);
 }
@@ -35,6 +44,46 @@
 
 .head.today {
   border-radius: 10px 10px 0 0;
+}
+
+/* The header stays under the top of the viewport while the rows scroll past
+   it. The fill is opaque: today's tint is laid over the card's own colour so
+   the rows under it never show through. */
+.head {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background-color: var(--pulsar-raised);
+  box-shadow: 0 1px 0 var(--pulsar-line);
+}
+
+.head.today {
+  background-image: linear-gradient(var(--pulsar-accent-soft), var(--pulsar-accent-soft));
+}
+
+/* The width the header's own text has to draw in: «hoy» rides beside the day
+   only where the column holds the whole label. */
+.headBox {
+  display: block;
+  container-type: inline-size;
+}
+
+.mark {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@container (min-width: 89px) {
+  .mark {
+    position: static;
+    inline-size: auto;
+    block-size: auto;
+    overflow: visible;
+    clip-path: none;
+  }
 }
 
 /* The link fills the header cell: its 8px padding is taken back by a negative
@@ -118,7 +167,8 @@
 }
 
 .footCell {
-  padding: 14px 8px;
+  padding: 14px 4px;
+  white-space: nowrap;
   border-block-start: 1px solid var(--pulsar-line);
   text-align: center;
   font-family: var(--font-mono);

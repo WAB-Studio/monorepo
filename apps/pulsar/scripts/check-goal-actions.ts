@@ -85,6 +85,8 @@ let createGoal: typeof import("@/app/actions/plan").createGoal;
 let createOneOff: typeof import("@/app/actions/one-offs").createOneOff;
 let scheduleOneOff: typeof import("@/app/actions/one-offs").scheduleOneOff;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
+let addPhase: typeof import("@/app/actions/plan").addPhase;
+let addCommitment: typeof import("@/app/actions/plan").addCommitment;
 let declareFact: typeof import("@/app/actions/facts").declareFact;
 let todayInZone: typeof import("@/lib/zone").todayInZone;
 let PAST_DAY_LIMIT: number;
@@ -123,7 +125,7 @@ let fixtureGoalId: string;
 
 before(async () => {
   installStubs(loadCookies());
-  ({ renameGoal, createGoal, moveHorizon } = await import("@/app/actions/plan"));
+  ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment } = await import("@/app/actions/plan"));
   ({ createOneOff, scheduleOneOff } = await import("@/app/actions/one-offs"));
   ({ declareFact } = await import("@/app/actions/facts"));
   ({ todayInZone } = await import("@/lib/zone"));
@@ -495,5 +497,55 @@ test("scheduleOneOff: a one-off dated after today moves; one dated today is refu
       await sql`delete from goals.facts where one_off_id in ${sql(ids)}`;
       await sql`delete from goals.one_offs where id in ${sql(ids)}`;
     }
+  }
+});
+
+test("addPhase and addCommitment: an ended or archived goal is refused as a goal that is gone and writes nothing; an open one lands both", async () => {
+  const open = await createGoal({ name: "RP-88 abierta", horizon: shiftDay(today, 60) });
+  if (!open.ok) throw new Error(open.error);
+  const [ended] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, 'RP-88 terminada', ${today}, now() - interval '20 days') returning id`;
+  const [archived] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, archived_at)
+    values (${personId}, 'RP-88 archivada', ${shiftDay(today, 60)}, now()) returning id`;
+  const phase = (goalId: string) => ({
+    goalId,
+    aim: "RP-88 fase",
+    startsOn: shiftDay(today, -10),
+    endsOn: shiftDay(today, -3),
+  });
+  const commitment = (goalId: string) => ({
+    goalId,
+    name: "RP-88 compromiso",
+    cadenceKind: "daily" as const,
+    satisfaction: "tap" as const,
+  });
+  const written = async (goalId: string) => {
+    const [row] = await sql<{ phases: number; commitments: number }[]>`
+      select (select count(*)::int from goals.phases where goal_id = ${goalId}) as phases,
+             (select count(*)::int from goals.commitments where goal_id = ${goalId}) as commitments`;
+    return row;
+  };
+  try {
+    for (const goalId of [ended.id, archived.id]) {
+      const refusedPhase = await addPhase(phase(goalId));
+      assert.equal(refusedPhase.ok, false);
+      if (!refusedPhase.ok) assert.equal(refusedPhase.error, "plan.errors.goalNotFound");
+
+      const refusedCommitment = await addCommitment(commitment(goalId));
+      assert.equal(refusedCommitment.ok, false);
+      if (!refusedCommitment.ok) assert.equal(refusedCommitment.error, "plan.errors.goalNotFound");
+
+      assert.deepEqual(await written(goalId), { phases: 0, commitments: 0 });
+    }
+
+    const landedPhase = await addPhase({ ...phase(open.goalId), startsOn: shiftDay(today, 1), endsOn: shiftDay(today, 8) });
+    assert.equal(landedPhase.ok, true);
+    const landedCommitment = await addCommitment(commitment(open.goalId));
+    assert.equal(landedCommitment.ok, true);
+    assert.deepEqual(await written(open.goalId), { phases: 1, commitments: 1 });
+  } finally {
+    await sql`delete from goals.goals where id in ${sql([open.goalId, ended.id, archived.id])}`;
   }
 });

@@ -10,16 +10,14 @@
 @media (min-width: 1024px) {
   .split {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
-    grid-template-rows: auto auto;
+    /* Main is always the wider column: below 1280 the two share what the rail
+       leaves, three parts to two, and the fixed aside waits for the room. */
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: auto 1fr;
     column-gap: 24px;
     /* Between the two cards of the right column. */
     row-gap: 18px;
     align-items: start;
-  }
-
-  .asideWide {
-    grid-template-columns: minmax(0, 1fr) 380px;
   }
 
   .main {
@@ -43,5 +41,15 @@
 
   .noBefore .after {
     grid-row: 1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+
+  .asideWide {
+    grid-template-columns: minmax(0, 1fr) 380px;
   }
 }

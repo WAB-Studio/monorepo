@@ -15,6 +15,9 @@ type PulsarTextProps = {
   tone?: Tone;
   // Pushes the text to the end of a flex row, after a name it annotates.
   end?: boolean;
+  // A `title` that reads as body text from the desktop rail on, where the page
+  // already has its headline above the card.
+  plainWide?: boolean;
 };
 
 const variants: Record<Variant, string | undefined> = {
@@ -38,8 +41,8 @@ const tones: Record<Tone, string> = {
 // union over the element it renders and a plain `Omit` would collapse it to one.
 type Narrowed<T> = T extends unknown ? Omit<T, "color" | "highContrast" | "size"> : never;
 
-export function Text({ variant = "body", tone, end, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
-  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, className]
+export function Text({ variant = "body", tone, end, plainWide, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
+  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, className]
     .filter(Boolean)
     .join(" ");
   return <ThemesText {...props} className={merged || undefined} />;

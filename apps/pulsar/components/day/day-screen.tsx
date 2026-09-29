@@ -158,9 +158,11 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     </>
   ) : lastEnded ? (
     <Panel as="div">
-      <Text as="p" variant="title">
-        {t("day.allEnded.title")}
-      </Text>
+      {oneOffs.length === 0 ? (
+        <Text as="p" variant="title" plainWide>
+          {t("day.allEnded.title")}
+        </Text>
+      ) : null}
       <Text as="p">
         {t("day.allEnded.body", {
           goal: lastEnded.name,

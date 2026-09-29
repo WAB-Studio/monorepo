@@ -2,7 +2,7 @@
   "range": "Del {start} al {end}",
   "sectionLabel": "{name} · semana {week} de {total}",
   "today": "hoy",
-  "todayColumn": "{label} · hoy",
+  "todayMark": "· hoy",
   "table": {
     "caption": "La semana, un compromiso por fila y un día por columna",
     "footer": "hechos"

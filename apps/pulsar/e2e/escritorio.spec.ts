@@ -348,3 +348,258 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
     }
   });
 }
+
+// Module 88: what the critic measured at 1024 and 1280. A person of the
+// spec's own for each: `layout` is a wide open plan, `closed` holds no open
+// goal at all, so neither depends on a sibling's rows.
+const LAYOUT_GOAL = `Meta de medición amplia con un nombre largo ${stamp}`;
+const LONG_COMMITMENT = "Dormir ocho horas antes de un día de entrenamiento fuerte";
+const CLOSED_ENDED = `Meta terminada cerrada ${stamp}`;
+const CLOSED_ARCHIVED = `Meta archivada cerrada ${stamp}`;
+const BANK = `Llamar al banco ${stamp}`;
+
+type Desk = { layoutSession: string; layoutGoalId: string; closedSession: string; endedId: string; archivedId: string; closedId: string };
+
+const deskTest = test.extend<object, { desk: Desk }>({
+  desk: [
+    async ({}, provide, workerInfo) => {
+      const baseURL = workerInfo.project.use.baseURL ?? "http://localhost:3200";
+      const lane = laneNumber();
+      const layout = mintDisposablePerson(9700 + lane * 10 + workerInfo.parallelIndex, baseURL);
+      const closed = mintDisposablePerson(9600 + lane * 10 + workerInfo.parallelIndex, baseURL);
+      const admin = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+      try {
+        const created = new Date(Date.now() - 20 * 86_400_000);
+        const [goal] = await admin<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon, created_at, measure_name, measure_unit)
+          values (${layout.id}, ${LAYOUT_GOAL}, ${shift(today, 90)}, ${created}, 'Sueño', 'horas') returning id
+        `;
+        await admin`
+          insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+          values (${layout.id}, ${goal.id}, 'Sostener el ritmo diario', ${shift(today, -7)}, ${shift(today, 30)})
+        `;
+        for (let index = 0; index < 16; index++) {
+          const name = index === 0 ? LONG_COMMITMENT : `Compromiso de la tabla ${index}`;
+          const [row] = await admin<{ id: string }[]>`
+            insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+            values (${layout.id}, ${goal.id}, ${name}, 'daily', 'tap', ${created}) returning id
+          `;
+          if (index < 3) await admin`insert into goals.facts (user_id, commitment_id, day) values (${layout.id}, ${row.id}, ${today})`;
+        }
+
+        const [ended] = await admin<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon, created_at)
+          values (${closed.id}, ${CLOSED_ENDED}, ${today}, ${created}) returning id
+        `;
+        const [archived] = await admin<{ id: string }[]>`
+          insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+          values (${closed.id}, ${CLOSED_ARCHIVED}, ${shift(today, 60)}, ${created}, now()) returning id
+        `;
+        await admin`insert into goals.one_offs (user_id, name, day) values (${closed.id}, ${BANK}, ${today})`;
+
+        await provide({
+          layoutSession: layout.sessionFile,
+          layoutGoalId: goal.id,
+          closedSession: closed.sessionFile,
+          endedId: ended.id,
+          archivedId: archived.id,
+          closedId: closed.id,
+        });
+      } finally {
+        for (const id of [layout.id, closed.id]) {
+          await admin`delete from goals.facts where user_id = ${id}`;
+          await admin`delete from goals.one_offs where user_id = ${id}`;
+          await admin`delete from goals.goals where user_id = ${id}`;
+        }
+        await admin.end();
+      }
+    },
+    { scope: "worker" },
+  ],
+});
+
+// The width of the card a piece of text stands in.
+function cardWidth(locator: Locator): Promise<number> {
+  return locator.evaluate((el) => {
+    let node: Element | null = el;
+    while (node && getComputedStyle(node).borderTopLeftRadius !== "14px") node = node.parentElement;
+    return node ? node.getBoundingClientRect().width : 0;
+  });
+}
+
+deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and the side cards stack with no hole (module 88)", async ({ browser, baseURL, desk }) => {
+  const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1024, 800);
+  try {
+    await page.goto("/");
+    const goalCard = await cardWidth(page.getByText(LAYOUT_GOAL, { exact: true }).first());
+    const oneOffs = await cardWidth(page.getByText("Sueltas", { exact: true }).first());
+    expect(goalCard).toBeGreaterThan(oneOffs);
+
+    await page.goto(`/metas/${desk.layoutGoalId}`);
+    const commitments = await cardWidth(page.getByText(LONG_COMMITMENT, { exact: true }));
+    const end = page.getByText("el final", { exact: true });
+    const side = await cardWidth(end);
+    expect(commitments).toBeGreaterThan(side);
+    // «Dormir ocho horas antes de un día de entrenamiento fuerte» took five lines in the narrow column.
+    const lines = await page.getByText(LONG_COMMITMENT, { exact: true }).evaluate(
+      (el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
+    );
+    expect(lines).toBeLessThanOrEqual(2);
+
+    // The phases card follows the measure card by the row gap alone.
+    const gap = await page.evaluate(() => {
+      const card = (text: string) => {
+        const label = [...document.querySelectorAll("*")].find((el) => el.children.length === 0 && el.textContent?.trim().toLowerCase() === text)!;
+        let node: Element | null = label;
+        while (node && getComputedStyle(node).borderTopLeftRadius !== "14px") node = node.parentElement;
+        return node!.getBoundingClientRect();
+      };
+      return card("una fase").top - card("ver por semana").bottom;
+    });
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThanOrEqual(60);
+  } finally {
+    await context.close();
+  }
+});
+
+deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on the goal (module 88)", async ({ browser, baseURL, desk }) => {
+  const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1280, 800);
+  try {
+    await page.goto("/");
+    expect(await cardWidth(page.getByText("Sueltas", { exact: true }).first())).toBe(360);
+    await page.goto(`/metas/${desk.layoutGoalId}`);
+    expect(await cardWidth(page.getByText("el final", { exact: true }))).toBe(380);
+  } finally {
+    await context.close();
+  }
+});
+
+deskTest("Semana's day header stays in view and opaque once the rows scroll, at 1280 (module 88)", async ({ browser, baseURL, desk }) => {
+  const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1280, 800);
+  try {
+    await page.goto("/semana");
+    const table = page.getByRole("table");
+    await expect(table).toBeVisible();
+    const scrollable = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+    expect(scrollable).toBeGreaterThan(400);
+    await page.evaluate(() => window.scrollTo(0, 500));
+
+    const head = await table.getByRole("columnheader").first().evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return {
+        top: rect.top,
+        covered: !el.contains(hit),
+        fill: getComputedStyle(el).backgroundColor,
+        card: getComputedStyle(el.closest("table")!.parentElement!).backgroundColor,
+      };
+    });
+    expect(Math.abs(head.top)).toBeLessThanOrEqual(1);
+    expect(head.covered).toBe(false);
+    expect(head.fill).toBe(head.card);
+
+    // Dark: the same fill as the card, never transparent.
+    await page.evaluate(() => {
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
+    });
+    const dark = await table.getByRole("columnheader").first().evaluate((el) => ({
+      fill: getComputedStyle(el).backgroundColor,
+      card: getComputedStyle(el.closest("table")!.parentElement!).backgroundColor,
+    }));
+    expect(dark.fill).not.toBe("rgba(0, 0, 0, 0)");
+    expect(dark.fill).toBe(dark.card);
+  } finally {
+    await context.close();
+  }
+});
+
+deskTest("at 1024 no day header and no tally on Semana wraps (module 88)", async ({ browser, baseURL, desk }) => {
+  const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1024, 800);
+  try {
+    await page.goto("/semana");
+    await expect(page.getByRole("table")).toBeVisible();
+    const lines = await page.evaluate(() =>
+      [...document.querySelectorAll("thead th, tfoot td")]
+        .filter((el) => (el.textContent ?? "").trim() !== "")
+        .map((el) => {
+          // Drawn text only: the clipped mark holds a text node of its own.
+          const tops = new Set<number>();
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!(node.textContent ?? "").trim()) continue;
+            if (getComputedStyle(node.parentElement!).clipPath !== "none") continue;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+          }
+          return { text: (el.textContent ?? "").trim(), lines: tops.size };
+        }),
+    );
+    // Seven day headers and the tallies of the days up to today.
+    expect(lines.length).toBeGreaterThanOrEqual(9);
+    expect(lines.filter((entry) => entry.lines > 1)).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
+deskTest("Hoy with every goal ended drops «Hoy no pide nada.» while a one-off waits, and says it as body text at 1280 (module 88)", async ({ browser, baseURL, desk }) => {
+  const admin = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const sentence = "Hoy no pide nada.";
+  const wide = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 1280, 800);
+  const phone = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 360, 740);
+  try {
+    // A one-off waits: the ended-goal line and its two ways stay, the sentence goes.
+    await wide.page.goto("/");
+    await expect(wide.page.getByText(BANK, { exact: true })).toBeVisible();
+    await expect(wide.page.getByText(`${CLOSED_ENDED} terminó el`)).toBeVisible();
+    await expect(wide.page.getByRole("link", { name: "Ver las metas" })).toBeVisible();
+    await expect(wide.page.getByRole("link", { name: "Abrir otra meta" })).toBeVisible();
+    await expect(wide.page.getByText(sentence)).toHaveCount(0);
+
+    // Nothing waits: the sentence is body text beside the rail and the phone's title on the phone.
+    await admin`delete from goals.one_offs where user_id = ${desk.closedId}`;
+    await wide.page.reload();
+    await phone.page.goto("/");
+    await expect(wide.page.getByText(sentence)).toBeVisible();
+    await expect(wide.page.getByText(sentence)).toHaveCSS("font-size", "15px");
+    await expect(phone.page.getByText(sentence)).toBeVisible();
+    await expect(phone.page.getByText(sentence)).toHaveCSS("font-size", "27px");
+  } finally {
+    await wide.context.close();
+    await phone.context.close();
+    await admin`insert into goals.one_offs (user_id, name, day) values (${desk.closedId}, ${BANK}, ${today})`;
+    await admin.end();
+  }
+});
+
+deskTest("an ended or archived goal is «no existe» on «fases/nueva» and on «compromisos/nuevo» (module 88)", async ({ browser, baseURL, desk }) => {
+  const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 1280, 800);
+  try {
+    for (const id of [desk.endedId, desk.archivedId]) {
+      for (const path of ["fases/nueva", "compromisos/nuevo"]) {
+        // The stream has begun by the time `notFound` throws, so the answer is the page's own.
+        await page.goto(`/metas/${id}/${path}`);
+        await expect(page.getByRole("heading", { name: "Esta página no existe" }), `${id}/${path}`).toBeVisible();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+deskTest("an archived goal's overline says it is archived, and an open one still says it was opened (module 88)", async ({ browser, baseURL, desk }) => {
+  const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 1280, 800);
+  const on = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "America/Bogota" }).format(new Date());
+  try {
+    await page.goto(`/metas/${desk.archivedId}`);
+    await expect(page.getByText(`meta · archivada el ${on}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(/abierta el/)).toHaveCount(0);
+    await page.goto(`/metas/${desk.endedId}`);
+    await expect(page.getByText(/^meta · abierta el /)).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
