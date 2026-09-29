@@ -57,6 +57,7 @@ type FactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
+  one_off_name: string | null;
 };
 
 type WeekQueryRow = {
@@ -87,7 +88,9 @@ type EvidenceOutcome = {
  * day.ts` applies — a bare cast renders in the session's zone (UTC), which
  * would keep a commitment retired after 19:00 Bogotá live one day too long.
  *
- * `goals` excludes an archived one (RP-24), the same filter `lib/queries/
+ * `goals` excludes an archived one (RP-24) and one that ended before the
+ * week began; a goal that ended mid-week stays, it lived through the days
+ * before. The same archived filter `lib/queries/
  * day.ts`'s own `queryGoalsRow` carries: `WeekScreen` (module 17) only ever
  * groups a dot under a goal it finds here, and `goals.length === 0` is what
  * decides the week's own empty state (`empty-week.tsx`).
@@ -101,7 +104,7 @@ async function queryGoalsRow(
     select
       (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
          from "goals"."goals" g
-         where g.archived_at is null) as goals,
+         where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
@@ -114,10 +117,12 @@ async function queryGoalsRow(
          where p.starts_on <= ${weekEnd}::date
            and (p.ends_on is null or p.ends_on >= ${weekStart}::date)) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', c.unit,
+                 'one_off_name', o.name
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
+         left join "goals"."one_offs" o on o.id = f.one_off_id
          where f.day between ${weekStart}::date and ${weekEnd}::date) as facts
   `);
 
@@ -192,6 +197,8 @@ function toCommitmentGoal(row: CommitmentRow): CommitmentGoal {
 // facts.ts`), and null for a one-off that belongs to nothing — RP-20's own
 // text says the week still shows it, with no goal section to draw it under.
 export type OneOffFact = {
+  oneOffId: string;
+  name: string;
   day: string;
   goalId: string | null;
 };
@@ -257,6 +264,11 @@ export async function loadWeek(anyDayInIt: string): Promise<{
     // subject" means never both), read back out here instead.
     oneOffFacts: row.facts
       .filter((fact) => fact.one_off_id !== null)
-      .map((fact) => ({ day: fact.day, goalId: fact.goal_id })),
+      .map((fact) => ({
+        oneOffId: fact.one_off_id as string,
+        name: fact.one_off_name ?? "",
+        day: fact.day,
+        goalId: fact.goal_id,
+      })),
   };
 }
