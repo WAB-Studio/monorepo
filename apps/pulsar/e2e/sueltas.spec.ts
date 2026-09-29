@@ -1,6 +1,9 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, laneNumber, seededPerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // The one-offs with no day wait in `/sueltas` (`SueltasSinDia.dc.html`): each
@@ -23,6 +26,27 @@ async function seedDayless(
     values (${personId}, ${name}, null, ${goalId ?? null}) returning id
   `;
   return row.id;
+}
+
+// A person of this spec's own: the lane's shared one may hold other specs'
+// rows, so only a fresh identity can promise that nothing else waits. Minted
+// at a disposable lane (offset from `fases.spec.ts` and `varias-metas.spec.ts`)
+// and registered under the suite's run, whose teardown drops it.
+function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
+  execFileSync(
+    process.execPath,
+    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
+    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
+  );
+  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
+  const previous = process.env.HARNESS_LANE;
+  process.env.HARNESS_LANE = String(lane);
+  try {
+    return { id: seededPerson().id, sessionFile };
+  } finally {
+    if (previous === undefined) delete process.env.HARNESS_LANE;
+    else process.env.HARNESS_LANE = previous;
+  }
 }
 
 async function rowOf(db: postgres.Sql, oneOffId: string) {
@@ -52,7 +76,7 @@ test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds
     await expect(page).toHaveURL(/\/sueltas$/);
 
     await expect(page.getByRole("button", { name: new RegExp(`^${name} de `) })).toBeVisible();
-    await expect(page.getByText(`de ${goalName.toLocaleLowerCase("es")}`)).toBeVisible();
+    await expect(page.getByText(`de ${goalName}`)).toBeVisible();
     await expect(page.getByRole("navigation").getByRole("link", { name: "Hoy" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -132,14 +156,17 @@ test("completed from the list it lands in «hechas hoy» (RP-21, RP-19)", async 
 });
 
 test("deleted from the sheet its row is gone from the database, and the last one draws the empty state (RP-22)", async ({
-  page,
+  browser,
+  baseURL,
   db,
-  personId,
 }) => {
+  const person = mintDisposablePerson(9600 + laneNumber(), baseURL ?? "http://localhost:3200");
   const name = `Suelta a borrar de la lista ${Date.now()}`;
-  const oneOffId = await seedDayless(db, personId, name);
+  const oneOffId = await seedDayless(db, person.id, name);
+  const context = await browser.newContext({ storageState: person.sessionFile });
 
   try {
+    const page = await context.newPage();
     await page.goto("/sueltas");
     await page.getByRole("button", { name, exact: true }).click();
     await page.getByRole("button", { name: "Borrarla" }).click();
@@ -147,13 +174,15 @@ test("deleted from the sheet its row is gone from the database, and the last one
     await expect(sheet).toContainText("¿Borrarla?");
     await sheet.getByRole("button", { name: "Borrarla" }).click();
 
-    await expect(page.getByText("Nada espera sin día.")).toBeVisible();
-    await expect(page.getByRole("link", { name: "volver a hoy" })).toHaveAttribute("href", "/");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await rowOf(db, oneOffId)).toHaveLength(0);
+    await expect(page.getByText("Nada espera, ni sin día ni para otro día.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Volver a hoy", exact: true })).toHaveAttribute("href", "/");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       page.viewportSize()?.width ?? 1280,
     );
   } finally {
+    await context.close();
     await db`delete from goals.one_offs where id = ${oneOffId}`;
   }
 });
