@@ -107,3 +107,34 @@ test("at 360 the order is the phone's: end, commitments, phases, then «Archivar
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
 });
+
+test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase» sits right of the phases label (RNP-11)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const goalId = await seedGoal(db, personId, `Meta sin cifra ${Date.now()}`);
+  await db`delete from goals.phases where goal_id = ${goalId}`;
+  try {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(`/metas/${goalId}`);
+
+    const cards = await page.locator("main").evaluate((main) =>
+      Array.from(main.querySelectorAll("*"))
+        .filter((el) => {
+          const style = getComputedStyle(el);
+          return style.borderTopWidth === "1px" && style.borderTopLeftRadius === "14px";
+        })
+        .map((el) => (el as HTMLElement).innerText.trim()),
+    );
+    expect(cards).toHaveLength(3);
+    for (const text of cards) expect(text).not.toBe("");
+
+    const label = await boxOf(page, "cero fases");
+    const add = await page.getByRole("link", { name: "Añadir una fase" }).boundingBox();
+    expect(add!.x).toBeGreaterThan(label.x + 150);
+    expect(Math.abs(add!.y + add!.height / 2 - (label.y + 8))).toBeLessThan(30);
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});

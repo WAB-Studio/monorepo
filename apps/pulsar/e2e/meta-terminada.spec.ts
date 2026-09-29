@@ -45,7 +45,17 @@ test("an ended goal reads «terminó el» and yesterday, offers both acts and ne
   const { goalId } = await seedEnded(db, personId, `Meta terminada ${Date.now()}`);
   try {
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText(`terminó el ${civilDateLabel(dayBefore(todayInZone()), true)}`)).toBeVisible();
+    // «terminó el lunes 28 de septiembre»: weekday, day and month, no comma.
+    const yesterday = new Intl.DateTimeFormat("es-CO", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    }).formatToParts(new Date(`${dayBefore(todayInZone())}T12:00:00Z`));
+    const part = (type: string) => yesterday.find((p) => p.type === type)!.value;
+    await expect(
+      page.getByText(`terminó el ${part("weekday")} ${part("day")} de ${part("month")}`, { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText(/semanas? · hasta el /)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Archivar", exact: true })).toBeVisible();
@@ -96,6 +106,27 @@ test("archiving an ended goal moves it to «Archivadas» (RP-24)", async ({ page
     await page.goto("/metas");
     const archived = page.locator("section", { hasText: "Archivadas" });
     await expect(archived.getByRole("link", { name })).toBeVisible();
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});
+
+test("an archived goal keeps «Reabrir» and nothing else: no «Renombrar», no «Archivar» (RP-24)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const { goalId } = await seedEnded(db, personId, `Meta archivada ${Date.now()}`);
+  await db`update goals.goals set archived_at = now() where id = ${goalId}`;
+  try {
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/metas/${goalId}`);
+      await expect(page.getByRole("button", { name: "Reabrir" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Renombrar" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^Archivar/ })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /mover el final/i })).toHaveCount(0);
+    }
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
