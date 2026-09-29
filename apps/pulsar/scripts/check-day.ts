@@ -2079,6 +2079,20 @@ async function runEndedThisWeekCheck(): Promise<void> {
       sunday.length === 3 && sunday[0].lastDay === "2010-06-10",
       `endedThisWeek on Sunday = ${JSON.stringify(sunday)}`,
     );
+
+    // A fixed week (Mon 2010-08-02): endings on Monday, Tuesday and Thursday
+    // read from its Friday, in horizon-descending order, and none from before.
+    const before = await seedGoal("fixed-week before", "2010-08-02");
+    const fixedMon = await seedGoal("fixed-week mon", "2010-08-03");
+    const fixedTue = await seedGoal("fixed-week tue", "2010-08-04");
+    const fixedThu = await seedGoal("fixed-week thu", "2010-08-06");
+    const fixed = (await loadDay("2010-08-06")).endedThisWeek.filter((goal) => goal.name.startsWith("fixed-week"));
+    assert(
+      "endedThisWeek from a Friday holds the Thursday, Tuesday and Monday endings in horizon-descending order, none from the week before",
+      JSON.stringify(fixed.map((goal) => [goal.id, goal.lastDay])) ===
+        JSON.stringify([[fixedThu, "2010-08-05"], [fixedTue, "2010-08-03"], [fixedMon, "2010-08-02"]]),
+      `endedThisWeek = ${JSON.stringify(fixed)}; the previous week's goal ${before} must be absent`,
+    );
   } finally {
     if (ids.length > 0) await db`delete from goals.goals where id in ${db(ids)}`;
     await db.end();
