@@ -10,15 +10,19 @@
   },
   "detail": {
     "overline": "meta · abierta el {date}",
-    "horizonUntil": "{weeks} semanas · hasta el {date}",
+    "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
     "measures": "mide {measure}",
     "moveHorizon": "mover el final",
+    "moveHorizonEnded": "Mover el final",
     "commitmentsCount": "{word} {count, plural, one {compromiso} other {compromisos}}",
     "phasesCount": "{word} {count, plural, one {fase} other {fases}}",
     "phaseSpan": "semanas {start}–{end}",
     "unreadableEvidence": "No pudimos leer una fuente. Lo declarado sigue aquí.",
     "rename": "Renombrar",
     "archive": "Archivar esta meta",
+    "archiveShort": "Archivar",
+    "endedOn": "terminó el {date}",
+    "endHeading": "el final",
     "reopen": "Reabrir",
     "reviewLink": "Ver por semana"
   },
@@ -85,11 +89,12 @@
   "list": {
     "title": "tus metas",
     "addAnother": "Abrir otra meta",
+    "endedTitle": "terminadas",
     "archivedTitle": "Archivadas"
   },
   "horizon": {
     "title": "¿Cuántas semanas?",
-    "weeksLabel": "semanas desde el {date}",
+    "weeksLabel": "semanas, contando la del {date}",
     "endsOn": "termina el {date}",
     "confirm": "Moverlo",
     "cancel": "Dejarlo como está"
