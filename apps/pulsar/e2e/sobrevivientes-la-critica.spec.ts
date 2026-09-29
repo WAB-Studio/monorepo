@@ -146,7 +146,7 @@ test("a horizon typed short of the latest phase names that phase, not an earlier
     `;
     const before = await horizonOf(db, goalId);
     const sheet = await openHorizonSheet(page, goalId);
-    await sheet.getByLabel(/^semanas desde el /i).fill("5");
+    await sheet.getByLabel(/^semanas, contando la del /i).fill("5");
     await sheet.getByRole("button", { name: "Moverlo" }).click();
 
     await expect(
@@ -167,7 +167,7 @@ test("520 weeks reads as a horizon and 521 is refused with the column unchanged 
   try {
     const before = await horizonOf(db, goalId);
     const sheet = await openHorizonSheet(page, goalId);
-    const field = sheet.getByLabel(/^semanas desde el /i);
+    const field = sheet.getByLabel(/^semanas, contando la del /i);
 
     await field.fill("520");
     await expect(

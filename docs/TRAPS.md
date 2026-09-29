@@ -2509,3 +2509,15 @@ server (`CONNECTION_ENDED`, 404 on `/compromisos/nuevo`) that vanished after a r
   provisional.
 - Specs whose click lands on a control the dev overlay covers (`<nextjs-portal>` intercepts pointer
   events) fail under `next dev` only. `playwright.config.ts` says `next build && next start`; use it.
+
+## `CONNECTION_ENDED` after a 30 s timeout is the fixture closing, not the pooler
+
+Measured 2026-09-29 in `apps/pulsar`: `sobrevivientes-la-critica.spec.ts:132` and `:161` reported
+`Test timeout of 30000ms` then `write CONNECTION_ENDED`. The page snapshot in `error-context.md` showed
+the sheet open; the spec looked for the field by a label module 83 had renamed
+(`semanas desde el` became `semanas, contando la del`), so `fill` waited out the clock and the
+fixture's `db` closed under the pending query.
+
+- Read the `error-context.md` page snapshot before the error line. A timeout plus `CONNECTION_ENDED`
+  is a locator that never matched.
+- Grep `e2e/` for a string a module renames in `messages/`; a spec that types a label rots silently.
