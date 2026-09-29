@@ -490,6 +490,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Hoy with every goal ended and none open** reads «Hoy no pide nada.», names the goal that ended
   and its day, and offers «Ver las metas» solid and «Abrir otra meta» outlined; goalless one-offs
   still draw below. Decided 2026-09-29 by the coordinator; board approved by the user.
+- **An archived goal's overline reads «meta · archivada el {date}»**, the day it was archived in the
+  person's zone, in place of «meta · abierta el {date}». Decided 2026-09-29 by the coordinator.
 - **Hoy's desktop figure is each open goal's measure this week**, one card per goal with a measure:
   its name, the number, «esta semana», «Ver por semana». A goal without a measure draws no card.
   Decided 2026-09-29 by the coordinator, reading `HoyEscritorio.dc.html`.
@@ -503,3 +505,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **The time of a done one-off goes under its name.** Decided 2026-09-29 by the coordinator.
 - **The rail's date is short: «martes 22 sep»** (`civilDateShort`). Decided 2026-09-29 by the
   coordinator.
+- **«Hoy no pide nada.» only when nothing is asked and nothing waits today.** With every goal ended and
+  a one-off still due, Hoy keeps the ended-goal line and its two buttons and drops the sentence. From
+  1024 the sentence is body text, never a second headline under «Hoy». Decided 2026-09-29 by the
+  coordinator, after the critic found it contradicting a waiting one-off.
+- **Two columns split 3:2 from 1024, and fix the aside at 1280.** Below 1280 the main column (goals,
+  commitments) takes three parts and the aside two; from 1280 the aside keeps the boards' own width.
+  No board draws 1024; this is the coordinator's reading. Decided 2026-09-29 by the coordinator.
+- **Semana's name column is 200 px at 1280**, not the 260 `SemanaEscritorio.dc.html` draws, so a day
+  header reads «mar 29 · hoy» on one line; the header row stays in view while the table scrolls.
+  Decided 2026-09-29 by the coordinator.

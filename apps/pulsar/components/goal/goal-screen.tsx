@@ -36,14 +36,15 @@ import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";
 
-// "22 de septiembre": the day the goal was opened, in the person's own zone
-// (RNP-06) and in words, never a locale this design does not otherwise use.
-function openedOnLabel(createdAt: string): string {
+// "22 de septiembre": the day a goal was opened or archived, in the person's
+// own zone (RNP-06) and in words, never a locale this design does not
+// otherwise use.
+function longDateLabel(instant: string): string {
   return new Intl.DateTimeFormat("es-CO", {
     day: "numeric",
     month: "long",
     timeZone: TIME_ZONE,
-  }).format(new Date(createdAt));
+  }).format(new Date(instant));
 }
 
 // «lunes 28 de septiembre»: the month always, so the week of today is not
@@ -245,7 +246,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   return (
     <Page>
       <Text as="p" variant="meta" tone="muted">
-        {t("goal.detail.overline", { date: openedOnLabel(goal.createdAt) })}
+        {goal.archivedAt
+          ? t("goal.detail.archivedOverline", { date: longDateLabel(goal.archivedAt) })
+          : t("goal.detail.overline", { date: longDateLabel(goal.createdAt) })}
       </Text>
       <Panel as="div" row>
         <Text as="p" variant="title">

@@ -127,7 +127,8 @@ export async function WeekScreen() {
     const isToday = dayView.day === today;
     return {
       key: dayView.day,
-      label: isToday ? t("week.todayColumn", { label }) : label,
+      label,
+      mark: isToday ? t("week.todayMark") : undefined,
       href: link?.href,
       hrefLabel: link?.label,
       today: isToday,

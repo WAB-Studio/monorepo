@@ -121,7 +121,7 @@ test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ browser, b
   }
 });
 
-test("with every goal ended and none open, Hoy names the goal and its last day, offers two ways on, and keeps the sueltas (RP-19)", async ({
+test("with every goal ended and none open and a suelta due, Hoy names the goal and its last day, offers two ways on, keeps the sueltas and drops the sentence (RP-19)", async ({
   browser,
   baseURL,
   db,
@@ -137,7 +137,8 @@ test("with every goal ended and none open, Hoy names the goal and its last day, 
   try {
     const page = await context.newPage();
     await page.goto("/");
-    await expect(page.getByText("Hoy no pide nada.")).toBeVisible();
+    // A suelta waits today: the sentence would be false.
+    await expect(page.getByText("Hoy no pide nada.")).toHaveCount(0);
     const yesterday = plusDays(-1);
     await expect(
       page.getByText(`Inglés Crítico terminó el ${words(yesterday, true)}. Puedes moverle el final o abrir otra.`),

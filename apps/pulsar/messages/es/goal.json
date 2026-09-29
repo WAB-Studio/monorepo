@@ -10,6 +10,7 @@
   },
   "detail": {
     "overline": "meta · abierta el {date}",
+    "archivedOverline": "meta · archivada el {date}",
     "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
     "measures": "mide {measure}",
     "moveHorizon": "mover el final",

@@ -43,6 +43,13 @@ export type MoveHorizonResult = { ok: true } | { ok: false; error: string };
 // rejection into the same generic failure.
 class NamedError extends Error {}
 
+// An archived or ended goal takes no new phase or commitment, and is refused
+// as a goal that is not there — what `compromisos/nuevo` and `fases/nueva`
+// answer with a 404. `listGoals` draws the same line.
+function isClosed(goal: { horizon: string; archivedAt: Date | string | null }): boolean {
+  return goal.archivedAt !== null || goal.horizon <= todayInZone();
+}
+
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal
 // (docs/TRAPS.md, "An array binding is not an array"). Built as an explicit
@@ -119,10 +126,10 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${goalId}::text, 0))`);
 
       const [goal] = await tx
-        .select({ id: goals.id, horizon: goals.horizon })
+        .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, goalId));
-      if (!goal) throw new NamedError("plan.errors.goalNotFound");
+      if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       // A goal names one horizon; a phase is a span of it, never past it.
       if (!phaseWithinHorizon({ startsOn, endsOn }, goal.horizon)) {
@@ -180,10 +187,10 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
   try {
     const commitmentId = await withGoalsDb(async (tx) => {
       const [goal] = await tx
-        .select({ id: goals.id })
+        .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, data.goalId));
-      if (!goal) throw new NamedError("plan.errors.goalNotFound");
+      if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       let sourceId: string | null = null;
       if (data.satisfaction === "evidence") {

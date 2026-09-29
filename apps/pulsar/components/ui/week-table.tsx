@@ -10,6 +10,10 @@ export type WeekTableColumn = {
   // A column with `href` is a link in its header; `hrefLabel` names it.
   href?: string;
   hrefLabel?: string;
+  // Said beside the label only where the column is wide enough to hold both;
+  // narrower, it stays in the header for a screen reader and the fill still
+  // marks the day.
+  mark?: string;
   today?: boolean;
 };
 
@@ -40,16 +44,19 @@ export function WeekTable({
       <caption className={styles.hidden}>{caption}</caption>
       <thead>
         <tr>
-          <td className={styles.nameColumn} />
+          <td className={join(styles.nameColumn, styles.head)} />
           {columns.map((column, index) => (
             <th key={column.key} scope="col" className={join(styles.day, shade(index), styles.head)}>
-              {column.href ? (
-                <Link href={column.href} aria-label={column.hrefLabel} className={styles.dayLink}>
-                  {column.label}
-                </Link>
-              ) : (
-                column.label
-              )}
+              <span className={styles.headBox}>
+                {column.href ? (
+                  <Link href={column.href} aria-label={column.hrefLabel} className={styles.dayLink}>
+                    {column.label}
+                  </Link>
+                ) : (
+                  column.label
+                )}
+                {column.mark ? <span className={styles.mark}> {column.mark}</span> : null}
+              </span>
             </th>
           ))}
         </tr>
