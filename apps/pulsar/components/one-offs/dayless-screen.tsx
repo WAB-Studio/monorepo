@@ -1,24 +1,36 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { Button, Flex, Page, SectionLabel, Text } from "@/components/ui";
-import { listDaylessOneOffs } from "@/lib/queries/one-offs";
+import { Button, Flex, Page, Text } from "@/components/ui";
+import { dayWords } from "@/lib/day/day-words";
+import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
+import { todayInZone } from "@/lib/zone";
 
-import { DaylessRow } from "./dayless-row";
+import { WaitingList } from "./waiting-list";
 
 /**
- * The one-offs with no day (RP-21, `SueltasSinDia.dc.html`): each can be done,
- * given a day or deleted. Empty, it says so and offers the way back only.
+ * What waits (RP-21, `SueltasProgramadas.dc.html`): the one-offs with no day,
+ * then those dated after today. Each can be done, moved or deleted from here.
  */
 export async function DaylessScreen() {
   const t = await getTranslations();
-  const oneOffs = await listDaylessOneOffs();
+  const today = todayInZone();
+  const [dayless, scheduled] = await Promise.all([
+    listDaylessOneOffs(),
+    listScheduledOneOffs(today),
+  ]);
 
-  const words = t.raw("day.past.countWords") as string[];
-  const count = oneOffs.length;
-  const caption = t(count === 1 ? "oneOffs.waitingOne" : "oneOffs.waitingMany", {
-    count: words[count] ?? String(count),
-  });
+  const weekdays = t.raw("day.weekdayLong") as string[];
+  const months = t.raw("day.monthLong") as string[];
+  const when = (day: string) => {
+    const words = dayWords(day, today);
+    const parts = {
+      weekday: weekdays[words.weekday],
+      day: words.day,
+      month: words.month === null ? "" : months[words.month],
+    };
+    return t(words.month === null ? "oneOffs.when" : "oneOffs.whenFar", parts);
+  };
 
   return (
     <Page>
@@ -37,21 +49,19 @@ export async function DaylessScreen() {
       <Text as="p" variant="title">
         {t("oneOffs.title")}
       </Text>
-      {count === 0 ? (
-        <Text as="p">{t("oneOffs.empty")}</Text>
-      ) : (
-        <section>
-          <SectionLabel>{caption}</SectionLabel>
-          {oneOffs.map((oneOff) => (
-            <DaylessRow
-              key={oneOff.id}
-              oneOffId={oneOff.id}
-              name={oneOff.name}
-              goalName={oneOff.goalName?.toLocaleLowerCase("es")}
-            />
-          ))}
-        </section>
-      )}
+      <WaitingList
+        dayless={dayless.map((oneOff) => ({
+          id: oneOff.id,
+          name: oneOff.name,
+          goalName: oneOff.goalName ?? undefined,
+        }))}
+        scheduled={scheduled.map((oneOff) => ({
+          id: oneOff.id,
+          name: oneOff.name,
+          goalName: oneOff.goalName ?? undefined,
+          scheduled: { day: oneOff.day, label: when(oneOff.day) },
+        }))}
+      />
     </Page>
   );
 }

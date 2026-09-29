@@ -52,7 +52,7 @@ test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds
     await expect(page).toHaveURL(/\/sueltas$/);
 
     await expect(page.getByRole("button", { name: new RegExp(`^${name} de `) })).toBeVisible();
-    await expect(page.getByText(`de ${goalName.toLocaleLowerCase("es")}`)).toBeVisible();
+    await expect(page.getByText(`de ${goalName}`)).toBeVisible();
     await expect(page.getByRole("navigation").getByRole("link", { name: "Hoy" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -147,9 +147,19 @@ test("deleted from the sheet its row is gone from the database, and the last one
     await expect(sheet).toContainText("¿Borrarla?");
     await sheet.getByRole("button", { name: "Borrarla" }).click();
 
-    await expect(page.getByText("Nada espera sin día.")).toBeVisible();
-    await expect(page.getByRole("link", { name: "volver a hoy" })).toHaveAttribute("href", "/");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await rowOf(db, oneOffId)).toHaveLength(0);
+    // The other worker may hold rows of this identity's own: the empty state
+    // is asserted only when the database says nothing else waits.
+    const [{ waiting }] = await db<{ waiting: number }[]>`
+      select count(*)::int as waiting from goals.one_offs o
+      where o.user_id = ${personId} and (o.day is null or o.day > ${todayInZone()}::date)
+        and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
+    `;
+    if (waiting === 0) {
+      await expect(page.getByText("Nada espera, ni sin día ni para otro día.")).toBeVisible();
+      await expect(page.getByRole("link", { name: "Volver a hoy", exact: true })).toHaveAttribute("href", "/");
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       page.viewportSize()?.width ?? 1280,
     );
