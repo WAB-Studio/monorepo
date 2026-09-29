@@ -510,7 +510,7 @@ async function runZoneCheck(): Promise<void> {
   const person = await getPerson();
   if (!person) throw new Error("runZoneCheck: no verified session");
 
-  const goal = await createGoal({ name: "check-day zone probe", horizon: "2019-12-31" });
+  const goal = await createGoal({ name: "check-day zone probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runZoneCheck: createGoal failed: ${goal.error}`);
 
   const commitment = await addCommitment({
@@ -583,7 +583,7 @@ async function runCadenceZoneCheck(): Promise<void> {
   const person = await getPerson();
   if (!person) throw new Error("runCadenceZoneCheck: no verified session");
 
-  const goal = await createGoal({ name: "check-day cadence zone probe", horizon: "2019-12-31" });
+  const goal = await createGoal({ name: "check-day cadence zone probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runCadenceZoneCheck: createGoal failed: ${goal.error}`);
 
   const commitment = await addCommitment({
@@ -650,7 +650,7 @@ async function runWeekCommitmentsZoneCheck(): Promise<void> {
   const person = await getPerson();
   if (!person) throw new Error("runWeekCommitmentsZoneCheck: no verified session");
 
-  const goal = await createGoal({ name: "check-day week-commitments zone probe", horizon: "2019-12-31" });
+  const goal = await createGoal({ name: "check-day week-commitments zone probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runWeekCommitmentsZoneCheck: createGoal failed: ${goal.error}`);
 
   const commitment = await addCommitment({
@@ -1865,6 +1865,88 @@ async function runDesktopSurvivorsCheck(): Promise<void> {
   }
 }
 
+// Semana counts a flexible cadence by its own period (module 91). The week
+// 2010-05-31..06-06 crosses a month, so «al mes» reaches facts the week's own
+// rows never read, and «por semana» must not read the week before.
+async function runFlexiblePeriodCheck(): Promise<void> {
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runFlexiblePeriodCheck: no verified session");
+  const userId = person.id;
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+
+  async function seedCommitment(name: string, kind: string, count: number | null): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+      values (${userId}, ${goalId}, ${name}, ${kind}, ${count}, 'tap', '2009-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    return row.id;
+  }
+  async function seedFacts(commitmentId: string, days: string[]): Promise<void> {
+    for (const day of days) {
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day)
+        values (${userId}, ${goalId}, ${commitmentId}, ${day}::date)
+      `;
+    }
+  }
+
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${userId}, 'check-91 flexible', '2099-12-31'::date, '2009-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+    const weekly = await seedCommitment("check-91 weekly", "times_per_week", 3);
+    const monthly = await seedCommitment("check-91 monthly", "times_per_month", 4);
+    const daily = await seedCommitment("check-91 daily", "daily", null);
+    // Weekly: two inside the week, one the week before. Monthly: four in June
+    // (two inside the week, two after it) and one in May inside the week, so
+    // counting the month by the week would say 3 and the month says 4.
+    await seedFacts(weekly, ["2010-05-31", "2010-06-02", "2010-05-25"]);
+    await seedFacts(monthly, ["2010-06-01", "2010-06-02", "2010-06-15", "2010-06-20", "2010-05-31"]);
+
+    const week = await loadWeek("2010-06-02");
+    const byId = new Map(week.commitments.map((c) => [c.id, c]));
+    assert(
+      "a times-per-week commitment counts the days it was done in this week only",
+      byId.get(weekly)?.periodDone === 2,
+      `periodDone = ${byId.get(weekly)?.periodDone}, seeded 2 in the week and 1 the week before`,
+    );
+    assert(
+      "a times-per-month commitment counts its month, past the week's own days and not the month before",
+      byId.get(monthly)?.periodDone === 4,
+      `periodDone = ${byId.get(monthly)?.periodDone}, seeded 4 in June (2 in the week) and 1 in May`,
+    );
+
+    // A week that begins inside the month: the fact before its Monday still
+    // belongs to the month, the one after its Sunday too.
+    const inside = await seedCommitment("check-91 monthly inside", "times_per_month", 5);
+    await seedFacts(inside, ["2010-06-03", "2010-06-15", "2010-06-30", "2010-05-30"]);
+    const later = await loadWeek("2010-06-16");
+    const insideRow = later.commitments.find((c) => c.id === inside);
+    assert(
+      "a times-per-month commitment counts a fact of its month before the week begins, and one after it ends",
+      insideRow?.periodDone === 3,
+      `periodDone = ${insideRow?.periodDone}, seeded 06-03 (before the week 06-14..20), 06-15, 06-30 and 05-30 (May)`,
+    );
+    assert(
+      "a daily commitment carries no period count",
+      byId.get(daily)?.periodDone === null,
+      `periodDone = ${byId.get(daily)?.periodDone}`,
+    );
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
+    await db.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -1944,6 +2026,7 @@ async function runMain(): Promise<void> {
   await runDaylessCountAndOrderCheck();
   await runEndedGoalScheduledCheck();
   await runDesktopSurvivorsCheck();
+  await runFlexiblePeriodCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

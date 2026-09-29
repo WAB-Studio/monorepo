@@ -32,7 +32,7 @@ export function WeekTable({
   groups: readonly {
     key: string;
     label: string;
-    rows: readonly { key: string; name: string; cells: readonly (WeekTableCell | null)[] }[];
+    rows: readonly { key: string; name: string; detail?: string; cells: readonly (WeekTableCell | null)[] }[];
   }[];
   footer?: { label: string; cells: readonly string[] };
 }) {
@@ -75,7 +75,14 @@ export function WeekTable({
             {group.rows.map((row) => (
               <tr key={row.key}>
                 <th scope="row" className={styles.name}>
-                  {row.name}
+                  {row.detail ? (
+                    <span className={styles.nameStack}>
+                      <span>{row.name}</span>
+                      <span className={styles.detail}>{row.detail}</span>
+                    </span>
+                  ) : (
+                    row.name
+                  )}
                 </th>
                 {columns.map((column, index) => {
                   const cell = row.cells[index] ?? null;

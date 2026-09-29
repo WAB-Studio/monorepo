@@ -6,7 +6,7 @@ import { tallyDays } from "@/lib/day/tally";
 import type { DaySlot } from "@/lib/day/types";
 import type { loadWeek } from "@/lib/queries/week";
 
-import { goalWeekProgress } from "./week-progress";
+import { flexibleWords, goalWeekProgress } from "./week-progress";
 
 type Translate = Awaited<ReturnType<typeof getTranslations>>;
 type Week = Awaited<ReturnType<typeof loadWeek>>;
@@ -51,22 +51,29 @@ export function WeekTableFace({
   const commitmentRows = (goalId: string) =>
     commitments
       .filter((commitment) => commitment.goalId === goalId)
-      .map((commitment) => ({
-        key: commitment.id,
-        name: commitment.name,
-        cells: view.days.map((dayView) => {
-          if (!live(goalId, dayView.day)) return null;
-          const slot = dayView.slots.find(
-            (s) => s.commitmentId === commitment.id,
-          );
-          return slot
-            ? {
-                state: slotState(slot),
-                label: slotLabel(commitment.name, slot, t),
-              }
-            : null;
-        }),
-      }));
+      .map((commitment) => {
+        const words = flexibleWords(commitment, t);
+        return {
+          key: commitment.id,
+          name: commitment.name,
+          detail: words ? t("week.flexible.detail", words) : undefined,
+          cells: view.days.map((dayView) => {
+            if (!live(goalId, dayView.day)) return null;
+            const slot = dayView.slots.find(
+              (s) => s.commitmentId === commitment.id,
+            );
+            // A flexible row marks the days it was done and leaves the rest
+            // quiet: no day of it was ever asked on its own.
+            if (words && !slot?.satisfied) return null;
+            return slot
+              ? {
+                  state: slotState(slot),
+                  label: slotLabel(commitment.name, slot, t),
+                }
+              : null;
+          }),
+        };
+      });
 
   const oneOffRows = (goalId: string | null) =>
     oneOffFacts

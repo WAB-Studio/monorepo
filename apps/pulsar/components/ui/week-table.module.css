@@ -123,6 +123,21 @@
   color: var(--pulsar-ink);
 }
 
+/* A flexible commitment's cadence and count, under its name. */
+.nameStack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: var(--pulsar-text-label-tracking);
+  color: var(--pulsar-muted);
+}
+
 .cell {
   padding: 14px 8px;
   border-block-start: 1px solid var(--pulsar-line);
