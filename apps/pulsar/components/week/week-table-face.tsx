@@ -1,6 +1,6 @@
 import type { getTranslations } from "next-intl/server";
 
-import { WeekTable, type MarkState } from "@/components/ui";
+import { Panel, WeekTable, type MarkState } from "@/components/ui";
 import type { WeekTableColumn } from "@/components/ui/week-table";
 import { tallyDays } from "@/lib/day/tally";
 import type { DaySlot } from "@/lib/day/types";
@@ -106,11 +106,13 @@ export function WeekTableFace({
   );
 
   return (
-    <WeekTable
-      caption={t("week.table.caption")}
-      columns={columns}
-      groups={groups}
-      footer={{ label: t("week.table.footer"), cells }}
-    />
+    <Panel as="div">
+      <WeekTable
+        caption={t("week.table.caption")}
+        columns={columns}
+        groups={groups}
+        footer={{ label: t("week.table.footer"), cells }}
+      />
+    </Panel>
   );
 }

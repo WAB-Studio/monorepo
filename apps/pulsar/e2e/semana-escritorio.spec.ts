@@ -186,6 +186,16 @@ test("at 1280 the week is a table: commitments down, days across, today's fact i
     // (the two commitments and the two one-offs; one commitment has no fact).
     await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("3 de 4");
     await expect(table.getByRole("rowheader", { name: "hechos" })).toBeVisible();
+
+    // The table sits in one Panel card: a 1px border with a 14px radius.
+    const cards = await page.evaluate(
+      () =>
+        [...document.querySelectorAll("body *")].filter((el) => {
+          const style = getComputedStyle(el);
+          return style.borderTopWidth === "1px" && style.borderTopLeftRadius === "14px";
+        }).length,
+    );
+    expect(cards).toBe(1);
   } finally {
     await context.close();
     await dropPerson(db, personId);
