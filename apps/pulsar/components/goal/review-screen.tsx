@@ -2,8 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { civilDateToDate } from "@/lib/zone";
 import { loadGoal } from "@/lib/queries/goal";
 import { Button, Page, Table, Text, type TableRow } from "@/components/ui";
+
+const spanFormat = new Intl.DateTimeFormat("es", { day: "numeric", month: "short", timeZone: "UTC" });
 
 /**
  * `Revision.dc.html` / `RevisionEscritorio.dc.html` (RP-17): the goal's own
@@ -52,6 +55,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
       key: String(week.index),
       cells: [t("goal.review.weekLabel", { n: week.index }), week.total, week.phaseName ?? "", note],
       note: note || undefined,
+      detail: spanFormat.formatRange(civilDateToDate(week.startsOn), civilDateToDate(week.endsOn)),
     };
   });
 

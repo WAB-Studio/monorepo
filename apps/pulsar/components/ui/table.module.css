@@ -43,7 +43,7 @@
 }
 
 .stackLabel {
-  flex: 0 0 70px;
+  flex: 0 0 96px;
   font-size: var(--pulsar-text-meta-size);
   color: var(--pulsar-muted);
 }
@@ -63,6 +63,22 @@
 .unit {
   font-size: var(--pulsar-text-unit-size);
   font-weight: 400;
+  color: var(--pulsar-quiet);
+}
+
+/* The dates under «semana N»: two lines in one label, 3px apart. */
+.detail {
+  display: block;
+  margin-block-start: 3px;
+  font-size: var(--pulsar-text-unit-size);
+  overflow-wrap: anywhere;
+  color: var(--pulsar-quiet);
+}
+
+.detailWide {
+  display: block;
+  margin-block-start: 3px;
+  font-size: var(--pulsar-text-meta-size);
   color: var(--pulsar-quiet);
 }
 
@@ -117,7 +133,7 @@
 }
 
 .labelWidth {
-  inline-size: 110px;
+  inline-size: 150px;
 }
 
 .leadWidth {

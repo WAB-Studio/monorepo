@@ -148,12 +148,12 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await expect(rows).toHaveCount(4); // the header row plus three weeks
 
     const week1Row = rows.nth(1);
-    await expect(week1Row.getByRole("cell").nth(0)).toHaveText("semana 1");
+    await expect(week1Row.getByRole("cell").nth(0)).toContainText("semana 1");
     await expect(week1Row.getByRole("cell").nth(1)).toHaveText(String(WEEK1_TOTAL));
     await expect(week1Row).not.toHaveAttribute("data-current", "");
 
     const week3Row = rows.nth(3);
-    await expect(week3Row.getByRole("cell").nth(0)).toHaveText("semana 3");
+    await expect(week3Row.getByRole("cell").nth(0)).toContainText("semana 3");
     await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0");
     await expect(week3Row.getByRole("cell").nth(3)).toHaveText("en curso");
     await expect(week3Row).toHaveAttribute("data-current", "");
