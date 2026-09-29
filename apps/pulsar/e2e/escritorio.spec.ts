@@ -1,10 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import postgres from "postgres";
 
-import { test, expect, laneNumber, seededPerson } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RNP-11 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
@@ -37,23 +35,6 @@ const ENDED = `Meta terminada de medición ${stamp}`;
 // A person of this spec's own, registered under the suite's run whose teardown
 // drops it: the ended goal and the scheduled one-off are states the shared
 // identity cannot promise while its siblings count its goals and one-offs.
-function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
-  );
-  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
-  const previous = process.env.HARNESS_LANE;
-  process.env.HARNESS_LANE = String(lane);
-  try {
-    return { id: seededPerson().id, sessionFile };
-  } finally {
-    if (previous === undefined) delete process.env.HARNESS_LANE;
-    else process.env.HARNESS_LANE = previous;
-  }
-}
-
 type Measured = { count: number; violations: string[] };
 
 async function measure(page: Page, rootSelector: string | null, width: number): Promise<Measured> {
@@ -142,7 +123,7 @@ const worldTest = test.extend<object, { world: World }>({
   world: [
     async ({}, provide, workerInfo) => {
       const baseURL = workerInfo.project.use.baseURL;
-      const person = mintDisposablePerson(9900 + laneNumber() * 10 + workerInfo.parallelIndex, baseURL ?? "http://localhost:3200");
+      const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
       const admin = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
       const personId = person.id;
       try {
@@ -231,7 +212,7 @@ const ROUTES: Route[] = [
   {
     name: "/metas/<id>/revision",
     path: (world) => `/metas/${world.goalId}/revision`,
-    ready: (p) => expect(p.getByRole("main")).toBeVisible(),
+    ready: (p) => expect(p.locator("main")).toHaveCount(1),
     min: 4,
   },
   {
@@ -331,7 +312,7 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
     const { context, page } = await signedIn(browser, baseURL, world, 1023, 740);
     try {
       await page.goto(path);
-      await expect(page.getByRole("main")).toBeVisible();
+      await expect(page.locator("main")).toHaveCount(1);
 
       const nav = await railBox(page);
       expect(nav).toMatchObject({ x: 0, width: 1023 });
@@ -364,9 +345,8 @@ const deskTest = test.extend<object, { desk: Desk }>({
   desk: [
     async ({}, provide, workerInfo) => {
       const baseURL = workerInfo.project.use.baseURL ?? "http://localhost:3200";
-      const lane = laneNumber();
-      const layout = mintDisposablePerson(9700 + lane * 10 + workerInfo.parallelIndex, baseURL);
-      const closed = mintDisposablePerson(9600 + lane * 10 + workerInfo.parallelIndex, baseURL);
+      const layout = mintDisposablePerson(baseURL);
+      const closed = mintDisposablePerson(baseURL);
       const admin = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
       try {
         const created = new Date(Date.now() - 20 * 86_400_000);
@@ -431,11 +411,13 @@ deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and t
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1024, 800);
   try {
     await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
     const goalCard = await cardWidth(page.getByText(LAYOUT_GOAL, { exact: true }).first());
     const oneOffs = await cardWidth(page.getByText("Sueltas", { exact: true }).first());
     expect(goalCard).toBeGreaterThan(oneOffs);
 
     await page.goto(`/metas/${desk.layoutGoalId}`);
+    await expect(page.locator("main")).toHaveCount(1);
     const commitments = await cardWidth(page.getByText(LONG_COMMITMENT, { exact: true }));
     const end = page.getByText("el final", { exact: true });
     const side = await cardWidth(end);
@@ -467,8 +449,10 @@ deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on 
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1280, 800);
   try {
     await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
     expect(await cardWidth(page.getByText("Sueltas", { exact: true }).first())).toBe(360);
     await page.goto(`/metas/${desk.layoutGoalId}`);
+    await expect(page.locator("main")).toHaveCount(1);
     expect(await cardWidth(page.getByText("el final", { exact: true }))).toBe(380);
   } finally {
     await context.close();

@@ -60,6 +60,8 @@ function baseUrl(): string {
 }
 
 function sessionFile(): string {
+  const own = process.env.MINT_SESSION_FILE?.trim();
+  if (own) return resolve(process.cwd(), own);
   return resolve(process.cwd(), `private/session-${lane}.json`);
 }
 

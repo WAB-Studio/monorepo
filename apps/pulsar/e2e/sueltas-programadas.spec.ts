@@ -1,9 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type postgres from "postgres";
 
-import { test, expect, laneNumber, seededPerson } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `/sueltas` holds the one-offs dated after today under «programadas»: each
@@ -34,23 +32,6 @@ async function seed(
 // so only a fresh identity can promise the count. Minted at a disposable lane
 // (offset from `sueltas.spec.ts`) and registered under the suite's run, whose
 // teardown drops it.
-function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
-  );
-  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
-  const previous = process.env.HARNESS_LANE;
-  process.env.HARNESS_LANE = String(lane);
-  try {
-    return { id: seededPerson().id, sessionFile };
-  } finally {
-    if (previous === undefined) delete process.env.HARNESS_LANE;
-    else process.env.HARNESS_LANE = previous;
-  }
-}
-
 const WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
 function words(day: string): string {
@@ -63,7 +44,7 @@ test("a one-off for tomorrow is listed under «programadas» with tomorrow's wor
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9700 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const personId = person.id;
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
@@ -232,7 +213,7 @@ test("the scheduled list reads in day order, whatever order the one-offs were ma
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9710 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   // Made latest-day first: creation order is the reverse of day order.
@@ -262,7 +243,7 @@ test("«Nada espera» shows only when nothing waits: not with dayless ones alone
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9720 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const empty = /^Nada espera/;
@@ -297,7 +278,7 @@ test("a scheduled day names its month only when it falls outside this week: «ma
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9730 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const far = plusDays(14);

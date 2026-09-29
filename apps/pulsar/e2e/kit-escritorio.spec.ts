@@ -19,6 +19,8 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/semana");
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.locator("main")).toHaveCount(1);
 
   const rail = await box(page, "nav");
   expect(rail).toMatchObject({ x: 0, y: 0, width: 232, height: 800 });

@@ -2522,14 +2522,33 @@ fixture's `db` closed under the pending query.
   is a locator that never matched.
 - Grep `e2e/` for a string a module renames in `messages/`; a spec that types a label rots silently.
 
-## `linkInvalid` from a spec's disposable person is not yet explained
+## Two specs that mint at one lane number share a session file
 
-Measured 2026-09-29 in `apps/pulsar`: specs that mint a person through `mint-session.ts` failed at
-`GET /auth/confirm … error=linkInvalid` 17 and 26 times in two full `check:e2e` runs of module 88, and
-repeatedly under the mutator, while other lanes ran suites. The same suite passed 182/182 after a few
-idle minutes, and a bare mint never failed. `linkInvalid` folds every completed rejection, a rate
-limit included, into one word.
+Measured 2026-09-29 in `apps/pulsar`: `mint-session.ts` wrote `private/session-<lane>.json`, and every
+spec picked its lane by hand (`9700 + laneNumber()` in `metas-terminadas` and `sueltas-programadas`,
+`9711` reached by two formulas on lane 1, `9850 + lane` reused by four tests). Under `workers: 2` two
+mints of one number overwrote one cookie file: the loser drove, and at teardown deleted rows of, the
+other's person. That reads as `no box`, an empty page or a `linkInvalid` on a person the spec never made.
 
-- Read the server log for `magic link verification failed linkInvalid <name · status · code · message>`
-  before calling it anything. The route logs Auth's own answer since this entry.
+- Take the person from `mintDisposablePerson(baseUrl)` in `e2e/fixtures.ts`. It writes a UUID-named file
+  (`MINT_SESSION_FILE`), so no number exists to collide. Never hand-pick an offset.
+- `linkInvalid` has a second cause, measured the same day: Auth answered `429 over_request_rate_limit`
+  under a full run (5 of 5 mint failures in one run). The route logs it as
+  `magic link verification failed linkInvalid AuthApiError · 429 · over_request_rate_limit`. Read that
+  line before blaming a collision. A full `check:e2e` mints about 20 people; leave the lane idle a few
+  minutes after one.
 - Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
+
+## `page.goto` returns with the loading fallback still standing
+
+Measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
+(`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a
+never-used lane. The failure's `error-context.md` showed `main` holding the `(app)/loading.tsx` skeleton
+beside the streamed page. The CI runner reaches the database slower, so `load` fires before the
+Suspense boundary swaps in the content; a box read straight after `goto` measures the skeleton or nothing.
+A fresh identity was not the cause.
+
+- Anchor every measuring spec on the settled page before its first box: a visible element of the
+  content and `await expect(page.locator("main")).toHaveCount(1)`.
+- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
+  from inside the repo) before guessing at a red the local suite does not show.

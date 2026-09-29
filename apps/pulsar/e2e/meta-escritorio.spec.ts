@@ -29,6 +29,14 @@ async function seedGoal(db: postgres.Sql, personId: string, name: string): Promi
   return goal.id;
 }
 
+// `load` fires with the loading fallback still standing, so a box read
+// straight after `goto` measures the skeleton or nothing.
+async function settled(page: Page) {
+  await expect(page.getByText("Compromiso ancho", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fase ancha", { exact: true })).toBeVisible();
+  await expect(page.locator("main")).toHaveCount(1);
+}
+
 async function boxOf(page: Page, text: string) {
   return page.getByText(text, { exact: true }).evaluate((el) => {
     const { x, y } = el.getBoundingClientRect();
@@ -46,6 +54,7 @@ test("at 1280 the commitments sit left, the end and the phases right, one of eac
   try {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}`);
+    await settled(page);
 
     const commitment = await boxOf(page, "Compromiso ancho");
     const phase = await boxOf(page, "Fase ancha");
@@ -115,6 +124,7 @@ test("at 360 the order is the phone's: end, commitments, phases, then «Archivar
   try {
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(`/metas/${goalId}`);
+    await settled(page);
 
     const end = await page.getByText(/^12 semanas · hasta el /).boundingBox();
     const commitment = await page.getByText("Compromiso ancho", { exact: true }).boundingBox();
@@ -142,6 +152,8 @@ test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase
   try {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText("cero fases", { exact: true })).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
 
     const cards = await page.locator("main").evaluate((main) =>
       Array.from(main.querySelectorAll("*"))

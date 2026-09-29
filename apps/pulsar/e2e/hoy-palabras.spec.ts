@@ -1,7 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
-import { test, expect, laneNumber, seededPerson } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // The words Hoy says at every width: a goal's name as written, a far date with
@@ -28,29 +26,12 @@ function words(day: string, withMonth: boolean): string {
 
 // A person of this spec's own: a goal named on Hoy or ended must be the only
 // one there. Registered under the suite's run, whose teardown drops it.
-function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
-  );
-  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
-  const previous = process.env.HARNESS_LANE;
-  process.env.HARNESS_LANE = String(lane);
-  try {
-    return { id: seededPerson().id, sessionFile };
-  } finally {
-    if (previous === undefined) delete process.env.HARNESS_LANE;
-    else process.env.HARNESS_LANE = previous;
-  }
-}
-
 test("a goal named «Inglés Crítico» keeps its capitals on its field, and on a day before it opened (RP-20, RNP-07)", async ({
   browser,
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9860 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)
@@ -79,7 +60,7 @@ test("a one-off carried from before this week names its month; one from this wee
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9860 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const far = plusDays(-21);
   const near = weekOf(todayInZone())[0];
@@ -101,7 +82,7 @@ test("a one-off carried from before this week names its month; one from this wee
 });
 
 test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(9860 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   await db`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -126,7 +107,7 @@ test("with every goal ended and none open and a suelta due, Hoy names the goal a
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9860 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   await db`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -159,7 +140,7 @@ test("at 1280 the all-ended message stands in a card, its title and buttons padd
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9860 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   await db`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -171,6 +152,8 @@ test("at 1280 the all-ended message stands in a card, its title and buttons padd
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     const title = page.getByText("Hoy no pide nada.");
+    await expect(page.getByRole("link", { name: "Abrir otra meta" })).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
     const card = title.locator("xpath=..");
     await expect(card).toHaveCSS("border-radius", "14px");
     const [cardBox, titleBox] = [await card.boundingBox(), await title.boundingBox()];
