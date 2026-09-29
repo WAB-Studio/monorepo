@@ -515,3 +515,12 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Semana's name column is 200 px at 1280**, not the 260 `SemanaEscritorio.dc.html` draws, so a day
   header reads «mar 29 · hoy» on one line; the header row stays in view while the table scrolls.
   Decided 2026-09-29 by the coordinator.
+- **A goal's weekly figure is named by its unit** («kilómetros esta semana»), never by the first
+  commitment with a number: the sum takes every fact in that unit. Decided 2026-09-29 by the user.
+- **Hoy says when a goal ended**, in one quiet line for the days after its end. Board to draw.
+  Decided 2026-09-29 by the user.
+- **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the
+  daily «hechos» and their row reads «1 de 2 esta semana». Board to draw. Decided 2026-09-29 by the user.
+- **A one-column screen caps at 640 px from 1024.** Decided 2026-09-29 by the user.
+- **Hoy builds what `HoyEscritorio.dc.html` draws**: «Hoy pide N», each row's cadence, a flexible
+  commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.
