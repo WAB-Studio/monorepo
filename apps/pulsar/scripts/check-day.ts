@@ -1073,18 +1073,19 @@ async function runOneOffCarryCheck(): Promise<void> {
   const yesterday = addDays(today, -1);
   const tomorrow = addDays(today, 1);
 
-  const undone = await createOneOff({ name: "check-day carry probe undone", day: threeDaysBack });
-  if (!undone.ok) {
-    throw new Error(`runOneOffCarryCheck: createOneOff (undone) failed: ${undone.error}`);
+  // `createOneOff` refuses a past day (RP-19), so the rows dated back are raw inserts.
+  async function seedDated(name: string, day: string): Promise<{ oneOffId: string }> {
+    const [row] = await withGoalsDb((tx) =>
+      tx.execute<{ id: string }>(sql`
+        insert into ${oneOffs} (user_id, goal_id, name, day)
+        values (${person!.id}, null, ${name}, ${day})
+        returning id
+      `),
+    );
+    return { oneOffId: row.id };
   }
-
-  const doneElsewhen = await createOneOff({
-    name: "check-day carry probe done-elsewhen",
-    day: threeDaysBack,
-  });
-  if (!doneElsewhen.ok) {
-    throw new Error(`runOneOffCarryCheck: createOneOff (done-elsewhen) failed: ${doneElsewhen.error}`);
-  }
+  const undone = await seedDated("check-day carry probe undone", threeDaysBack);
+  const doneElsewhen = await seedDated("check-day carry probe done-elsewhen", threeDaysBack);
 
   const future = await createOneOff({ name: "check-day carry probe future", day: tomorrow });
   if (!future.ok) {
@@ -1235,6 +1236,65 @@ async function runPhaseDayBoundCheck(): Promise<void> {
 }
 
 /**
+ * Proves `daylessCount` counts only the dayless (RP-21), against a baseline
+ * read first, with two dayless and one dated-undone one-off so the two sets
+ * differ in size, and that `listDaylessOneOffs` reads them oldest first.
+ */
+async function runDaylessCountAndOrderCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { listDaylessOneOffs } = await import("@/lib/queries/one-offs");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { oneOffs } = await import("@/db/schema");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runDaylessCountAndOrderCheck: no verified session");
+
+  const today = todayInZone();
+  const baseline = (await loadDay(today)).daylessCount;
+  const ids: string[] = [];
+
+  async function seed(name: string, day: string | null): Promise<string> {
+    const [row] = await withGoalsDb((tx) =>
+      tx.execute<{ id: string }>(sql`
+        insert into ${oneOffs} (user_id, goal_id, name, day)
+        values (${person!.id}, null, ${name}, ${day})
+        returning id
+      `),
+    );
+    ids.push(row.id);
+    return row.id;
+  }
+
+  try {
+    const first = await seed("check-day order first", null);
+    const second = await seed("check-day order second", null);
+    await seed("check-day dated undone a", today);
+
+    const now = await loadDay(today);
+    assert(
+      "daylessCount moves by the two dayless one-offs, not by the dated one",
+      now.daylessCount === baseline + 2,
+      `baseline ${baseline}, now ${now.daylessCount}`,
+    );
+
+    const listed = (await listDaylessOneOffs()).map((row) => row.id);
+    assert(
+      "listDaylessOneOffs lists the older dayless one-off before the newer",
+      listed.indexOf(first) !== -1 && listed.indexOf(first) < listed.indexOf(second),
+      `first at ${listed.indexOf(first)}, second at ${listed.indexOf(second)}`,
+    );
+  } finally {
+    if (ids.length > 0) {
+      await withGoalsDb((tx) =>
+        tx.execute(sql`delete from ${oneOffs} where id in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`),
+      );
+    }
+  }
+}
+
+/**
  * Proves module 64's reads: a commitment asks nothing before the civil day it
  * was written (`loadDay` and `loadWeek` alike), `loadDay(today).goals` carries
  * `openedOn`, a one-off done on the day drawn is in `doneOneOffs` with its
@@ -1295,10 +1355,16 @@ async function runCreatedOnAndOneOffsCheck(): Promise<void> {
     const commitmentId = commitment.commitmentId;
 
     const doneToday = await createOneOff({ name: "check-day done today", day: today, goalId: goal.goalId });
-    const doneYesterday = await createOneOff({ name: "check-day done yesterday", day: yesterday });
-    if (!doneToday.ok || !doneYesterday.ok) {
-      throw new Error("runCreatedOnAndOneOffsCheck: createOneOff failed");
-    }
+    if (!doneToday.ok) throw new Error("runCreatedOnAndOneOffsCheck: createOneOff failed");
+    // A past day is refused by `createOneOff` (RP-19), so this row is a raw insert.
+    const [doneYesterdayRow] = await withGoalsDb((tx) =>
+      tx.execute<{ id: string }>(sql`
+        insert into ${oneOffs} (user_id, goal_id, name, day)
+        values (${person.id}, null, 'check-day done yesterday', ${yesterday})
+        returning id
+      `),
+    );
+    const doneYesterday = { oneOffId: doneYesterdayRow.id };
     const undoneToday = await createOneOff({ name: "check-day undone today", day: today });
     if (!undoneToday.ok) throw new Error("runCreatedOnAndOneOffsCheck: createOneOff (undone) failed");
     oneOffIds.push(doneToday.oneOffId, doneYesterday.oneOffId, undoneToday.oneOffId);
@@ -1782,6 +1848,7 @@ async function runMain(): Promise<void> {
   await runFactWrittenOnCheck();
   await runPhaseDayBoundCheck();
   await runCreatedOnAndOneOffsCheck();
+  await runDaylessCountAndOrderCheck();
   await runEndedGoalScheduledCheck();
 
   console.log("");

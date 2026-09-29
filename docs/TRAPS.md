@@ -2495,3 +2495,17 @@ connection caches, not with the code.
 - **Do.** When every write-path check fails at once on a clean tree, read
   `show default_transaction_read_only` before blaming code, and discard that run's results as neither
   killed nor survived.
+
+## A mutant reads as a survivor because `next dev` served the code from before it
+
+Measured 2026-09-29 by module 87's tester in `apps/pulsar`: mutants M23 and M40 read green on e2e
+until the lane's `next dev` was restarted, then went red (2 and 3 failures). Turbopack in dev kept
+serving the server code from before the edit. The same day a validator read seven reds on a lane
+server (`CONNECTION_ENDED`, 404 on `/compromisos/nuevo`) that vanished after a restart.
+
+- Restart the lane's dev server before each mutant's e2e run, and before reading any red as a
+  regression.
+- The mutator's e2e verdicts from 2026-09-28 may share this flaw: a survivor read on a warm server is
+  provisional.
+- Specs whose click lands on a control the dev overlay covers (`<nextjs-portal>` intercepts pointer
+  events) fail under `next dev` only. `playwright.config.ts` says `next build && next start`; use it.
