@@ -29,7 +29,12 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
 
   // Every control the screen draws stands right of the rail.
   const leftmost = await page.locator("main").evaluate((el) =>
-    Math.min(...Array.from(el.querySelectorAll("a, button, input")).map((c) => c.getBoundingClientRect().left)),
+    Math.min(
+      ...Array.from(el.querySelectorAll("a, button, input"))
+        .map((c) => c.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+        .map((rect) => rect.left),
+    ),
   );
   expect(leftmost).toBeGreaterThanOrEqual(232);
 

@@ -115,25 +115,38 @@ test("at 1280 the week is a table: commitments down, days across, today's fact i
     }
     await expect(table.getByRole("rowheader", { name: "Sueltas" })).toBeVisible();
 
-    // The footer equals what the person's own rows say at this moment.
-    const [{ done, total }] = await db<{ done: number; total: number }[]>`
-      with open_goals as (
-        select id from goals.goals
-        where user_id = ${personId} and archived_at is null and horizon > ${today}
+    // Sibling specs seed on this identity, so the DB read and the page read
+    // repeat together until they land on the same moment.
+    const cutoff = new Date(`${shift(today, 1)}T05:00:00Z`);
+    const kinds = todayIndex < 5 ? ["daily", "weekdays"] : ["daily"];
+    await expect
+      .poll(
+        async () => {
+          const [{ done, total }] = await db<{ done: number; total: number }[]>`
+            with open_goals as (
+              select id from goals.goals
+              where user_id = ${personId} and archived_at is null and horizon > ${today}
+            )
+            select
+              (select count(*)::int from goals.facts f
+                where f.user_id = ${personId} and f.day = ${today}
+                  and (f.commitment_id in (select c.id from goals.commitments c where c.goal_id in (select id from open_goals))
+                    or (f.one_off_id is not null and (f.goal_id is null or f.goal_id in (select id from open_goals))))) as done,
+              (select count(*)::int from goals.commitments c
+                where c.user_id = ${personId} and c.goal_id in (select id from open_goals)
+                  and c.cadence_kind = any(${kinds}) and c.created_at < ${cutoff})
+              + (select count(*)::int from goals.facts f
+                where f.user_id = ${personId} and f.day = ${today} and f.one_off_id is not null
+                  and (f.goal_id is null or f.goal_id in (select id from open_goals))) as total
+          `;
+          await page.reload();
+          const cell = await page.getByRole("table").locator("tfoot td").nth(todayIndex).textContent();
+          const expected = `${done} de ${total}`;
+          return cell === expected ? "match" : `${cell} vs ${expected}`;
+        },
+        { timeout: 60_000 },
       )
-      select
-        (select count(*)::int from goals.facts f
-          where f.user_id = ${personId} and f.day = ${today}
-            and (f.commitment_id in (select c.id from goals.commitments c where c.goal_id in (select id from open_goals))
-              or (f.one_off_id is not null and (f.goal_id is null or f.goal_id in (select id from open_goals))))) as done,
-        (select count(*)::int from goals.commitments c
-          where c.user_id = ${personId} and c.goal_id in (select id from open_goals) and c.cadence_kind = any(${todayIndex < 5 ? ["daily", "weekdays"] : ["daily"]})
-            and c.created_at < ${new Date(`${shift(today, 1)}T05:00:00Z`)})
-        + (select count(*)::int from goals.facts f
-          where f.user_id = ${personId} and f.day = ${today} and f.one_off_id is not null
-            and (f.goal_id is null or f.goal_id in (select id from open_goals))) as total
-    `;
-    await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText(`${done} de ${total}`);
+      .toBe("match");
     await expect(table.getByRole("rowheader", { name: "hechos" })).toBeVisible();
   } finally {
     await db`delete from goals.one_offs where user_id = ${personId} and name in (${named}, ${loose})`;

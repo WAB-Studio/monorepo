@@ -36,8 +36,8 @@ function shortLabel(day: string): string {
 async function seedGoal(db: postgres.Sql, personId: string, name: string) {
   const stamp = Date.now();
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon)
-    values (${personId}, ${`Meta semana pasada ${stamp}`}, ${shift(todayInZone(), 60)}) returning id
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, ${`Meta semana pasada ${stamp}`}, ${shift(todayInZone(), 60)}, ${new Date(Date.now() - 12 * 86_400_000)}) returning id
   `;
   await db`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
