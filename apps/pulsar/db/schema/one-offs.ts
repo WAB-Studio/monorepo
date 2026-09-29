@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { date, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
+import { TIME_ZONE } from "../../lib/zone";
 import { goalsSchema } from "./_schema";
 import { goals } from "./goals";
 
@@ -47,14 +48,15 @@ export const oneOffs = goalsSchema.table(
         select 1 from "goals"."facts" f where f.one_off_id = ${t.id}
       )`,
     }),
-    // RP-21: a one-off with no day takes one, never one that has a day or a
-    // fact. The grant narrows the write to `day`; `using` is what refuses a
-    // second move. Same subquery shape as the delete policy, for the same
-    // import-cycle reason.
+    // RP-21: a one-off with no day, or a day after the person's today, takes
+    // another, never one on or before today or one with a fact. The grant
+    // narrows the write to `day`; `using` is what refuses the rest. Today is
+    // the zone's civil day, never `current_date` (UTC). Same subquery shape
+    // as the delete policy, for the same import-cycle reason.
     pgPolicy("one_offs_update_self", {
       for: "update",
       to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId} and ${t.day} is null and not exists (
+      using: sql`${authUid} = ${t.userId} and (${t.day} is null or ${t.day} > (now() at time zone '${sql.raw(TIME_ZONE)}')::date) and not exists (
         select 1 from "goals"."facts" f where f.one_off_id = ${t.id}
       )`,
       withCheck: sql`${authUid} = ${t.userId}`,

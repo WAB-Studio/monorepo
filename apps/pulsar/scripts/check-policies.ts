@@ -61,6 +61,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import postgres from "postgres";
 
 import { withSettledTransaction } from "@/lib/settled-transaction";
+import { civilDateInZone, civilDateToDate, todayInZone } from "@/lib/zone";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) throw new Error("DATABASE_URL is not set");
@@ -883,6 +884,11 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
   await sql.end();
 }
 
+// The civil day `n` days after `day`, read through the zone module.
+function dayAfter(day: string, n: number): string {
+  return civilDateInZone(new Date(civilDateToDate(day).getTime() + n * 86_400_000));
+}
+
 // Module 63 (RP-21, RP-25): `0005` grants `UPDATE (day)` on `one_offs` and
 // `UPDATE (horizon)` on `goals`, and bounds the one-off's with
 // `one_offs_update_self`. Driven bare under a settled session, own
@@ -901,7 +907,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
       const [dayless] = await tx<{ id: string }[]>`
         insert into goals.one_offs (user_id, name) values (${subject}, 'sin dia') returning id`;
       const [dated] = await tx<{ id: string }[]>`
-        insert into goals.one_offs (user_id, name, day) values (${subject}, 'con dia', '2026-09-29') returning id`;
+        insert into goals.one_offs (user_id, name, day) values (${subject}, 'con dia', ${dayAfter(todayInZone(), 1)}) returning id`;
       const [withFact] = await tx<{ id: string }[]>`
         insert into goals.one_offs (user_id, name) values (${subject}, 'con hecho') returning id`;
       await tx`
@@ -933,8 +939,8 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
       );
       assert(
         "P51",
-        movesDated.code === undefined && movesDated.rows.length === 0,
-        `own dated one-off moves, sqlstate = ${movesDated.code ?? "none"}, rows = ${movesDated.rows.length}`,
+        movesDated.code === undefined && movesDated.rows.length === 1,
+        `own one-off dated Bogota-tomorrow moves, sqlstate = ${movesDated.code ?? "none"}, rows = ${movesDated.rows.length}`,
       );
 
       const movesWithFact = await attemptRows<{ id: string }>(
@@ -1012,6 +1018,115 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
   await sql.end();
 }
 
+// Module 73 (RP-21): `one_offs_update_self` lets a one-off dated after the
+// person's Bogota today move, and refuses today, the past, a fact and a
+// stranger. Driven bare under a settled session, forced rollback.
+async function checkScheduledOneOffMoveByZone(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const today = todayInZone();
+  // Deliberately UTC: the one instant the zone and the server's day disagree.
+  const utcDay = new Date().toISOString().slice(0, 10);
+  const target = dayAfter(today, 30);
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const make = async (name: string, day: string): Promise<string> => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into goals.one_offs (user_id, name, day) values (${subject}, ${name}, ${day}) returning id`;
+        return row.id;
+      };
+      const onToday = await make("hoy", today);
+      const yesterday = await make("ayer", dayAfter(today, -1));
+      const withFact = await make("con hecho", dayAfter(today, 2));
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${withFact}, ${today})`;
+      const onUtcDay = await make("dia utc", utcDay);
+
+      await enterUserContext(tx, intruder);
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name, day) values (${intruder}, 'ajeno', ${dayAfter(today, 3)}) returning id`;
+
+      await enterUserContext(tx, subject);
+      const moveRows = (id: string) =>
+        attemptRows<{ id: string }>(
+          tx,
+          (sp) => sp`update goals.one_offs set day = ${target} where id = ${id} returning id`,
+        );
+
+      const cases: [string, string, number][] = [
+        ["P59", onToday, 0],
+        ["P60", yesterday, 0],
+        ["P61", withFact, 0],
+        ["P62", theirs.id, 0],
+      ];
+      for (const [label, id, expected] of cases) {
+        const result = await moveRows(id);
+        const what = { P59: "dated Bogota-today", P60: "dated yesterday", P61: "scheduled with a fact", P62: "another person's scheduled" }[label];
+        assert(
+          label,
+          result.code === undefined && result.rows.length === expected,
+          `own ${what} one-off moves (today = ${today}), sqlstate = ${result.code ?? "none"}, rows = ${result.rows.length}`,
+        );
+      }
+
+      // Only when UTC has already turned the page (19:00-24:00 Bogota) does
+      // the UTC day differ from Bogota's; otherwise it is today's case again.
+      const utcDiffers = utcDay !== today;
+      const utc = await moveRows(onUtcDay);
+      assert(
+        "P63",
+        utc.code === undefined && utc.rows.length === (utcDiffers ? 1 : 0),
+        `one-off dated on the UTC day ${utcDay} (Bogota today ${today}, differs = ${utcDiffers}) moves, rows = ${utc.rows.length}`,
+      );
+
+      // The session's own zone moved far east: `current_date` follows it, the
+      // policy must not. Differs from Bogota's day from 05:00 Bogota on.
+      await tx`select set_config('TimeZone', 'Pacific/Kiritimati', true)`;
+      const [{ far }] = await tx<{ far: string }[]>`select current_date::text as far`;
+      const tomorrow = await make("manana", dayAfter(today, 1));
+      const farToday = await moveRows(onToday);
+      const farTomorrow = await moveRows(tomorrow);
+      assert(
+        "P66",
+        farToday.rows.length === 0 && farTomorrow.rows.length === 1,
+        `session zone Kiritimati (current_date ${far}, Bogota ${today}): dated today rows = ${farToday.rows.length}, dated Bogota-tomorrow rows = ${farTomorrow.rows.length}`,
+      );
+      await tx`select set_config('TimeZone', 'UTC', true)`;
+
+      const renames = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'otro' where id = ${onToday}`,
+      );
+      assert("P64", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  const policies = await sql<{ policyname: string; qual: string }[]>`
+    select policyname, qual from pg_policies
+    where schemaname = 'goals' and tablename = 'one_offs' order by policyname`;
+  const update = policies.find((p) => p.policyname === "one_offs_update_self");
+  assert(
+    "P65",
+    policies.length === 4 &&
+      !!update &&
+      update.qual.includes("America/Bogota") &&
+      !update.qual.includes("CURRENT_DATE") &&
+      update.qual.includes("IS NULL"),
+    `one_offs policies = ${policies.map((p) => p.policyname).join(", ")}; update using names the zone`,
+  );
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   const sql = postgres(DATABASE_URL!, {
     prepare: false,
@@ -1030,6 +1145,7 @@ async function main(): Promise<void> {
   await checkOneOffWithFactRefusedByPolicy();
   await checkGoalRenameArchiveGrant();
   await checkOneOffScheduleAndHorizonGrants();
+  await checkScheduledOneOffMoveByZone();
 
   if (failed) process.exit(1);
 }
