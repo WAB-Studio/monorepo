@@ -8,7 +8,7 @@ import { dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-14: the goal's total sums every fact in its unit, so the screens name the
 // figure by that unit, never by the first commitment's name. Hoy's card
-// (`HoyEscritorio.dc.html`), the goal's «suma …» line and the review's header.
+// (`HoyEscritorio.dc.html`), the goal's «mide en …» line and the review's header.
 // The person is this spec's own and is dropped by id.
 
 // Registered under the suite's run the way `mint-session.ts` registers the
@@ -122,7 +122,7 @@ test("the week's figure is named by its unit on Hoy, the goal and the review, an
 
     // The goal: the line leads with the unit; the figure is the sum.
     await page.goto(`/metas/${goal.id}`);
-    await expect(page.getByText(`suma ${KM}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`mide en ${KM}`, { exact: true })).toBeVisible();
     await expect(page.getByText(`mide ${first}`)).toHaveCount(0);
     await expect(page.getByText(new RegExp(`^${total}\\s*${KM}`)).first()).toBeVisible();
 

@@ -524,3 +524,5 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A one-column screen caps at 640 px from 1024.** Decided 2026-09-29 by the user.
 - **Hoy builds what `HoyEscritorio.dc.html` draws**: «Hoy pide N», each row's cadence, a flexible
   commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.
+- **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed
+  «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.

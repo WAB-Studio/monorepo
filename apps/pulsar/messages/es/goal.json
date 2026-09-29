@@ -12,7 +12,7 @@
     "overline": "meta · abierta el {date}",
     "archivedOverline": "meta · archivada el {date}",
     "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
-    "measures": "suma {unit}",
+    "measures": "mide en {unit}",
     "moveHorizon": "mover el final",
     "moveHorizonEnded": "Mover el final",
     "commitmentsCount": "{word} {count, plural, one {compromiso} other {compromisos}}",
