@@ -108,8 +108,12 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const phoneActs = ended ? (
     <Face on="phone">
       <Flex gap="3">
-        {moveAction}
-        <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
+        <Flex flexGrow="1" flexBasis="0" minWidth="0">
+          {moveAction}
+        </Flex>
+        <Flex flexGrow="1" flexBasis="0" minWidth="0">
+          <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
+        </Flex>
       </Flex>
     </Face>
   ) : null;
@@ -184,7 +188,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const after = (
     <Panel>
       <section>
-        <Flex justify="between" align="center">
+        <Flex justify="between" align="center" mb={{ initial: "0", lg: "1" }}>
           <SectionLabel>
             {t("goal.detail.phasesCount", {
               word: countWord(goal.phases.length, t, true),

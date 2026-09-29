@@ -273,7 +273,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       ))}
       <Panel as="div">
         <section>
-          <Flex justify="between" align="center" gap="2">
+          <Flex justify="between" align="center" gap="2" mb={{ initial: "0", lg: "1" }}>
             <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
             {waiting > 0 ? (
               <Button asChild tap={44} variant="ghost">
