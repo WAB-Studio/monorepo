@@ -15,7 +15,7 @@ import {
   type PhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { TIME_ZONE, weekOf } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts`
@@ -156,6 +156,7 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
     cadence: toCadence(row),
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
+    createdOn: civilDateInZone(new Date(row.created_at)),
   };
 }
 

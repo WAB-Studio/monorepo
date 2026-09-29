@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
@@ -81,6 +81,33 @@ async function resetOneOff(db: postgres.Sql, id: string): Promise<void> {
   await db`delete from goals.facts where one_off_id = ${id}`;
 }
 
+// A commitment asks nothing before the civil day it was written, and the
+// seed writes them today: without this, a Sunday's other day (yesterday) and
+// a Monday's would hold no dots at all. Moved back by id, restored by id.
+async function backdateCommitments(
+  db: postgres.Sql,
+  personId: string,
+): Promise<() => Promise<void>> {
+  const originals = await db<{ id: string; created_at: Date }[]>`
+    select id, created_at from goals.commitments where user_id = ${personId}
+  `;
+  const ids = originals.map((row) => row.id);
+  if (ids.length > 0) {
+    await db`
+      update goals.commitments set created_at = created_at - interval '30 days'
+      where id in ${db(ids)} and user_id = ${personId}
+    `;
+  }
+  return async () => {
+    for (const row of originals) {
+      await db`
+        update goals.commitments set created_at = ${row.created_at}
+        where id = ${row.id} and user_id = ${personId}
+      `;
+    }
+  };
+}
+
 test("seven rows per goal at 360px, no horizontal overflow (RP-16)", async ({ page }) => {
   await page.goto("/semana");
 
@@ -92,7 +119,16 @@ test("seven rows per goal at 360px, no horizontal overflow (RP-16)", async ({ pa
   expect(scrollWidth).toBeLessThanOrEqual(360);
 });
 
-test("a day with no facts carries no filled dot (RP-16)", async ({ page }) => {
+test("a day with no facts carries no filled dot (RP-16)", async ({ page, db, personId }) => {
+  const restore = await backdateCommitments(db, personId);
+  try {
+    await checkEmptyOtherDay(page);
+  } finally {
+    await restore();
+  }
+});
+
+async function checkEmptyOtherDay(page: Page): Promise<void> {
   await page.goto("/semana");
 
   const goalSection = page.locator("section", { hasText: GOAL_NAME });
@@ -116,7 +152,7 @@ test("a day with no facts carries no filled dot (RP-16)", async ({ page }) => {
     expect(state).toBe(expectedStateFor(label ?? ""));
   }
   expect(dots.every(({ state }) => state === "empty")).toBe(true);
-});
+}
 
 test("a one-off under a goal completed today fills a dot in that goal's today row (RP-20)", async ({
   page,

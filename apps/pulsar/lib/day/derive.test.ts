@@ -16,6 +16,7 @@ function tapPlan(id: string, overrides: Partial<CommitmentPlan> = {}): Commitmen
     cadence: { kind: "daily" },
     satisfiedBy: { kind: "tap" },
     retiredAt: null,
+    createdOn: "2000-01-01",
     ...overrides,
   };
 }

@@ -23,7 +23,7 @@ import {
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { TIME_ZONE } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -46,6 +46,7 @@ type GoalRow = {
   id: string;
   name: string;
   horizon: string;
+  created_at: string;
   measure_name: string | null;
   measure_unit: string | null;
 };
@@ -89,12 +90,21 @@ type OneOffRow = {
 // `OneOffSummary[]` — `deriveDay` takes no goals array and `DayView` has no
 // place for a one-off, so module 13's screen is what groups a slot under the
 // goal it belongs to and draws a one-off beneath the last one.
+type DoneOneOffRow = {
+  id: string;
+  goal_id: string | null;
+  name: string;
+  fact_id: string;
+};
+
 type GoalsQueryRow = {
   goals: GoalRow[];
   commitments: CommitmentRow[];
   phases: PhaseRow[];
   facts: FactRow[];
   one_offs: OneOffRow[];
+  done_one_offs: DoneOneOffRow[];
+  dayless_count: number;
 };
 
 type EvidenceOutcome = {
@@ -150,7 +160,26 @@ async function queryGoalsRow(tx: Transaction, day: string): Promise<GoalsQueryRo
          where o.day <= ${day}::date
            and not exists (
              select 1 from "goals"."facts" f where f.one_off_id = o.id
-           )) as one_offs
+           )) as one_offs,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'id', o.id,
+                 'goal_id', o.goal_id,
+                 'name', o.name,
+                 'fact_id', f.id
+               ) order by f.written_at), '[]'::json)
+         from "goals"."one_offs" o
+         join "goals"."facts" f on f.one_off_id = o.id
+         where f.day = ${day}::date) as done_one_offs,
+      (select count(*)::int
+         from "goals"."one_offs" o
+         where o.day is null
+           and not exists (
+             select 1 from "goals"."facts" f where f.one_off_id = o.id
+           )
+           and (o.goal_id is null or exists (
+             select 1 from "goals"."goals" g
+             where g.id = o.goal_id and g.archived_at is null
+           ))) as dayless_count
   `);
 
   return row;
@@ -181,6 +210,7 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
     cadence: toCadence(row),
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
+    createdOn: civilDateInZone(new Date(row.created_at)),
   };
 }
 
@@ -202,6 +232,8 @@ export type GoalSummary = {
   id: string;
   name: string;
   horizon: string;
+  // The civil day the goal was written, in the person's zone.
+  openedOn: string;
   measureName: string | null;
   measureUnit: string | null;
 };
@@ -211,6 +243,7 @@ function toGoalSummary(row: GoalRow): GoalSummary {
     id: row.id,
     name: row.name,
     horizon: row.horizon,
+    openedOn: civilDateInZone(new Date(row.created_at)),
     measureName: row.measure_name,
     measureUnit: row.measure_unit,
   };
@@ -227,6 +260,15 @@ export type OneOffSummary = {
   goalId: string | null;
   name: string;
   day: string | null;
+};
+
+// A one-off whose fact lands on the day drawn: RP-19's "done stays", read
+// back with the fact's id so the screen can undo it.
+export type DoneOneOffSummary = {
+  id: string;
+  goalId: string | null;
+  name: string;
+  factId: string;
 };
 
 function toOneOffSummary(row: OneOffRow): OneOffSummary {
@@ -308,6 +350,8 @@ export async function loadDay(day: string): Promise<{
   evidence: "read" | "unreadable";
   goals: GoalSummary[];
   oneOffs: OneOffSummary[];
+  doneOneOffs: DoneOneOffSummary[];
+  daylessCount: number;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
   factsByCommitment: Record<string, LoggedFact>;
@@ -347,6 +391,13 @@ export async function loadDay(day: string): Promise<{
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
     oneOffs: row.one_offs.map(toOneOffSummary),
+    doneOneOffs: row.done_one_offs.map((o) => ({
+      id: o.id,
+      goalId: o.goal_id,
+      name: o.name,
+      factId: o.fact_id,
+    })),
+    daylessCount: row.dayless_count,
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),
     factsByCommitment: latestFactByCommitment(row.facts.map(toFactForCommitment)),

@@ -10,6 +10,7 @@ function plan(overrides: Partial<CommitmentPlan> = {}): CommitmentPlan {
     cadence: { kind: "daily" },
     satisfiedBy: { kind: "tap" },
     retiredAt: null,
+    createdOn: "2000-01-01",
     ...overrides,
   };
 }
@@ -162,4 +163,25 @@ test("retired at 23:30 Bogotá on a Wednesday still asks that Wednesday and stop
   const p = plan({ cadence: { kind: "daily" }, retiredAt: "2026-03-05T04:30:00Z" });
   assert.equal(asksOn(p, "2026-03-04", []), true, "Wednesday, the day it was retired");
   assert.equal(asksOn(p, "2026-03-05", []), false, "Thursday, the very next civil day");
+});
+
+// --- a commitment asks nothing before the day it was written ---
+
+test("a plan created on D asks nothing on D-1 and asks on D", () => {
+  const p = plan({ cadence: { kind: "daily" }, createdOn: "2026-09-28" });
+  assert.equal(asksOn(p, "2026-09-27", []), false, "the day before it existed");
+  assert.equal(asksOn(p, "2026-09-28", []), true, "its own day");
+});
+
+test("createdOn refuses the day before under every cadence, not only daily", () => {
+  const cadences: CommitmentPlan["cadence"][] = [
+    { kind: "weekdays", days: [1, 2, 3, 4, 5, 6, 7] },
+    { kind: "times_per_week", count: 3 },
+    { kind: "times_per_month", count: 3 },
+    { kind: "every_n_days", n: 1, anchor: "2026-09-01" },
+  ];
+  for (const cadence of cadences) {
+    const p = plan({ cadence, createdOn: "2026-09-28" });
+    assert.equal(asksOn(p, "2026-09-27", []), false, cadence.kind);
+  }
 });

@@ -65,6 +65,7 @@ export function asksOn(
   day: string,
   facts: DeclaredFact[],
 ): boolean {
+  if (day < plan.createdOn) return false;
   if (plan.retiredAt !== null && day > retiredCivilDay(plan.retiredAt)) return false;
 
   switch (plan.cadence.kind) {

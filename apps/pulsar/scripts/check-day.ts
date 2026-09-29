@@ -522,6 +522,8 @@ async function runZoneCheck(): Promise<void> {
   if (!commitment.ok) throw new Error(`runZoneCheck: addCommitment failed: ${commitment.error}`);
   const testId = commitment.commitmentId;
 
+  await backdateCommitment(testId, person.id, new Date("2019-01-01T12:00:00Z"));
+
   const retiredAt = instantAtLocalTime(ZONE_TEST_DAY, 23, 30, TIME_ZONE);
   await withGoalsDb((tx) =>
     tx.execute(
@@ -594,6 +596,8 @@ async function runCadenceZoneCheck(): Promise<void> {
     throw new Error(`runCadenceZoneCheck: addCommitment failed: ${commitment.error}`);
   }
   const testId = commitment.commitmentId;
+
+  await backdateCommitment(testId, person.id, new Date("2019-01-01T12:00:00Z"));
 
   const retiredAt = instantAtLocalTime(CADENCE_ZONE_WEDNESDAY, 23, 30, TIME_ZONE);
   await withGoalsDb((tx) =>
@@ -674,6 +678,21 @@ async function runWeekCommitmentsZoneCheck(): Promise<void> {
     !presentInCommitments,
     `commitment ${presentInCommitments ? "present" : "absent"} in loadWeek("${ZONE_NEXT_DAY}").commitments`,
   );
+}
+
+// A commitment asks nothing before its own `created_at`'s civil day, so a
+// probe about a day in the past writes that moment back by id, under the
+// identity that owns the row. The app's own role cannot write the column.
+async function backdateCommitment(id: string, userId: string, createdAt: Date): Promise<void> {
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    await db`
+      update goals.commitments set created_at = ${createdAt.toISOString()}::timestamptz
+      where id = ${id} and user_id = ${userId}
+    `;
+  } finally {
+    await db.end();
+  }
 }
 
 // Whole civil days added to a `YYYY-MM-DD` string, by midday UTC — the same
@@ -1150,6 +1169,8 @@ async function runFactWrittenOnCheck(): Promise<void> {
   }
   const testId = commitment.commitmentId;
 
+  await backdateCommitment(testId, person.id, new Date(Date.now() - 3 * 86_400_000));
+
   const [factRow] = await withGoalsDb((tx) =>
     tx.execute<{ id: string }>(sql`
       insert into ${facts} (user_id, commitment_id, one_off_id, goal_id, day)
@@ -1210,6 +1231,196 @@ async function runPhaseDayBoundCheck(): Promise<void> {
   } finally {
     await migrationDb`delete from goals.goals where id = ${goal.goalId}`;
     await migrationDb.end();
+  }
+}
+
+/**
+ * Proves module 64's reads: a commitment asks nothing before the civil day it
+ * was written (`loadDay` and `loadWeek` alike), `loadDay(today).goals` carries
+ * `openedOn`, a one-off done on the day drawn is in `doneOneOffs` with its
+ * fact and out of `oneOffs`, one done yesterday is in neither, and a dayless
+ * one is in neither list but counts in `daylessCount` and is listed by
+ * `listDaylessOneOffs`, unless it is done or its goal is archived. The dayless
+ * count is measured against a baseline read first: this identity may hold
+ * dayless rows of its own. Every row is deleted by id in `finally`.
+ */
+async function runCreatedOnAndOneOffsCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { listDaylessOneOffs } = await import("@/lib/queries/one-offs");
+  const { createGoal, addCommitment, archiveGoal } = await import("@/app/actions/plan");
+  const { createOneOff, completeOneOff } = await import("@/app/actions/one-offs");
+  const { getPerson, withGoalsDb } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { oneOffs } = await import("@/db/schema");
+  const { sql } = await import("drizzle-orm");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runCreatedOnAndOneOffsCheck: no verified session");
+
+  const today = todayInZone();
+  const yesterday = addDays(today, -1);
+  const baseline = (await loadDay(today)).daylessCount;
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  const oneOffIds: string[] = [];
+
+  async function seedDayless(name: string, goalId: string | null): Promise<string> {
+    const [row] = await withGoalsDb((tx) =>
+      tx.execute<{ id: string }>(sql`
+        insert into ${oneOffs} (user_id, goal_id, name, day)
+        values (${person!.id}, ${goalId}, ${name}, null)
+        returning id
+      `),
+    );
+    oneOffIds.push(row.id);
+    return row.id;
+  }
+
+  try {
+    const goal = await createGoal({ name: "check-day created-on probe", horizon: "2099-12-31" });
+    if (!goal.ok) throw new Error(`runCreatedOnAndOneOffsCheck: createGoal failed: ${goal.error}`);
+    goalIds.push(goal.goalId);
+
+    const commitment = await addCommitment({
+      goalId: goal.goalId,
+      name: "check-day created-on probe",
+      cadenceKind: "daily",
+      satisfaction: "tap",
+    });
+    if (!commitment.ok) {
+      throw new Error(`runCreatedOnAndOneOffsCheck: addCommitment failed: ${commitment.error}`);
+    }
+    const commitmentId = commitment.commitmentId;
+
+    const doneToday = await createOneOff({ name: "check-day done today", day: today, goalId: goal.goalId });
+    const doneYesterday = await createOneOff({ name: "check-day done yesterday", day: yesterday });
+    if (!doneToday.ok || !doneYesterday.ok) {
+      throw new Error("runCreatedOnAndOneOffsCheck: createOneOff failed");
+    }
+    const undoneToday = await createOneOff({ name: "check-day undone today", day: today });
+    if (!undoneToday.ok) throw new Error("runCreatedOnAndOneOffsCheck: createOneOff (undone) failed");
+    oneOffIds.push(doneToday.oneOffId, doneYesterday.oneOffId, undoneToday.oneOffId);
+
+    const completed = await completeOneOff({ oneOffId: doneToday.oneOffId });
+    if (!completed.ok) throw new Error(`runCreatedOnAndOneOffsCheck: completeOneOff failed: ${completed.error}`);
+    await db`
+      insert into goals.facts (user_id, commitment_id, one_off_id, goal_id, day)
+      values (${person.id}, null, ${doneYesterday.oneOffId}, null, ${yesterday})
+    `;
+
+    const dayless = await seedDayless("check-day dayless", null);
+    const daylessDone = await seedDayless("check-day dayless done", null);
+    const daylessDoneResult = await completeOneOff({ oneOffId: daylessDone });
+    if (!daylessDoneResult.ok) {
+      throw new Error(`runCreatedOnAndOneOffsCheck: completeOneOff (dayless) failed: ${daylessDoneResult.error}`);
+    }
+    const archivedGoal = await createGoal({ name: "check-day archived probe", horizon: "2099-12-31" });
+    if (!archivedGoal.ok) throw new Error(`runCreatedOnAndOneOffsCheck: createGoal failed: ${archivedGoal.error}`);
+    goalIds.push(archivedGoal.goalId);
+    const daylessArchived = await seedDayless("check-day dayless archived", archivedGoal.goalId);
+    const archived = await archiveGoal({ goalId: archivedGoal.goalId });
+    if (!archived.ok) throw new Error(`runCreatedOnAndOneOffsCheck: archiveGoal failed: ${archived.error}`);
+
+    const start = wireCalls.length;
+    const todayDay = await loadDay(today);
+    reportRun("created-on", wireCalls.slice(start), false);
+    const yesterdayDay = await loadDay(yesterday);
+
+    assert(
+      "a commitment created today is absent from loadDay(yesterday).view.slots",
+      !yesterdayDay.view.slots.some((slot) => slot.commitmentId === commitmentId),
+      `slots = ${JSON.stringify(yesterdayDay.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "it is present on its own day, in loadDay(today).view.slots",
+      todayDay.view.slots.some((slot) => slot.commitmentId === commitmentId),
+      `slots = ${JSON.stringify(todayDay.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+
+    const week = await loadWeek(yesterday);
+    const weekYesterday = week.view.days.find((day) => day.day === yesterday);
+    const weekToday = (await loadWeek(today)).view.days.find((day) => day.day === today);
+    assert(
+      "loadWeek asks nothing for that commitment on the day before its creation",
+      weekYesterday !== undefined && !weekYesterday.slots.some((slot) => slot.commitmentId === commitmentId),
+      `slots = ${JSON.stringify(weekYesterday?.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "loadWeek asks for it on its own day",
+      weekToday !== undefined && weekToday.slots.some((slot) => slot.commitmentId === commitmentId),
+      `slots = ${JSON.stringify(weekToday?.slots.map((slot) => slot.commitmentId))}`,
+    );
+
+    const openedOn = todayDay.goals.find((candidate) => candidate.id === goal.goalId)?.openedOn;
+    assert("loadDay(today).goals carries openedOn, the civil day the goal was written", openedOn === today, `openedOn = ${openedOn}`);
+
+    const [factRow] = await db<{ id: string }[]>`
+      select id from goals.facts where one_off_id = ${doneToday.oneOffId}
+    `;
+    const doneRow = todayDay.doneOneOffs.find((row) => row.id === doneToday.oneOffId);
+    assert(
+      "a one-off completed today is in doneOneOffs with its factId",
+      doneRow !== undefined && doneRow.factId === factRow.id && doneRow.goalId === goal.goalId,
+      `row = ${JSON.stringify(doneRow)}, fact ${factRow.id}`,
+    );
+    assert(
+      "it is not in oneOffs",
+      !todayDay.oneOffs.some((row) => row.id === doneToday.oneOffId),
+      "checked against loadDay(today).oneOffs",
+    );
+    const listed = [...todayDay.oneOffs.map((row) => row.id), ...todayDay.doneOneOffs.map((row) => row.id)];
+    assert(
+      "a one-off completed yesterday is in neither list",
+      !listed.includes(doneYesterday.oneOffId),
+      `ids = ${JSON.stringify(listed)}`,
+    );
+    assert(
+      "a dayless one-off is in neither list",
+      !listed.includes(dayless),
+      `ids = ${JSON.stringify(listed)}`,
+    );
+    assert(
+      "daylessCount counts the dayless one, and not a dated one, a done one nor one whose goal is archived",
+      todayDay.daylessCount === baseline + 1,
+      `baseline ${baseline}, now ${todayDay.daylessCount}`,
+    );
+
+    const listStart = wireCalls.length;
+    const daylessList = await listDaylessOneOffs();
+    const listCalls = wireCalls.slice(listStart);
+    const ids = daylessList.map((row) => row.id);
+    assert(
+      "listDaylessOneOffs lists the dayless one and no dated, done or archived-goal one",
+      ids.includes(dayless) &&
+        !ids.includes(undoneToday.oneOffId) &&
+        !ids.includes(daylessDone) &&
+        !ids.includes(daylessArchived),
+      `ids = ${JSON.stringify(ids)}`,
+    );
+    assert(
+      "listDaylessOneOffs and daylessCount agree",
+      daylessList.length === todayDay.daylessCount,
+      `${daylessList.length} listed, ${todayDay.daylessCount} counted`,
+    );
+    const listApplication = [...groupByConnection(listCalls).entries()].reduce(
+      (sum, [connection, calls]) => sum + analyzeGroup(connection, calls).applicationCount,
+      0,
+    );
+    assert(
+      "listDaylessOneOffs issues two application statements",
+      listApplication === 2,
+      `${listApplication} application statement(s) of ${listCalls.length} on the wire`,
+    );
+  } finally {
+    if (oneOffIds.length > 0) {
+      await db`delete from goals.one_offs where id in ${db(oneOffIds)} and user_id = ${person.id}`;
+    }
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${person.id}`;
+    }
+    await db.end();
   }
 }
 
@@ -1282,6 +1493,7 @@ async function runMain(): Promise<void> {
   await runOneOffCarryCheck();
   await runFactWrittenOnCheck();
   await runPhaseDayBoundCheck();
+  await runCreatedOnAndOneOffsCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
