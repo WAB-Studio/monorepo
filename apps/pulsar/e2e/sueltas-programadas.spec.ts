@@ -1,6 +1,9 @@
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, laneNumber, seededPerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `/sueltas` holds the one-offs dated after today under «programadas»: each
@@ -27,6 +30,27 @@ async function seed(
   return row.id;
 }
 
+// A person of this spec's own: the group label counts every waiting one-off,
+// so only a fresh identity can promise the count. Minted at a disposable lane
+// (offset from `sueltas.spec.ts`) and registered under the suite's run, whose
+// teardown drops it.
+function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
+  execFileSync(
+    process.execPath,
+    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
+    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
+  );
+  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
+  const previous = process.env.HARNESS_LANE;
+  process.env.HARNESS_LANE = String(lane);
+  try {
+    return { id: seededPerson().id, sessionFile };
+  } finally {
+    if (previous === undefined) delete process.env.HARNESS_LANE;
+    else process.env.HARNESS_LANE = previous;
+  }
+}
+
 const WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
 function words(day: string): string {
@@ -35,10 +59,13 @@ function words(day: string): string {
 }
 
 test("a one-off for tomorrow is listed under «programadas» with tomorrow's words, its goal as written (RP-21, RNP-07)", async ({
-  page,
+  browser,
+  baseURL,
   db,
-  personId,
 }) => {
+  const person = mintDisposablePerson(9700 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const personId = person.id;
+  const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const name = `Programada de mañana ${stamp}`;
   const goalName = `Inglés ${stamp}`;
@@ -49,11 +76,13 @@ test("a one-off for tomorrow is listed under «programadas» with tomorrow's wor
   const oneOffId = await seed(db, personId, name, plusDays(1), goal.id);
 
   try {
+    const page = await context.newPage();
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/sueltas");
 
-    await expect(page.getByRole("heading", { name: "Lo que espera" }).or(page.getByText("Lo que espera"))).toBeVisible();
-    await expect(page.getByText(/programadas?$/)).toBeVisible();
+    await expect(page.getByText("Lo que espera", { exact: true })).toBeVisible();
+    await expect(page.getByText("una programada", { exact: true })).toBeVisible();
+    await expect(page.getByText(/sin día$/)).toHaveCount(0);
     const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row).toContainText(`${words(plusDays(1))}`);
     await expect(row).toContainText(`de ${goalName}`);
@@ -63,6 +92,7 @@ test("a one-off for tomorrow is listed under «programadas» with tomorrow's wor
     );
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   } finally {
+    await context.close();
     await db`delete from goals.one_offs where id = ${oneOffId}`;
     await db`delete from goals.goals where id = ${goal.id} and user_id = ${personId}`;
   }
