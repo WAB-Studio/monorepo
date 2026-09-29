@@ -1,0 +1,16 @@
+{
+  "kicker": "sueltas",
+  "title": "Sin día",
+  "toToday": "volver a hoy",
+  "waitingOne": "{count} espera",
+  "waitingMany": "{count} esperan",
+  "fromGoal": "de {goal}",
+  "markLabel": "Dar por hecha: {name}",
+  "empty": "Nada espera sin día.",
+  "schedule": {
+    "title": "¿Para cuándo?",
+    "confirm": "Ponerle ese día",
+    "keep": "Dejarla sin día",
+    "delete": "Borrarla"
+  }
+}

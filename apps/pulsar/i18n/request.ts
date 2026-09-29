@@ -3,7 +3,7 @@ import { getRequestConfig } from "next-intl/server";
 // One locale and no routing: the interface is Spanish (RNP-01), no segment
 // carries it and nothing negotiates it.
 export default getRequestConfig(async () => {
-  const [common, account, day, goal, plan, week, sources] = await Promise.all([
+  const [common, account, day, goal, plan, week, sources, oneOffs] = await Promise.all([
     import("../messages/es/common.json"),
     import("../messages/es/account.json"),
     import("../messages/es/day.json"),
@@ -11,6 +11,7 @@ export default getRequestConfig(async () => {
     import("../messages/es/plan.json"),
     import("../messages/es/week.json"),
     import("../messages/es/sources.json"),
+    import("../messages/es/oneOffs.json"),
   ]);
 
   return {
@@ -23,6 +24,7 @@ export default getRequestConfig(async () => {
       plan: plan.default,
       week: week.default,
       sources: sources.default,
+      oneOffs: oneOffs.default,
     },
   };
 });

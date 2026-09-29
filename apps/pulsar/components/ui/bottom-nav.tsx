@@ -23,7 +23,7 @@ export function BottomNav({
   const pathname = usePathname();
 
   const items = [
-    { href: "/", label: todayLabel, active: pathname === "/" },
+    { href: "/", label: todayLabel, active: pathname === "/" || pathname.startsWith("/sueltas") },
     // A past day (`/dia/<fecha>`) is reached from the week, and stands under it.
     {
       href: "/semana",
