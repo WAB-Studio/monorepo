@@ -94,6 +94,17 @@ export function civilDateShort(day: string): string {
   return `${part("weekday")} ${part("day")} ${part("month").slice(0, 3)}`;
 }
 
+// "13 sep": `civilDateShort` without the weekday.
+export function civilDayMonthShort(day: string): string {
+  const parts = new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("day")} ${part("month").slice(0, 3)}`;
+}
+
 // An instant as the 24-hour "HH:mm" a person in the zone read on their clock.
 // `h23` keeps midnight "00:05", never "24:05".
 export function timeInZone(instant: string): string {

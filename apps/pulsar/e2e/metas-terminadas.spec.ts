@@ -65,7 +65,8 @@ test("one open, one ended and one archived goal list each under its heading, in 
     await page.setViewportSize({ width: 360, height: 740 });
     const stamp = Date.now();
     const open = `Abierta ${stamp}`;
-    const ended = `Terminada ${stamp}`;
+    // Short, so the annotation cannot reach the row's end unless it is pushed there.
+    const ended = `Fin ${stamp % 100000}`;
     const archived = `Archivada ${stamp}`;
     const openId = await seedGoal(db, person.id, open, plusDays(60));
     // The last day it counted is the 13th: the horizon is the day after.
@@ -90,7 +91,14 @@ test("one open, one ended and one archived goal list each under its heading, in 
     expect(at(ended)).toBeLessThan(at("Archivadas"));
     expect(at("Archivadas")).toBeLessThan(at(archived));
     await expect(archivadas).toBeVisible();
-    await expect(page.getByRole("link", { name: `${ended} terminó el 13 sep`, exact: true })).toBeVisible();
+    const endedRow = page.getByRole("link", { name: `${ended} terminó el 13 sep`, exact: true });
+    await expect(endedRow).toBeVisible();
+
+    // The annotation sits at the row's end, not right after the name.
+    const rowBox = await endedRow.boundingBox();
+    const noteBox = await endedRow.getByText("terminó el 13 sep").boundingBox();
+    expect(rowBox && noteBox).toBeTruthy();
+    expect(noteBox!.x + noteBox!.width).toBeGreaterThan(rowBox!.x + rowBox!.width - 24);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     for (const [name, id] of [
