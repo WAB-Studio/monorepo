@@ -80,6 +80,20 @@ export function civilDateLabel(day: string, weekday = false): string {
   }).format(civilDateToDate(day));
 }
 
+// "martes 22 sep": weekday, day and the month's first three letters, no
+// punctuation. The month is cut from its long name because ICU's own short
+// form is "sept" for September.
+export function civilDateShort(day: string): string {
+  const parts = new Intl.DateTimeFormat("es-CO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("weekday")} ${part("day")} ${part("month").slice(0, 3)}`;
+}
+
 // An instant as the 24-hour "HH:mm" a person in the zone read on their clock.
 // `h23` keeps midnight "00:05", never "24:05".
 export function timeInZone(instant: string): string {
