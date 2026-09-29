@@ -1424,8 +1424,275 @@ async function runCreatedOnAndOneOffsCheck(): Promise<void> {
   }
 }
 
+function applicationStatements(calls: DebugCall[]): number {
+  return [...groupByConnection(calls).entries()].reduce(
+    (sum, [connection, group]) => sum + analyzeGroup(connection, group).applicationCount,
+    0,
+  );
+}
+
+// Module 74: an ended goal leaves the day, the week keeps the days it lived,
+// a done one-off carries its time, scheduled one-offs are counted and
+// listed, the week's measure equals the goal's own current week. Every row
+// is seeded under this run's identity and deleted by id. Run alone with
+// `--module-74`.
+async function runEndedGoalScheduledCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const { listDaylessOneOffs, listScheduledOneOffs } = await import("@/lib/queries/one-offs");
+  const { tallyDays } = await import("@/lib/day/tally");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone, weekOf } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runEndedGoalScheduledCheck: no verified session");
+  const userId = person.id;
+
+  const today = todayInZone();
+  const yesterday = addDays(today, -1);
+  const tomorrow = addDays(today, 1);
+  const monday = weekOf(today)[0];
+  console.log(`\nmodule 74 check — ${new Date().toISOString()} (today ${today}, monday ${monday})`);
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  const oneOffIds: string[] = [];
+
+  async function seedGoal(
+    name: string,
+    horizon: string,
+    measure: { name: string; unit: string } | null,
+    archived = false,
+  ): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at, archived_at)
+      values (${userId}, ${name}, ${horizon}::date, ${measure?.name ?? null}, ${measure?.unit ?? null},
+              now() - interval '28 days', ${archived ? new Date().toISOString() : null}::timestamptz)
+      returning id
+    `;
+    goalIds.push(row.id);
+    return row.id;
+  }
+  async function seedCommitment(goalId: string, name: string, quantity: boolean): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${goalId}, ${name}, 'daily', ${quantity ? "quantity" : "tap"},
+              ${quantity ? 10 : null}, ${quantity ? "min" : null}, now() - interval '28 days')
+      returning id
+    `;
+    return row.id;
+  }
+  // `goal_id` rides on the fact the way `declareFact` copies it: `loadGoal`
+  // reads a goal's facts by it.
+  async function seedFact(
+    goalId: string,
+    commitmentId: string,
+    day: string,
+    quantity: number | null,
+  ): Promise<void> {
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${userId}, ${goalId}, ${commitmentId}, ${day}::date, ${quantity})
+    `;
+  }
+  async function seedOneOff(name: string, goalId: string | null, day: string | null): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, day)
+      values (${userId}, ${goalId}, ${name}, ${day}::date)
+      returning id
+    `;
+    oneOffIds.push(row.id);
+    return row.id;
+  }
+
+  try {
+    const ended = await seedGoal("check-74 ended", today, null);
+    const endedCommitment = await seedCommitment(ended, "check-74 ended tap", false);
+    const measured = await seedGoal("check-74 measured", "2099-12-31", { name: "minutos", unit: "min" });
+    const measuredCommitment = await seedCommitment(measured, "check-74 minutes", true);
+    const plain = await seedGoal("check-74 plain", "2099-12-31", null);
+    await seedCommitment(plain, "check-74 plain tap", false);
+    const archivedGoal = await seedGoal("check-74 archived", "2099-12-31", null, true);
+    await seedCommitment(archivedGoal, "check-74 archived tap", false);
+
+    // 7 on the Monday, 5 today, 100 the week before: the week's measure is 12
+    // (5 when today is the Monday itself).
+    const expectedMeasure = monday === today ? 5 : 12;
+    if (monday !== today) await seedFact(measured, measuredCommitment, monday, 7);
+    await seedFact(measured, measuredCommitment, today, 5);
+    await seedFact(measured, measuredCommitment, addDays(monday, -7), 100);
+
+    const doneOneOff = await seedOneOff("check-74 done today", null, today);
+    await db`
+      insert into goals.facts (user_id, one_off_id, goal_id, day)
+      values (${userId}, ${doneOneOff}, null, ${today}::date)
+    `;
+    const [doneFact] = await db<{ written_at: Date }[]>`
+      select written_at from goals.facts where one_off_id = ${doneOneOff}
+    `;
+    const tomorrowOneOff = await seedOneOff("check-74 tomorrow", null, tomorrow);
+    const laterOneOff = await seedOneOff("check-74 in three days", null, addDays(today, 3));
+    const todayOneOff = await seedOneOff("check-74 dated today", null, today);
+    const endedScheduled = await seedOneOff("check-74 ended goal, scheduled", ended, tomorrow);
+    const endedDayless = await seedOneOff("check-74 ended goal, dayless", ended, null);
+
+    const dayStart = wireCalls.length;
+    const todayDay = await loadDay(today);
+    const dayApplication = applicationStatements(wireCalls.slice(dayStart));
+    const yesterdayDay = await loadDay(yesterday);
+    assert("loadDay still issues four application statements", dayApplication === 4, `${dayApplication}`);
+
+    assert(
+      "a goal whose horizon is today is absent from loadDay(today).goals",
+      !todayDay.goals.some((goal) => goal.id === ended),
+      `goals = ${JSON.stringify(todayDay.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "it is present in loadDay(yesterday).goals",
+      yesterdayDay.goals.some((goal) => goal.id === ended),
+      `goals = ${JSON.stringify(yesterdayDay.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "an archived goal is on no day",
+      !todayDay.goals.some((goal) => goal.id === archivedGoal) &&
+        !yesterdayDay.goals.some((goal) => goal.id === archivedGoal),
+      "checked today and yesterday",
+    );
+
+    const doneRow = todayDay.doneOneOffs.find((row) => row.id === doneOneOff);
+    assert(
+      "a one-off completed today carries writtenAt equal to its fact's written_at",
+      doneRow !== undefined && new Date(doneRow.writtenAt).getTime() === doneFact.written_at.getTime(),
+      `writtenAt = ${doneRow?.writtenAt}, fact ${doneFact.written_at.toISOString()}`,
+    );
+
+    const openOneOffs = todayDay.oneOffs.map((row) => row.id);
+    assert(
+      "a one-off dated tomorrow is not in oneOffs",
+      !openOneOffs.includes(tomorrowOneOff) && !openOneOffs.includes(laterOneOff),
+      `ids = ${JSON.stringify(openOneOffs)}`,
+    );
+    assert("a one-off dated today is in oneOffs", openOneOffs.includes(todayOneOff), "checked");
+
+    const [expected] = await db<{ n: number }[]>`
+      select count(*)::int as n from goals.one_offs o
+      where o.user_id = ${userId}
+        and o.day > ${today}::date
+        and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
+        and (o.goal_id is null or exists (
+          select 1 from goals.goals g
+          where g.id = o.goal_id and g.archived_at is null and g.horizon > ${today}::date))
+    `;
+    const countedNow = (await loadDay(today)).scheduledCount;
+    assert(
+      "scheduledCount counts tomorrow's and the later one, not today's nor an ended goal's",
+      countedNow === expected.n && countedNow >= 2,
+      `scheduledCount ${countedNow}, database read ${expected.n}`,
+    );
+
+    const listStart = wireCalls.length;
+    const scheduled = await listScheduledOneOffs(today);
+    const listApplication = applicationStatements(wireCalls.slice(listStart));
+    const scheduledIds = scheduled.map((row) => row.id);
+    assert("listScheduledOneOffs issues two application statements", listApplication === 2, `${listApplication}`);
+    assert(
+      "listScheduledOneOffs lists tomorrow's and the later one, in day order",
+      scheduledIds.includes(tomorrowOneOff) &&
+        scheduledIds.includes(laterOneOff) &&
+        scheduledIds.indexOf(tomorrowOneOff) < scheduledIds.indexOf(laterOneOff),
+      `ids = ${JSON.stringify(scheduledIds)}`,
+    );
+    assert(
+      "it lists neither today's one-off, nor an ended goal's, nor a done one",
+      !scheduledIds.includes(todayOneOff) &&
+        !scheduledIds.includes(endedScheduled) &&
+        !scheduledIds.includes(doneOneOff),
+      `ids = ${JSON.stringify(scheduledIds)}`,
+    );
+    const dayless = (await listDaylessOneOffs()).map((row) => row.id);
+    assert(
+      "an ended goal's dayless one-off is not listed",
+      !dayless.includes(endedDayless),
+      `ids = ${JSON.stringify(dayless)}`,
+    );
+
+    assert(
+      "weekMeasure holds the goal's measure since Monday",
+      todayDay.weekMeasure[measured] === expectedMeasure,
+      `weekMeasure = ${todayDay.weekMeasure[measured]}, seeded ${expectedMeasure}`,
+    );
+    const goalView = await loadGoal(measured);
+    const currentWeek = goalView?.weeks.find((week) => week.current);
+    assert(
+      "it equals the current week of loadGoal(id).weeks",
+      currentWeek !== undefined && currentWeek.total === todayDay.weekMeasure[measured],
+      `loadGoal ${currentWeek?.total}, loadDay ${todayDay.weekMeasure[measured]}`,
+    );
+    assert(
+      "a goal without a measure has no key",
+      !(plain in todayDay.weekMeasure) && !(ended in todayDay.weekMeasure),
+      `keys = ${JSON.stringify(Object.keys(todayDay.weekMeasure))}`,
+    );
+
+    const weekStart = wireCalls.length;
+    const week = await loadWeek(today);
+    const weekApplication = applicationStatements(wireCalls.slice(weekStart));
+    assert("loadWeek still issues four application statements", weekApplication === 4, `${weekApplication}`);
+    const weekOneOff = week.oneOffFacts.find((fact) => fact.oneOffId === doneOneOff);
+    assert(
+      "loadWeek's one-off facts carry the one-off's id and name",
+      weekOneOff?.name === "check-74 done today",
+      `fact = ${JSON.stringify(weekOneOff)}`,
+    );
+    const endedInWeek = week.goals.some((goal) => goal.id === ended);
+    assert(
+      "a goal that ended yesterday is in loadWeek(today).goals when yesterday is in the week, absent when the week starts today",
+      endedInWeek === (monday !== today),
+      `inWeek = ${endedInWeek}, monday ${monday}, today ${today}`,
+    );
+    assert(
+      "an archived goal is not in loadWeek's goals",
+      !week.goals.some((goal) => goal.id === archivedGoal),
+      "checked",
+    );
+
+    const without = { ...week, goals: week.goals.filter((goal) => goal.id !== ended) };
+    const withEnded = tallyDays(week);
+    const withoutEnded = tallyDays(without);
+    const delta = withEnded.map((tally, i) => tally.total - withoutEnded[i].total);
+    const days = week.view.days.map((day) => day.day);
+    const expectedDelta = days.map((day) =>
+      day < today && week.view.days.find((d) => d.day === day)!.slots.some((slot) => slot.commitmentId === endedCommitment)
+        ? 1
+        : 0,
+    );
+    assert(
+      "the ended goal's commitment counts in tallyDays for the days before today and not from today",
+      JSON.stringify(delta) === JSON.stringify(expectedDelta) &&
+        (monday === today || expectedDelta.some((n) => n === 1)),
+      `delta = ${JSON.stringify(delta)}, expected ${JSON.stringify(expectedDelta)}`,
+    );
+  } finally {
+    if (oneOffIds.length > 0) {
+      await db`delete from goals.one_offs where id in ${db(oneOffIds)} and user_id = ${userId}`;
+    }
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
+    await db.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
+
+  if (process.argv.includes("--module-74")) {
+    await runEndedGoalScheduledCheck();
+    console.log(failed ? "REPORT  failed" : "REPORT  passed");
+    process.exit(failed ? 1 : 0);
+  }
 
   const { loadDay } = await import("@/lib/queries/day");
   const { todayInZone } = await import("@/lib/zone");
@@ -1494,6 +1761,7 @@ async function runMain(): Promise<void> {
   await runFactWrittenOnCheck();
   await runPhaseDayBoundCheck();
   await runCreatedOnAndOneOffsCheck();
+  await runEndedGoalScheduledCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
