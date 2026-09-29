@@ -46,6 +46,9 @@ function dayLabel(day: string, weekdayNames: string[]): string {
 function noteFor(day: string, today: string, filled: number, total: number, t: Translate): string | undefined {
   if (day > today) return undefined;
   if (day === today) return t("week.today");
+  // A goal that drew no dot on a lived day asked nothing there (it was opened
+  // later): a count would read "0 de 0", a pair of zeros with nothing behind.
+  if (total === 0) return undefined;
   return t("week.ratio", { done: filled, total });
 }
 
