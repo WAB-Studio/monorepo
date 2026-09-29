@@ -70,6 +70,7 @@ body {
   --pulsar-text-unit-size: 11px;
   --pulsar-text-measure-tracking: 0.02em;
   --pulsar-text-sheet-title-size: 21px;
+  --pulsar-text-sheet-title-size-wide: 24px;
   --pulsar-text-line-size: 15px;
   --pulsar-text-line-leading: 1.6;
 }
@@ -103,4 +104,15 @@ body {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+/* RNP-11, `HoyEscritorio.dc.html`: from 1024px the shell is a row. The rail
+   (`components/ui/bottom-nav`) stands first and sticks to the viewport; the
+   screen takes the rest. The root grows with its content so the rail has the
+   whole scroll to stick through. */
+@media (min-width: 1024px) {
+  body > .radix-themes {
+    flex-direction: row;
+    flex: 1 0 auto;
+  }
 }

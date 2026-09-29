@@ -1,0 +1,47 @@
+/* Below 1024px the wrappers vanish: their children become the page's own
+   flex items and take its gap. */
+.split,
+.before,
+.main,
+.after {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-rows: auto auto;
+    column-gap: 24px;
+    /* Between the two cards of the right column. */
+    row-gap: 18px;
+    align-items: start;
+  }
+
+  .asideWide {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .main {
+    display: block;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    min-inline-size: 0;
+  }
+
+  .before {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .after {
+    display: block;
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .noBefore .after {
+    grid-row: 1;
+  }
+}

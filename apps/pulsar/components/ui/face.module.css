@@ -1,0 +1,13 @@
+/* Hides the face that is not this width's. The shown one keeps whatever
+   `display` its element has. */
+@media (min-width: 1024px) {
+  .phone {
+    display: none;
+  }
+}
+
+@media (max-width: 1023.98px) {
+  .desktop {
+    display: none;
+  }
+}

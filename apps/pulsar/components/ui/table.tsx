@@ -102,6 +102,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
             {columns.map((header, column) => (
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>
                 {header}
+                {column === lead && unit ? <span className={styles.headerUnit}>{unit}</span> : null}
               </th>
             ))}
           </tr>
