@@ -53,3 +53,7 @@
 .accent.accent {
   color: var(--pulsar-accent);
 }
+
+.end.end {
+  margin-inline-start: auto;
+}

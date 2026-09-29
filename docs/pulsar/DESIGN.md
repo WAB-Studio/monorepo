@@ -480,8 +480,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   and phases as they were. Its move sheet opens on the weeks that end this Sunday. Decided 2026-09-29
   by the coordinator; board approved by the user.
 - **`/metas` lists «terminadas» between the open and «Archivadas»**, each with «terminó el <day
-  month>». With only ended goals the list still draws, «Abrir otra meta» included. Decided 2026-09-29
-  by the coordinator; board approved by the user.
+  month>». With only ended goals the list still draws, «Abrir otra meta» included. Each ended row
+  reads «terminó el {día} {mes corto}» at its end, with no year, as on the goal screen and on Hoy;
+  the year is omitted on purpose. Decided 2026-09-29 by the coordinator; board approved by the user.
 - **Hoy with every goal ended and none open** reads «Hoy no pide nada.», names the goal that ended
   and its day, and offers «Ver las metas» solid and «Abrir otra meta» outlined; goalless one-offs
   still draw below. Decided 2026-09-29 by the coordinator; board approved by the user.

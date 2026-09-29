@@ -4,7 +4,9 @@ import { getTranslations } from "next-intl/server";
 
 import { listGoalsForMetas } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
-import { Button, Page, SectionLabel } from "@/components/ui";
+import { civilDayMonthShort } from "@/lib/zone";
+import { dayBefore } from "@/lib/day/weeks";
+import { Button, Page, SectionLabel, Text } from "@/components/ui";
 
 // No board draws this screen. It always lists the person's open goals, one
 // with the other — never a redirect past a single one, or a second goal is
@@ -19,13 +21,17 @@ import { Button, Page, SectionLabel } from "@/components/ui";
 // under a quiet "Archivadas" one when there is at least one — each still its
 // own way into `Meta.dc.html`, from where it reopens. The redirect to
 // `/metas/nueva` only fires when the person has never opened a goal at all,
-// open or archived: an all-archived person still lands here, not there.
+// open, ended or archived: an all-archived person still lands here, not there.
+// An ended goal (`MetasTerminadas.dc.html`) lists under "terminadas" between
+// the two, and counts against the redirect the same way.
 export default async function GoalsIndexPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
-  const { open, archived } = await listGoalsForMetas();
-  if (open.length === 0 && archived.length === 0) redirect("/metas/nueva");
+  const { open, ended, archived } = await listGoalsForMetas();
+  if (open.length === 0 && ended.length === 0 && archived.length === 0) {
+    redirect("/metas/nueva");
+  }
 
   const t = await getTranslations();
 
@@ -40,6 +46,22 @@ export default async function GoalsIndexPage() {
       <Button asChild variant="outline" block>
         <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
       </Button>
+
+      {ended.length > 0 ? (
+        <section>
+          <SectionLabel>{t("goal.list.endedTitle")}</SectionLabel>
+          {ended.map((goal) => (
+            <Button key={goal.id} asChild variant="outline" block>
+              <Link href={`/metas/${goal.id}`}>
+                {goal.name}
+                <Text variant="meta" end>
+                  {t("goal.list.endedOnShort", { date: civilDayMonthShort(dayBefore(goal.horizon)) })}
+                </Text>
+              </Link>
+            </Button>
+          ))}
+        </section>
+      ) : null}
 
       {archived.length > 0 ? (
         <section>
