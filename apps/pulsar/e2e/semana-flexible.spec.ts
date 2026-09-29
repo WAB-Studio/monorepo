@@ -108,3 +108,23 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
     await db`delete from goals.goals where id = ${goal.id}`;
   }
 });
+
+test("on the phone a goal with no commitment still draws its own section", async ({ browser, baseURL, db }) => {
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+  const goalName = `Meta sin compromisos ${Date.now()}`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${goalName}, ${plusDays(90)}::date, now() - interval '3 days') returning id
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto("/semana");
+    await expect(page.locator("main")).toHaveCount(1);
+    await expect(page.getByText(goalName)).toBeVisible();
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id}`;
+  }
+});

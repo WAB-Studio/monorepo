@@ -197,11 +197,14 @@ export async function WeekScreen() {
       ? t("week.sectionLabel", { name: goal.name, week: progress.week, total: progress.total })
       : goal.name;
 
-    const hasDaily =
+    const flexible = flexibleSection(goal);
+    // A goal whose only commitments are flexible has no day to draw; a goal
+    // with none at all still draws its section, as it always did.
+    const daysToDraw =
+      flexible === null ||
       commitments.some((c) => c.goalId === goal.id && flexibleWords(c, t) === null) ||
       oneOffFacts.some((fact) => fact.goalId === goal.id);
-    const flexible = flexibleSection(goal);
-    if (!hasDaily) return flexible;
+    if (!daysToDraw) return flexible;
 
     return (
       <Fragment key={goal.id}>
