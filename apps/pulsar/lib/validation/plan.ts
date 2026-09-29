@@ -79,34 +79,31 @@ const cadenceSchema = z.discriminatedUnion("cadenceKind", [
       )
       .min(1, { error: "plan.errors.weekdaysEmpty" }),
   }),
-  // Bounded well under Postgres's `integer` ceiling, the way module 14 bounded
-  // a declared quantity: nobody means "every 1000 days" or "1000 times a
-  // month", so a value that large is a mistyped digit, not a real cadence.
-  // Left unbounded, that digit used to reach the insert raw and come back as
-  // `value out of range for type integer` — a 500, not a message.
+  // What a week (7) and a year (365) hold; a month holds at most 31 days. The
+  // bound lives here alone: a commitment stored outside it still loads.
   z.object({
     cadenceKind: z.literal("times_per_week"),
     cadenceN: z
       .number({ error: "plan.errors.timesPerWeekInvalid" })
       .int({ error: "plan.errors.timesPerWeekInvalid" })
-      .positive({ error: "plan.errors.timesPerWeekInvalid" })
-      .max(1_000, { error: "plan.errors.timesPerWeekInvalid" }),
+      .min(1, { error: "plan.errors.timesPerWeekInvalid" })
+      .max(7, { error: "plan.errors.timesPerWeekInvalid" }),
   }),
   z.object({
     cadenceKind: z.literal("every_n_days"),
     cadenceN: z
       .number({ error: "plan.errors.everyNDaysInvalid" })
       .int({ error: "plan.errors.everyNDaysInvalid" })
-      .positive({ error: "plan.errors.everyNDaysInvalid" })
-      .max(1_000, { error: "plan.errors.everyNDaysInvalid" }),
+      .min(1, { error: "plan.errors.everyNDaysInvalid" })
+      .max(365, { error: "plan.errors.everyNDaysInvalid" }),
   }),
   z.object({
     cadenceKind: z.literal("times_per_month"),
     cadenceN: z
       .number({ error: "plan.errors.timesPerMonthInvalid" })
       .int({ error: "plan.errors.timesPerMonthInvalid" })
-      .positive({ error: "plan.errors.timesPerMonthInvalid" })
-      .max(1_000, { error: "plan.errors.timesPerMonthInvalid" }),
+      .min(1, { error: "plan.errors.timesPerMonthInvalid" })
+      .max(31, { error: "plan.errors.timesPerMonthInvalid" }),
   }),
 ]);
 

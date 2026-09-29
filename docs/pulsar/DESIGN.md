@@ -195,6 +195,12 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   says it reuses the list's own block-button pattern, under a second `SectionLabel`. Decided
   2026-09-27 by the coordinator, the user having delegated it.
 
+- **Module 67's bound.** It changes the words of an error the form already shows, and nothing else.
+- **`/sueltas` loading and failure.** They reuse `app/(app)/loading.tsx` (`HoyCargando.dc.html`) and
+  `Fallo.dc.html`; the list has no state of its own there.
+- **A past day with a goal opened later.** It is `DiaPasado.dc.html` with one goal fewer; drawing it
+  again would repeat the board.
+
 ## Decisions taken here
 
 - **The light/dark control sits in the day's header** (RNP-08), a 44 px icon button at the top
@@ -405,3 +411,17 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   by the user 2026-09-28, over keeping 1 to 1 000.
 - **RP-17 is kept through the move to Monday–Sunday weeks.** Its text stays true; the change lives in
   the decision above. Decided by the user 2026-09-28, over retiring it for a new code.
+- **Fifteen boards drawn for the slice «lo que la crítica pidió», approved by the user 2026-09-28.**
+  `HoyHechas`, `HoyHechasTodas` («hechas hoy» at the foot of the one-offs, with its time; a second tap
+  undoes; «N sin día» to the right of the «sueltas» label, absent at zero), `HoySueltaDia`,
+  `HoySueltaOtroDia`, `HoySueltaSinDia` (the chips «hoy · mañana · otro día · sin día» show only while
+  typing, «hoy» chosen, so Enter still writes today; a past date is refused in place; a one-off written
+  for another day or none is confirmed in a line), `SueltasSinDia`, `SueltasSinDiaVacia`,
+  `SueltaDarDia` (the list marks Hoy's tab; its sheet gives a day or leads to the delete sheet),
+  `DiaPasadoSeptimo` (no step back, one line why), `DiaPasadoVacio` («Ese día no pedía nada»),
+  `MetaHorizonte`, `MetaHorizonteHoja`, `MetaHorizonteFase`, `MetaHorizontePasado` («mover el final»
+  beside the horizon; the sheet asks weeks and names the Sunday it ends; two refusals),
+  `SemanaMetaNueva`; `Revision` and `RevisionEscritorio` redrawn with each week's dates.
+- **A goal opened late in the week keeps the weeks it was written with.** Its partial first week is
+  week 1, and «12 semanas» ends on the Sunday of week 12. Decided by the user 2026-09-28, over counting
+  twelve whole weeks after the partial one.

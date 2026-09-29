@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addPhaseSchema, archiveGoalSchema, phasesOverlap, renameGoalSchema, reopenGoalSchema } from "./plan";
+import { addCommitmentSchema, addPhaseSchema, archiveGoalSchema, phasesOverlap, renameGoalSchema, reopenGoalSchema } from "./plan";
 
 const GOAL_ID = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d";
 
@@ -75,3 +75,29 @@ test("reopenGoalSchema: accepts a real goalId and nothing else", () => {
   const result = reopenGoalSchema.safeParse({ goalId: GOAL_ID });
   assert.equal(result.success, true);
 });
+
+// RP-12: a week holds 7 days, a year 365, a month at most 31.
+const CADENCE_BOUNDS = [
+  ["times_per_week", 7, "plan.errors.timesPerWeekInvalid"],
+  ["every_n_days", 365, "plan.errors.everyNDaysInvalid"],
+  ["times_per_month", 31, "plan.errors.timesPerMonthInvalid"],
+] as const;
+
+function commitmentInput(cadenceKind: string, cadenceN: number) {
+  return { goalId: GOAL_ID, name: "leer", satisfaction: "tap", cadenceKind, cadenceN };
+}
+
+for (const [kind, max, key] of CADENCE_BOUNDS) {
+  test(`addCommitmentSchema: ${kind} accepts 1 and ${max}`, () => {
+    assert.equal(addCommitmentSchema.safeParse(commitmentInput(kind, 1)).success, true);
+    assert.equal(addCommitmentSchema.safeParse(commitmentInput(kind, max)).success, true);
+  });
+
+  test(`addCommitmentSchema: ${kind} refuses 0 and ${max + 1} with ${key}`, () => {
+    for (const n of [0, max + 1]) {
+      const result = addCommitmentSchema.safeParse(commitmentInput(kind, n));
+      assert.equal(result.success, false);
+      if (!result.success) assert.equal(result.error.issues[0].message, key);
+    }
+  });
+}

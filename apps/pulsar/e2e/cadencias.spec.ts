@@ -158,3 +158,51 @@ test("«N veces al mes» offers no chip on CompromisoNuevo, and a commitment sto
     await deleteGoal(db, personId, goalId);
   }
 });
+
+test("«8» veces por semana is refused with the message naming 7 and writes no row (RP-12)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const goalName = `Meta tope semana ${Date.now()}`;
+  const commitmentName = `Compromiso tope semana ${Date.now()}`;
+  const goalId = await createGoal(page, goalName);
+
+  try {
+    await openNewCommitmentForm(page, goalId);
+    await page.getByLabel("qué es").fill(commitmentName);
+    await page.getByRole("button", { name: "N por semana", exact: true }).click();
+    await page.getByLabel("veces por semana").fill("8");
+    await page.getByRole("button", { name: "Añadirlo" }).click();
+
+    await expect(page.getByText("un número entero entre 1 y 7.")).toBeVisible();
+    expect(await commitmentByName(db, personId, commitmentName)).toBeNull();
+  } finally {
+    await deleteGoal(db, personId, goalId);
+  }
+});
+
+test("a commitment stored with «9» times a week, past the bound, still reads on its goal and asks on Hoy (RP-12)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const goalName = `Meta fuera de tope ${Date.now()}`;
+  const commitmentName = `Compromiso fuera de tope ${Date.now()}`;
+  const goalId = await createGoal(page, goalName);
+
+  try {
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction)
+      values (${personId}, ${goalId}, ${commitmentName}, 'times_per_week', 9, 'tap')
+    `;
+
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText("9 veces por semana")).toBeVisible();
+
+    await page.goto("/");
+    await expect(page.locator("button", { hasText: commitmentName })).toBeVisible();
+  } finally {
+    await deleteGoal(db, personId, goalId);
+  }
+});
