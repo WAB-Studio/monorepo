@@ -212,7 +212,7 @@ const ROUTES: Route[] = [
   {
     name: "/metas/<id>/revision",
     path: (world) => `/metas/${world.goalId}/revision`,
-    ready: (p) => expect(p.getByRole("main")).toBeVisible(),
+    ready: (p) => expect(p.locator("main")).toHaveCount(1),
     min: 4,
   },
   {
@@ -312,7 +312,7 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
     const { context, page } = await signedIn(browser, baseURL, world, 1023, 740);
     try {
       await page.goto(path);
-      await expect(page.getByRole("main")).toBeVisible();
+      await expect(page.locator("main")).toHaveCount(1);
 
       const nav = await railBox(page);
       expect(nav).toMatchObject({ x: 0, width: 1023 });

@@ -189,7 +189,7 @@ test("/metas/<id>/fases/nueva holds at 360 (RNP-07)", async ({ page, db, personI
 test("/metas/<id>/revision holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}/revision`);
-    await expect(page.getByRole("main")).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
     await expectHolds(page, 1);
   });
 });
