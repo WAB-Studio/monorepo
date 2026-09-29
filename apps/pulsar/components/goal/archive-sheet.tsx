@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { archiveGoal, reopenGoal } from "@/app/actions/plan";
-import { Button, Sheet, Text } from "@/components/ui";
+import { Button, Sheet, SheetActions, Text } from "@/components/ui";
 
 export type ArchiveGoalActionProps = {
   goalId: string;
@@ -59,12 +59,14 @@ export function ArchiveGoalAction({ goalId, name }: ArchiveGoalActionProps) {
             {t(error)}
           </Text>
         ) : null}
-        <Button block onClick={handleArchive} disabled={pending}>
-          {t("plan.archiveSheet.confirm")}
-        </Button>
-        <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-          {t("plan.archiveSheet.cancel")}
-        </Button>
+        <SheetActions>
+          <Button block onClick={handleArchive} disabled={pending}>
+            {t("plan.archiveSheet.confirm")}
+          </Button>
+          <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+            {t("plan.archiveSheet.cancel")}
+          </Button>
+        </SheetActions>
       </Sheet>
     </>
   );

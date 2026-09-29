@@ -1,0 +1,124 @@
+/* `SemanaEscritorio.dc.html`. Rules are hairlines, today is a fill: no border
+   box, no red. */
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.nameColumn {
+  inline-size: 260px;
+}
+
+.day {
+  padding: 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--pulsar-muted);
+}
+
+/* Today's column, header to footer. */
+.today {
+  background: var(--pulsar-accent-soft);
+}
+
+.head.today {
+  border-radius: 10px 10px 0 0;
+}
+
+.dayLink {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.dayLink:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+}
+
+.group {
+  padding: 22px 0 8px;
+  text-align: start;
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-label-size);
+  font-weight: 400;
+  letter-spacing: var(--pulsar-text-label-tracking);
+  text-transform: uppercase;
+  color: var(--pulsar-muted);
+}
+
+.name {
+  padding: 14px 12px 14px 0;
+  border-block-start: 1px solid var(--pulsar-line);
+  text-align: start;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pulsar-ink);
+}
+
+.cell {
+  padding: 14px 8px;
+  border-block-start: 1px solid var(--pulsar-line);
+  text-align: center;
+}
+
+.dot {
+  display: inline-block;
+  box-sizing: border-box;
+  inline-size: 12px;
+  block-size: 12px;
+  vertical-align: middle;
+  border-radius: 50%;
+}
+
+.declared {
+  background: var(--pulsar-accent);
+}
+
+.evidence {
+  background: var(--pulsar-accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
+}
+
+.empty {
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-quiet);
+}
+
+.none::before {
+  content: "·";
+  color: var(--pulsar-quiet);
+}
+
+.footLabel {
+  padding: 14px 0;
+  border-block-start: 1px solid var(--pulsar-line);
+  text-align: start;
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-meta-size);
+  font-weight: 400;
+  color: var(--pulsar-muted);
+}
+
+.footCell {
+  padding: 14px 8px;
+  border-block-start: 1px solid var(--pulsar-line);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-meta-size);
+  color: var(--pulsar-muted);
+}
+
+.footCell.today {
+  border-radius: 0 0 10px 10px;
+}

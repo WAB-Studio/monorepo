@@ -35,3 +35,21 @@
     max-width: 1020px;
   }
 }
+
+/* RNP-11: beside the rail, `app/theme.css`'s row frame. The column fills what
+   the rail leaves and starts at its edge; the board's padding is 44 over 56. */
+@media (min-width: 1024px) {
+  .page {
+    flex: 1 1 0;
+    min-inline-size: 0;
+    width: auto;
+    max-width: none;
+    margin-inline: 0;
+    padding: 44px 56px calc(44px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The cap is the table's 1020, so the padding stands outside it. */
+  .page.wide {
+    max-width: 1132px;
+  }
+}

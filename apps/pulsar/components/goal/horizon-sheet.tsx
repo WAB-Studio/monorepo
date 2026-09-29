@@ -9,7 +9,7 @@ import { moveHorizon } from "@/app/actions/plan";
 import { dayBefore, horizonForWeeks, weekIndexOf } from "@/lib/day/weeks";
 import { horizonRefusal, moveHorizonSchema } from "@/lib/validation/horizon";
 import { civilDateLabel, todayInZone } from "@/lib/zone";
-import { Button, Field, Sheet } from "@/components/ui";
+import { Button, Field, Sheet, SheetActions } from "@/components/ui";
 
 // The new-goal rule (`new-goal-form.tsx`): a whole number of weeks, 1 to 520.
 const weeksSchema = z.coerce.number().int().positive().max(520);
@@ -125,12 +125,14 @@ export function MoveHorizonAction({ goalId, name, openedOn, weeks, phases }: Mov
           hint={error ?? endsOn}
           autoFocus
         />
-        <Button block onClick={handleMove} disabled={pending}>
-          {t("goal.horizon.confirm")}
-        </Button>
-        <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-          {t("goal.horizon.cancel")}
-        </Button>
+        <SheetActions>
+          <Button block onClick={handleMove} disabled={pending}>
+            {t("goal.horizon.confirm")}
+          </Button>
+          <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+            {t("goal.horizon.cancel")}
+          </Button>
+        </SheetActions>
       </Sheet>
     </>
   );
