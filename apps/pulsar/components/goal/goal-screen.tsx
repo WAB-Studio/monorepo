@@ -2,13 +2,33 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { ArchiveGoalAction, ReopenGoalButton } from "@/components/goal/archive-sheet";
+import {
+  ArchiveGoalAction,
+  ReopenGoalButton,
+} from "@/components/goal/archive-sheet";
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { phaseOn } from "@/lib/day/derive";
 import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
-import { civilDateInZone, civilDateLabel, todayInZone, TIME_ZONE } from "@/lib/zone";
-import { Button, Face, Figure, Flex, Mark, Page, Row, SectionLabel, Split, Text } from "@/components/ui";
+import {
+  civilDateInZone,
+  civilDateLabel,
+  todayInZone,
+  TIME_ZONE,
+} from "@/lib/zone";
+import {
+  Button,
+  Face,
+  Figure,
+  Flex,
+  Mark,
+  Page,
+  Panel,
+  Row,
+  SectionLabel,
+  Split,
+  Text,
+} from "@/components/ui";
 
 import { CommitmentList, countWord, type Translator } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
@@ -25,7 +45,12 @@ function openedOnLabel(createdAt: string): string {
   }).format(new Date(createdAt));
 }
 
-function phaseSpanLabel(openedOn: string, startsOn: string, endsOn: string | null, t: Translator) {
+function phaseSpanLabel(
+  openedOn: string,
+  startsOn: string,
+  endsOn: string | null,
+  t: Translator,
+) {
   const start = weekIndex(openedOn, startsOn);
   const end = endsOn ? weekIndex(openedOn, endsOn) : start;
   return t("goal.detail.phaseSpan", { start, end });
@@ -52,7 +77,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const archived = goal.archivedAt !== null;
   const ended = goal.endedOn !== null && !archived;
   // An ended goal's sheet opens on the count that ends this Sunday.
-  const sheetWeeks = ended ? Math.max(totalWeeks, weekIndex(openedOn, today)) : totalWeeks;
+  const sheetWeeks = ended
+    ? Math.max(totalWeeks, weekIndex(openedOn, today))
+    : totalWeeks;
   const moveAction = (
     <MoveHorizonAction
       goalId={goal.id}
@@ -66,95 +93,121 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const before = (
     <>
-      <Face on="desktop">
-        <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
-      </Face>
-      {ended && goal.endedOn ? (
-        <Text as="p" variant="meta">
-          {t("goal.detail.endedOn", { date: civilDateLabel(goal.endedOn, true) })}
-        </Text>
-      ) : (
-        <Flex justify="between" align="center">
-          <Text as="p" variant="meta" tone="muted">
-            {t("goal.detail.horizonUntil", {
-              weeks: totalWeeks,
-              date: civilDateLabel(dayBefore(goal.horizon)),
+      <Panel>
+        <Face on="desktop">
+          <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
+        </Face>
+        {ended && goal.endedOn ? (
+          <Text as="p" variant="meta">
+            {t("goal.detail.endedOn", {
+              date: civilDateLabel(goal.endedOn, true),
             })}
           </Text>
-          {archived ? null : moveAction}
-        </Flex>
-      )}
-      {goal.measureUnit ? (
-        <Text as="p" variant="meta" tone="muted">
-          {t("goal.detail.measures", { measure: goal.measureName ?? "" })}
-        </Text>
-      ) : null}
+        ) : (
+          <Flex justify="between" align="center">
+            <Text as="p" variant="meta" tone="muted">
+              {t("goal.detail.horizonUntil", {
+                weeks: totalWeeks,
+                date: civilDateLabel(dayBefore(goal.horizon)),
+              })}
+            </Text>
+            {archived ? null : moveAction}
+          </Flex>
+        )}
+        {ended ? <Face on="desktop">{moveAction}</Face> : null}
+      </Panel>
 
-      {ended ? (
-        <>
+      <Panel>
+        {goal.measureUnit ? (
+          <Text as="p" variant="meta" tone="muted">
+            {t("goal.detail.measures", { measure: goal.measureName ?? "" })}
+          </Text>
+        ) : null}
+
+        {ended ? (
           <Face on="phone">
             <Flex gap="3">
               {moveAction}
               <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
             </Flex>
           </Face>
-          <Face on="desktop">{moveAction}</Face>
-        </>
-      ) : null}
+        ) : null}
 
-      {goal.measureUnit ? (
-        <Figure value={goal.measureTotal} unit={goal.measureUnit} variant="measure" />
-      ) : null}
+        {goal.measureUnit ? (
+          <Figure
+            value={goal.measureTotal}
+            unit={goal.measureUnit}
+            variant="measure"
+          />
+        ) : null}
 
-      {goal.measureUnit ? (
-        <Button asChild variant="ghost">
-          <Link href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</Link>
-        </Button>
-      ) : null}
+        {goal.measureUnit ? (
+          <Button asChild variant="ghost">
+            <Link href={`/metas/${goal.id}/revision`}>
+              {t("goal.detail.reviewLink")}
+            </Link>
+          </Button>
+        ) : null}
 
-      {goal.measureUnit && goal.evidence === "unreadable" ? (
-        <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
-      ) : null}
+        {goal.measureUnit && goal.evidence === "unreadable" ? (
+          <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
+        ) : null}
+      </Panel>
     </>
   );
 
   const main = (
-    <CommitmentList
-      goalId={goal.id}
-      commitments={goal.commitments}
-      archived={archived || ended}
-    />
+    <Panel as="div">
+      <CommitmentList
+        goalId={goal.id}
+        commitments={goal.commitments}
+        archived={archived || ended}
+      />
+    </Panel>
   );
 
   const after = (
-    <section>
-      <SectionLabel>
-        {t("goal.detail.phasesCount", {
-          word: countWord(goal.phases.length, t, true),
-          count: goal.phases.length,
-        })}
-      </SectionLabel>
-      {goal.phases.map((phase) => (
-        <Row
-          key={phase.id}
-          leading={<Mark state={currentPhase?.id === phase.id ? "declared" : "empty"} size="dot" />}
-          name={phase.name}
-          trailing={
-            <Flex direction="column" align="end">
-              <Text as="span" variant="meta" tone="muted">
-                {phaseSpanLabel(openedOn, phase.startsOn, phase.endsOn, t)}
-              </Text>
-            </Flex>
-          }
-          disabled
-        />
-      ))}
-      {archived || ended ? null : (
-        <Button asChild variant={goal.phases.length > 0 ? "outline" : "solid"} block>
-          <Link href={`/metas/${goal.id}/fases/nueva`}>{t("goal.phases.add")}</Link>
-        </Button>
-      )}
-    </section>
+    <Panel>
+      <section>
+        <SectionLabel>
+          {t("goal.detail.phasesCount", {
+            word: countWord(goal.phases.length, t, true),
+            count: goal.phases.length,
+          })}
+        </SectionLabel>
+        {goal.phases.map((phase) => (
+          <Row
+            key={phase.id}
+            leading={
+              <Mark
+                state={currentPhase?.id === phase.id ? "declared" : "empty"}
+                size="dot"
+              />
+            }
+            name={phase.name}
+            trailing={
+              <Flex direction="column" align="end">
+                <Text as="span" variant="meta" tone="muted">
+                  {phaseSpanLabel(openedOn, phase.startsOn, phase.endsOn, t)}
+                </Text>
+              </Flex>
+            }
+            disabled
+          />
+        ))}
+        {archived || ended ? null : (
+          <Button
+            asChild
+            variant={goal.phases.length > 0 ? "outline" : "solid"}
+            block
+          >
+            <Link href={`/metas/${goal.id}/fases/nueva`}>
+              {t("goal.phases.add")}
+            </Link>
+          </Button>
+        )}
+      </section>
+    </Panel>
   );
 
   return (
@@ -162,19 +215,28 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <Text as="p" variant="meta" tone="muted">
         {t("goal.detail.overline", { date: openedOnLabel(goal.createdAt) })}
       </Text>
-      <Flex justify="between" align="center" gap="3">
+      <Panel as="div" row>
         <Text as="p" variant="title">
           {goal.name}
         </Text>
         <Face on="desktop">
           <Flex gap="2">
-            <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
+            <RenameGoalAction
+              goalId={goal.id}
+              name={goal.name}
+              variant="outline"
+            />
             {archived ? null : (
-              <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short />
+              <ArchiveGoalAction
+                goalId={goal.id}
+                name={goal.name}
+                block={false}
+                short
+              />
             )}
           </Flex>
         </Face>
-      </Flex>
+      </Panel>
       <Face on="phone">
         <RenameGoalAction goalId={goal.id} name={goal.name} />
       </Face>

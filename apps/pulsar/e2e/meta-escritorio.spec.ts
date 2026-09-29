@@ -57,6 +57,20 @@ test("at 1280 the commitments sit left, the end and the phases right, one of eac
     expect(end.x).toBeGreaterThan(commitment.x + 300);
     expect(end.y).toBeLessThan(phase.y);
 
+    // Each group sits in a bordered white card: commitments, the end, the phases.
+    for (const text of ["Compromiso ancho", "Fase ancha", "el final"]) {
+      const card = await page.getByText(text, { exact: true }).evaluate((el) => {
+        for (let node = el.parentElement; node; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (style.borderTopWidth === "1px" && style.borderTopLeftRadius === "14px") {
+            return { radius: style.borderTopLeftRadius, padding: style.paddingLeft };
+          }
+        }
+        return null;
+      });
+      expect(card, text).toEqual({ radius: "14px", padding: "24px" });
+    }
+
     await expect(page.getByRole("button", { name: "Renombrar" })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "Archivar" })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "mover el final" })).toHaveCount(1);
