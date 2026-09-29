@@ -5,11 +5,15 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { archiveGoal, reopenGoal } from "@/app/actions/plan";
-import { Button, Sheet, Text } from "@/components/ui";
+import { Button, Sheet, SheetActions, Text } from "@/components/ui";
 
 export type ArchiveGoalActionProps = {
   goalId: string;
   name: string;
+  variant?: "outline" | "ghost";
+  block?: boolean;
+  // «Archivar» beside another control; the foot of the phone face says the whole act.
+  short?: boolean;
 };
 
 /**
@@ -20,7 +24,13 @@ export type ArchiveGoalActionProps = {
  * `archived_at` alone, the same shape `retireCommitment` already takes for a
  * commitment. Nothing is deleted.
  */
-export function ArchiveGoalAction({ goalId, name }: ArchiveGoalActionProps) {
+export function ArchiveGoalAction({
+  goalId,
+  name,
+  variant = "outline",
+  block = true,
+  short = false,
+}: ArchiveGoalActionProps) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -44,8 +54,8 @@ export function ArchiveGoalAction({ goalId, name }: ArchiveGoalActionProps) {
 
   return (
     <>
-      <Button variant="outline" block onClick={() => setOpen(true)}>
-        {t("goal.detail.archive")}
+      <Button variant={variant} block={block} onClick={() => setOpen(true)}>
+        {t(short ? "goal.detail.archiveShort" : "goal.detail.archive")}
       </Button>
       <Sheet
         open={open}
@@ -59,12 +69,14 @@ export function ArchiveGoalAction({ goalId, name }: ArchiveGoalActionProps) {
             {t(error)}
           </Text>
         ) : null}
-        <Button block onClick={handleArchive} disabled={pending}>
-          {t("plan.archiveSheet.confirm")}
-        </Button>
-        <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-          {t("plan.archiveSheet.cancel")}
-        </Button>
+        <SheetActions>
+          <Button block onClick={handleArchive} disabled={pending}>
+            {t("plan.archiveSheet.confirm")}
+          </Button>
+          <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+            {t("plan.archiveSheet.cancel")}
+          </Button>
+        </SheetActions>
       </Sheet>
     </>
   );

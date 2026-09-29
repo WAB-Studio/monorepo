@@ -1,5 +1,3 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
@@ -7,7 +5,7 @@ import type postgres from "postgres";
 import { weekIndex } from "@/components/goal/phase-weeks";
 import { civilDateInZone, dateToCivilDate } from "@/lib/zone";
 
-import { test, expect, laneNumber } from "./fixtures";
+import { test, expect, laneNumber, mintDisposablePerson } from "./fixtures";
 
 // Opens `/metas/nueva`, the least it takes to open a goal (RP-11) — the same
 // helper `compromiso.spec.ts` and `varias-metas.spec.ts` each keep their own
@@ -43,40 +41,14 @@ async function phaseCount(db: postgres.Sql, goalId: string): Promise<number> {
   return Number(row.count);
 }
 
-// Mints a throwaway identity at a lane number no real lane uses, the same
-// door `varias-metas.spec.ts`'s own "empty week" test opens (a real `GET
-// /auth/confirm` redemption, never a typed address — RNP-09) — offset by
-// 500 from its own `9000 + laneNumber()` so the two specs, run together
-// under `workers: 2`, never mint at the same disposable lane. Its goal and
-// phase are never deleted through this app's own doors either, but the
-// identity is registered under the suite's run (`HARNESS_RUN_ID`, inherited
-// through `process.env`) and `scripts/harness/e2e-run.ts`'s teardown deletes
-// its `auth.users` row, which cascades through `goals.goals.user_id`'s own
-// `ON DELETE CASCADE` (`db/schema/goals.ts`) — a superuser statement, not a
-// grant this role holds — so nothing here outlives the run. Kept
-// separate from the lane's own reused goal below: the "solid button, empty
-// goal" state cannot be reproduced on a goal any rerun has already given a
-// phase to.
-function mintDisposableSession(lane: number, baseUrl: string): void {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    {
-      env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl },
-      stdio: "pipe",
-    },
-  );
-}
-
 test("a fresh goal draws its own way in solid; the first phase added lists as semanas 1–4 and the day names it", async ({
   browser,
   baseURL,
 }) => {
-  const disposableLane = 9500 + laneNumber();
-  mintDisposableSession(disposableLane, baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
 
   const context = await browser.newContext({
-    storageState: resolve(process.cwd(), `private/session-${disposableLane}.json`),
+    storageState: person.sessionFile,
   });
   try {
     const page = await context.newPage();

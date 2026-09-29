@@ -1,10 +1,11 @@
 {
-  "appName": "Bitácora",
+  "appName": "Bitácora de metas",
   "tagline": "Lo que pasó, cuándo y quién lo escribió.",
   "nav": {
     "today": "Hoy",
     "week": "Semana",
-    "goal": "Meta"
+    "goal": "Meta",
+    "goals": "Metas"
   },
   "notFound": {
     "kicker": "no está",

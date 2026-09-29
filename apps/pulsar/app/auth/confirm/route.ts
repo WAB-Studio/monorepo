@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   );
 
   if (!result.ok) {
-    console.error("magic link verification failed", result.reason);
+    console.error("magic link verification failed", result.reason, result.detail);
     return failure(request, authHeaders, result.reason);
   }
 

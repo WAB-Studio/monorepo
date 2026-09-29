@@ -1,0 +1,26 @@
+{
+  "kicker": "sueltas",
+  "title": "Lo que espera",
+  "toToday": "volver a hoy",
+  "daylessGroup": "{count} sin día",
+  "scheduledGroupOne": "{count} programada",
+  "scheduledGroupMany": "{count} programadas",
+  "fromGoal": "de {goal}",
+  "whenWithGoal": "{when} · de {goal}",
+  "when": "{weekday} {day}",
+  "whenFar": "{weekday} {day} de {month}",
+  "markLabel": "Dar por hecha: {name}",
+  "empty": "Nada espera, ni sin día ni para otro día.",
+  "emptyToToday": "Volver a hoy",
+  "done": "«{name}» quedó en «hechas hoy».",
+  "seeToday": "ver hoy",
+  "schedule": {
+    "title": "¿Para cuándo?",
+    "now": "ahora: {when}",
+    "confirm": "Ponerle ese día",
+    "keep": "Dejarla sin día",
+    "move": "Moverla",
+    "stay": "Dejarla como está",
+    "delete": "Borrarla"
+  }
+}

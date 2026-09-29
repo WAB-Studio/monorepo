@@ -12,8 +12,8 @@ function evidenceDay(day: string, quantity: number, unit: string): EvidenceDay {
   return { day, quantity, unit, labelKey: "sources.readingLookups" };
 }
 
-// 2026-09-29 is a Tuesday: week 1 opens that day regardless (RP-17 never
-// aligns to Monday).
+// 2026-09-29 is a Tuesday: week 1 opens that day and closes on its Sunday
+// (RP-17); week 2 opens the Monday after.
 const OPENED_ON_TUESDAY = "2026-09-29";
 const FAR_HORIZON = "2027-01-01";
 
@@ -21,12 +21,12 @@ test("measureByWeek: a goal opened on a Tuesday buckets facts by its own week, n
   const weeks = measureByWeek({
     openedOn: OPENED_ON_TUESDAY,
     horizon: FAR_HORIZON,
-    today: "2026-10-06",
+    today: "2026-10-05",
     unit: "min",
     facts: [
       fact("2026-09-29", 10, "min"), // day 1 of week 1
-      fact("2026-10-05", 15, "min"), // day 7 of week 1 (week 1's own last day)
-      fact("2026-10-06", 20, "min"), // day 8, the first day of week 2
+      fact("2026-10-04", 15, "min"), // the first Sunday, week 1's own last day
+      fact("2026-10-05", 20, "min"), // the next Monday, the first day of week 2
     ],
     evidence: [],
     phases: [],
@@ -35,10 +35,10 @@ test("measureByWeek: a goal opened on a Tuesday buckets facts by its own week, n
   assert.equal(weeks.length, 2);
   assert.equal(weeks[0].index, 1);
   assert.equal(weeks[0].startsOn, "2026-09-29");
-  assert.equal(weeks[0].endsOn, "2026-10-05");
+  assert.equal(weeks[0].endsOn, "2026-10-04");
   assert.equal(weeks[0].total, 25);
   assert.equal(weeks[1].index, 2);
-  assert.equal(weeks[1].startsOn, "2026-10-06");
+  assert.equal(weeks[1].startsOn, "2026-10-05");
   assert.equal(weeks[1].total, 20);
 });
 
@@ -90,7 +90,7 @@ test("measureByWeek: a null unit gives every week a total of 0, facts and eviden
 
 test("measureByWeek: a goal opened three weeks ago with no facts returns three rows, each reading 0 — a gap is drawn, never absent", () => {
   const weeks = measureByWeek({
-    openedOn: "2026-09-13", // 15 days before "today" below: week 3
+    openedOn: "2026-09-15", // a Tuesday two Mondays before "today" below: week 3
     horizon: FAR_HORIZON,
     today: "2026-09-28",
     unit: "min",
@@ -113,7 +113,7 @@ test("measureByWeek: a goal opened three weeks ago with no facts returns three r
 test("measureByWeek: a today past the horizon stops at the horizon's own week, never past it", () => {
   const weeks = measureByWeek({
     openedOn: "2026-01-06",
-    horizon: "2026-01-27", // 21 days later: the horizon's own week is week 4
+    horizon: "2026-02-02", // the Monday after week 4
     today: "2026-06-01", // long past the horizon
     unit: "min",
     facts: [],
@@ -127,12 +127,12 @@ test("measureByWeek: a today past the horizon stops at the horizon's own week, n
 
 test("measureByWeek: phaseName reads phaseOn(phases, startsOn)'s own name, null with no phase covering the week's start", () => {
   const phases: Phase[] = [
-    { id: "p1", name: "cimientos", startsOn: "2026-09-29", endsOn: "2026-10-05" },
+    { id: "p1", name: "cimientos", startsOn: "2026-09-29", endsOn: "2026-10-04" },
   ];
   const weeks = measureByWeek({
     openedOn: OPENED_ON_TUESDAY,
     horizon: FAR_HORIZON,
-    today: "2026-10-06",
+    today: "2026-10-05",
     unit: "min",
     facts: [],
     evidence: [],
@@ -148,7 +148,7 @@ test("measureByWeek: current is true only for the row holding today, false for e
   const weeks = measureByWeek({
     openedOn: OPENED_ON_TUESDAY,
     horizon: FAR_HORIZON,
-    today: "2026-10-06", // the first day of week 2
+    today: "2026-10-05", // the first day of week 2
     unit: "min",
     facts: [],
     evidence: [],
@@ -164,12 +164,12 @@ test("measureByWeek: evidence on a week's last day counts in that week, not the 
   const weeks = measureByWeek({
     openedOn: OPENED_ON_TUESDAY,
     horizon: FAR_HORIZON,
-    today: "2026-10-06",
+    today: "2026-10-05",
     unit: "searches",
     facts: [],
     evidence: [
-      evidenceDay("2026-10-05", 7, "searches"), // week 1's own last day
-      evidenceDay("2026-10-06", 4, "searches"), // week 2's first day
+      evidenceDay("2026-10-04", 7, "searches"), // week 1's own last day, a Sunday
+      evidenceDay("2026-10-05", 4, "searches"), // week 2's first day, a Monday
     ],
     phases: [],
   });

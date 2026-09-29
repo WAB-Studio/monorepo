@@ -17,7 +17,21 @@
       "nada", "uno", "dos", "tres", "cuatro", "cinco", "seis",
       "siete", "ocho", "nueve", "diez", "once", "doce"
     ],
-    "writtenOn": "anotado el {weekday} {day}"
+    "writtenOn": "anotado el {weekday} {day}",
+    "nothingTitle": "Ese día no pedía nada",
+    "writtenOnFar": "anotado el {weekday} {day} de {month}",
+    "startedOn": "{goal} empezó el {weekday} {day}",
+    "startedOnFar": "{goal} empezó el {weekday} {day} de {month}",
+    "limit": "Siete días atrás es lo más lejos que se anota."
+  },
+  "weekFigure": {
+    "caption": "esta semana"
+  },
+  "allEnded": {
+    "title": "Hoy no pide nada.",
+    "body": "{goal} terminó el {date}. Puedes moverle el final o abrir otra.",
+    "toGoals": "Ver las metas",
+    "newGoal": "Abrir otra meta"
   },
   "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
   "unreadableEvidencePast": "No pudimos leer una fuente. Lo que declaraste ese día sigue aquí.",
@@ -38,11 +52,33 @@
       "confirm": "Borrarla",
       "cancel": "Dejarla"
     },
-    "carriedFrom": "del {weekday} {day}"
+    "carriedFrom": "del {weekday} {day}",
+    "carriedFromFar": "del {weekday} {day} de {month}",
+    "daylessLink": "{count, plural, one {# espera} other {# esperan}}"
+  },
+  "doneOneOffs": {
+    "title": "Hechas hoy",
+    "undoLabel": "Deshacer: {name}"
+  },
+  "choice": {
+    "label": "Para cuándo",
+    "today": "hoy",
+    "tomorrow": "mañana",
+    "other": "otro día",
+    "none": "sin día",
+    "dateLabel": "qué día"
   },
   "newOneOff": {
     "label": "Algo suelto",
-    "placeholder": "Escribe algo suelto..."
+    "placeholder": "Escribe algo suelto...",
+    "labelForGoal": "Algo suelto de {goal}",
+    "placeholderForGoal": "Escribe algo suelto de {goal}...",
+    "submit": "Anotar",
+    "savedNone": "Anotada sin día: espera en «{count} sin día».",
+    "savedTomorrow": "Anotada para mañana, {weekday} {day}.",
+    "savedTomorrowFar": "Anotada para mañana, {weekday} {day} de {month}.",
+    "savedOther": "Anotada para el {weekday} {day}.",
+    "savedOtherFar": "Anotada para el {weekday} {day} de {month}."
   },
   "quantitySheet": {
     "question": "¿Cuánto hiciste hoy?",
@@ -75,6 +111,8 @@
     "oneOffNameEmpty": "Escribe qué es lo suelto.",
     "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
     "oneOffDayInvalid": "Ese día no es válido.",
+    "oneOffDayPast": "Ese día ya pasó. Elige hoy o uno por venir.",
+    "oneOffAlreadyDated": "Esa ya tiene un día. Recarga la página.",
     "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra.",
     "dayInvalid": "Ese día no es válido.",
     "dayFuture": "Ese día todavía no llega.",

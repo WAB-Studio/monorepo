@@ -9,7 +9,7 @@ export type FailureReason = "linkTimeout" | "linkInvalid";
 
 export type VerifyMagicLinkResult<TUser> =
   | { ok: true; user: TUser }
-  | { ok: false; reason: FailureReason };
+  | { ok: false; reason: FailureReason; detail: string };
 
 // No `@repo/supabase-auth` import here, on purpose: that package pulls in
 // `server-only` and `next/headers`, so a module that imports it cannot load
@@ -19,6 +19,19 @@ export type VerifyMagicLinkResult<TUser> =
 type VerifyOtp<TParams, TUser> = (
   params: TParams,
 ) => Promise<{ data: { user: TUser | null }; error: unknown }>;
+
+// The server log's only trace of why a link failed: `reason` folds every
+// completed rejection into `linkInvalid`, and a rate limit reads the same there.
+function describeAuthError(error: unknown, user: unknown): string {
+  if (!error) return user ? "none" : "no user in a success answer";
+  const { name, status, code, message } = error as {
+    name?: string;
+    status?: number;
+    code?: string;
+    message?: string;
+  };
+  return [name, status, code, message].filter((part) => part !== undefined).join(" · ");
+}
 
 /**
  * Calls `verifyOtp` exactly once — there is no loop and no branch that
@@ -32,7 +45,11 @@ export async function verifyMagicLink<TParams, TUser>(
 ): Promise<VerifyMagicLinkResult<TUser>> {
   const { data, error } = await verifyOtp(params);
   if (error || !data.user) {
-    return { ok: false, reason: isAuthRetryableFetchError(error) ? "linkTimeout" : "linkInvalid" };
+    return {
+      ok: false,
+      reason: isAuthRetryableFetchError(error) ? "linkTimeout" : "linkInvalid",
+      detail: describeAuthError(error, data.user),
+    };
   }
   return { ok: true, user: data.user };
 }

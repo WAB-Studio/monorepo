@@ -2460,3 +2460,95 @@ connection caches, not with the code.
 - **Do.** Assert a not-found by what the page draws («This page could not be found.») and by the
   form's title being absent, never by the status code. Run such a spec against `next build && next
   start`, as `playwright.config.ts` says.
+
+## A lane's `session-<n>.json` outlives the identity it names
+
+- **What.** `check:goal` failed with `Failed query: insert into "goals"."goals" … params: 50a8cf48-…`:
+  the cookie in `apps/pulsar/private/session-4.json` named a harness identity `harness:reap` had already
+  pruned. `mint-session` opens a seed run it never closes, so the reap drops it once its heartbeat is
+  30 minutes stale, and the session file stays behind pointing at nobody.
+- **Measured 2026-09-28** on lane 4, twice: module 65's rerun and the coordinator's. A fresh
+  `harness:mint-session` made the same code pass, 87 checks.
+- **Do.** Run `HARNESS_LANE=<n> PULSAR_BASE_URL=http://localhost:<port> npm run harness:mint-session
+  -w apps/pulsar` before `check:day`, `check:goal` or `check:goal-actions` when the last mint is over
+  half an hour old. A red on an insert naming a `user_id` that is not the lane's is this, not the code.
+
+## A spec that counts a number another spec moves in parallel is a race, not a check
+
+- **What.** Three reds of the same kind on 2026-09-28: `evidencia.spec.ts:103` counted every other
+  user's rows in the global `reading.lookups` (56 → 55 mid-run, voyager-e2e deleting one);
+  `suelta-dia.spec.ts:78` asserted the link «N sin día» read exactly before+1 while `sueltas.spec.ts`
+  created and deleted dayless one-offs under the same lane identity on the other Playwright worker; and
+  `revision.spec.ts:101` took the opening day in UTC (after 19:00 Bogotá the UTC day is tomorrow).
+- **Do.** Assert on rows the spec itself owns (by id, or under a second identity it registers and
+  drops), never on a count of a shared table or of the lane identity's whole collection. Derive every
+  day with `lib/zone.ts` (`todayInZone`, `civilDateInZone`), never `toISOString().slice(0,10)` or
+  `dateToCivilDate` of an instant. Run a new spec once with `TZ=UTC` on the Playwright process: CI's
+  runner is UTC.
+
+## The shared database went read-only for a stretch, and came back by itself
+
+- **What.** On 2026-09-28 around 23:30 Bogotá (04:30 UTC) the mutator saw
+  `default_transaction_read_only=on` through `DATABASE_URL` for at least 16 minutes: every seed failed,
+  `check:goal-actions` 0/17 on a clean tree. At 00:15 Bogotá the setting read `off`, a temp write
+  landed, and the database held 158 MB. The cause was not found.
+- **Do.** When every write-path check fails at once on a clean tree, read
+  `show default_transaction_read_only` before blaming code, and discard that run's results as neither
+  killed nor survived.
+
+## A mutant reads as a survivor because `next dev` served the code from before it
+
+Measured 2026-09-29 by module 87's tester in `apps/pulsar`: mutants M23 and M40 read green on e2e
+until the lane's `next dev` was restarted, then went red (2 and 3 failures). Turbopack in dev kept
+serving the server code from before the edit. The same day a validator read seven reds on a lane
+server (`CONNECTION_ENDED`, 404 on `/compromisos/nuevo`) that vanished after a restart.
+
+- Restart the lane's dev server before each mutant's e2e run, and before reading any red as a
+  regression.
+- The mutator's e2e verdicts from 2026-09-28 may share this flaw: a survivor read on a warm server is
+  provisional.
+- Specs whose click lands on a control the dev overlay covers (`<nextjs-portal>` intercepts pointer
+  events) fail under `next dev` only. `playwright.config.ts` says `next build && next start`; use it.
+
+## `CONNECTION_ENDED` after a 30 s timeout is the fixture closing, not the pooler
+
+Measured 2026-09-29 in `apps/pulsar`: `sobrevivientes-la-critica.spec.ts:132` and `:161` reported
+`Test timeout of 30000ms` then `write CONNECTION_ENDED`. The page snapshot in `error-context.md` showed
+the sheet open; the spec looked for the field by a label module 83 had renamed
+(`semanas desde el` became `semanas, contando la del`), so `fill` waited out the clock and the
+fixture's `db` closed under the pending query.
+
+- Read the `error-context.md` page snapshot before the error line. A timeout plus `CONNECTION_ENDED`
+  is a locator that never matched.
+- Grep `e2e/` for a string a module renames in `messages/`; a spec that types a label rots silently.
+
+## Two specs that mint at one lane number share a session file
+
+Measured 2026-09-29 in `apps/pulsar`: `mint-session.ts` wrote `private/session-<lane>.json`, and every
+spec picked its lane by hand (`9700 + laneNumber()` in `metas-terminadas` and `sueltas-programadas`,
+`9711` reached by two formulas on lane 1, `9850 + lane` reused by four tests). Under `workers: 2` two
+mints of one number overwrote one cookie file: the loser drove, and at teardown deleted rows of, the
+other's person. That reads as `no box`, an empty page or a `linkInvalid` on a person the spec never made.
+
+- Take the person from `mintDisposablePerson(baseUrl)` in `e2e/fixtures.ts`. It writes a UUID-named file
+  (`MINT_SESSION_FILE`), so no number exists to collide. Never hand-pick an offset.
+- `linkInvalid` has a second cause, measured the same day: Auth answered `429 over_request_rate_limit`
+  under a full run (5 of 5 mint failures in one run). The route logs it as
+  `magic link verification failed linkInvalid AuthApiError · 429 · over_request_rate_limit`. Read that
+  line before blaming a collision. A full `check:e2e` mints about 20 people; leave the lane idle a few
+  minutes after one.
+- Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
+
+## `page.goto` returns with the loading fallback still standing
+
+Measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
+(`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a
+never-used lane. The failure's `error-context.md` showed `main` holding the `(app)/loading.tsx` skeleton
+beside the streamed page. The CI runner reaches the database slower, so `load` fires before the
+Suspense boundary swaps in the content; a box read straight after `goto` measures the skeleton or nothing.
+A fresh identity was not the cause.
+
+- Anchor every measuring spec on the settled page before its first box: a visible element of the
+  content and `await expect(page.locator("main")).toHaveCount(1)`.
+- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
+  from inside the repo) before guessing at a red the local suite does not show.

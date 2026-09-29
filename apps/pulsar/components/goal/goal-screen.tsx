@@ -2,28 +2,70 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { ArchiveGoalAction, ReopenGoalButton } from "@/components/goal/archive-sheet";
+import {
+  ArchiveGoalAction,
+  ReopenGoalButton,
+} from "@/components/goal/archive-sheet";
 import { EvidenceNote } from "@/components/day/evidence-note";
+import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
 import { loadGoal } from "@/lib/queries/goal";
-import { civilDateInZone, todayInZone, TIME_ZONE } from "@/lib/zone";
-import { Button, Figure, Flex, Mark, Page, Row, SectionLabel, Text } from "@/components/ui";
+import { dayBefore } from "@/lib/day/weeks";
+import {
+  civilDateInZone,
+  civilDateLabel,
+  todayInZone,
+  TIME_ZONE,
+} from "@/lib/zone";
+import {
+  Button,
+  Face,
+  Figure,
+  Flex,
+  Mark,
+  Page,
+  Panel,
+  Row,
+  SectionLabel,
+  Split,
+  Text,
+} from "@/components/ui";
 
 import { CommitmentList, countWord, type Translator } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
+import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";
 
-// "22 de septiembre": the day the goal was opened, in the person's own zone
-// (RNP-06) and in words, never a locale this design does not otherwise use.
-function openedOnLabel(createdAt: string): string {
+// "22 de septiembre": the day a goal was opened or archived, in the person's
+// own zone (RNP-06) and in words, never a locale this design does not
+// otherwise use.
+function longDateLabel(instant: string): string {
   return new Intl.DateTimeFormat("es-CO", {
     day: "numeric",
     month: "long",
     timeZone: TIME_ZONE,
-  }).format(new Date(createdAt));
+  }).format(new Date(instant));
 }
 
-function phaseSpanLabel(openedOn: string, startsOn: string, endsOn: string | null, t: Translator) {
+// «lunes 28 de septiembre»: the month always, so the week of today is not
+// asked for by `dayWords`; a day of 1970 is never in it.
+function endedOnWords(endedOn: string, t: Translator): string {
+  const words = dayWords(endedOn, "1970-01-01");
+  const weekdays = t.raw("day.weekdayLong") as string[];
+  const months = t.raw("day.monthLong") as string[];
+  return t("goal.detail.endedOn", {
+    weekday: weekdays[words.weekday],
+    day: words.day,
+    month: months[words.month ?? 0],
+  });
+}
+
+function phaseSpanLabel(
+  openedOn: string,
+  startsOn: string,
+  endsOn: string | null,
+  t: Translator,
+) {
   const start = weekIndex(openedOn, startsOn);
   const end = endsOn ? weekIndex(openedOn, endsOn) : start;
   return t("goal.detail.phaseSpan", { start, end });
@@ -47,52 +89,132 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const totalWeeks = horizonWeeks(openedOn, goal.horizon);
   const currentPhase = phaseOn(goal.phases, today);
 
-  return (
-    <Page>
-      <Text as="p" variant="meta" tone="muted">
-        {t("goal.detail.overline", { date: openedOnLabel(goal.createdAt) })}
-      </Text>
-      <Text as="p" variant="title">
-        {goal.name}
-      </Text>
-      <RenameGoalAction goalId={goal.id} name={goal.name} />
-      <Text as="p" variant="meta" tone="muted">
-        {goal.measureUnit
-          ? t("goal.detail.horizonAndMeasure", { weeks: totalWeeks, measure: goal.measureName ?? "" })
-          : t("goal.detail.horizonOnly", { weeks: totalWeeks })}
-      </Text>
+  const archived = goal.archivedAt !== null;
+  const ended = goal.endedOn !== null && !archived;
+  // An ended goal's sheet opens on the count that ends this Sunday.
+  const sheetWeeks = ended
+    ? Math.max(totalWeeks, weekIndex(openedOn, today))
+    : totalWeeks;
+  const moveAction = (
+    <MoveHorizonAction
+      goalId={goal.id}
+      name={goal.name}
+      openedOn={openedOn}
+      weeks={sheetWeeks}
+      phases={goal.phases}
+      solid={ended}
+    />
+  );
+
+  const phoneActs = ended ? (
+    <Face on="phone">
+      <Flex gap="3">
+        <Flex flexGrow="1" flexBasis="0" minWidth="0">
+          {moveAction}
+        </Flex>
+        <Flex flexGrow="1" flexBasis="0" minWidth="0">
+          <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
+        </Flex>
+      </Flex>
+    </Face>
+  ) : null;
+
+  const before = (
+    <>
+      <Panel>
+        <Face on="desktop">
+          <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
+        </Face>
+        {ended && goal.endedOn ? (
+          <Text as="p" variant="meta">
+            {endedOnWords(goal.endedOn, t)}
+          </Text>
+        ) : (
+          <Flex justify="between" align="center">
+            <Text as="p" variant="meta" tone="muted">
+              {t("goal.detail.horizonUntil", {
+                weeks: totalWeeks,
+                date: civilDateLabel(dayBefore(goal.horizon)),
+              })}
+            </Text>
+            {archived ? null : moveAction}
+          </Flex>
+        )}
+        {ended ? <Face on="desktop">{moveAction}</Face> : null}
+      </Panel>
 
       {goal.measureUnit ? (
-        <Figure value={goal.measureTotal} unit={goal.measureUnit} variant="measure" />
-      ) : null}
+        <Panel>
+          <Text as="p" variant="meta" tone="muted">
+            {t("goal.detail.measures", { unit: goal.measureUnit })}
+          </Text>
+          {phoneActs}
 
-      {goal.measureUnit ? (
-        <Button asChild variant="ghost">
-          <Link href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</Link>
-        </Button>
-      ) : null}
+          {goal.measureUnit ? (
+            <Figure
+              value={goal.measureTotal}
+              unit={goal.measureUnit}
+              variant="measure"
+            />
+          ) : null}
 
-      {goal.measureUnit && goal.evidence === "unreadable" ? (
-        <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
-      ) : null}
+          {goal.measureUnit ? (
+            <Button asChild variant="ghost">
+              <Link href={`/metas/${goal.id}/revision`}>
+                {t("goal.detail.reviewLink")}
+              </Link>
+            </Button>
+          ) : null}
 
+          {goal.measureUnit && goal.evidence === "unreadable" ? (
+            <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
+          ) : null}
+        </Panel>
+      ) : (
+        phoneActs
+      )}
+    </>
+  );
+
+  const main = (
+    <Panel as="div">
       <CommitmentList
         goalId={goal.id}
         commitments={goal.commitments}
-        archived={goal.archivedAt !== null}
+        archived={archived || ended}
       />
+    </Panel>
+  );
 
+  const after = (
+    <Panel>
       <section>
-        <SectionLabel>
-          {t("goal.detail.phasesCount", {
-            word: countWord(goal.phases.length, t, true),
-            count: goal.phases.length,
-          })}
-        </SectionLabel>
+        <Flex justify="between" align="center" mb={{ initial: "0", lg: "1" }}>
+          <SectionLabel>
+            {t("goal.detail.phasesCount", {
+              word: countWord(goal.phases.length, t, true),
+              count: goal.phases.length,
+            })}
+          </SectionLabel>
+          {archived || ended ? null : (
+            <Face on="desktop">
+              <Button asChild variant="ghost" tone="accent" tap={44}>
+                <Link href={`/metas/${goal.id}/fases/nueva`}>
+                  {t("goal.phases.add")}
+                </Link>
+              </Button>
+            </Face>
+          )}
+        </Flex>
         {goal.phases.map((phase) => (
           <Row
             key={phase.id}
-            leading={<Mark state={currentPhase?.id === phase.id ? "declared" : "empty"} size="dot" />}
+            leading={
+              <Mark
+                state={currentPhase?.id === phase.id ? "declared" : "empty"}
+                size="dot"
+              />
+            }
             name={phase.name}
             trailing={
               <Flex direction="column" align="end">
@@ -104,17 +226,68 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             disabled
           />
         ))}
-        {goal.archivedAt === null ? (
-          <Button asChild variant={goal.phases.length > 0 ? "outline" : "solid"} block>
-            <Link href={`/metas/${goal.id}/fases/nueva`}>{t("goal.phases.add")}</Link>
-          </Button>
-        ) : null}
+        {archived || ended ? null : (
+          <Face on="phone">
+            <Button
+              asChild
+              variant={goal.phases.length > 0 ? "outline" : "solid"}
+              block
+            >
+              <Link href={`/metas/${goal.id}/fases/nueva`}>
+                {t("goal.phases.add")}
+              </Link>
+            </Button>
+          </Face>
+        )}
       </section>
+    </Panel>
+  );
 
-      {goal.archivedAt !== null ? (
+  return (
+    <Page width="full">
+      <Text as="p" variant="meta" tone="muted">
+        {goal.archivedAt
+          ? t("goal.detail.archivedOverline", { date: longDateLabel(goal.archivedAt) })
+          : t("goal.detail.overline", { date: longDateLabel(goal.createdAt) })}
+      </Text>
+      <Panel as="div" row>
+        <Text as="p" variant="title">
+          {goal.name}
+        </Text>
+        <Face on="desktop">
+          <Flex gap="2">
+            {archived ? null : (
+              <RenameGoalAction
+                goalId={goal.id}
+                name={goal.name}
+                variant="outline"
+              />
+            )}
+            {archived ? null : (
+              <ArchiveGoalAction
+                goalId={goal.id}
+                name={goal.name}
+                block={false}
+                short
+              />
+            )}
+          </Flex>
+        </Face>
+      </Panel>
+      {archived ? null : (
+        <Face on="phone">
+          <RenameGoalAction goalId={goal.id} name={goal.name} />
+        </Face>
+      )}
+
+      <Split before={before} main={main} after={after} aside={380} />
+
+      {archived ? (
         <ReopenGoalButton goalId={goal.id} />
-      ) : (
-        <ArchiveGoalAction goalId={goal.id} name={goal.name} />
+      ) : ended ? null : (
+        <Face on="phone">
+          <ArchiveGoalAction goalId={goal.id} name={goal.name} />
+        </Face>
       )}
     </Page>
   );

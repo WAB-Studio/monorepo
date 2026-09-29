@@ -1,15 +1,18 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { Page, SectionLabel, Text } from "@/components/ui";
+import { Button, Face, Figure, Flex, Page, Panel, SectionLabel, Split, Text } from "@/components/ui";
+import { dayPhrase as dayPhraseOf } from "@/lib/day/day-phrase";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, timeInZone, todayInZone } from "@/lib/zone";
 
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
 import { EmptyDay } from "./empty-day";
+import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import { NewOneOff } from "./new-one-off";
 import { OneOffRow } from "./one-off-row";
@@ -47,10 +50,15 @@ function dateLabel(day: string, t: Translate): string {
   });
 }
 
-// «sábado 19» without a month: the carry and a late fact both name a day
-// inside the last week, where the weekday already tells it apart.
-function shortDayParts(day: string, t: Translate) {
-  return { weekday: weekdayOf(day, t), day: civilDateToDate(day).getUTCDate() };
+function dayPhrase(key: string, day: string, t: Translate, extra: Record<string, string> = {}): string {
+  return dayPhraseOf(
+    (phraseKey, values) => t(phraseKey, values),
+    key,
+    day,
+    todayInZone(),
+    { weekdays: t.raw("day.weekdayLong") as string[], months: t.raw("day.monthLong") as string[] },
+    extra,
+  );
 }
 
 function countInWords(count: number, t: Translate): string {
@@ -88,8 +96,32 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const today = todayInZone();
   const day = requested ?? today;
   const past = day < today;
-  const { view, evidence, goals, oneOffs, commitments, phases, factsByCommitment } =
-    await loadDay(day);
+  const loaded = await loadDay(day);
+  const {
+    view,
+    evidence,
+    goals: openGoals,
+    oneOffs,
+    doneOneOffs,
+    daylessCount,
+    scheduledCount,
+    weekMeasure,
+    commitments,
+    phases,
+    factsByCommitment,
+  } = loaded;
+
+  // A goal opened after the day drawn did not exist on it: it is not drawn
+  // there at all (RNP-07).
+  const goals = openGoals.filter((goal) => goal.openedOn <= day);
+  const laterGoal = past
+    ? openGoals.filter((goal) => goal.openedOn > day).sort((a, b) => a.openedOn.localeCompare(b.openedOn))[0]
+    : undefined;
+
+  // Every goal ended and none open (`HoyTodasTerminadas.dc.html`).
+  const lastEnded = !past && openGoals.length === 0 ? loaded.lastEnded : null;
+
+  const waiting = daylessCount + scheduledCount;
 
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
@@ -106,15 +138,179 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         name={oneOff.name}
         carriedFrom={
           isCarried(oneOff, day)
-            ? t("day.oneOffs.carriedFrom", shortDayParts(oneOff.day, t))
+            ? dayPhrase("day.oneOffs.carriedFrom", oneOff.day, t)
             : undefined
         }
       />
     );
   }
 
+  const goalsMain = goals.length === 0 && past ? (
+    <>
+      <Text as="p" variant="title">
+        {t("day.past.nothingTitle")}
+      </Text>
+      {laterGoal ? (
+        <Text as="p" variant="meta" tone="muted">
+          {dayPhrase("day.past.startedOn", laterGoal.openedOn, t, { goal: laterGoal.name })}
+        </Text>
+      ) : null}
+    </>
+  ) : lastEnded ? (
+    <Panel as="div">
+      {oneOffs.length === 0 ? (
+        <Text as="p" variant="title" plainWide>
+          {t("day.allEnded.title")}
+        </Text>
+      ) : null}
+      <Text as="p">
+        {t("day.allEnded.body", {
+          goal: lastEnded.name,
+          date: dateLabel(shiftCivilDay(lastEnded.horizon, -1), t),
+        })}
+      </Text>
+      <Button asChild block>
+        <Link href="/metas">{t("day.allEnded.toGoals")}</Link>
+      </Button>
+      <Button asChild block variant="outline">
+        <Link href="/metas/nueva">{t("day.allEnded.newGoal")}</Link>
+      </Button>
+    </Panel>
+  ) : goals.length === 0 ? (
+    <EmptyDay title={t("day.empty.title")} action={t("day.empty.action")} />
+  ) : (
+    <>
+      {goals.map((goal) => {
+        const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
+        const goalPhase = phaseOn(goalPhases, day);
+        const rows = commitments
+          .filter((commitment) => commitment.goalId === goal.id)
+          .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }))
+          // A commitment that does not ask on `day` has no slot at all
+          // (`deriveDay`'s own contract) — nothing to draw for it today.
+          .filter(
+            (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } =>
+              entry.slot !== undefined,
+          );
+
+        return (
+          <Panel as="div" key={goal.id}>
+            <section>
+              <SectionLabel>{goal.name}</SectionLabel>
+              {goalPhase ? (
+                <Text as="p" tone="muted" variant="meta">
+                  {goalPhase.name}
+                </Text>
+              ) : null}
+              {past ? (
+                <SectionLabel>{t("day.past.asked", { count: countInWords(rows.length, t) })}</SectionLabel>
+              ) : null}
+              {rows.map(({ commitment, slot }) => {
+                const logged = factsByCommitment[commitment.id];
+                return (
+                  <DayRow
+                    key={commitment.id}
+                    commitmentId={commitment.id}
+                    name={commitment.name}
+                    kind={commitment.kind}
+                    markState={slot.satisfiedBy === "evidence" ? "evidence" : slot.satisfied ? "declared" : "empty"}
+                    sourceName={
+                      slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
+                    }
+                    target={commitment.target}
+                    unit={commitment.unit}
+                    cadence={commitment.cadence}
+                    factId={logged?.factId}
+                    loggedQuantity={logged?.quantity ?? null}
+                    note={logged?.note ?? null}
+                    day={past ? day : undefined}
+                    writtenLabel={
+                      logged && logged.writtenOn !== day
+                        ? dayPhrase("day.past.writtenOn", logged.writtenOn, t)
+                        : undefined
+                    }
+                  />
+                );
+              })}
+              {past ? null : (
+                <>
+                  {carriedFirst.filter((oneOff) => oneOff.goalId === goal.id).map(oneOffRow)}
+                  <NewOneOff goalId={goal.id} daylessCount={daylessCount} goalName={goal.name} />
+                </>
+              )}
+            </section>
+          </Panel>
+        );
+      })}
+    </>
+  );
+
+  // One card per open goal that has a measure; a goal without one draws none.
+  const figures = goals.filter((goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined);
+
+  // A one-off belonging to nothing (RP-20) has no goal section to draw
+  // under, so it gets a group of its own — always on screen, even with
+  // no goal open yet, because RP-19 asks for no goal behind it either.
+  const goalless = past ? undefined : (
+    <>
+      {figures.map((goal) => (
+        <Panel as="div" key={goal.id}>
+          <Face on="desktop">
+            <SectionLabel>{goal.measureUnit}</SectionLabel>
+            <Flex align="baseline" gap="2">
+              <Figure value={weekMeasure[goal.id]} />
+              <Text variant="meta" tone="muted">
+                {t("day.weekFigure.caption")}
+              </Text>
+            </Flex>
+            <Button asChild tap={44} variant="ghost">
+              <Link href={`/metas/${goal.id}/revision`}>
+                <Text variant="meta" tone="accent">
+                  {t("goal.detail.reviewLink")}
+                </Text>
+              </Link>
+            </Button>
+          </Face>
+        </Panel>
+      ))}
+      <Panel as="div">
+        <section>
+          <Flex justify="between" align="center" gap="2" mb={{ initial: "0", lg: "1" }}>
+            <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
+            {waiting > 0 ? (
+              <Button asChild tap={44} variant="ghost">
+                <Link href="/sueltas">
+                  <Text variant="meta" tone="accent">
+                    {t("day.oneOffs.daylessLink", { count: waiting })}
+                  </Text>
+                </Link>
+              </Button>
+            ) : null}
+          </Flex>
+          {carriedFirst.filter((oneOff) => oneOff.goalId === null).map(oneOffRow)}
+          <NewOneOff daylessCount={daylessCount} />
+        </section>
+      </Panel>
+      {doneOneOffs.length > 0 ? (
+        <Panel as="div">
+          <section>
+            <SectionLabel>{t("day.doneOneOffs.title")}</SectionLabel>
+            {doneOneOffs.map((done) => (
+              <DoneOneOffRow
+                key={done.id}
+                factId={done.factId}
+                name={done.name}
+                time={timeInZone(done.writtenAt)}
+              />
+            ))}
+          </section>
+        </Panel>
+      ) : null}
+    </>
+  );
+
   return (
-    <Page>
+    <Page width={past ? undefined : "full"}>
       {past ? (
         <DayHeader
           date={dateLabel(day, t)}
@@ -123,6 +319,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.dayBefore") }
               : undefined
           }
+          limitNote={day > oldestPastDay(today) ? undefined : t("day.past.limit")}
           toToday={{ href: "/", label: t("day.nav.today") }}
         />
       ) : (
@@ -138,83 +335,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <EvidenceNote text={past ? t("day.unreadableEvidencePast") : t("day.unreadableEvidence")} />
       ) : null}
 
-      {goals.length === 0 ? (
-        <EmptyDay title={t("day.empty.title")} action={t("day.empty.action")} />
-      ) : (
-        <>
-          {goals.map((goal) => {
-            const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
-            const goalPhase = phaseOn(goalPhases, day);
-            const rows = commitments
-              .filter((commitment) => commitment.goalId === goal.id)
-              .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }))
-              // A commitment that does not ask on `day` has no slot at all
-              // (`deriveDay`'s own contract) — nothing to draw for it today.
-              .filter(
-                (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } =>
-                  entry.slot !== undefined,
-              );
-
-            return (
-              <section key={goal.id}>
-                <SectionLabel>{goal.name}</SectionLabel>
-                {goalPhase ? (
-                  <Text as="p" tone="muted" variant="meta">
-                    {goalPhase.name}
-                  </Text>
-                ) : null}
-                {past ? (
-                  <SectionLabel>{t("day.past.asked", { count: countInWords(rows.length, t) })}</SectionLabel>
-                ) : null}
-                {rows.map(({ commitment, slot }) => {
-                  const logged = factsByCommitment[commitment.id];
-                  return (
-                    <DayRow
-                      key={commitment.id}
-                      commitmentId={commitment.id}
-                      name={commitment.name}
-                      kind={commitment.kind}
-                      markState={slot.satisfiedBy === "evidence" ? "evidence" : slot.satisfied ? "declared" : "empty"}
-                      sourceName={
-                        slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
-                      }
-                      target={commitment.target}
-                      unit={commitment.unit}
-                      cadence={commitment.cadence}
-                      factId={logged?.factId}
-                      loggedQuantity={logged?.quantity ?? null}
-                      note={logged?.note ?? null}
-                      day={past ? day : undefined}
-                      writtenLabel={
-                        logged && logged.writtenOn !== day
-                          ? t("day.past.writtenOn", shortDayParts(logged.writtenOn, t))
-                          : undefined
-                      }
-                    />
-                  );
-                })}
-                {past ? null : (
-                  <>
-                    {carriedFirst.filter((oneOff) => oneOff.goalId === goal.id).map(oneOffRow)}
-                    <NewOneOff goalId={goal.id} />
-                  </>
-                )}
-              </section>
-            );
-          })}
-        </>
-      )}
-
-      {/* A one-off belonging to nothing (RP-20) has no goal section to draw
-          under, so it gets a group of its own — always on screen, even with
-          no goal open yet, because RP-19 asks for no goal behind it either. */}
-      {past ? null : (
-        <section>
-          <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
-          {carriedFirst.filter((oneOff) => oneOff.goalId === null).map(oneOffRow)}
-          <NewOneOff />
-        </section>
-      )}
+      <Split main={goalsMain} after={goalless} />
     </Page>
   );
 }

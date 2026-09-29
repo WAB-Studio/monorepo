@@ -2,14 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 
 import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
+import { todayInZone } from "@/lib/zone";
 import {
   createOneOffSchema,
   completeOneOffSchema,
   deleteOneOffSchema,
+  scheduleOneOffSchema,
+  type ScheduleOneOffInput,
   type CreateOneOffInput,
   type CompleteOneOffInput,
   type DeleteOneOffInput,
@@ -19,6 +22,7 @@ import { declareFact, type DeclareFactResult } from "./facts";
 
 export type CreateOneOffResult = { ok: true; oneOffId: string } | { ok: false; error: string };
 export type CompleteOneOffResult = DeclareFactResult;
+export type ScheduleOneOffResult = { ok: true } | { ok: false; error: string };
 export type DeleteOneOffResult = { ok: true } | { ok: false; error: string };
 
 // Carries a message key out of the transaction without collapsing every
@@ -61,7 +65,62 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
     });
 
     revalidatePath("/");
+    revalidatePath("/sueltas");
     return { ok: true, oneOffId };
+  } catch (error) {
+    if (error instanceof NamedError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+/**
+ * Gives a one-off a day, or moves one dated after today (RP-21). The row is
+ * read first only to name the refusal; the enforcement is
+ * `day is null or day > today` in the UPDATE and `one_offs_update_self`, so a fact landing between the two statements still
+ * writes nothing — 0 rows is reported as `oneOffHasFact`.
+ */
+export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<ScheduleOneOffResult> {
+  const parsed = scheduleOneOffSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "day.errors.signedOut" };
+
+  const { oneOffId, day } = parsed.data;
+  const today = todayInZone();
+
+  try {
+    await withGoalsDb(async (tx) => {
+      const [row] = await tx
+        .select({ id: oneOffs.id, day: oneOffs.day })
+        .from(oneOffs)
+        .where(eq(oneOffs.id, oneOffId));
+      if (!row) throw new NamedError("day.errors.notFound");
+      if (row.day != null && row.day <= today) throw new NamedError("day.errors.oneOffAlreadyDated");
+
+      const [existingFact] = await tx
+        .select({ id: facts.id })
+        .from(facts)
+        .where(eq(facts.oneOffId, oneOffId));
+      if (existingFact) throw new NamedError("day.errors.oneOffHasFact");
+
+      const updated = await tx
+        .update(oneOffs)
+        .set({ day })
+        .where(
+          and(
+            eq(oneOffs.id, oneOffId),
+            eq(oneOffs.userId, person.id),
+            or(isNull(oneOffs.day), gt(oneOffs.day, today)),
+          ),
+        )
+        .returning({ id: oneOffs.id });
+      if (updated.length === 0) throw new NamedError("day.errors.oneOffHasFact");
+    });
+
+    revalidatePath("/");
+    revalidatePath("/sueltas");
+    return { ok: true };
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: error.message };
     throw error;

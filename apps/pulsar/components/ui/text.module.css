@@ -53,3 +53,17 @@
 .accent.accent {
   color: var(--pulsar-accent);
 }
+
+.end.end {
+  margin-inline-start: auto;
+}
+
+/* Body text from 1024: the size and weight a paragraph in a card reads at. */
+@media (min-width: 1024px) {
+  .plainWide.plainWide.title.title {
+    font-size: var(--pulsar-text-line-size);
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: var(--pulsar-text-line-leading);
+  }
+}

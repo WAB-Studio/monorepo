@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { retireCommitment } from "@/app/actions/plan";
-import { Button, Row, Sheet, Text } from "@/components/ui";
+import { Button, Row, Sheet, SheetActions, Text } from "@/components/ui";
 
 export type RetireSheetProps = {
   open: boolean;
@@ -67,12 +67,14 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
           {t(error)}
         </Text>
       ) : null}
-      <Button block onClick={handleRetire} disabled={pending}>
-        {t("plan.retireSheet.confirm")}
-      </Button>
-      <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
-        {t("plan.retireSheet.cancel")}
-      </Button>
+      <SheetActions>
+        <Button block onClick={handleRetire} disabled={pending}>
+          {t("plan.retireSheet.confirm")}
+        </Button>
+        <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          {t("plan.retireSheet.cancel")}
+        </Button>
+      </SheetActions>
     </Sheet>
   );
 }

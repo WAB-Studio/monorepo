@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, max, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
+import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
+import { todayInZone } from "@/lib/zone";
 import {
   addCommitmentSchema,
   addPhaseSchema,
@@ -35,10 +37,18 @@ export type RetireCommitmentResult = { ok: true } | { ok: false; error: string }
 export type RenameGoalResult = { ok: true } | { ok: false; error: string };
 export type ArchiveGoalResult = { ok: true } | { ok: false; error: string };
 export type ReopenGoalResult = { ok: true } | { ok: false; error: string };
+export type MoveHorizonResult = { ok: true } | { ok: false; error: string };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
 class NamedError extends Error {}
+
+// An archived or ended goal takes no new phase or commitment, and is refused
+// as a goal that is not there — what `compromisos/nuevo` and `fases/nueva`
+// answer with a 404. `listGoals` draws the same line.
+function isClosed(goal: { horizon: string; archivedAt: Date | string | null }): boolean {
+  return goal.archivedAt !== null || goal.horizon <= todayInZone();
+}
 
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal
@@ -116,10 +126,10 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${goalId}::text, 0))`);
 
       const [goal] = await tx
-        .select({ id: goals.id, horizon: goals.horizon })
+        .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, goalId));
-      if (!goal) throw new NamedError("plan.errors.goalNotFound");
+      if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       // A goal names one horizon; a phase is a span of it, never past it.
       if (!phaseWithinHorizon({ startsOn, endsOn }, goal.horizon)) {
@@ -177,10 +187,10 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
   try {
     const commitmentId = await withGoalsDb(async (tx) => {
       const [goal] = await tx
-        .select({ id: goals.id })
+        .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, data.goalId));
-      if (!goal) throw new NamedError("plan.errors.goalNotFound");
+      if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       let sourceId: string | null = null;
       if (data.satisfaction === "evidence") {
@@ -359,5 +369,54 @@ export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResu
   if (reopened.length === 0) return { ok: false, error: "plan.errors.notFound" };
 
   revalidateGoalScreens(parsed.data.goalId);
+  return { ok: true };
+}
+
+/**
+ * Moves a goal's horizon (RP-25). One transaction reads the goal and the last
+ * day of its phases, so a horizon that would strand a phase is refused with the
+ * data it was judged on. The UPDATE names `horizon` alone, scoped by `(id,
+ * userId)`; a foreign id matches nothing and is reported as a missing goal.
+ */
+export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonResult> {
+  const parsed = moveHorizonSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const { goalId, horizon } = parsed.data;
+
+  try {
+    await withGoalsDb(async (tx) => {
+      const [goal] = await tx.select({ id: goals.id }).from(goals).where(eq(goals.id, goalId));
+      if (!goal) throw new NamedError("plan.errors.notFound");
+
+      const [last] = await tx
+        .select({ endsOn: max(phases.endsOn) })
+        .from(phases)
+        .where(eq(phases.goalId, goalId));
+
+      const refusal = horizonRefusal({
+        horizon,
+        today: todayInZone(),
+        lastPhaseEndsOn: last?.endsOn ?? null,
+      });
+      if (refusal) throw new NamedError(refusal);
+
+      const moved = await tx
+        .update(goals)
+        .set({ horizon })
+        .where(and(eq(goals.id, goalId), eq(goals.userId, person.id)))
+        .returning({ id: goals.id });
+      if (moved.length === 0) throw new NamedError("plan.errors.notFound");
+    });
+  } catch (error) {
+    if (error instanceof NamedError) return { ok: false, error: error.message };
+    throw error;
+  }
+
+  revalidateGoalScreens(goalId);
+  revalidatePath(`/metas/${goalId}/revision`);
   return { ok: true };
 }

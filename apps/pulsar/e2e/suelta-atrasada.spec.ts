@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // RP-19's carry (`HoySueltaAtrasada.dc.html`): a one-off undone since an
 // earlier day reads on Hoy, first, with «del sábado 19» under it. Each test
@@ -20,7 +20,11 @@ function pastDay(daysAgo: number): string {
 function carriedLabel(day: string): string {
   const date = civilDateToDate(day);
   const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
-  return `del ${weekday} ${date.getUTCDate()}`;
+  const month = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" }).format(date);
+  // The month appears only outside the week of today.
+  return weekOf(todayInZone()).includes(day)
+    ? `del ${weekday} ${date.getUTCDate()}`
+    : `del ${weekday} ${date.getUTCDate()} de ${month}`;
 }
 
 async function seedOneOff(db: postgres.Sql, personId: string, name: string, day: string): Promise<string> {
@@ -72,7 +76,7 @@ test("a one-off from two days back reads on Hoy with its day, before today's, wh
   }
 });
 
-test("completed from Hoy, a carried one-off leaves and a reload keeps it gone, its fact on today (RP-19)", async ({
+test("completed from Hoy, a carried one-off moves to «hechas hoy» and a reload keeps it there, its fact on today (RP-19)", async ({
   page,
   db,
   personId,
@@ -86,10 +90,11 @@ test("completed from Hoy, a carried one-off leaves and a reload keeps it gone, i
     await expect(row).toBeVisible();
 
     await row.locator("xpath=ancestor::div[1]").getByRole("button", { name: "Marcar como hecho" }).click();
-    await expect(row).toBeHidden();
+    const undo = page.getByRole("button", { name: `Deshacer: ${name}` });
+    await expect(undo).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Algo suelto").last()).toBeVisible();
-    await expect(nameButton(page, name)).toHaveCount(0);
+    await expect(undo).toBeVisible();
 
     const facts = await db<{ day: string }[]>`
       select day::text as day from goals.facts where one_off_id = ${id}

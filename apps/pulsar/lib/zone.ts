@@ -68,3 +68,50 @@ export function weekOf(day: string): string[] {
   }
   return days;
 }
+
+// "13 de diciembre", or "domingo 13 de diciembre" with `weekday`: a civil day
+// in words, read from its own midday-UTC instant so no offset shifts it.
+export function civilDateLabel(day: string, weekday = false): string {
+  return new Intl.DateTimeFormat("es-CO", {
+    weekday: weekday ? "long" : undefined,
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(civilDateToDate(day));
+}
+
+// "martes 22 sep": weekday, day and the month's first three letters, no
+// punctuation. The month is cut from its long name because ICU's own short
+// form is "sept" for September.
+export function civilDateShort(day: string): string {
+  const parts = new Intl.DateTimeFormat("es-CO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("weekday")} ${part("day")} ${part("month").slice(0, 3)}`;
+}
+
+// "13 sep": `civilDateShort` without the weekday.
+export function civilDayMonthShort(day: string): string {
+  const parts = new Intl.DateTimeFormat("es-CO", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).formatToParts(civilDateToDate(day));
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("day")} ${part("month").slice(0, 3)}`;
+}
+
+// An instant as the 24-hour "HH:mm" a person in the zone read on their clock.
+// `h23` keeps midnight "00:05", never "24:05".
+export function timeInZone(instant: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: TIME_ZONE,
+  }).format(new Date(instant));
+}

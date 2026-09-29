@@ -1,9 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type postgres from "postgres";
 
-import { test, expect, laneNumber } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 
 // Seeded by `harness:seed-goal`, the one goal this identity always carries
 // (`compromiso.spec.ts`'s own constant, word for word) — this suite never
@@ -50,8 +48,8 @@ test("the Meta tab opens the goals list, and a second goal is opened from it, no
     // Both open goals draw on the day (§0.3, 5), grouped, with no selector —
     // the newly opened one included, even with no commitment of its own yet.
     await page.goto("/");
-    await expect(page.getByText(SEEDED_GOAL_NAME)).toBeVisible();
-    await expect(page.getByText(goalName)).toBeVisible();
+    await expect(page.getByText(SEEDED_GOAL_NAME, { exact: true })).toBeVisible();
+    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
 
     // Its own screen has a quiet way back to the list: the bottom nav's own
     // "Meta" tab, already mounted on every signed-in screen, never a second
@@ -65,37 +63,14 @@ test("the Meta tab opens the goals list, and a second goal is opened from it, no
   }
 });
 
-// A goal-less state is reachable only from a person with none, and this
-// suite's one identity always carries the seeded goal (`compromiso.spec.ts`
-// and every other spec here assume it). Deleting it, even briefly, would
-// race every other spec `playwright.config.ts`'s `workers: 2` might be
-// running at the same moment. A fresh, disposable identity is minted
-// instead, through the same door `seed-goal.ts` itself signs in with — a
-// real `GET /auth/confirm` redemption, never a typed address (RNP-09) — at a
-// lane number no real lane ever uses, so it collides with nothing. The
-// child inherits `HARNESS_RUN_ID` through `process.env`, so the identity is
-// registered under the suite's own run and dropped with it at teardown
-// (`scripts/harness/e2e-run.ts`); nothing here writes a goal under it.
-function mintDisposableSession(lane: number, baseUrl: string): void {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    {
-      env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl },
-      stdio: "pipe",
-    },
-  );
-}
-
 test("an empty week says what to do and links to opening one (RP-11, RP-16)", async ({
   browser,
   baseURL,
 }) => {
-  const disposableLane = 9000 + laneNumber();
-  mintDisposableSession(disposableLane, baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
 
   const context = await browser.newContext({
-    storageState: resolve(process.cwd(), `private/session-${disposableLane}.json`),
+    storageState: person.sessionFile,
   });
   try {
     const page = await context.newPage();

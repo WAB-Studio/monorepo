@@ -1,0 +1,67 @@
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+
+import { Button, Flex, Page, Text } from "@/components/ui";
+import { dayWords } from "@/lib/day/day-words";
+import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
+import { todayInZone } from "@/lib/zone";
+
+import { WaitingList } from "./waiting-list";
+
+/**
+ * What waits (RP-21, `SueltasProgramadas.dc.html`): the one-offs with no day,
+ * then those dated after today. Each can be done, moved or deleted from here.
+ */
+export async function DaylessScreen() {
+  const t = await getTranslations();
+  const today = todayInZone();
+  const [dayless, scheduled] = await Promise.all([
+    listDaylessOneOffs(),
+    listScheduledOneOffs(today),
+  ]);
+
+  const weekdays = t.raw("day.weekdayLong") as string[];
+  const months = t.raw("day.monthLong") as string[];
+  const when = (day: string) => {
+    const words = dayWords(day, today);
+    const parts = {
+      weekday: weekdays[words.weekday],
+      day: words.day,
+      month: words.month === null ? "" : months[words.month],
+    };
+    return t(words.month === null ? "oneOffs.when" : "oneOffs.whenFar", parts);
+  };
+
+  return (
+    <Page>
+      <Flex justify="between" align="center" gap="2">
+        <Text as="p" variant="meta" tone="muted">
+          {t("oneOffs.kicker")}
+        </Text>
+        <Button asChild tap={44} variant="ghost">
+          <Link href="/">
+            <Text variant="meta" tone="accent">
+              {t("oneOffs.toToday")}
+            </Text>
+          </Link>
+        </Button>
+      </Flex>
+      <Text as="p" variant="title">
+        {t("oneOffs.title")}
+      </Text>
+      <WaitingList
+        dayless={dayless.map((oneOff) => ({
+          id: oneOff.id,
+          name: oneOff.name,
+          goalName: oneOff.goalName ?? undefined,
+        }))}
+        scheduled={scheduled.map((oneOff) => ({
+          id: oneOff.id,
+          name: oneOff.name,
+          goalName: oneOff.goalName ?? undefined,
+          scheduled: { day: oneOff.day, label: when(oneOff.day) },
+        }))}
+      />
+    </Page>
+  );
+}

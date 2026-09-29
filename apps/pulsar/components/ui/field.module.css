@@ -36,10 +36,23 @@
   color: var(--pulsar-muted);
 }
 
+/* A value refused: the ring turns ink, the message under it says why. */
+.control.control:has(input[aria-invalid="true"]) {
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-ink);
+}
+
 .hint {
   font-size: var(--pulsar-text-meta-size);
   line-height: 1.4;
   color: var(--pulsar-muted);
+}
+
+/* The refusal's sentence, in ink at 14/500: this design has no colour for failure. */
+.refusal {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--pulsar-ink);
 }
 
 /* docs/pulsar/DESIGN.md "The controls": disabled and read-only both drop the

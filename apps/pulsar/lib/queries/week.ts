@@ -3,7 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveWeek } from "@/lib/day/derive";
-import type { CommitmentPlan, EvidenceDay, WeekView } from "@/lib/day/types";
+import type { Cadence, CommitmentPlan, EvidenceDay, WeekView } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
   toCadence,
@@ -15,7 +15,7 @@ import {
   type PhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { TIME_ZONE, weekOf } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts`
@@ -57,6 +57,7 @@ type FactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
+  one_off_name: string | null;
 };
 
 type WeekQueryRow = {
@@ -64,6 +65,7 @@ type WeekQueryRow = {
   commitments: CommitmentRow[];
   phases: PhaseRow[];
   facts: FactRow[];
+  period_facts: { commitment_id: string; day: string }[];
 };
 
 type EvidenceOutcome = {
@@ -87,7 +89,15 @@ type EvidenceOutcome = {
  * day.ts` applies — a bare cast renders in the session's zone (UTC), which
  * would keep a commitment retired after 19:00 Bogotá live one day too long.
  *
- * `goals` excludes an archived one (RP-24), the same filter `lib/queries/
+ * `period_facts` is the fifth subquery of the same statement: every
+ * commitment fact from the first of `anyDay`'s month to the last of it or of
+ * the week, whichever reaches further. A flexible cadence's «N de M» counts
+ * inside its period, and «al mes» reaches days the week's own `facts` never
+ * read. No extra round trip.
+ *
+ * `goals` excludes an archived one (RP-24) and one that ended before the
+ * week began; a goal that ended mid-week stays, it lived through the days
+ * before. The same archived filter `lib/queries/
  * day.ts`'s own `queryGoalsRow` carries: `WeekScreen` (module 17) only ever
  * groups a dot under a goal it finds here, and `goals.length === 0` is what
  * decides the week's own empty state (`empty-week.tsx`).
@@ -96,12 +106,13 @@ async function queryGoalsRow(
   tx: Transaction,
   weekStart: string,
   weekEnd: string,
+  anyDay: string,
 ): Promise<WeekQueryRow> {
   const [row] = await tx.execute<WeekQueryRow>(sql`
     select
       (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
          from "goals"."goals" g
-         where g.archived_at is null) as goals,
+         where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
@@ -114,11 +125,18 @@ async function queryGoalsRow(
          where p.starts_on <= ${weekEnd}::date
            and (p.ends_on is null or p.ends_on >= ${weekStart}::date)) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', c.unit,
+                 'one_off_name', o.name
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.day between ${weekStart}::date and ${weekEnd}::date) as facts
+         left join "goals"."one_offs" o on o.id = f.one_off_id
+         where f.day between ${weekStart}::date and ${weekEnd}::date) as facts,
+      (select coalesce(json_agg(json_build_object('commitment_id', f.commitment_id, 'day', f.day)), '[]'::json)
+         from "goals"."facts" f
+         where f.commitment_id is not null
+           and f.day >= least(${weekStart}::date, date_trunc('month', ${anyDay}::date)::date)
+           and f.day <= greatest(${weekEnd}::date, (date_trunc('month', ${anyDay}::date) + interval '1 month - 1 day')::date)) as period_facts
   `);
 
   return row;
@@ -156,6 +174,7 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
     cadence: toCadence(row),
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
+    createdOn: civilDateInZone(new Date(row.created_at)),
   };
 }
 
@@ -180,10 +199,30 @@ export type CommitmentGoal = {
   id: string;
   goalId: string;
   name: string;
+  cadence: Cadence;
+  // Distinct days with a fact inside the cadence's own period (this week for
+  // `times_per_week`, `anyDayInIt`'s month for `times_per_month`); null for
+  // every other cadence, which counts by the day.
+  periodDone: number | null;
 };
 
-function toCommitmentGoal(row: CommitmentRow): CommitmentGoal {
-  return { id: row.id, goalId: row.goal_id, name: row.name };
+function toCommitmentGoal(
+  row: CommitmentRow,
+  periodFacts: WeekQueryRow["period_facts"],
+  week: string[],
+  month: string,
+): CommitmentGoal {
+  const cadence = toCadence(row);
+  const inPeriod =
+    cadence.kind === "times_per_week"
+      ? (day: string) => week.includes(day)
+      : cadence.kind === "times_per_month"
+        ? (day: string) => day.slice(0, 7) === month
+        : null;
+  const periodDone = inPeriod
+    ? new Set(periodFacts.filter((f) => f.commitment_id === row.id && inPeriod(f.day)).map((f) => f.day)).size
+    : null;
+  return { id: row.id, goalId: row.goal_id, name: row.name, cadence, periodDone };
 }
 
 // A one-off's own fact (RP-20): `goalId` is the one-off's own, copied onto
@@ -191,6 +230,8 @@ function toCommitmentGoal(row: CommitmentRow): CommitmentGoal {
 // facts.ts`), and null for a one-off that belongs to nothing — RP-20's own
 // text says the week still shows it, with no goal section to draw it under.
 export type OneOffFact = {
+  oneOffId: string;
+  name: string;
   day: string;
   goalId: string | null;
 };
@@ -225,7 +266,7 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   const weekEnd = week[6];
 
   const [row, evidenceOutcome] = await Promise.all([
-    withGoalsDb((tx) => queryGoalsRow(tx, weekStart, weekEnd)),
+    withGoalsDb((tx) => queryGoalsRow(tx, weekStart, weekEnd, anyDayInIt)),
     withReadingDb((tx) => queryEvidenceBySource(tx, person.id, weekStart, weekEnd)).then(
       (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
       (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
@@ -250,12 +291,17 @@ export async function loadWeek(anyDayInIt: string): Promise<{
     view,
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
-    commitments: row.commitments.map(toCommitmentGoal),
+    commitments: row.commitments.map((c) => toCommitmentGoal(c, row.period_facts, week, anyDayInIt.slice(0, 7))),
     // Unfiltered by `commitment_id`, unlike `facts` above: a one-off's fact
     // is exactly the row `facts` throws away (RP-19's own shape — "one
     // subject" means never both), read back out here instead.
     oneOffFacts: row.facts
       .filter((fact) => fact.one_off_id !== null)
-      .map((fact) => ({ day: fact.day, goalId: fact.goal_id })),
+      .map((fact) => ({
+        oneOffId: fact.one_off_id as string,
+        name: fact.one_off_name ?? "",
+        day: fact.day,
+        goalId: fact.goal_id,
+      })),
   };
 }

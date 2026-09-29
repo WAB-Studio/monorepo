@@ -10,18 +10,21 @@ import styles from "./chip.module.css";
 type ChipProps = Omit<ComponentPropsWithoutRef<"button">, "children"> & {
   children?: ReactNode;
   selected?: boolean;
-  shape?: "pill" | "day";
+  // `choice` is the compact pill of a small radio set (`HoySueltaDia.dc.html`).
+  shape?: "pill" | "day" | "choice";
+  // One of a set the person picks a single one of: a radio, not a toggle.
+  radio?: boolean;
   // A quantity is a figure, and a figure is set in mono.
   mono?: boolean;
 };
 
 export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
-  { children, selected, shape = "pill", mono, className, type = "button", ...props },
+  { children, selected, shape = "pill", radio, mono, className, type = "button", ...props },
   ref,
 ) {
   const merged = [
     styles.chip,
-    shape === "day" ? styles.day : styles.pill,
+    shape === "day" ? styles.day : shape === "choice" ? styles.choice : styles.pill,
     selected ? styles.selected : undefined,
     mono ? styles.mono : undefined,
     className,
@@ -30,7 +33,15 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
     .join(" ");
 
   return (
-    <button ref={ref} type={type} aria-pressed={selected ?? false} className={merged} {...props}>
+    <button
+      ref={ref}
+      type={type}
+      {...(radio
+        ? { role: "radio", "aria-checked": selected ?? false }
+        : { "aria-pressed": selected ?? false })}
+      className={merged}
+      {...props}
+    >
       {children}
     </button>
   );

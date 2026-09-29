@@ -1,0 +1,39 @@
+/* Below 1024px the panel is not there: its children are the page's own flex
+   items and take its gap. */
+.panel {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    padding: 22px 24px;
+    background: var(--pulsar-raised);
+    border: 1px solid var(--pulsar-line);
+    border-radius: 14px;
+  }
+
+  /* Two cards of one column. */
+  .panel + .panel {
+    margin-block-start: 18px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .row + .panel {
+    margin-block-start: 0;
+  }
+}

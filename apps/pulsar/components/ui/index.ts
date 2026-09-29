@@ -20,12 +20,13 @@ export { Flex, Grid, VisuallyHidden } from "@radix-ui/themes";
 
 export { Page } from "./page";
 
-export { BottomNav } from "./bottom-nav";
+export { BottomNav, NoTabMarked } from "./bottom-nav";
 
 export { Row } from "./row";
 
 export { Mark, type MarkState } from "./mark";
 
+export { Panel } from "./panel";
 export { SectionLabel } from "./section-label";
 
 export { Figure } from "./figure";
@@ -47,3 +48,11 @@ export { Separator } from "./separator";
 export { ThemeToggle } from "./theme-toggle";
 
 export { Table, type TableRow } from "./table";
+
+export { Face } from "./face";
+
+export { Split } from "./split";
+
+export { WeekTable } from "./week-table";
+
+export { SheetActions } from "./sheet-actions";

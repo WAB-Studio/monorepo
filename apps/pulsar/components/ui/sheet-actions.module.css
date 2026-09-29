@@ -1,0 +1,20 @@
+/* Below 1024px the group vanishes: its buttons are the sheet body's own flex
+   items, so nothing moves. */
+.actions {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .actions {
+    display: flex;
+    /* The primary is first in the markup and stands last, at the right. */
+    flex-direction: row-reverse;
+    gap: 10px;
+    margin-block-start: 8px;
+  }
+
+  /* Outranks the button's own full-width rule. */
+  .actions.actions.actions > * {
+    inline-size: auto;
+  }
+}

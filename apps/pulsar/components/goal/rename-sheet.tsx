@@ -6,11 +6,12 @@ import { useTranslations } from "next-intl";
 
 import { renameGoal } from "@/app/actions/plan";
 import { renameGoalSchema } from "@/lib/validation/plan";
-import { Button, Field, Sheet, Text } from "@/components/ui";
+import { Button, Field, Sheet, SheetActions, Text } from "@/components/ui";
 
 export type RenameGoalActionProps = {
   goalId: string;
   name: string;
+  variant?: "ghost" | "outline";
 };
 
 /**
@@ -22,7 +23,7 @@ export type RenameGoalActionProps = {
  * weeks and commitments are never touched: `name` is the one column this
  * act ever writes.
  */
-export function RenameGoalAction({ goalId, name }: RenameGoalActionProps) {
+export function RenameGoalAction({ goalId, name, variant = "ghost" }: RenameGoalActionProps) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -60,7 +61,7 @@ export function RenameGoalAction({ goalId, name }: RenameGoalActionProps) {
 
   return (
     <>
-      <Button variant="ghost" onClick={openSheet}>
+      <Button variant={variant} onClick={openSheet}>
         {t("goal.detail.rename")}
       </Button>
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("plan.renameSheet.title")}>
@@ -75,12 +76,14 @@ export function RenameGoalAction({ goalId, name }: RenameGoalActionProps) {
             {t(error)}
           </Text>
         ) : null}
-        <Button block onClick={handleSave} disabled={pending}>
-          {t("plan.renameSheet.confirm")}
-        </Button>
-        <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-          {t("plan.renameSheet.cancel")}
-        </Button>
+        <SheetActions>
+          <Button block onClick={handleSave} disabled={pending}>
+            {t("plan.renameSheet.confirm")}
+          </Button>
+          <Button block variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+            {t("plan.renameSheet.cancel")}
+          </Button>
+        </SheetActions>
       </Sheet>
     </>
   );

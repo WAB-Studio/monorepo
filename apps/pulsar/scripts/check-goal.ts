@@ -857,17 +857,12 @@ async function runPhaseOverlapRaceCheck(): Promise<void> {
 }
 
 // One quantity of `min` per week, on that week's own known day: `openedOn`
-// itself (week 1), a week later (week 2), and today (week 3's own `endsOn` —
-// `openedOn` + `OPENED_DAYS_BACK` days is today by construction below), so
-// `loadGoal`'s own `weeks` (RP-17) has exactly one fact to place in each row
-// it returns.
+// itself (week 1), week 2's own Monday, and today (week 3) — `loadGoal`'s own
+// `weeks` (RP-17) has exactly one fact to place in each row it returns.
 const WEEK_TOTALS = [5, 8, 3];
-// 21 days back lands `today` on week 4's own `startsOn` (`floor(21 / 7) + 1`),
-// one week past the three this fixture means to seed — 20 is the highest
-// offset `weekIndexOf` still reads as week 3 (`floor(20 / 7) + 1 = 3`), which
-// is also week 3's own `endsOn`: the seed's own last day and the day
-// `loadGoal` reads as "today" are the same day, never one past it.
-const OPENED_DAYS_BACK = 20;
+// `openedOn` is the Wednesday of the week two Mondays back, so `today` always
+// sits in week 3 whatever weekday the check runs on, and week 1 is partial.
+const OPENED_WEEKDAY_OFFSET = 2;
 
 /**
  * RP-17: `loadGoal`'s own `weeks`, off a goal whose `created_at` sits three
@@ -898,14 +893,18 @@ async function runWeeksCheck(): Promise<void> {
   const { createGoal, addCommitment } = await import("@/app/actions/plan");
   const { loadGoal } = await import("@/lib/queries/goal");
   const { getPerson, withGoalsDb } = await import("@/lib/session");
-  const { todayInZone } = await import("@/lib/zone");
+  const { todayInZone, weekOf } = await import("@/lib/zone");
+  const { weekSpan } = await import("@/lib/day/weeks");
 
   const person = await getPerson();
   if (!person) throw new Error("runWeeksCheck: no settled session");
 
   const today = todayInZone();
-  const openedOn = addDays(today, -OPENED_DAYS_BACK);
-  const knownDays = [openedOn, addDays(openedOn, 7), today];
+  const openedOn = addDays(weekOf(today)[0], -14 + OPENED_WEEKDAY_OFFSET);
+  const openedDaysBack = Math.round(
+    (new Date(`${today}T12:00:00Z`).getTime() - new Date(`${openedOn}T12:00:00Z`).getTime()) / 86_400_000,
+  );
+  const knownDays = [openedOn, weekSpan(openedOn, 2, 2).startsOn, today];
 
   const goal = await createGoal({
     name: "check-goal.ts probe — RP-17 semanas",
@@ -935,7 +934,7 @@ async function runWeeksCheck(): Promise<void> {
     // the instant back by whole days shifts its own civil date by exactly
     // that many days too — the same `openedOn` this function already
     // computed from `today`, never a second, independent calculation.
-    const backdatedAt = new Date(Date.now() - OPENED_DAYS_BACK * 86_400_000);
+    const backdatedAt = new Date(Date.now() - openedDaysBack * 86_400_000);
     await migrationDb`update goals.goals set created_at = ${backdatedAt} where id = ${goalId}`;
 
     await withGoalsDb(async (tx) => {
@@ -955,9 +954,16 @@ async function runWeeksCheck(): Promise<void> {
     if (!view) throw new Error(`runWeeksCheck: loadGoal(${goalId}) returned null — the seeded goal is gone`);
 
     assert(
-      "RP-17: loadGoal returns exactly three weeks for a goal opened three weeks back",
+      "RP-17: loadGoal returns exactly three weeks for a goal opened on a Wednesday two weeks back",
       view.weeks.length === 3,
       `weeks = ${JSON.stringify(view.weeks.map((week) => ({ index: week.index, total: week.total })))}`,
+    );
+
+    assert(
+      "RP-17: week 1 starts on the Wednesday the goal opened, week 2 on a Monday",
+      view.weeks[0]?.startsOn === openedOn && view.weeks[1]?.startsOn === weekSpan(openedOn, 2, 2).startsOn &&
+        new Date(`${view.weeks[1]?.startsOn}T12:00:00Z`).getUTCDay() === 1,
+      `starts = ${JSON.stringify(view.weeks.map((week) => week.startsOn))}, openedOn = ${openedOn}`,
     );
 
     const totals = view.weeks.map((week) => week.total);
@@ -1086,6 +1092,78 @@ async function runLateNightOpenCheck(): Promise<void> {
   }
 }
 
+/**
+ * RP-26: a goal ends on the day before its horizon. `horizon = today` is the
+ * edge both comparisons must cross; archived wins over ended.
+ */
+async function runEndedCheck(): Promise<void> {
+  const { createGoal } = await import("@/app/actions/plan");
+  const { loadGoal, listGoals, listGoalsForMetas } = await import("@/lib/queries/goal");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const today = todayInZone();
+  const seeded: string[] = [];
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    for (const name of ["terminada", "en curso", "archivada"]) {
+      const goal = await createGoal({ name: `check-goal.ts probe — RP-26 ${name}`, horizon: addDays(today, 60) });
+      if (!goal.ok) throw new Error(`runEndedCheck: createGoal failed: ${goal.error}`);
+      seeded.push(goal.goalId);
+    }
+    const [endedId, openId, archivedId] = seeded;
+    await migrationDb`update goals.goals set horizon = ${today} where id = ${endedId}`;
+    await migrationDb`update goals.goals set horizon = ${addDays(today, 1)} where id = ${openId}`;
+    await migrationDb`update goals.goals set horizon = ${addDays(today, -5)}, archived_at = now() where id = ${archivedId}`;
+
+    const ended = await loadGoal(endedId);
+    const open = await loadGoal(openId);
+    assert(
+      "a goal whose horizon is today reads endedOn = yesterday",
+      ended?.endedOn === addDays(today, -1),
+      `endedOn = ${ended?.endedOn}`,
+    );
+    assert("a goal whose horizon is tomorrow reads endedOn = null", open?.endedOn === null, `endedOn = ${open?.endedOn}`);
+
+    const before = wireCalls.length;
+    const split = await listGoalsForMetas();
+    const metasCalls = wireCalls.slice(before);
+    // Net of begin/commit and type-fetch: the settle plus the one select.
+    const statements = [...groupByConnection(metasCalls).entries()].reduce(
+      (sum, [connection, calls]) => sum + analyzeGroup(connection, calls).applicationCount,
+      0,
+    );
+    const where = (list: { id: string }[], id: string) => list.some((goal) => goal.id === id);
+    assert(
+      "listGoalsForMetas puts the horizon-today goal in ended alone",
+      where(split.ended, endedId) && !where(split.open, endedId) && !where(split.archived, endedId),
+      `open=${where(split.open, endedId)} ended=${where(split.ended, endedId)} archived=${where(split.archived, endedId)}`,
+    );
+    assert(
+      "listGoalsForMetas puts the horizon-tomorrow goal in open alone",
+      where(split.open, openId) && !where(split.ended, openId) && !where(split.archived, openId),
+      `open=${where(split.open, openId)} ended=${where(split.ended, openId)} archived=${where(split.archived, openId)}`,
+    );
+    assert(
+      "an archived goal with a past horizon sits in archived alone",
+      where(split.archived, archivedId) && !where(split.ended, archivedId) && !where(split.open, archivedId),
+      `open=${where(split.open, archivedId)} ended=${where(split.ended, archivedId)} archived=${where(split.archived, archivedId)}`,
+    );
+    assert("listGoalsForMetas stays one query behind its settle (two application statements)",
+      statements === 2,
+      `${statements} application statement(s)`);
+
+    const listed = await listGoals();
+    assert(
+      "listGoals omits the ended and the archived goal and keeps the open one",
+      !where(listed, endedId) && !where(listed, archivedId) && where(listed, openId),
+      `ended=${where(listed, endedId)} archived=${where(listed, archivedId)} open=${where(listed, openId)}`,
+    );
+  } finally {
+    for (const id of seeded) await migrationDb`delete from goals.goals where id = ${id}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -1170,6 +1248,7 @@ async function runMain(): Promise<void> {
   await runPhaseOverlapRaceCheck();
   await runWeeksCheck();
   await runLateNightOpenCheck();
+  await runEndedCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

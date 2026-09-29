@@ -35,11 +35,16 @@ async function seedGoal(
   commitment: { name: string; kind: "tap" } | { name: string; kind: "quantity"; target: number; unit: string },
 ): Promise<{ goalId: string; commitmentId: string }> {
   const stamp = Date.now();
-  const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon)
-    values (${personId}, ${`Meta día pasado ${stamp}`}, ${pastDay(-60)}) returning id
-  `;
+  // The goal opens before the commitment it backdates: a day before its goal
+  // is not drawn (RNP-07).
   const createdAt = new Date(Date.now() - (LIMIT + 3) * 86_400_000);
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (
+      ${personId}, ${`Meta día pasado ${stamp}`}, ${pastDay(-60)},
+      ${new Date(createdAt.getTime() - 86_400_000)}
+    ) returning id
+  `;
   const [row] = await db<{ id: string }[]>`
     insert into goals.commitments
       (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
@@ -157,6 +162,7 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
   personId,
 }) => {
   const name = `Suelta vista desde ayer ${Date.now()}`;
+  const { goalId } = await seedGoal(db, personId, { name: `Compromiso ${name}`, kind: "tap" });
   const [oneOff] = await db<{ id: string }[]>`
     insert into goals.one_offs (user_id, name, day)
     values (${personId}, ${name}, ${pastDay(2)}) returning id
@@ -166,7 +172,7 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
     await expect(page.getByText(/ese día pedía/i).first()).toBeVisible();
-    await expect(page.getByText(name)).toHaveCount(0);
+    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Algo suelto")).toHaveCount(0);
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -174,7 +180,79 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
     await page.screenshot({ path: "private/dia-pasado-360.png", fullPage: true });
   } finally {
     await db`delete from goals.one_offs where id = ${oneOff.id}`;
+    await deleteGoal(db, personId, goalId);
   }
+});
+
+test("a commitment created today and a goal opened today are absent from yesterday (RNP-07)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const stamp = Date.now();
+  const goalName = `Meta recién abierta ${stamp}`;
+  const commitmentName = `Compromiso recién nacido ${stamp}`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon)
+    values (${personId}, ${goalName}, ${pastDay(-60)}) returning id
+  `;
+
+  try {
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+      values (${personId}, ${goal.id}, ${commitmentName}, 'daily', 'tap')
+    `;
+
+    await page.goto("/");
+    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
+    await expect(page.locator("button", { hasText: commitmentName })).toBeVisible();
+
+    await page.goto(`/dia/${pastDay(1)}`);
+    await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
+    await expect(page.getByText(goalName, { exact: true })).toHaveCount(0);
+    await expect(page.locator("button", { hasText: commitmentName })).toHaveCount(0);
+  } finally {
+    await deleteGoal(db, personId, goal.id);
+  }
+});
+
+test("a day before every goal this person holds says it asked for nothing, with no way to create one (RNP-07)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const day = pastDay(LIMIT);
+  const [{ earliest }] = await db<{ earliest: string | null }[]>`
+    select min((created_at at time zone 'America/Bogota')::date)::text as earliest
+    from goals.goals where user_id = ${personId} and archived_at is null
+  `;
+  // Another spec's backdated goal running beside this one would draw here.
+  test.skip(earliest !== null && earliest <= day, "a goal already open that day");
+
+  await page.goto(`/dia/${day}`);
+  await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
+  await expect(page.getByText(/ese día pedía/i)).toHaveCount(0);
+  if (earliest !== null) await expect(page.getByText(/empezó el/)).toBeVisible();
+
+  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidth).toBeLessThanOrEqual(360);
+});
+
+test("the seventh day back draws why there is no step further, the sixth draws the step (RP-06)", async ({
+  page,
+}) => {
+  const reason = "Siete días atrás es lo más lejos que se anota.";
+
+  await page.goto(`/dia/${pastDay(LIMIT)}`);
+  await expect(page.getByText(reason)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Ver el día anterior" })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+
+  await page.goto(`/dia/${pastDay(LIMIT - 1)}`);
+  await expect(page.getByRole("link", { name: "Ver el día anterior" })).toBeVisible();
+  await expect(page.getByText(reason)).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 });
 
 // Asserted by the not-found's heading, never by its status (`docs/TRAPS.md`):

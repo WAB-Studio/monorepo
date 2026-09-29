@@ -1,7 +1,8 @@
-import type { Page } from "@playwright/test";
+
+import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RNP-07 over every built screen and every sheet: at 360 × 740 (the
@@ -188,7 +189,7 @@ test("/metas/<id>/fases/nueva holds at 360 (RNP-07)", async ({ page, db, personI
 test("/metas/<id>/revision holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}/revision`);
-    await expect(page.getByRole("main")).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
     await expectHolds(page, 1);
   });
 });
@@ -252,5 +253,69 @@ test("the archive sheet holds at 360 (RNP-07)", async ({ page, db, personId }) =
     await page.getByRole("button", { name: "Archivar esta meta" }).click();
     await openSheet(page);
     await expectHolds(page, 2, '[role="dialog"]');
+  });
+});
+
+// RNP-11 · RP-21 · RP-26: this slice's new states at 360. A person of their
+// own, since an ended goal and a scheduled one-off are states the shared
+// identity's siblings would count.
+async function withNewStates(
+  browser: Browser,
+  baseURL: string | undefined,
+  db: postgres.Sql,
+  run: (page: Page, seed: { endedId: string; scheduledName: string }) => Promise<void>,
+): Promise<void> {
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+  const context = await browser.newContext({ baseURL, storageState: person.sessionFile });
+  const stamp = Date.now();
+  const scheduledName = `Programada de medición ${stamp}`;
+  const created = new Date(Date.now() - 20 * 86_400_000);
+  const [open] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${`${LONG_GOAL} ${stamp}`}, ${dayFromToday(90)}, ${created}) returning id
+  `;
+  const [ended] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${`Meta terminada con un nombre bastante largo ${stamp}`}, ${todayInZone()}, ${created}) returning id
+  `;
+  try {
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${person.id}, ${ended.id}, ${TAP}, 'daily', 'tap', ${created}),
+             (${person.id}, ${open.id}, ${TAP}, 'daily', 'tap', ${created})
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, day)
+      values (${person.id}, ${open.id}, ${scheduledName}, ${dayFromToday(2)})
+    `;
+    await run(await context.newPage(), { endedId: ended.id, scheduledName });
+  } finally {
+    await context.close();
+    await db`delete from goals.one_offs where user_id = ${person.id}`;
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+}
+
+test("the programadas list holds at 360 (RNP-07)", async ({ browser, baseURL, db }) => {
+  await withNewStates(browser, baseURL, db, async (page, { scheduledName }) => {
+    await page.goto("/sueltas");
+    await expect(page.getByRole("button", { name: new RegExp(`^${scheduledName}`) })).toBeVisible();
+    await expectHolds(page, 3);
+  });
+});
+
+test("an ended goal holds at 360 (RNP-07)", async ({ browser, baseURL, db }) => {
+  await withNewStates(browser, baseURL, db, async (page, { endedId }) => {
+    await page.goto(`/metas/${endedId}`);
+    await expect(page.getByRole("button", { name: "Renombrar" })).toBeVisible();
+    await expectHolds(page, 4);
+  });
+});
+
+test("/metas with «terminadas» holds at 360 (RNP-07)", async ({ browser, baseURL, db }) => {
+  await withNewStates(browser, baseURL, db, async (page) => {
+    await page.goto("/metas");
+    await expect(page.getByText("terminadas", { exact: false }).first()).toBeVisible();
+    await expectHolds(page, 3);
   });
 });

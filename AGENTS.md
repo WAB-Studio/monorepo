@@ -265,7 +265,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   probe that does not is a leak nothing can prune. `npm run harness:census` counts them; the
   number moves, so read it rather than trusting one written here — it said seven, then four, then
   zero inside one day.
-- `npm run harness:reap` is safe beside a running lane. It never touches a lane identity.
+- `npm run harness:reap` refuses to start while any run's heartbeat is fresh (measured
+  2026-09-29: `BLOCKED a live run holds harness.runs`). Run it when every lane is quiet. It never
+  touches a lane identity.
 - **A separate Supabase project for e2e was measured and refused, 2026-09-09.** Do not propose it
   again without one of the two triggers below. What the numbers said: `sync.spec.ts` mints **3
   sign-ins per run** — 15 across five lanes, far under any plausible Auth rate limit; the flake that
