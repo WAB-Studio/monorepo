@@ -163,9 +163,6 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Dark beyond `HoyOscuro.dc.html`.** Every other state is this design with the dark column of the
   token table. Drawing it again repeats a decision instead of taking one. Decided by the user
   2026-09-10, for every app.
-- **A wide face beyond `RevisionEscritorio.dc.html`.** Only the review's table changes shape rather
-  than width. The rest is used with one thumb.
-- **The one-offs with no day (RP-21).** Their list is named in the contract and drawn nowhere.
 - **The goals list (`/metas` with more than one goal).** Its own way in reuses `commitment-list.tsx`'s
   block-button pattern; no board draws the list itself. Decided 2026-09-27 by the coordinator, the
   user having delegated it.
@@ -425,3 +422,30 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A goal opened late in the week keeps the weeks it was written with.** Its partial first week is
   week 1, and «12 semanas» ends on the Sunday of week 12. Decided by the user 2026-09-28, over counting
   twelve whole weeks after the partial one.
+- **Pulsar has a desktop face from 1024 px.** A left rail (Bitácora, Hoy, Semana, Metas; the date
+  and the theme toggle at its foot) replaces the bottom nav. Hoy opens in two columns (the goals and
+  their commitments; the week's figure, the one-offs, «N esperan» and «hechas hoy»). Semana changes
+  shape: a table, one commitment per row and one day per column, today shaded, past days links, a
+  «hechos» row at the foot. The goal opens in two columns (commitments; the end, the figure, the
+  phases), «Renombrar» and «Archivar» beside the title. Every sheet is a centred 480 px dialog. The
+  past day, `/sueltas`, `/metas`, the forms, the 404 and Fallo sit in the same frame as one column;
+  700–1023 px keeps the phone face, centred. Boards: `HoyEscritorio`, `SemanaEscritorio`,
+  `MetaEscritorio`, `HojaEscritorio`. Replaces «A wide face beyond `RevisionEscritorio.dc.html`» in
+  «The boards that do not exist». Decided and approved by the user 2026-09-28: «no tiene sentido que
+  sea tan feo».
+- **A one-off written for a later day waits in `/sueltas` under «programadas»**, with its date, where
+  it can be moved, done or deleted; the link on Hoy reads «N esperan» (dayless and scheduled). Not
+  built; no board draws it yet. Decided by the user 2026-09-28, over showing it dimmed on Hoy and over
+  leaving it hidden.
+- **A goal past its end says «terminó el <día>» and leaves Hoy and Semana.** Its screen offers
+  «Archivar» and «Mover el final»; `/metas` lists it under «terminadas». Not built; no board. Decided by
+  the user 2026-09-28, over drawing it with a note and over leaving it open.
+- **A one-off for another day is written with a visible «Anotar»**, shown with the chips once a day
+  other than today is chosen, and Enter in the date field writes too. Decided by the user 2026-09-28.
+- **Tapping a done one-off's name undoes it**, the whole row, as a done commitment does. Decided by the
+  user 2026-09-28, over leaving the undo on the mark alone.
+- **«hechas hoy» prints each one's time**, as `HoyHechas.dc.html` draws. Decided by the user
+  2026-09-28, over cutting it from the design.
+- **«Borrarla» in `SueltaDarDia` is a muted ghost button, not underlined.** `Button` has no underline
+  prop and none was added for one link. Decided 2026-09-28 by the coordinator, the user having
+  delegated it.
