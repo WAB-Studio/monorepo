@@ -107,6 +107,7 @@ test("a review with a week across two months keeps each date on one line at 360 
     await page.goto(`/metas/${goalId}/revision`);
     const crossing = range(monday, dayAfter(monday, 6));
     const items = page.getByRole("listitem");
+    await expect(items).not.toHaveCount(0);
     expect(await items.count()).toBeGreaterThanOrEqual(3);
     await expect(items.filter({ hasText: crossing })).toHaveCount(1);
 
