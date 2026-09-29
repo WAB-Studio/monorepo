@@ -10,8 +10,9 @@
   },
   "detail": {
     "overline": "meta · abierta el {date}",
-    "horizonAndMeasure": "{weeks} semanas · mide {measure}",
-    "horizonOnly": "{weeks} semanas",
+    "horizonUntil": "{weeks} semanas · hasta el {date}",
+    "measures": "mide {measure}",
+    "moveHorizon": "mover el final",
     "commitmentsCount": "{word} {count, plural, one {compromiso} other {compromisos}}",
     "phasesCount": "{word} {count, plural, one {fase} other {fases}}",
     "phaseSpan": "semanas {start}–{end}",
@@ -86,7 +87,16 @@
     "addAnother": "Abrir otra meta",
     "archivedTitle": "Archivadas"
   },
+  "horizon": {
+    "title": "¿Cuántas semanas?",
+    "weeksLabel": "semanas desde el {date}",
+    "endsOn": "termina el {date}",
+    "confirm": "Moverlo",
+    "cancel": "Dejarlo como está"
+  },
   "errors": {
-    "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520."
+    "horizonWeeksInvalid": "Escribe un número entero de semanas, entre 1 y 520.",
+    "horizonPast": "La semana {weeks} ya pasó. El final puede ser esta semana o una por venir.",
+    "horizonBeforePhase": "La fase «{name}» llega hasta la semana {week}. El final no puede quedar antes."
   }
 }
