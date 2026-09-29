@@ -505,3 +505,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **The time of a done one-off goes under its name.** Decided 2026-09-29 by the coordinator.
 - **The rail's date is short: «martes 22 sep»** (`civilDateShort`). Decided 2026-09-29 by the
   coordinator.
+- **«Hoy no pide nada.» only when nothing is asked and nothing waits today.** With every goal ended and
+  a one-off still due, Hoy keeps the ended-goal line and its two buttons and drops the sentence. From
+  1024 the sentence is body text, never a second headline under «Hoy». Decided 2026-09-29 by the
+  coordinator, after the critic found it contradicting a waiting one-off.
+- **Two columns split 3:2 from 1024, and fix the aside at 1280.** Below 1280 the main column (goals,
+  commitments) takes three parts and the aside two; from 1280 the aside keeps the boards' own width.
+  No board draws 1024; this is the coordinator's reading. Decided 2026-09-29 by the coordinator.
+- **Semana's name column is 200 px at 1280**, not the 260 `SemanaEscritorio.dc.html` draws, so a day
+  header reads «mar 29 · hoy» on one line; the header row stays in view while the table scrolls.
+  Decided 2026-09-29 by the coordinator.
