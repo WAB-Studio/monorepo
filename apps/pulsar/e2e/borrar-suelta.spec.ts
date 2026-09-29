@@ -168,10 +168,9 @@ test("tapping the mark still marks a one-off done, and never opens the delete sh
     // removal, never catching the mark's tap opening it in the first place.
     expect(await page.getByRole("dialog").count()).toBe(0);
 
-    // `completeOneOff` takes it off today's list (RP-19: "done, it leaves
-    // the list") — the same row, gone, is what proves the mark's tap
-    // finished it rather than reaching the name's own act.
-    await expect(nameButton).toBeHidden();
+    // It moves to «hechas hoy», drawn with an undo mark instead: that is what
+    // proves the mark's tap finished it rather than reaching the name's act.
+    await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
 
     const oneOffId = await oneOffIdByName(db, personId, name);
     expect(oneOffId).not.toBeNull();

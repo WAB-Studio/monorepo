@@ -36,6 +36,11 @@
   color: var(--pulsar-muted);
 }
 
+/* A value refused: the ring turns ink, the message under it says why. */
+.control.control:has(input[aria-invalid="true"]) {
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-ink);
+}
+
 .hint {
   font-size: var(--pulsar-text-meta-size);
   line-height: 1.4;

@@ -72,7 +72,7 @@ test("a one-off from two days back reads on Hoy with its day, before today's, wh
   }
 });
 
-test("completed from Hoy, a carried one-off leaves and a reload keeps it gone, its fact on today (RP-19)", async ({
+test("completed from Hoy, a carried one-off moves to «hechas hoy» and a reload keeps it there, its fact on today (RP-19)", async ({
   page,
   db,
   personId,
@@ -86,10 +86,11 @@ test("completed from Hoy, a carried one-off leaves and a reload keeps it gone, i
     await expect(row).toBeVisible();
 
     await row.locator("xpath=ancestor::div[1]").getByRole("button", { name: "Marcar como hecho" }).click();
-    await expect(row).toBeHidden();
+    const undo = page.getByRole("button", { name: `Deshacer: ${name}` });
+    await expect(undo).toBeVisible();
     await page.reload();
     await expect(page.getByLabel("Algo suelto").last()).toBeVisible();
-    await expect(nameButton(page, name)).toHaveCount(0);
+    await expect(undo).toBeVisible();
 
     const facts = await db<{ day: string }[]>`
       select day::text as day from goals.facts where one_off_id = ${id}

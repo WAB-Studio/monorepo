@@ -177,7 +177,8 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
     const nameButton = page.locator("button", { hasText: ONE_OFF_NAME });
     const rowContainer = nameButton.locator("xpath=ancestor::div[1]");
     await rowContainer.getByRole("button", { name: "Marcar como hecho" }).click();
-    await expect(nameButton).toHaveCount(0);
+    // Done, it stays on Hoy under «hechas hoy», its mark now the undo (module 68).
+    await expect(page.getByRole("button", { name: `Deshacer: ${ONE_OFF_NAME}` })).toBeVisible();
 
     await page.goto("/semana");
     const afterRow = dayRow(goalSection, todayLabel());
@@ -226,7 +227,7 @@ test("a one-off belonging to nothing, done today, fills a dot in the Sueltas row
   try {
     const rowContainer = nameButton.locator("xpath=ancestor::div[1]");
     await rowContainer.getByRole("button", { name: "Marcar como hecho" }).click();
-    await expect(nameButton).toHaveCount(0);
+    await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
 
     await page.goto("/semana");
     // `loadWeek`'s own `oneOffFacts` (RP-20's second half): a fact with no

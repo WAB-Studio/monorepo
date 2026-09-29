@@ -15,6 +15,7 @@ export function DayHeader({
   date,
   title,
   back,
+  limitNote,
   toToday,
   theme,
 }: {
@@ -22,6 +23,8 @@ export function DayHeader({
   title?: string;
   // Absent on the oldest day a fact may still name (`PAST_DAY_LIMIT`).
   back?: HeaderLink;
+  // Said in the step's place on that oldest day: why there is no way further.
+  limitNote?: string;
   toToday?: HeaderLink;
   theme?: { toLightLabel: string; toDarkLabel: string };
 }) {
@@ -35,6 +38,8 @@ export function DayHeader({
                 <ChevronLeft size={20} aria-hidden />
               </Link>
             </IconButton>
+          ) : limitNote ? (
+            <Flex width="14px" flexShrink="0" aria-hidden />
           ) : null}
           <Text as="p" variant="meta" tone="muted">
             {date}
@@ -51,6 +56,11 @@ export function DayHeader({
         ) : null}
         {theme ? <ThemeToggle toLightLabel={theme.toLightLabel} toDarkLabel={theme.toDarkLabel} /> : null}
       </Flex>
+      {limitNote ? (
+        <Text as="p" variant="meta" tone="muted">
+          {limitNote}
+        </Text>
+      ) : null}
       {title ? (
         <Text as="p" variant="title">
           {title}

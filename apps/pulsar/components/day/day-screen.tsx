@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { Page, SectionLabel, Text } from "@/components/ui";
+import { Button, Flex, Page, SectionLabel, Text } from "@/components/ui";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -10,6 +11,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
 import { EmptyDay } from "./empty-day";
+import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import { NewOneOff } from "./new-one-off";
 import { OneOffRow } from "./one-off-row";
@@ -88,8 +90,24 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const today = todayInZone();
   const day = requested ?? today;
   const past = day < today;
-  const { view, evidence, goals, oneOffs, commitments, phases, factsByCommitment } =
-    await loadDay(day);
+  const {
+    view,
+    evidence,
+    goals: openGoals,
+    oneOffs,
+    doneOneOffs,
+    daylessCount,
+    commitments,
+    phases,
+    factsByCommitment,
+  } = await loadDay(day);
+
+  // A goal opened after the day drawn did not exist on it: it is not drawn
+  // there at all (RNP-07).
+  const goals = openGoals.filter((goal) => goal.openedOn <= day);
+  const laterGoal = past
+    ? openGoals.filter((goal) => goal.openedOn > day).sort((a, b) => a.openedOn.localeCompare(b.openedOn))[0]
+    : undefined;
 
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
@@ -123,6 +141,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.dayBefore") }
               : undefined
           }
+          limitNote={day > oldestPastDay(today) ? undefined : t("day.past.limit")}
           toToday={{ href: "/", label: t("day.nav.today") }}
         />
       ) : (
@@ -138,7 +157,21 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <EvidenceNote text={past ? t("day.unreadableEvidencePast") : t("day.unreadableEvidence")} />
       ) : null}
 
-      {goals.length === 0 ? (
+      {goals.length === 0 && past ? (
+        <>
+          <Text as="p" variant="title">
+            {t("day.past.nothingTitle")}
+          </Text>
+          {laterGoal ? (
+            <Text as="p" variant="meta" tone="muted">
+              {t("day.past.startedOn", {
+                goal: laterGoal.name.toLocaleLowerCase("es"),
+                ...shortDayParts(laterGoal.openedOn, t),
+              })}
+            </Text>
+          ) : null}
+        </>
+      ) : goals.length === 0 ? (
         <EmptyDay title={t("day.empty.title")} action={t("day.empty.action")} />
       ) : (
         <>
@@ -196,7 +229,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 {past ? null : (
                   <>
                     {carriedFirst.filter((oneOff) => oneOff.goalId === goal.id).map(oneOffRow)}
-                    <NewOneOff goalId={goal.id} />
+                    <NewOneOff goalId={goal.id} daylessCount={daylessCount} />
                   </>
                 )}
               </section>
@@ -209,11 +242,32 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           under, so it gets a group of its own — always on screen, even with
           no goal open yet, because RP-19 asks for no goal behind it either. */}
       {past ? null : (
-        <section>
-          <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
-          {carriedFirst.filter((oneOff) => oneOff.goalId === null).map(oneOffRow)}
-          <NewOneOff />
-        </section>
+        <>
+          <section>
+            <Flex justify="between" align="center" gap="2">
+              <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
+              {daylessCount > 0 ? (
+                <Button asChild tap={44} variant="ghost">
+                  <Link href="/sueltas">
+                    <Text variant="meta" tone="accent">
+                      {t("day.oneOffs.daylessLink", { count: daylessCount })}
+                    </Text>
+                  </Link>
+                </Button>
+              ) : null}
+            </Flex>
+            {carriedFirst.filter((oneOff) => oneOff.goalId === null).map(oneOffRow)}
+            <NewOneOff daylessCount={daylessCount} />
+          </section>
+          {doneOneOffs.length > 0 ? (
+            <section>
+              <SectionLabel>{t("day.doneOneOffs.title")}</SectionLabel>
+              {doneOneOffs.map((done) => (
+                <DoneOneOffRow key={done.id} factId={done.factId} name={done.name} />
+              ))}
+            </section>
+          ) : null}
+        </>
       )}
     </Page>
   );
