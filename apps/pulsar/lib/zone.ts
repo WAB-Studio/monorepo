@@ -79,3 +79,14 @@ export function civilDateLabel(day: string, weekday = false): string {
     timeZone: "UTC",
   }).format(civilDateToDate(day));
 }
+
+// An instant as the 24-hour "HH:mm" a person in the zone read on their clock.
+// `h23` keeps midnight "00:05", never "24:05".
+export function timeInZone(instant: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: TIME_ZONE,
+  }).format(new Date(instant));
+}
