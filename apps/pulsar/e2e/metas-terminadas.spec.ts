@@ -68,7 +68,8 @@ test("one open, one ended and one archived goal list each under its heading, in 
     const ended = `Terminada ${stamp}`;
     const archived = `Archivada ${stamp}`;
     const openId = await seedGoal(db, person.id, open, plusDays(60));
-    const endedId = await seedGoal(db, person.id, ended, todayInZone());
+    // The last day it counted is the 13th: the horizon is the day after.
+    const endedId = await seedGoal(db, person.id, ended, "2026-09-14");
     const archivedId = await seedGoal(db, person.id, archived, plusDays(60), true);
 
     await page.goto("/metas");
@@ -81,7 +82,7 @@ test("one open, one ended and one archived goal list each under its heading, in 
       Array.from(document.querySelectorAll("main a, main h2, main section *"))
         .map((el) => el.textContent?.trim() ?? ""),
     );
-    const at = (needle: string) => order.findIndex((text) => text === needle);
+    const at = (needle: string) => order.findIndex((text) => text.startsWith(needle));
     expect(at(open)).toBeGreaterThanOrEqual(0);
     expect(at(open)).toBeLessThan(at("Abrir otra meta"));
     expect(at("Abrir otra meta")).toBeLessThan(at("terminadas"));
@@ -89,6 +90,7 @@ test("one open, one ended and one archived goal list each under its heading, in 
     expect(at(ended)).toBeLessThan(at("Archivadas"));
     expect(at("Archivadas")).toBeLessThan(at(archived));
     await expect(archivadas).toBeVisible();
+    await expect(page.getByRole("link", { name: `${ended} terminó el 13 sep`, exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     for (const [name, id] of [
@@ -97,7 +99,7 @@ test("one open, one ended and one archived goal list each under its heading, in 
       [archived, archivedId],
     ]) {
       await page.goto("/metas");
-      await page.getByRole("link", { name, exact: true }).click();
+      await page.getByRole("link", { name: new RegExp(`^${name}`) }).click();
       await page.waitForURL(new RegExp(`/metas/${id}$`));
     }
   } finally {
@@ -121,7 +123,7 @@ test("a person whose only goal ended lands on the list, not on /metas/nueva", as
     await page.goto("/metas");
     await expect(page).toHaveURL(/\/metas$/);
     await expect(page.getByText("terminadas", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: ended, exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(`^${ended}`) })).toBeVisible();
   } finally {
     await context.close();
   }

@@ -90,6 +90,7 @@
     "title": "tus metas",
     "addAnother": "Abrir otra meta",
     "endedTitle": "terminadas",
+    "endedOnShort": "terminó el {date}",
     "archivedTitle": "Archivadas"
   },
   "horizon": {

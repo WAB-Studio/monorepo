@@ -4,7 +4,9 @@ import { getTranslations } from "next-intl/server";
 
 import { listGoalsForMetas } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
-import { Button, Page, SectionLabel } from "@/components/ui";
+import { dayBefore } from "@/lib/day/weeks";
+import { dayWords } from "@/lib/day/day-words";
+import { Button, Page, SectionLabel, Text } from "@/components/ui";
 
 // No board draws this screen. It always lists the person's open goals, one
 // with the other — never a redirect past a single one, or a second goal is
@@ -32,6 +34,14 @@ export default async function GoalsIndexPage() {
   }
 
   const t = await getTranslations();
+  const months = t.raw("day.monthLong") as string[];
+  // «13 sep»: the month's first three letters, as `civilDateShort` cuts it.
+  const endedOn = (horizon: string) => {
+    const words = dayWords(dayBefore(horizon), "1970-01-01");
+    return t("goal.list.endedOnShort", {
+      date: `${words.day} ${months[words.month ?? 0].slice(0, 3)}`,
+    });
+  };
 
   return (
     <Page>
@@ -50,7 +60,12 @@ export default async function GoalsIndexPage() {
           <SectionLabel>{t("goal.list.endedTitle")}</SectionLabel>
           {ended.map((goal) => (
             <Button key={goal.id} asChild variant="outline" block>
-              <Link href={`/metas/${goal.id}`}>{goal.name}</Link>
+              <Link href={`/metas/${goal.id}`}>
+                {goal.name}
+                <Text variant="meta" end>
+                  {endedOn(goal.horizon)}
+                </Text>
+              </Link>
             </Button>
           ))}
         </section>
