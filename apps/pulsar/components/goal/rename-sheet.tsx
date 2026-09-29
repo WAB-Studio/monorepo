@@ -11,6 +11,7 @@ import { Button, Field, Sheet, SheetActions, Text } from "@/components/ui";
 export type RenameGoalActionProps = {
   goalId: string;
   name: string;
+  variant?: "ghost" | "outline";
 };
 
 /**
@@ -22,7 +23,7 @@ export type RenameGoalActionProps = {
  * weeks and commitments are never touched: `name` is the one column this
  * act ever writes.
  */
-export function RenameGoalAction({ goalId, name }: RenameGoalActionProps) {
+export function RenameGoalAction({ goalId, name, variant = "ghost" }: RenameGoalActionProps) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -60,7 +61,7 @@ export function RenameGoalAction({ goalId, name }: RenameGoalActionProps) {
 
   return (
     <>
-      <Button variant="ghost" onClick={openSheet}>
+      <Button variant={variant} onClick={openSheet}>
         {t("goal.detail.rename")}
       </Button>
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("plan.renameSheet.title")}>

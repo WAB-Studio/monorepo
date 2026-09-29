@@ -26,6 +26,7 @@ export { Row } from "./row";
 
 export { Mark, type MarkState } from "./mark";
 
+export { Panel } from "./panel";
 export { SectionLabel } from "./section-label";
 
 export { Figure } from "./figure";

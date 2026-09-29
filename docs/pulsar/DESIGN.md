@@ -492,3 +492,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `HoyHechas.dc.html`.
 - **The horizon sheet's label reads «semanas, contando la del {date}».** Decided 2026-09-29 by the
   coordinator.
+- **The kit gains `Panel`, the desktop card**: white ground, 1px line, radius 14, from 1024 px. Below
+  1024 px it draws nothing and its content flows as on the phone. Decided 2026-09-29 by the
+  coordinator, reading `MetaEscritorio.dc.html`.
+- **The time of a done one-off goes under its name.** Decided 2026-09-29 by the coordinator.
+- **The rail's date is short: «martes 22 sep»** (`civilDateShort`). Decided 2026-09-29 by the
+  coordinator.

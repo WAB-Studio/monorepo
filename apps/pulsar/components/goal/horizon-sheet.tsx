@@ -20,6 +20,8 @@ export type MoveHorizonActionProps = {
   openedOn: string;
   weeks: number;
   phases: { name: string; endsOn: string | null }[];
+  // An ended goal offers the move as its main act.
+  solid?: boolean;
 };
 
 /**
@@ -28,7 +30,14 @@ export type MoveHorizonActionProps = {
  * `horizonForWeeks` names, and the refusal the server would give runs here
  * first, on the phases the page loaded — same function, same message.
  */
-export function MoveHorizonAction({ goalId, name, openedOn, weeks, phases }: MoveHorizonActionProps) {
+export function MoveHorizonAction({
+  goalId,
+  name,
+  openedOn,
+  weeks,
+  phases,
+  solid = false,
+}: MoveHorizonActionProps) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -108,9 +117,15 @@ export function MoveHorizonAction({ goalId, name, openedOn, weeks, phases }: Mov
 
   return (
     <>
-      <Button variant="ghost" tone="accent" tap={44} onClick={openSheet}>
-        {t("goal.detail.moveHorizon")}
-      </Button>
+      {solid ? (
+        <Button block onClick={openSheet}>
+          {t("goal.detail.moveHorizonEnded")}
+        </Button>
+      ) : (
+        <Button variant="ghost" tone="accent" tap={44} onClick={openSheet}>
+          {t("goal.detail.moveHorizon")}
+        </Button>
+      )}
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("goal.horizon.title")}>
         <Field
           label={t("goal.horizon.weeksLabel", { date: civilDateLabel(openedOn) })}

@@ -60,8 +60,8 @@ test("moving 12 weeks to 16 reads «16 semanas» and writes the Sunday's next da
     await expect(page.getByText(/^12 semanas · hasta el /)).toBeVisible();
 
     const sheet = await openHorizonSheet(page, goalId);
-    await expect(sheet.getByLabel(/^semanas desde el /i)).toHaveValue("12");
-    await sheet.getByLabel(/^semanas desde el /i).fill("16");
+    await expect(sheet.getByLabel(/^semanas, contando la del /i)).toHaveValue("12");
+    await sheet.getByLabel(/^semanas, contando la del /i).fill("16");
     const sunday = new Intl.DateTimeFormat("es-CO", {
       weekday: "long",
       day: "numeric",
@@ -102,7 +102,7 @@ test("a count ending before a phase is refused with its message and the column s
     page.on("request", (request) => {
       if (request.method() === "POST" && request.headers()["next-action"]) actionCalls.push(request.url());
     });
-    const field = sheet.getByLabel(/^semanas desde el /i);
+    const field = sheet.getByLabel(/^semanas, contando la del /i);
     await field.fill("11");
     await sheet.getByRole("button", { name: "Moverlo" }).click();
 
@@ -126,7 +126,7 @@ test("a count already past is refused and the column stays (RP-25)", async ({ pa
   try {
     const before = await horizonOf(db, goalId);
     const sheet = await openHorizonSheet(page, goalId);
-    await sheet.getByLabel(/^semanas desde el /i).fill("1");
+    await sheet.getByLabel(/^semanas, contando la del /i).fill("1");
     await sheet.getByRole("button", { name: "Moverlo" }).click();
 
     await expect(
@@ -215,6 +215,17 @@ test("the horizon line and its sheet hold at 360 (RNP-07)", async ({ page, db, p
       expect(b?.height).toBeGreaterThanOrEqual(48);
       expect((b?.x ?? 0) + (b?.width ?? 0)).toBeLessThanOrEqual(360);
     }
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});
+
+test("a goal of one week reads «1 semana», never «1 semanas» (RP-11)", async ({ page, db, personId }) => {
+  const { goalId } = await seedGoal(db, personId, `Meta una semana ${Date.now()}`, { weeks: 1 });
+  try {
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(/^1 semana · hasta el /)).toBeVisible();
+    await expect(page.getByText(/^1 semanas/)).toHaveCount(0);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
