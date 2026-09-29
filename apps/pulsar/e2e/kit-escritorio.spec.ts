@@ -56,6 +56,8 @@ for (const [width, pageBox] of [
   }) => {
     await page.setViewportSize({ width, height: 740 });
     await page.goto("/metas");
+    await expect(page.locator("main :is(h1, p, a, button, input)").first()).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
 
     const nav = await box(page, "nav");
     expect(nav).toMatchObject({ x: 0, width, height: 51 });
