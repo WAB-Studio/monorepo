@@ -16,6 +16,8 @@ export type TableRow = {
   // The phone face's trailing note: the wide face spreads it over columns
   // the phone has no room for, so the caller words it once for the phone.
   note?: ReactNode;
+  // A second line under the row label, on both faces: the week's dates.
+  detail?: ReactNode;
 };
 
 type TableProps = {
@@ -75,7 +77,10 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
               className={styles.stackRow}
               data-current={index === current ? "" : undefined}
             >
-              <span className={styles.stackLabel}>{row.cells[0]}</span>
+              <span className={styles.stackLabel}>
+                {row.cells[0]}
+                {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
+              </span>
               {lead === undefined ? null : (
                 <span className={styles.stackFigure}>
                   {figureCell(row.cells[lead])}
@@ -107,6 +112,9 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
               {columns.map((_, column) => (
                 <td key={column} className={join(styles.cell, cellClass(column))}>
                   {figures.includes(column) ? figureCell(row.cells[column]) : row.cells[column]}
+                  {column === 0 && row.detail ? (
+                    <span className={styles.detailWide}>{row.detail}</span>
+                  ) : null}
                 </td>
               ))}
             </tr>

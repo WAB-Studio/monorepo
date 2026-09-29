@@ -86,9 +86,32 @@ async function deleteLookups(db: postgres.Sql, personId: string, deviceId: strin
   await db`delete from reading.lookups where user_id = ${personId} and device_id = ${deviceId}`;
 }
 
-async function othersLookupCount(db: postgres.Sql, personId: string): Promise<number> {
+// A second person of this spec's own, registered under the suite's run the way
+// `mint-session.ts` registers the first (the run's teardown drops it if this
+// spec cannot). Nothing else writes its rows, so a count of them cannot race.
+async function createSecondPerson(db: postgres.Sql): Promise<string> {
+  const runId = process.env.HARNESS_RUN_ID?.trim();
+  if (!runId) throw new Error("HARNESS_RUN_ID is unset: this spec runs under check:e2e's own run");
+  const id = randomUUID();
+  const email = `harness-pulsar-${id}@example.invalid`;
+  await db.begin(async (tx) => {
+    await tx`insert into auth.users (id, email) values (${id}, ${email})`;
+    await tx`
+      insert into harness.identities (user_id, run_id, email, disposition)
+      values (${id}, ${runId}, ${email}, 'ephemeral')`;
+  });
+  return id;
+}
+
+async function dropSecondPerson(db: postgres.Sql, id: string): Promise<void> {
+  await db`delete from reading.lookups where user_id = ${id}`;
+  await db`delete from auth.users where id = ${id}`;
+  await db`delete from harness.identities where user_id = ${id}`;
+}
+
+async function lookupCountOf(db: postgres.Sql, personId: string): Promise<number> {
   const [row] = await db<{ count: number }[]>`
-    select count(*)::int as count from reading.lookups where user_id != ${personId}
+    select count(*)::int as count from reading.lookups where user_id = ${personId}
   `;
   return row.count;
 }
@@ -111,13 +134,20 @@ test("an evidence commitment names diccionario at creation, stays empty below it
   const deviceId = randomUUID();
   const threshold = 2;
 
-  // Read before this spec writes a single row, so the isolation claim below
-  // is a real before/after, not an assumption.
-  const before = await othersLookupCount(db, personId);
-
-  const goalId = await createGoal(page, goalName);
+  // Two rows on today's evening: the threshold itself. If the first person's
+  // evidence ever counted them, its «one fewer» step below would read satisfied.
+  const otherRows = threshold;
+  const otherId = await createSecondPerson(db);
+  const otherDevice = randomUUID();
+  let goalId: string | undefined;
 
   try {
+    for (let local = 1; local <= otherRows; local++) {
+      await insertLookup(db, otherId, otherDevice, local, eveningInBogota(day));
+    }
+    expect(await lookupCountOf(db, otherId)).toBe(otherRows);
+
+    goalId = await createGoal(page, goalName);
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
 
@@ -181,17 +211,17 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     const dot = todayRow.locator(`[role="img"][aria-label="${commitmentName}: diccionario"]`);
     await expect(dot).toHaveCount(1);
     await expect(dot).toHaveAttribute("data-state", "evidence");
+
+    // The evidence counted this person's two rows alone, and the second
+    // person's rows are exactly what they were before the flow.
+    expect(await lookupCountOf(db, personId)).toBe(threshold);
+    expect(await lookupCountOf(db, otherId)).toBe(otherRows);
   } finally {
     // Deleted by the exact ids this spec minted — the identity's own purge
     // (module 53's `dropRun`, `ON DELETE CASCADE`) is the backstop, not the
     // only door.
     await deleteLookups(db, personId, deviceId);
-    await deleteGoal(db, personId, goalId);
+    if (goalId) await deleteGoal(db, personId, goalId);
+    await dropSecondPerson(db, otherId);
   }
-
-  // Nothing landed under, or survived under, any identity but this spec's
-  // own: the count of every other row is exactly what it was before this
-  // spec wrote anything.
-  const after = await othersLookupCount(db, personId);
-  expect(after).toBe(before);
 });
