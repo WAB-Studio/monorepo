@@ -85,7 +85,8 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
 
     const goalLeft = await box(page.getByText(`Meta con cifra ${stamp}`, { exact: true }));
     const goalPlain = await box(page.getByText(`Meta sin cifra ${stamp}`, { exact: true }));
-    const label = page.getByText(`minutos hablados ${stamp}`, { exact: true });
+    // The figure is named by its unit, never by the goal's `measure_name`.
+    const label = page.getByText("min", { exact: true });
     const figure = await box(label);
     const sueltas = await box(page.getByText("Sueltas", { exact: true }));
     const waiting = await box(page.getByRole("link", { name: "2 esperan" }));

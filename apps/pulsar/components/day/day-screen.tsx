@@ -256,9 +256,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {figures.map((goal) => (
         <Panel as="div" key={goal.id}>
           <Face on="desktop">
-            <SectionLabel>{goal.measureName}</SectionLabel>
+            <SectionLabel>{goal.measureUnit}</SectionLabel>
             <Flex align="baseline" gap="2">
-              <Figure value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
+              <Figure value={weekMeasure[goal.id]} />
               <Text variant="meta" tone="muted">
                 {t("day.weekFigure.caption")}
               </Text>

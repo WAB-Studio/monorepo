@@ -44,7 +44,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
 
   const columns = [
     t("goal.review.columns.week"),
-    goal.measureName,
+    t("goal.review.columns.total"),
     t("goal.review.columns.phase"),
     t("goal.review.columns.note"),
   ];
@@ -67,7 +67,7 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
         {goal.name}
       </Text>
       <Text as="p" variant="title">
-        {goal.measureName}
+        {goal.measureUnit}
       </Text>
       <Table
         caption={t("goal.review.caption")}
