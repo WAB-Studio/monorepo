@@ -310,7 +310,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   );
 
   return (
-    <Page>
+    <Page width={past ? undefined : "full"}>
       {past ? (
         <DayHeader
           date={dateLabel(day, t)}

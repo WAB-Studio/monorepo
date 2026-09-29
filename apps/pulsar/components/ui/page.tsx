@@ -8,6 +8,11 @@ import styles from "./page.module.css";
 // 1020, the one span `RevisionEscritorio.dc.html` draws — "A wide face beyond
 // `RevisionEscritorio.dc.html`" is the only one this design has (docs/pulsar/
 // DESIGN.md "The boards that do not exist"), so no third value is offered.
-export function Page({ children, width }: { children?: ReactNode; width?: "wide" }) {
-  return <main className={width === "wide" ? `${styles.page} ${styles.wide}` : styles.page}>{children}</main>;
+//
+// Beside the rail a screen is one 640px column unless it says otherwise:
+// `width="full"` is for the screens that lay out two columns of their own
+// (Hoy, the goal, Semana's table), which take all the rail leaves.
+export function Page({ children, width }: { children?: ReactNode; width?: "wide" | "full" }) {
+  const cap = width === "wide" ? styles.wide : width === "full" ? styles.full : undefined;
+  return <main className={cap ? `${styles.page} ${cap}` : styles.page}>{children}</main>;
 }
