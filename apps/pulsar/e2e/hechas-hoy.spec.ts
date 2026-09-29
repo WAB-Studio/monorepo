@@ -1,10 +1,11 @@
+import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
 // «Hechas hoy» (`HoyHechas.dc.html`): a one-off done today stays on Hoy with a
-// filled mark, and the mark takes the fact back (RP-19, RP-05).
+// filled mark, and the whole row takes the fact back (RP-19, RP-05).
 
 async function seedOneOff(db: postgres.Sql, personId: string, name: string): Promise<string> {
   const [row] = await db<{ id: string }[]>`
@@ -12,6 +13,16 @@ async function seedOneOff(db: postgres.Sql, personId: string, name: string): Pro
     values (${personId}, ${name}, ${todayInZone()}) returning id
   `;
   return row.id;
+}
+
+// The row's own mark: the last div holding the name is the innermost, and
+// another spec's one-off may sit below it on the same day.
+function markOf(page: Page, name: string) {
+  return page
+    .locator("div")
+    .filter({ has: page.getByRole("button", { name, exact: true }) })
+    .last()
+    .getByRole("button", { name: "Marcar como hecho" });
 }
 
 async function factCount(db: postgres.Sql, oneOffId: string): Promise<number> {
@@ -30,10 +41,10 @@ test("a completed one-off moves to «hechas hoy» with a filled mark, survives a
   try {
     await page.goto("/");
     await expect(page.getByText("Hechas hoy")).toHaveCount(0);
-    await page.getByRole("button", { name: "Marcar como hecho" }).last().click();
+    await markOf(page, name).click();
     await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
     await expect(page.getByText("Hechas hoy")).toBeVisible();
-    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
     expect(await factCount(db, oneOffId)).toBe(1);
 
     await page.reload();
@@ -51,7 +62,7 @@ test("a completed one-off moves to «hechas hoy» with a filled mark, survives a
   }
 });
 
-test("the name of a done one-off opens nothing, and the screen holds at 360px (RP-22, RNP-07)", async ({
+test("the name of a done one-off opens no sheet and undoes it, and the screen holds at 360px (RP-19, RP-22, RNP-07)", async ({
   page,
   db,
   personId,
@@ -61,14 +72,15 @@ test("the name of a done one-off opens nothing, and the screen holds at 360px (R
 
   try {
     await page.goto("/");
-    await page.getByRole("button", { name: "Marcar como hecho" }).last().click();
+    await markOf(page, name).click();
     await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
+
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     await page.getByText(name, { exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    expect(await factCount(db, oneOffId)).toBe(1);
-
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toHaveCount(0);
+    await expect.poll(() => factCount(db, oneOffId)).toBe(0);
   } finally {
     await db`delete from goals.one_offs where id = ${oneOffId}`;
   }

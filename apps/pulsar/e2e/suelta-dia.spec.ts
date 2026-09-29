@@ -55,8 +55,9 @@ test("«mañana» writes tomorrow's day, does not draw, and says where it went (
     await page.goto("/");
     const field = page.getByLabel("Algo suelto").last();
     await field.fill(name);
+    await expect(page.getByRole("button", { name: "Anotar" })).toHaveCount(0);
     await page.getByRole("radio", { name: "mañana" }).click();
-    await field.press("Enter");
+    await page.getByRole("button", { name: "Anotar" }).click();
 
     await expect(page.getByRole("status")).toContainText("Anotada para mañana");
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
@@ -77,6 +78,7 @@ test("«sin día» writes a null day, does not draw, and the way into the list s
     const field = page.getByLabel("Algo suelto").last();
     await field.fill(name);
     await page.getByRole("radio", { name: "sin día" }).click();
+    await expect(page.getByRole("button", { name: "Anotar" })).toBeVisible();
     await field.press("Enter");
 
     await expect(page.getByRole("status")).toContainText("Anotada sin día");
@@ -84,7 +86,7 @@ test("«sin día» writes a null day, does not draw, and the way into the list s
     expect(await rowsNamed(db, personId, name)).toMatchObject([{ day: null }]);
     // The count is the identity's, and `sueltas.spec.ts` moves it in parallel:
     // the row above proves the write, the link proves the way in.
-    await expect(page.getByRole("link", { name: /^\d+ sin día$/ })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: /^\d+ (espera|esperan)$/ })).toHaveAttribute(
       "href",
       "/sueltas",
     );
@@ -105,6 +107,7 @@ test("«otro día» takes a date; a past one is refused with its message and no 
     await field.fill(name);
     await page.getByRole("radio", { name: "otro día" }).click();
     const date = page.getByLabel("qué día");
+    await expect(page.getByRole("button", { name: "Anotar" })).toBeVisible();
 
     await date.fill(plusDays(-1));
     await field.press("Enter");
@@ -114,7 +117,7 @@ test("«otro día» takes a date; a past one is refused with its message and no 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     await date.fill(plusDays(3));
-    await field.press("Enter");
+    await date.press("Enter");
     await expect(page.getByRole("status")).toContainText("Anotada para el");
     expect(await rowsNamed(db, personId, name)).toMatchObject([{ day: plusDays(3) }]);
   } finally {

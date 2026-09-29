@@ -9,14 +9,16 @@ import { Mark, Row, Text } from "@/components/ui";
 export type DoneOneOffRowProps = {
   factId: string;
   name: string;
+  // The hour it was done, already said in the person's zone.
+  time?: string;
 };
 
 /**
- * A one-off done today (RP-19): the filled mark is the one control and takes
- * the fact back, so the one-off returns among the undone (RP-05). Its name
- * opens nothing — a done one-off is not deleted (RP-22).
+ * A one-off done today (RP-19): the whole row is the one control and takes
+ * the fact back, so the one-off returns among the undone (RP-05). It opens
+ * nothing — a done one-off is not deleted (RP-22).
  */
-export function DoneOneOffRow({ factId, name }: DoneOneOffRowProps) {
+export function DoneOneOffRow({ factId, name, time }: DoneOneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -36,14 +38,20 @@ export function DoneOneOffRow({ factId, name }: DoneOneOffRowProps) {
     <>
       <Row
         leading={<Mark state="declared" />}
-        leadingLabel={t("day.doneOneOffs.undoLabel", { name })}
+        aria-label={t("day.doneOneOffs.undoLabel", { name })}
         name={
           <Text as="span" tone="muted">
             {name}
           </Text>
         }
-        onLeadingClick={handleUndo}
-        tabIndex={-1}
+        trailing={
+          time ? (
+            <Text as="span" tone="muted" variant="meta">
+              {time}
+            </Text>
+          ) : undefined
+        }
+        onClick={handleUndo}
         disabled={pending}
       />
       {error ? (

@@ -5,8 +5,9 @@ import { useTranslations } from "next-intl";
 
 import { createOneOff } from "@/app/actions/one-offs";
 import { createOneOffSchema } from "@/lib/validation/one-off";
-import { Field, Flex, Mark, Text } from "@/components/ui";
-import { civilDateToDate, todayInZone } from "@/lib/zone";
+import { Button, Field, Flex, Mark, Text } from "@/components/ui";
+import { dayWords } from "@/lib/day/day-words";
+import { todayInZone } from "@/lib/zone";
 
 import { DayChoice } from "./day-choice";
 import { DEFAULT_DAY_CHOICE, dayForChoice, type DayChoiceValue } from "./day-for-choice";
@@ -19,6 +20,8 @@ export type NewOneOffProps = {
   // The dayless one-offs the person holds, so a write with no day can say
   // which number it just raised.
   daylessCount?: number;
+  // The goal's name as written; it names the field (RP-20).
+  goalName?: string;
 };
 
 /**
@@ -29,10 +32,11 @@ export type NewOneOffProps = {
  * because this is the one row nothing has written yet.
  *
  * Once there is a name, «para cuándo» appears under it: today is already
- * chosen, so Enter alone still writes today. A one-off written for another
+ * chosen, so Enter alone still writes today. Any other choice shows «Anotar»,
+ * because Enter in the date field would otherwise write nothing. A one-off written for another
  * day, or none, does not draw on Hoy, so the field says where it went.
  */
-export function NewOneOff({ goalId, daylessCount = 0 }: NewOneOffProps) {
+export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -43,14 +47,16 @@ export function NewOneOff({ goalId, daylessCount = 0 }: NewOneOffProps) {
   function savedMessage(kind: DayChoiceValue["kind"], day: string | null): string | null {
     if (kind === "none") return t("day.newOneOff.savedNone", { count: daylessCount + 1 });
     if (kind === "today" || day === null) return null;
+    const words = dayWords(day, todayInZone());
     const weekdays = t.raw("day.weekdayLong") as string[];
+    const months = t.raw("day.monthLong") as string[];
     const parts = {
-      weekday: weekdays[(civilDateToDate(day).getUTCDay() + 6) % 7],
-      day: civilDateToDate(day).getUTCDate(),
+      weekday: weekdays[words.weekday],
+      day: words.day,
+      month: words.month === null ? "" : months[words.month],
     };
-    return kind === "tomorrow"
-      ? t("day.newOneOff.savedTomorrow", parts)
-      : t("day.newOneOff.savedOther", parts);
+    const key = kind === "tomorrow" ? "savedTomorrow" : "savedOther";
+    return t(words.month === null ? `day.newOneOff.${key}` : `day.newOneOff.${key}Far`, parts);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -93,9 +99,13 @@ export function NewOneOff({ goalId, daylessCount = 0 }: NewOneOffProps) {
       <Flex align="center" gap="2">
         <Mark state="empty" dashed />
         <Field
-          label={t("day.newOneOff.label")}
+          label={goalName ? t("day.newOneOff.labelForGoal", { goal: goalName }) : t("day.newOneOff.label")}
           hideLabel
-          placeholder={t("day.newOneOff.placeholder")}
+          placeholder={
+            goalName
+              ? t("day.newOneOff.placeholderForGoal", { goal: goalName })
+              : t("day.newOneOff.placeholder")
+          }
           value={name}
           onChange={(event) => {
             setName(event.target.value);
@@ -114,6 +124,13 @@ export function NewOneOff({ goalId, daylessCount = 0 }: NewOneOffProps) {
           allowNone
           min={todayInZone()}
           error={dateError}
+          action={
+            choice.kind !== "today" ? (
+              <Button type="submit" tap={44} disabled={pending}>
+                {t("day.newOneOff.submit")}
+              </Button>
+            ) : null
+          }
         />
       ) : null}
       {nameError ? (
