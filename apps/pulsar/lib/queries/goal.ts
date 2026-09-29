@@ -17,6 +17,7 @@ import {
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
+import { dayBefore } from "@/lib/day/weeks";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts` and
@@ -95,6 +96,10 @@ export type GoalView = {
   id: string;
   name: string;
   horizon: string;
+  // The last day the goal counted: `dayBefore(horizon)` once `horizon` is
+  // today or past, null while it still runs. Archived or not — the screen
+  // decides which wins.
+  endedOn: string | null;
   // When the goal was opened (§0.3, 3), in the person's own zone — the goal
   // screen's own overline (RP-11), read off `to_jsonb(g)`'s whole row rather
   // than a second round trip.
@@ -369,6 +374,7 @@ export async function loadGoal(goalId: string): Promise<GoalView | null> {
     id: row.goal.id,
     name: row.goal.name,
     horizon: row.goal.horizon,
+    endedOn: row.goal.horizon <= todayInZone() ? dayBefore(row.goal.horizon) : null,
     createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
     measureUnit: row.goal.measure_unit,
@@ -410,16 +416,23 @@ export async function listGoals(): Promise<GoalSummary[]> {
     `),
   );
 
-  return rows.map(toGoalSummary);
+  // The civil day is the person's, so the cut is JS against `todayInZone()`,
+  // never `current_date`: an ended goal is refused like an archived one.
+  const today = todayInZone();
+  return rows.filter((row) => row.horizon > today).map(toGoalSummary);
 }
 
 /**
  * `/metas`'s own query (RP-24): one statement, every goal the person has
- * ever opened, split into "open" and "archived" here rather than by a
+ * ever opened, split into "open", "ended" and "archived" here rather than by a
  * second round trip — the screen lists the first, then a quiet "Archivadas"
  * section for the second, each still its own way into `Meta.dc.html`.
  */
-export async function listGoalsForMetas(): Promise<{ open: GoalSummary[]; archived: GoalSummary[] }> {
+export async function listGoalsForMetas(): Promise<{
+  open: GoalSummary[];
+  ended: GoalSummary[];
+  archived: GoalSummary[];
+}> {
   const rows = await withGoalsDb((tx) =>
     tx.execute<GoalRow>(sql`
       select id, name, horizon, measure_name, measure_unit, archived_at
@@ -428,9 +441,14 @@ export async function listGoalsForMetas(): Promise<{ open: GoalSummary[]; archiv
     `),
   );
 
+  // Archived wins over ended: the check runs first.
+  const today = todayInZone();
   const summaries = rows.map(toGoalSummary);
+  const archived = summaries.filter((goal) => goal.archivedAt !== null);
+  const live = summaries.filter((goal) => goal.archivedAt === null);
   return {
-    open: summaries.filter((goal) => goal.archivedAt === null),
-    archived: summaries.filter((goal) => goal.archivedAt !== null),
+    open: live.filter((goal) => goal.horizon > today),
+    ended: live.filter((goal) => goal.horizon <= today),
+    archived,
   };
 }
