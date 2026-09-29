@@ -163,9 +163,6 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Dark beyond `HoyOscuro.dc.html`.** Every other state is this design with the dark column of the
   token table. Drawing it again repeats a decision instead of taking one. Decided by the user
   2026-09-10, for every app.
-- **A wide face beyond `RevisionEscritorio.dc.html`.** Only the review's table changes shape rather
-  than width. The rest is used with one thumb.
-- **The one-offs with no day (RP-21).** Their list is named in the contract and drawn nowhere.
 - **The goals list (`/metas` with more than one goal).** Its own way in reuses `commitment-list.tsx`'s
   block-button pattern; no board draws the list itself. Decided 2026-09-27 by the coordinator, the
   user having delegated it.
@@ -200,6 +197,14 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `Fallo.dc.html`; the list has no state of its own there.
 - **A past day with a goal opened later.** It is `DiaPasado.dc.html` with one goal fewer; drawing it
   again would repeat the board.
+- **The desktop face of the slice «escritorio»'s new states.** `/sueltas` and `/metas` sit as one
+  column in the desktop frame; the ended goal is `MetaEscritorio.dc.html` with
+  `MetaTerminada.dc.html`'s differences. Drawing them again repeats two boards.
+- **The whole done row undoing.** It changes no pixel: the row draws as `HoyHechas.dc.html` draws it.
+- **Copy-only fixes of the slice «escritorio»** — «1 semana», the month on a far date, a goal's name as
+  written, each goal's field naming its goal, «N esperan», the horizon sheet's label. They change words
+  where the boards already draw them.
+- **`/sueltas` with one group only.** It is `SueltasProgramadas.dc.html` with a group fewer.
 
 ## Decisions taken here
 
@@ -425,3 +430,65 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A goal opened late in the week keeps the weeks it was written with.** Its partial first week is
   week 1, and «12 semanas» ends on the Sunday of week 12. Decided by the user 2026-09-28, over counting
   twelve whole weeks after the partial one.
+- **Pulsar has a desktop face from 1024 px.** A left rail (Bitácora, Hoy, Semana, Metas; the date
+  and the theme toggle at its foot) replaces the bottom nav. Hoy opens in two columns (the goals and
+  their commitments; the week's figure, the one-offs, «N esperan» and «hechas hoy»). Semana changes
+  shape: a table, one commitment per row and one day per column, today shaded, past days links, a
+  «hechos» row at the foot. The goal opens in two columns (commitments; the end, the figure, the
+  phases), «Renombrar» and «Archivar» beside the title. Every sheet is a centred 480 px dialog. The
+  past day, `/sueltas`, `/metas`, the forms, the 404 and Fallo sit in the same frame as one column;
+  700–1023 px keeps the phone face, centred. Boards: `HoyEscritorio`, `SemanaEscritorio`,
+  `MetaEscritorio`, `HojaEscritorio`. Replaces «A wide face beyond `RevisionEscritorio.dc.html`» in
+  «The boards that do not exist». Decided and approved by the user 2026-09-28: «no tiene sentido que
+  sea tan feo».
+- **A one-off written for a later day waits in `/sueltas` under «programadas»**, with its date, where
+  it can be moved, done or deleted; the link on Hoy reads «N esperan» (dayless and scheduled). Not
+  built; no board draws it yet. Decided by the user 2026-09-28, over showing it dimmed on Hoy and over
+  leaving it hidden.
+- **A goal past its end says «terminó el <día>» and leaves Hoy and Semana.** Its screen offers
+  «Archivar» and «Mover el final»; `/metas` lists it under «terminadas». Not built; no board. Decided by
+  the user 2026-09-28, over drawing it with a note and over leaving it open.
+- **A goal that ends mid-week stays in Semana until that Sunday**, with the days it lived and blank
+  days after its end; it leaves Hoy the day after its end and is gone from the next week. Not built.
+  Decided by the user 2026-09-29, over dropping it from Semana the day after its end.
+- **A one-off for another day is written with a visible «Anotar»**, shown with the chips once a day
+  other than today is chosen, and Enter in the date field writes too. Decided by the user 2026-09-28.
+- **Tapping a done one-off's name undoes it**, the whole row, as a done commitment does. Decided by the
+  user 2026-09-28, over leaving the undo on the mark alone.
+- **«hechas hoy» prints each one's time**, as `HoyHechas.dc.html` draws. Decided by the user
+  2026-09-28, over cutting it from the design.
+- **«Borrarla» in `SueltaDarDia` is a muted ghost button, not underlined.** `Button` has no underline
+  prop and none was added for one link. Decided 2026-09-28 by the coordinator, the user having
+  delegated it.
+- **Ten boards drawn for the slice «escritorio», approved by the user 2026-09-29.**
+  `SueltasProgramadas`, `SueltasProgramadasHecha`, `SueltasProgramadasVacia`, `SueltaMover`,
+  `SueltaMoverPasado`, `HoyTodasTerminadas`, `MetaTerminada`, `MetaTerminadaMover`,
+  `MetasTerminadas`, `MetasSoloTerminadas`; `HoySueltaOtroDia` redrawn in place with «Anotar».
+- **`/sueltas` is titled «Lo que espera»**: «N sin día» first, «N programadas» after, each programada
+  with its weekday and day, the month only outside this week, and its goal when it has one. A group
+  with nothing in it does not draw. Done from the list, the one-off leaves it and a status line says
+  it is in «hechas hoy», with «ver hoy». Decided 2026-09-29 by the coordinator; board approved by the
+  user.
+- **A programada moves from «¿Para cuándo?»** with its current day under the title, «hoy · mañana ·
+  otro día» (no «sin día»), «Moverla» solid, «Dejarla como está» outlined, «Borrarla» a muted ghost.
+  A past day is refused as the one-off field refuses it. Decided 2026-09-29 by the coordinator; board
+  approved by the user.
+- **«Anotar» is a solid accent button under the chips**, in the same place for «mañana», «otro día»
+  and «sin día». Decided 2026-09-29 by the coordinator; board approved by the user.
+- **An ended goal's screen**: «terminó el <weekday day month>» in place of the weeks line, «Mover el
+  final» solid and «Archivar» outlined side by side, no way to add a commitment or a phase, the figure
+  and phases as they were. Its move sheet opens on the weeks that end this Sunday. Decided 2026-09-29
+  by the coordinator; board approved by the user.
+- **`/metas` lists «terminadas» between the open and «Archivadas»**, each with «terminó el <day
+  month>». With only ended goals the list still draws, «Abrir otra meta» included. Decided 2026-09-29
+  by the coordinator; board approved by the user.
+- **Hoy with every goal ended and none open** reads «Hoy no pide nada.», names the goal that ended
+  and its day, and offers «Ver las metas» solid and «Abrir otra meta» outlined; goalless one-offs
+  still draw below. Decided 2026-09-29 by the coordinator; board approved by the user.
+- **Hoy's desktop figure is each open goal's measure this week**, one card per goal with a measure:
+  its name, the number, «esta semana», «Ver por semana». A goal without a measure draws no card.
+  Decided 2026-09-29 by the coordinator, reading `HoyEscritorio.dc.html`.
+- **«hechas hoy» prints `HH:mm`, 24-hour.** Decided 2026-09-29 by the coordinator, from
+  `HoyHechas.dc.html`.
+- **The horizon sheet's label reads «semanas, contando la del {date}».** Decided 2026-09-29 by the
+  coordinator.

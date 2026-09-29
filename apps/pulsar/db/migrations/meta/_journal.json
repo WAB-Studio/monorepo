@@ -43,6 +43,13 @@
       "when": 1790634661590,
       "tag": "0005_cute_nighthawk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790690364712,
+      "tag": "0006_noisy_green_goblin",
+      "breakpoints": true
     }
   ]
 }

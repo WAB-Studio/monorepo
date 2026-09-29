@@ -108,7 +108,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-23** — A goal can be renamed. Its facts, weeks and commitments keep reading as they did. Asked for by the user 2026-09-27.
 - [x] **RP-24** — A goal can be archived. It leaves the day and the week; its facts and the weeks it governed stay, and it can be opened again from the goals list. Nothing is deleted. Asked for by the user 2026-09-27.
 - [ ] **RP-25** — A goal's horizon can be moved from the goal. Its facts, weeks and phases keep reading as they did, and a horizon never ends before a phase does. Asked for by the user 2026-09-28, to keep «Se puede mover después» true.
-- [ ] **RP-21** — A one-off with no day is not lost. It waits in a list of its own, off the day's screen, and is given a day whenever the person wants one.
+- [ ] **RP-21** — A one-off with no day is not lost. It waits in a list of its own, off the day's screen, and is given a day whenever the person wants one A one-off written for a later day waits in the same list, with its date, and can be moved, done or deleted there.
+- [ ] **RP-26** — A goal past its end says the day it ended, leaves the day and the week, and is listed apart among the goals; it can be archived or have its end moved. Nothing is deleted. Asked for by the user 2026-09-28.
 
 #### The week and the review
 
@@ -131,6 +132,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RNP-08** — The person chooses light or dark and the choice is remembered on the device. The app opens in the system's mode until a choice is made.
 - [ ] **RNP-10** — A second evidence source costs a reader and a row of configuration, never a migration and never a screen. The shape a source answers in is fixed — a day, a quantity, a unit, a name for the person — and nothing downstream of it knows which app it came from.
 - [ ] **RNP-09** — Every `auth.users` row a script of this app creates is registered through `@repo/harness-registry`. No automated check ever submits the sign-in form with a typed address: it sends a real email from the user's own account and mints a real row.
+- [ ] **RNP-11** — From 1024 px the app has a desktop face: a left rail in place of the bottom nav, Hoy and a goal in two columns, the week as a table of commitments by day, every sheet a centred dialog, every other screen one column in the same frame, with no horizontal overflow at 1280×800. Below 1024 the phone face holds unchanged (RNP-07). Asked for by the user 2026-09-28.
 
 ---
 
