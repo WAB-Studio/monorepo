@@ -2,6 +2,11 @@
   "range": "Del {start} al {end}",
   "sectionLabel": "{name} · semana {week} de {total}",
   "today": "hoy",
+  "todayColumn": "{label} · hoy",
+  "table": {
+    "caption": "La semana, un compromiso por fila y un día por columna",
+    "footer": "hechos"
+  },
   "ratio": "{done} de {total}",
   "unreadableEvidence": "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.",
   "weekdayShort": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],

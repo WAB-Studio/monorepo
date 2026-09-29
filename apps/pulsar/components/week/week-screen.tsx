@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 
-import { Page, SectionLabel, Text, type MarkState } from "@/components/ui";
+import { Face, Page, SectionLabel, Text, type MarkState } from "@/components/ui";
 import type { DaySlot } from "@/lib/day/types";
 import { loadWeek, type CommitmentGoal, type GoalSummary, type OneOffFact } from "@/lib/queries/week";
 import { weekDayHref } from "@/lib/day/week-href";
@@ -9,6 +9,7 @@ import { civilDateToDate, todayInZone } from "@/lib/zone";
 import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
 import { goalWeekProgress } from "./week-progress";
+import { WeekTableFace } from "./week-table-face";
 
 type Translate = Awaited<ReturnType<typeof getTranslations>>;
 
@@ -106,7 +107,8 @@ function WeekTitle({ start, end, t }: { start: string; end: string; t: Translate
 export async function WeekScreen() {
   const t = await getTranslations();
   const today = todayInZone();
-  const { view, evidence, goals, commitments, oneOffFacts } = await loadWeek(today);
+  const week = await loadWeek(today);
+  const { view, evidence, goals, commitments, oneOffFacts } = week;
 
   const weekdayNames = t.raw("week.weekdayShort") as string[];
   const weekdayLong = t.raw("week.weekdayLong") as string[];
@@ -119,9 +121,24 @@ export async function WeekScreen() {
       label: t("week.openDay", { weekday, day: Number(day.slice(8, 10)) }),
     };
   }
+  const columns = view.days.map((dayView) => {
+    const link = linkFor(dayView.day);
+    const label = dayLabel(dayView.day, weekdayNames);
+    const isToday = dayView.day === today;
+    return {
+      key: dayView.day,
+      label: isToday ? t("week.todayColumn", { label }) : label,
+      href: link?.href,
+      hrefLabel: link?.label,
+      today: isToday,
+    };
+  });
   const slotsByDay = new Map(view.days.map((dayView) => [dayView.day, dayView.slots]));
 
-  function dotsFor(goalId: string, day: string): WeekDot[] {
+  function dotsFor(goal: GoalSummary, day: string): WeekDot[] {
+    // A day on or after the goal's end draws nothing (RP-26).
+    if (day >= goal.horizon) return [];
+    const goalId = goal.id;
     const goalCommitments = new Map(
       commitments.filter((c) => c.goalId === goalId).map((c) => [c.id, c] as [string, CommitmentGoal]),
     );
@@ -152,7 +169,8 @@ export async function WeekScreen() {
       <section key={goal.id}>
         <SectionLabel>{sectionLabel}</SectionLabel>
         {view.days.map((dayView, index) => {
-          const dots = dotsFor(goal.id, dayView.day);
+          const dots = dotsFor(goal, dayView.day);
+          const ended = dayView.day >= goal.horizon;
           const filled = dots.filter((dot) => dot.state !== "empty").length;
           return (
             <WeekDayRow
@@ -161,7 +179,7 @@ export async function WeekScreen() {
               isToday={dayView.day === today}
               link={linkFor(dayView.day)}
               dots={dots}
-              note={noteFor(dayView.day, today, filled, dots.length, t)}
+              note={ended ? undefined : noteFor(dayView.day, today, filled, dots.length, t)}
               rule={index < view.days.length - 1}
             />
           );
@@ -186,33 +204,39 @@ export async function WeekScreen() {
 
       {goals.length === 0 ? (
         <EmptyWeek title={t("week.empty.title")} action={t("week.empty.action")} />
-      ) : (
-        goals.map(goalSection)
-      )}
-
-      {hasGoalless ? (
-        <section>
-          <SectionLabel>{t("week.oneOffs.title")}</SectionLabel>
-          {view.days.map((dayView, index) => {
-            const count = goalless(dayView.day).length;
-            const dots: WeekDot[] = Array.from({ length: count }, () => ({
-              state: "declared",
-              label: t("week.dot.oneOff"),
-            }));
-            return (
-              <WeekDayRow
-                key={dayView.day}
-                label={dayLabel(dayView.day, weekdayNames)}
-                isToday={dayView.day === today}
-                link={linkFor(dayView.day)}
-                dots={dots}
-                note={goallessNoteFor(dayView.day, today, count, t)}
-                rule={index < view.days.length - 1}
-              />
-            );
-          })}
-        </section>
       ) : null}
+
+      <Face on="desktop">
+        <WeekTableFace week={week} today={today} columns={columns} t={t} />
+      </Face>
+
+      <Face on="phone">
+        {goals.map(goalSection)}
+
+        {hasGoalless ? (
+          <section>
+            <SectionLabel>{t("week.oneOffs.title")}</SectionLabel>
+            {view.days.map((dayView, index) => {
+              const count = goalless(dayView.day).length;
+              const dots: WeekDot[] = Array.from({ length: count }, () => ({
+                state: "declared",
+                label: t("week.dot.oneOff"),
+              }));
+              return (
+                <WeekDayRow
+                  key={dayView.day}
+                  label={dayLabel(dayView.day, weekdayNames)}
+                  isToday={dayView.day === today}
+                  link={linkFor(dayView.day)}
+                  dots={dots}
+                  note={goallessNoteFor(dayView.day, today, count, t)}
+                  rule={index < view.days.length - 1}
+                />
+              );
+            })}
+          </section>
+        ) : null}
+      </Face>
     </Page>
   );
 }
