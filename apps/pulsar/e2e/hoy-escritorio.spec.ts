@@ -1,10 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type { Locator } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, laneNumber, seededPerson } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Hoy at 1024 and beyond (`HoyEscritorio.dc.html`, RNP-11): the goals left, the
@@ -19,23 +17,6 @@ function plusDays(days: number): string {
 
 // A person of this spec's own: the counts span the identity, so only a fresh
 // one can promise them. Registered under the suite's run, whose teardown drops it.
-function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
-  );
-  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
-  const previous = process.env.HARNESS_LANE;
-  process.env.HARNESS_LANE = String(lane);
-  try {
-    return { id: seededPerson().id, sessionFile };
-  } finally {
-    if (previous === undefined) delete process.env.HARNESS_LANE;
-    else process.env.HARNESS_LANE = previous;
-  }
-}
-
 async function box(locator: Locator) {
   const rect = await locator.boundingBox();
   if (!rect) throw new Error("no box");
@@ -74,7 +55,7 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9850 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const { measuredId } = await seedGoals(db, person.id, stamp);
@@ -143,7 +124,7 @@ test("at 360 the sections come in the phone's own order and the figure is not dr
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9850 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   await seedGoals(db, person.id, stamp);
@@ -195,7 +176,7 @@ test("«N esperan» is dayless plus scheduled at the same moment, and opens /sue
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9850 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   await db`insert into goals.one_offs (user_id, name, day) values (${person.id}, ${`Sin día ${stamp}`}, null)`;
@@ -227,7 +208,7 @@ test("«N esperan» is dayless plus scheduled at the same moment, and opens /sue
 });
 
 test("a one-off done at a known instant reads its HH:mm in «hechas hoy» (RP-19)", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(9850 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const name = `Hecha con hora ${Date.now()}`;
   const [done] = await db<{ id: string }[]>`

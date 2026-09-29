@@ -1,10 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, laneNumber, seededPerson } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RNP-07 over every built screen and every sheet: at 360 × 740 (the
@@ -261,30 +259,13 @@ test("the archive sheet holds at 360 (RNP-07)", async ({ page, db, personId }) =
 // RNP-11 · RP-21 · RP-26: this slice's new states at 360. A person of their
 // own, since an ended goal and a scheduled one-off are states the shared
 // identity's siblings would count.
-function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
-  );
-  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
-  const previous = process.env.HARNESS_LANE;
-  process.env.HARNESS_LANE = String(lane);
-  try {
-    return { id: seededPerson().id, sessionFile };
-  } finally {
-    if (previous === undefined) delete process.env.HARNESS_LANE;
-    else process.env.HARNESS_LANE = previous;
-  }
-}
-
 async function withNewStates(
   browser: Browser,
   baseURL: string | undefined,
   db: postgres.Sql,
   run: (page: Page, seed: { endedId: string; scheduledName: string }) => Promise<void>,
 ): Promise<void> {
-  const person = mintDisposablePerson(9910 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ baseURL, storageState: person.sessionFile });
   const stamp = Date.now();
   const scheduledName = `Programada de medición ${stamp}`;

@@ -115,7 +115,12 @@ test("undoing a done one-off whose fact is already gone says so and keeps the ro
   `;
   try {
     await page.goto("/");
-    await page.getByRole("button", { name: "Marcar como hecho" }).last().click();
+    // This person's list is shared with other specs: mark this row, never whichever is last.
+    await page
+      .locator("button", { hasText: name })
+      .locator("xpath=ancestor::div[1]")
+      .getByRole("button", { name: "Marcar como hecho" })
+      .click();
     const undo = page.getByRole("button", { name: `Deshacer: ${name}` });
     await expect(undo).toBeVisible();
 

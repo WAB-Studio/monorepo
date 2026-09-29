@@ -1,11 +1,9 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type postgres from "postgres";
 
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-import { test, expect, laneNumber, seededPerson } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 
 // `/metas` lists an ended goal apart, under «terminadas», between the open
 // ones and «Archivadas» (RP-26, RP-24, RNP-07).
@@ -19,23 +17,6 @@ function plusDays(days: number): string {
 // A person of this spec's own: only a fresh identity has no other goal, which
 // the only-ended case needs. Registered under the suite's run, whose teardown
 // drops it.
-function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
-  );
-  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
-  const previous = process.env.HARNESS_LANE;
-  process.env.HARNESS_LANE = String(lane);
-  try {
-    return { id: seededPerson().id, sessionFile };
-  } finally {
-    if (previous === undefined) delete process.env.HARNESS_LANE;
-    else process.env.HARNESS_LANE = previous;
-  }
-}
-
 async function seedGoal(
   db: postgres.Sql,
   personId: string,
@@ -58,7 +39,7 @@ test("one open, one ended and one archived goal list each under its heading, in 
   db,
 }) => {
   const url = baseURL ?? "http://localhost:3200";
-  const person = mintDisposablePerson(9700 + laneNumber(), url);
+  const person = mintDisposablePerson(url);
   const context = await browser.newContext({ storageState: person.sessionFile });
   try {
     const page = await context.newPage();
@@ -121,7 +102,7 @@ test("a person whose only goal ended lands on the list, not on /metas/nueva", as
   db,
 }) => {
   const url = baseURL ?? "http://localhost:3200";
-  const person = mintDisposablePerson(9800 + laneNumber(), url);
+  const person = mintDisposablePerson(url);
   const context = await browser.newContext({ storageState: person.sessionFile });
   try {
     const page = await context.newPage();

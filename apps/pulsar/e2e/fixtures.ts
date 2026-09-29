@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -25,8 +27,7 @@ export function sessionFile(): string {
 type StoredCookie = { name: string; value: string };
 type StorageState = { cookies: StoredCookie[]; origins: unknown[] };
 
-function loadStorageState(): StorageState {
-  const file = sessionFile();
+function loadStorageState(file = sessionFile()): StorageState {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
   } catch {
@@ -71,6 +72,23 @@ function claimsFromAccessToken(token: string): { id: string; email: string } {
 export function seededPerson(): { id: string; email: string } {
   const { cookies } = loadStorageState();
   return claimsFromAccessToken(accessTokenFromCookies(cookies));
+}
+
+// A person of a spec's own, under a session file no other test can name: the
+// path is a fresh UUID, never a number two files could pick alike. Two
+// workers minting one path overwrote each other's cookie, and the teardown of
+// one dropped the rows the other was measuring. Registered under the suite's
+// run (`HARNESS_RUN_ID`), whose teardown drops the identity.
+export function mintDisposablePerson(baseUrl: string): { id: string; sessionFile: string } {
+  const file = `private/disposable/${randomUUID()}.json`;
+  execFileSync(
+    process.execPath,
+    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
+    { env: { ...process.env, MINT_SESSION_FILE: file, PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
+  );
+  const absolute = resolve(process.cwd(), file);
+  const { cookies } = loadStorageState(absolute);
+  return { id: claimsFromAccessToken(accessTokenFromCookies(cookies)).id, sessionFile: absolute };
 }
 
 type Fixtures = {

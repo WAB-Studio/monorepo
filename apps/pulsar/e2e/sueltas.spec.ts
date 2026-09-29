@@ -1,9 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
 
 import type postgres from "postgres";
 
-import { test, expect, laneNumber, seededPerson } from "./fixtures";
+import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // The one-offs with no day wait in `/sueltas` (`SueltasSinDia.dc.html`): each
@@ -32,23 +30,6 @@ async function seedDayless(
 // rows, so only a fresh identity can promise that nothing else waits. Minted
 // at a disposable lane (offset from `fases.spec.ts` and `varias-metas.spec.ts`)
 // and registered under the suite's run, whose teardown drops it.
-function mintDisposablePerson(lane: number, baseUrl: string): { id: string; sessionFile: string } {
-  execFileSync(
-    process.execPath,
-    ["--import", "tsx", "--env-file=.env.local", "scripts/harness/mint-session.ts"],
-    { env: { ...process.env, HARNESS_LANE: String(lane), PULSAR_BASE_URL: baseUrl }, stdio: "pipe" },
-  );
-  const sessionFile = resolve(process.cwd(), `private/session-${lane}.json`);
-  const previous = process.env.HARNESS_LANE;
-  process.env.HARNESS_LANE = String(lane);
-  try {
-    return { id: seededPerson().id, sessionFile };
-  } finally {
-    if (previous === undefined) delete process.env.HARNESS_LANE;
-    else process.env.HARNESS_LANE = previous;
-  }
-}
-
 async function rowOf(db: postgres.Sql, oneOffId: string) {
   return db<{ day: string | null }[]>`
     select day::text as day from goals.one_offs where id = ${oneOffId}
@@ -160,7 +141,7 @@ test("deleted from the sheet its row is gone from the database, and the last one
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(9600 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const name = `Suelta a borrar de la lista ${Date.now()}`;
   const oneOffId = await seedDayless(db, person.id, name);
   const context = await browser.newContext({ storageState: person.sessionFile });
