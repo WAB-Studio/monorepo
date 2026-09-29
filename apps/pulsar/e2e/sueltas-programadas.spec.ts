@@ -221,3 +221,112 @@ test("deleted from the move sheet its row is gone from the database (RP-22)", as
     await db`delete from goals.one_offs where id = ${oneOffId}`;
   }
 });
+
+const MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+test("the scheduled list reads in day order, whatever order the one-offs were made in (RP-21)", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  const person = mintDisposablePerson(9710 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  const stamp = Date.now();
+  // Made latest-day first: creation order is the reverse of day order.
+  const late = await seed(db, person.id, `Orden tarde ${stamp}`, plusDays(9));
+  const early = await seed(db, person.id, `Orden pronto ${stamp}`, plusDays(2));
+  const middle = await seed(db, person.id, `Orden medio ${stamp}`, plusDays(5));
+
+  try {
+    const page = await context.newPage();
+    await page.goto("/sueltas");
+    const rows = page.getByRole("button", { name: new RegExp(`^Orden .* ${stamp}`) });
+    await expect(rows).toHaveCount(3);
+    const texts = await rows.allInnerTexts();
+    expect(texts.map((text) => text.split("\n")[0])).toEqual([
+      `Orden pronto ${stamp}`,
+      `Orden medio ${stamp}`,
+      `Orden tarde ${stamp}`,
+    ]);
+  } finally {
+    await context.close();
+    await db`delete from goals.one_offs where id in (${late}, ${early}, ${middle})`;
+  }
+});
+
+test("«Nada espera» shows only when nothing waits: not with dayless ones alone, not with scheduled ones alone (RP-21)", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  const person = mintDisposablePerson(9720 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  const stamp = Date.now();
+  const empty = /^Nada espera/;
+  let dayless: string | null = null;
+  let scheduled: string | null = null;
+
+  try {
+    const page = await context.newPage();
+    await page.goto("/sueltas");
+    await expect(page.getByText(empty)).toBeVisible();
+
+    dayless = await seed(db, person.id, `Solo sin día ${stamp}`, null);
+    await page.goto("/sueltas");
+    await expect(page.getByRole("button", { name: new RegExp(`^Solo sin día ${stamp}`) })).toBeVisible();
+    await expect(page.getByText(empty)).toHaveCount(0);
+
+    await db`delete from goals.one_offs where id = ${dayless}`;
+    dayless = null;
+    scheduled = await seed(db, person.id, `Solo programada ${stamp}`, plusDays(9));
+    await page.goto("/sueltas");
+    await expect(page.getByRole("button", { name: new RegExp(`^Solo programada ${stamp}`) })).toBeVisible();
+    await expect(page.getByText(empty)).toHaveCount(0);
+  } finally {
+    await context.close();
+    if (dayless) await db`delete from goals.one_offs where id = ${dayless}`;
+    if (scheduled) await db`delete from goals.one_offs where id = ${scheduled}`;
+  }
+});
+
+test("a scheduled day names its month only when it falls outside this week: «martes 30», «martes 30 de octubre» (RP-21)", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  const person = mintDisposablePerson(9730 + laneNumber(), baseURL ?? "http://localhost:3200");
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  const stamp = Date.now();
+  const far = plusDays(14);
+  const farDate = civilDateToDate(far);
+  const farWords = `${words(far)} de ${MONTHS[farDate.getUTCMonth()]}`;
+  const ids: string[] = [];
+  ids.push(await seed(db, person.id, `Lejana ${stamp}`, far));
+  // Monday to Sunday is one week: tomorrow is in it unless today is Sunday.
+  const sunday = civilDateToDate(todayInZone()).getUTCDay() === 0;
+  if (!sunday) ids.push(await seed(db, person.id, `Cercana ${stamp}`, plusDays(1)));
+
+  try {
+    const page = await context.newPage();
+    await page.goto("/sueltas");
+
+    const farRow = page.getByRole("button", { name: new RegExp(`^Lejana ${stamp}`) });
+    await expect(farRow).toBeVisible();
+    expect(await farRow.innerText()).toContain(farWords);
+
+    if (!sunday) {
+      const nearRow = page.getByRole("button", { name: new RegExp(`^Cercana ${stamp}`) });
+      await expect(nearRow).toBeVisible();
+      const near = await nearRow.innerText();
+      expect(near).toContain(words(plusDays(1)));
+      expect(near).not.toMatch(new RegExp(`${words(plusDays(1))} de`));
+      for (const month of MONTHS) expect(near).not.toContain(month);
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.one_offs where id in ${db(ids)}`;
+  }
+});

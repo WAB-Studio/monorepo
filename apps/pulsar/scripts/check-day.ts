@@ -1772,6 +1772,99 @@ async function runEndedGoalScheduledCheck(): Promise<void> {
   }
 }
 
+// Desktop slice survivors. Every row lives in a fixed past week so no other
+// goal of the person can outrank or join it, is seeded under this run's
+// identity, and is deleted by id.
+async function runDesktopSurvivorsCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { getPerson } = await import("@/lib/session");
+  const { weekOf } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runDesktopSurvivorsCheck: no verified session");
+  const userId = person.id;
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  const deviceId = "00000000-0000-4000-8000-0000000000d5";
+
+  async function seedGoal(name: string, horizon: string, opts: { archived?: boolean; unit?: string } = {}) {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at, archived_at)
+      values (${userId}, ${name}, ${horizon}::date, ${opts.unit ?? null}, ${opts.unit ?? null},
+              '2009-12-01T00:00:00Z'::timestamptz, ${opts.archived ? "2010-01-01T00:00:00Z" : null}::timestamptz)
+      returning id
+    `;
+    goalIds.push(row.id);
+    return row.id;
+  }
+
+  try {
+    // 2010-06-07 is a Monday.
+    const monday = "2010-06-07";
+    assert("the fixture Monday is a Monday", weekOf("2010-06-09")[0] === monday, weekOf("2010-06-09")[0]);
+
+    // Hoy's all-ended card names the goal that ended last, and never an
+    // archived one, however late its horizon.
+    await seedGoal("survivor first-ended", "2010-06-01");
+    await seedGoal("survivor last-ended", "2010-06-05");
+    await seedGoal("survivor archived-later", "2010-06-06", { archived: true });
+    const ended = (await loadDay("2010-06-09")).lastEnded;
+    assert(
+      "lastEnded names the goal that ended last, not the first and not an archived one",
+      ended?.name === "survivor last-ended",
+      `lastEnded = ${JSON.stringify(ended)}`,
+    );
+
+    // A goal that ended on or before the week's Monday never draws in the week.
+    const beforeWeek = await seedGoal("survivor ended before week", "2010-06-03");
+    const onMonday = await seedGoal("survivor ends on monday", monday);
+    const inWeek = await seedGoal("survivor ends in week", "2010-06-08");
+    const week = await loadWeek("2010-06-09");
+    const weekIds = week.goals.map((goal) => goal.id);
+    assert(
+      "loadWeek omits a goal whose horizon is before the week and one whose horizon is the Monday",
+      !weekIds.includes(beforeWeek) && !weekIds.includes(onMonday),
+      `ended-before present ${weekIds.includes(beforeWeek)}, ends-on-monday present ${weekIds.includes(onMonday)}`,
+    );
+    assert("loadWeek keeps a goal that ends inside the week", weekIds.includes(inWeek), `ids = ${JSON.stringify(weekIds)}`);
+
+    // The weekly figure reads evidence from every earlier day of the week,
+    // and none from the week before.
+    const measured = await seedGoal("survivor measured", "2099-12-31", { unit: "searches" });
+    const [source] = await db<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (${userId}, ${measured}, 'survivor evidence', 'daily', 'evidence', ${source.id}, 1,
+              '2009-12-01T00:00:00Z'::timestamptz)
+    `;
+    const lookupAt = ["2010-06-07T17:00:00Z", "2010-06-07T18:00:00Z", "2010-06-06T17:00:00Z"];
+    for (const [i, at] of lookupAt.entries()) {
+      await db`
+        insert into reading.lookups
+          (user_id, device_id, local_id, at, received_at, text, normalised, kind, outcome,
+           dictionary_ready, record_schema)
+        values (${userId}, ${deviceId}, ${i + 1}, ${at}::timestamptz, ${at}::timestamptz, 'x', 'x',
+                'word', 'exact', true, 1)
+      `;
+    }
+    const measure = (await loadDay("2010-06-09")).weekMeasure[measured];
+    assert(
+      "weekMeasure on Wednesday counts Monday's two searches and not the Sunday before",
+      measure === 2,
+      `weekMeasure = ${measure}, seeded 2 on Monday and 1 on the Sunday before`,
+    );
+  } finally {
+    await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
+    await db.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -1850,6 +1943,7 @@ async function runMain(): Promise<void> {
   await runCreatedOnAndOneOffsCheck();
   await runDaylessCountAndOrderCheck();
   await runEndedGoalScheduledCheck();
+  await runDesktopSurvivorsCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
