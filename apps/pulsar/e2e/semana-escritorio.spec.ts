@@ -1,3 +1,6 @@
+import { randomBytes, randomUUID } from "node:crypto";
+
+import type { BrowserContext } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
@@ -57,21 +60,85 @@ async function seedCommitment(
   return row.id;
 }
 
+// Registered under the suite's run the way `mint-session.ts` registers the
+// first person; the run's teardown drops it if this spec cannot.
+async function createPerson(db: postgres.Sql): Promise<string> {
+  const runId = process.env.HARNESS_RUN_ID?.trim();
+  if (!runId) throw new Error("HARNESS_RUN_ID is unset: this spec runs under check:e2e's own run");
+  const id = randomUUID();
+  const email = `harness-pulsar-${id}@example.invalid`;
+  await db.begin(async (tx) => {
+    await tx`
+      insert into auth.users (
+        id, instance_id, aud, role, email, email_confirmed_at,
+        encrypted_password, confirmation_token, recovery_token,
+        email_change, email_change_token_current, email_change_token_new,
+        email_change_confirm_status, phone_change, phone_change_token,
+        reauthentication_token, raw_app_meta_data, raw_user_meta_data,
+        is_sso_user, is_anonymous, created_at, updated_at)
+      values (
+        ${id}, '00000000-0000-0000-0000-000000000000', 'authenticated',
+        'authenticated', ${email}, now(),
+        '', '', '',
+        '', '', '',
+        0, '', '',
+        '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+        false, false, now(), now())`;
+    await tx`
+      insert into harness.identities (user_id, run_id, email, disposition)
+      values (${id}, ${runId}, ${email}, 'ephemeral')`;
+  });
+  return id;
+}
+
+// The real `/auth/confirm` redemption `mint-session.ts` performs, its cookies
+// landing in this context's own jar.
+async function signIn(context: BrowserContext, db: postgres.Sql, personId: string) {
+  const hash = randomBytes(32).toString("hex");
+  const [{ email }] = await db<{ email: string }[]>`
+    update auth.users set recovery_token = ${hash}, recovery_sent_at = now(), updated_at = now()
+    where id = ${personId} returning email`;
+  await db`
+    insert into auth.one_time_tokens (id, user_id, token_type, token_hash, relates_to, created_at, updated_at)
+    values (${randomUUID()}, ${personId}, 'recovery_token', ${hash}, ${email}, now(), now())`;
+  const response = await context.request.get(`/auth/confirm?token_hash=${hash}&type=magiclink`, {
+    maxRedirects: 0,
+  });
+  const location = response.headers()["location"];
+  if (!location || location.includes("error=")) {
+    throw new Error(`/auth/confirm refused the token: ${location}`);
+  }
+}
+
+async function dropPerson(db: postgres.Sql, id: string) {
+  await db`delete from goals.facts where user_id = ${id}`;
+  await db`delete from goals.one_offs where user_id = ${id}`;
+  await db`delete from goals.goals where user_id = ${id}`;
+  await db`delete from auth.users where id = ${id}`;
+  await db`delete from harness.identities where user_id = ${id}`;
+}
+
 const longAgo = () => new Date(Date.now() - 12 * 86_400_000);
 
 test("at 1280 the week is a table: commitments down, days across, today's fact in today's cell, a one-off a named row (RNP-11, RP-16, RP-20)", async ({
-  page,
+  browser,
+  baseURL,
   db,
-  personId,
 }) => {
+  // A person of this spec's own: siblings seed on the suite's person, so the
+  // «hechos» tally of this page is exactly what this test seeds.
+  const personId = await createPerson(db);
+  const context = await browser.newContext({ baseURL: baseURL! });
+  const page = await context.newPage();
+  await signIn(context, db, personId);
   const stamp = Date.now();
   const goalName = `Meta tabla ${stamp}`;
   const first = `Anki ${stamp}`;
   const second = `Leer ${stamp}`;
   const named = `Suelta con meta ${stamp}`;
   const loose = `Suelta libre ${stamp}`;
-  const goalId = await seedGoal(db, personId, goalName, shift(today, 60));
   try {
+    const goalId = await seedGoal(db, personId, goalName, shift(today, 60));
     const firstId = await seedCommitment(db, personId, goalId, first, longAgo());
     // Created now: no earlier day of the week held it.
     await seedCommitment(db, personId, goalId, second, new Date());
@@ -115,42 +182,13 @@ test("at 1280 the week is a table: commitments down, days across, today's fact i
     }
     await expect(table.getByRole("rowheader", { name: "Sueltas" })).toBeVisible();
 
-    // Sibling specs seed on this identity, so the DB read and the page read
-    // repeat together until they land on the same moment.
-    const cutoff = new Date(`${shift(today, 1)}T05:00:00Z`);
-    const kinds = todayIndex < 5 ? ["daily", "weekdays"] : ["daily"];
-    await expect
-      .poll(
-        async () => {
-          const [{ done, total }] = await db<{ done: number; total: number }[]>`
-            with open_goals as (
-              select id from goals.goals
-              where user_id = ${personId} and archived_at is null and horizon > ${today}
-            )
-            select
-              (select count(*)::int from goals.facts f
-                where f.user_id = ${personId} and f.day = ${today}
-                  and (f.commitment_id in (select c.id from goals.commitments c where c.goal_id in (select id from open_goals))
-                    or (f.one_off_id is not null and (f.goal_id is null or f.goal_id in (select id from open_goals))))) as done,
-              (select count(*)::int from goals.commitments c
-                where c.user_id = ${personId} and c.goal_id in (select id from open_goals)
-                  and c.cadence_kind = any(${kinds}) and c.created_at < ${cutoff})
-              + (select count(*)::int from goals.facts f
-                where f.user_id = ${personId} and f.day = ${today} and f.one_off_id is not null
-                  and (f.goal_id is null or f.goal_id in (select id from open_goals))) as total
-          `;
-          await page.reload();
-          const cell = await page.getByRole("table").locator("tfoot td").nth(todayIndex).textContent();
-          const expected = `${done} de ${total}`;
-          return cell === expected ? "match" : `${cell} vs ${expected}`;
-        },
-        { timeout: 60_000 },
-      )
-      .toBe("match");
+    // Only this spec's person owns these rows: 3 declared of 4 on the day
+    // (the two commitments and the two one-offs; one commitment has no fact).
+    await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("3 de 4");
     await expect(table.getByRole("rowheader", { name: "hechos" })).toBeVisible();
   } finally {
-    await db`delete from goals.one_offs where user_id = ${personId} and name in (${named}, ${loose})`;
-    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+    await context.close();
+    await dropPerson(db, personId);
   }
 });
 
