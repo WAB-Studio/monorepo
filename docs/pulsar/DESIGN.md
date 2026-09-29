@@ -185,6 +185,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Renombrar.** No board draws the rename sheet; "Decisions taken here" says it takes the retire
   sheet's own shape, with a field. Decided 2026-09-27 by the coordinator, the user having delegated
   it.
+- **Hoy with every goal ended, at 1024 and wider.** `HoyTodasTerminadas.dc.html` draws the phone
+  face only. At 1024 the message and its two buttons sit in the left column inside a `Panel`, the
+  buttons stacked as on the phone; goalless one-offs and «hechas hoy» keep the right column.
+  Decided 2026-09-29 by the coordinator.
 - **Archivar.** No board draws the archive sheet, the outlined block that opens it, or the solid
   «Reabrir» that replaces it once a goal is archived; "Decisions taken here" says all three. Decided
   2026-09-27 by the coordinator, the user having delegated it.

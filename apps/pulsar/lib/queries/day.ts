@@ -121,6 +121,7 @@ type GoalsQueryRow = {
   dayless_count: number;
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
+  last_ended: { name: string; horizon: string } | null;
 };
 
 // A goal is open on `day` while its horizon, the first day after it, lies
@@ -225,7 +226,12 @@ async function queryGoalsRow(
            and (o.goal_id is null or exists (
              select 1 from "goals"."goals" g
              where g.id = o.goal_id and ${openGoal("g", day)}
-           ))) as scheduled_count
+           ))) as scheduled_count,
+      (select jsonb_build_object('name', g.name, 'horizon', g.horizon)
+         from "goals"."goals" g
+         where g.archived_at is null and g.horizon <= ${day}::date
+         order by g.horizon desc
+         limit 1) as last_ended
   `);
 
   return row;
@@ -444,6 +450,8 @@ export async function loadDay(day: string): Promise<{
   doneOneOffs: DoneOneOffSummary[];
   daylessCount: number;
   scheduledCount: number;
+  // The open-less day's own words: the goal whose end came last (name, horizon).
+  lastEnded: { name: string; horizon: string } | null;
   weekMeasure: Record<string, number>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
@@ -503,6 +511,7 @@ export async function loadDay(day: string): Promise<{
     })),
     daylessCount: row.dayless_count,
     scheduledCount: row.scheduled_count,
+    lastEnded: row.last_ended,
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),
