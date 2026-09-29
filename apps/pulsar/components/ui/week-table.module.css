@@ -37,7 +37,14 @@
   border-radius: 10px 10px 0 0;
 }
 
+/* The link fills the header cell: its 8px padding is taken back by a negative
+   margin, so the 33px box is the row's own height and the target clears 32. */
 .dayLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 33px;
+  margin-block: -8px;
   color: inherit;
   text-decoration: underline;
 }
