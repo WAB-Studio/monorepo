@@ -87,6 +87,7 @@ let scheduleOneOff: typeof import("@/app/actions/one-offs").scheduleOneOff;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
 let addPhase: typeof import("@/app/actions/plan").addPhase;
 let addCommitment: typeof import("@/app/actions/plan").addCommitment;
+let reopenGoal: typeof import("@/app/actions/plan").reopenGoal;
 let declareFact: typeof import("@/app/actions/facts").declareFact;
 let todayInZone: typeof import("@/lib/zone").todayInZone;
 let PAST_DAY_LIMIT: number;
@@ -125,7 +126,7 @@ let fixtureGoalId: string;
 
 before(async () => {
   installStubs(loadCookies());
-  ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment } = await import("@/app/actions/plan"));
+  ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal } = await import("@/app/actions/plan"));
   ({ createOneOff, scheduleOneOff } = await import("@/app/actions/one-offs"));
   ({ declareFact } = await import("@/app/actions/facts"));
   ({ todayInZone } = await import("@/lib/zone"));
@@ -547,5 +548,50 @@ test("addPhase and addCommitment: an ended or archived goal is refused as a goal
     assert.deepEqual(await written(open.goalId), { phases: 1, commitments: 1 });
   } finally {
     await sql`delete from goals.goals where id in ${sql([open.goalId, ended.id, archived.id])}`;
+  }
+});
+
+test("addPhase and addCommitment: moving an ended goal's end forward, or reopening an archived one, lets the adds land again", async () => {
+  const [ended] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, 'RP-88 reabrir terminada', ${today}, now() - interval '20 days') returning id`;
+  const [archived] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, archived_at)
+    values (${personId}, 'RP-88 reabrir archivada', ${shiftDay(today, 60)}, now()) returning id`;
+  const commitment = (goalId: string) => ({
+    goalId,
+    name: "RP-88 compromiso reabierto",
+    cadenceKind: "daily" as const,
+    satisfaction: "tap" as const,
+  });
+  const written = async (goalId: string) => {
+    const [row] = await sql<{ phases: number; commitments: number }[]>`
+      select (select count(*)::int from goals.phases where goal_id = ${goalId}) as phases,
+             (select count(*)::int from goals.commitments where goal_id = ${goalId}) as commitments`;
+    return row;
+  };
+  const span = { aim: "RP-88 fase reabierta", startsOn: shiftDay(today, 1), endsOn: shiftDay(today, 8) };
+  try {
+    const stillEnded = await addPhase({ goalId: ended.id, ...span });
+    assert.equal(stillEnded.ok, false);
+
+    const moved = await moveHorizon({ goalId: ended.id, horizon: shiftDay(today, 30) });
+    assert.equal(moved.ok, true);
+    const endedPhase = await addPhase({ goalId: ended.id, ...span });
+    assert.equal(endedPhase.ok, true);
+    const endedCommitment = await addCommitment(commitment(ended.id));
+    assert.equal(endedCommitment.ok, true);
+    assert.deepEqual(await written(ended.id), { phases: 1, commitments: 1 });
+
+    const stillArchived = await addPhase({ goalId: archived.id, ...span });
+    assert.equal(stillArchived.ok, false);
+
+    const reopened = await reopenGoal({ goalId: archived.id });
+    assert.equal(reopened.ok, true);
+    const archivedPhase = await addPhase({ goalId: archived.id, ...span });
+    assert.equal(archivedPhase.ok, true);
+    assert.deepEqual(await written(archived.id), { phases: 1, commitments: 0 });
+  } finally {
+    await sql`delete from goals.goals where id in ${sql([ended.id, archived.id])}`;
   }
 });
