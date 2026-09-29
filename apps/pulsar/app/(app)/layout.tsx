@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BottomNav } from "@/components/ui";
 import { getPerson } from "@/lib/session";
-import { civilDateLabel, todayInZone } from "@/lib/zone";
+import { civilDateShort, todayInZone } from "@/lib/zone";
 
 /**
  * The signed-in shell: the day, `/metas/**` and nothing else — `/entrar` and
@@ -31,7 +31,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           goalLabel={t("goal")}
           appName={common("appName")}
           goalsLabel={t("goals")}
-          date={civilDateLabel(todayInZone(), true)}
+          date={civilDateShort(todayInZone())}
           theme={{ toLightLabel: theme("toLight"), toDarkLabel: theme("toDark") }}
         />
       ) : null}

@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BottomNav } from "@/components/ui";
 
-import { civilDateLabel, todayInZone } from "@/lib/zone";
+import { civilDateShort, todayInZone } from "@/lib/zone";
 
 import AppNotFound from "./(app)/not-found";
 
@@ -26,7 +26,7 @@ export default async function NotFound() {
         goalLabel={nav("goal")}
         appName={common("appName")}
         goalsLabel={nav("goals")}
-        date={civilDateLabel(todayInZone(), true)}
+        date={civilDateShort(todayInZone())}
         theme={{ toLightLabel: theme("toLight"), toDarkLabel: theme("toDark") }}
       />
     </>

@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures";
-import { civilDateLabel, todayInZone } from "@/lib/zone";
+import { civilDateShort, todayInZone } from "@/lib/zone";
 
 // RNP-11: every signed-in screen stands in the desktop frame — the rail's
 // name, its three entries, today's date and the face toggle at its foot.
@@ -19,7 +19,7 @@ for (const [path, marked] of ROUTES) {
     await expect(rail).toContainText("Bitácora");
     await expect(rail).toContainText("de metas");
     await expect(rail.getByRole("link")).toHaveCount(3);
-    await expect(rail).toContainText(civilDateLabel(todayInZone(), true));
+    await expect(rail).toContainText(civilDateShort(todayInZone()));
     await expect(rail.getByRole("button")).toHaveCount(1);
 
     const current = rail.locator("a[aria-current='page']");
@@ -51,7 +51,7 @@ test("at 360 the bottom nav is three tabs with no name, date or toggle", async (
   const nav = page.getByRole("navigation");
   await expect(nav.getByRole("link")).toHaveCount(3);
   await expect(nav.getByText("Bitácora")).toBeHidden();
-  await expect(nav.getByText(civilDateLabel(todayInZone(), true))).toBeHidden();
+  await expect(nav.getByText(civilDateShort(todayInZone()))).toBeHidden();
   await expect(nav.getByRole("button")).toBeHidden();
   await expect(nav.getByRole("link", { name: "Meta", exact: true })).toBeVisible();
 });
