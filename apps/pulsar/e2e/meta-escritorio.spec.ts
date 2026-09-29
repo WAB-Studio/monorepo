@@ -83,6 +83,29 @@ test("at 1280 the commitments sit left, the end and the phases right, one of eac
   }
 });
 
+// Elements drawing the Panel card: a 1px border with a 14px radius.
+async function panelCards(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      [...document.querySelectorAll("body *")].filter((el) => {
+        const style = getComputedStyle(el);
+        return style.borderTopWidth === "1px" && style.borderTopLeftRadius === "14px";
+      }).length,
+  );
+}
+
+test("at 800 the goal draws no Panel card (RNP-11)", async ({ page, db, personId }) => {
+  const goalId = await seedGoal(db, personId, `Meta media ${Date.now()}`);
+  try {
+    await page.setViewportSize({ width: 800, height: 800 });
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText("Compromiso ancho", { exact: true })).toBeVisible();
+    expect(await panelCards(page)).toBe(0);
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});
+
 test("at 360 the order is the phone's: end, commitments, phases, then «Archivar esta meta» (RNP-11)", async ({
   page,
   db,
@@ -101,6 +124,7 @@ test("at 360 the order is the phone's: end, commitments, phases, then «Archivar
     expect(commitment!.y).toBeLessThan(phase!.y);
     expect(phase!.y).toBeLessThan(archive!.y);
 
+    expect(await panelCards(page)).toBe(0);
     await expect(page.getByRole("button", { name: "Renombrar" })).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
   } finally {
