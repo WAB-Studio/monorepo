@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { type ReactNode, useId } from "react";
 import { useTranslations } from "next-intl";
 
 import { Chip, Field, Flex, Text } from "@/components/ui";
@@ -16,6 +16,8 @@ export type DayChoiceProps = {
   min: string;
   // Set when the schema refused the picked date; already a catalogue key.
   error?: string | null;
+  // Sits under the chips and the date, indented with them («Anotar»).
+  action?: ReactNode;
 };
 
 const KINDS: DayChoiceKind[] = ["today", "tomorrow", "other", "none"];
@@ -24,7 +26,7 @@ const KINDS: DayChoiceKind[] = ["today", "tomorrow", "other", "none"];
  * «Para cuándo» (`HoySueltaDia.dc.html`): four chips and, for «otro día», a
  * date. Draws no state of its own; the caller holds the choice.
  */
-export function DayChoice({ value, onChange, allowNone, min, error }: DayChoiceProps) {
+export function DayChoice({ value, onChange, allowNone, min, error, action }: DayChoiceProps) {
   const t = useTranslations();
   const errorId = useId();
 
@@ -61,6 +63,7 @@ export function DayChoice({ value, onChange, allowNone, min, error }: DayChoiceP
           ) : null}
         </>
       ) : null}
+      {action}
     </Flex>
   );
 }

@@ -48,7 +48,7 @@ test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds
   try {
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/");
-    await page.getByRole("link", { name: /sin día$/ }).click();
+    await page.getByRole("link", { name: /(espera|esperan)$/ }).click();
     await expect(page).toHaveURL(/\/sueltas$/);
 
     await expect(page.getByRole("button", { name: new RegExp(`^${name} de `) })).toBeVisible();
