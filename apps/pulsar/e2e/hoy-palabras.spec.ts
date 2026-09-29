@@ -171,6 +171,8 @@ test("at 1280 the all-ended message stands in a card, its title and buttons padd
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     const title = page.getByText("Hoy no pide nada.");
+    await expect(page.getByRole("link", { name: "Abrir otra meta" })).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
     const card = title.locator("xpath=..");
     await expect(card).toHaveCSS("border-radius", "14px");
     const [cardBox, titleBox] = [await card.boundingBox(), await title.boundingBox()];

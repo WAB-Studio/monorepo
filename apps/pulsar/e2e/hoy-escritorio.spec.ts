@@ -97,6 +97,9 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     expect(revisionNumber).toBe("12");
 
     await page.goto("/");
+    // `load` fires with the loading fallback still standing; measure the settled page.
+    await expect(page.getByText(`Hechas hoy`, { exact: true })).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
 
     const goalLeft = await box(page.getByText(`Meta con cifra ${stamp}`, { exact: true }));
@@ -156,6 +159,8 @@ test("at 360 the sections come in the phone's own order and the figure is not dr
     const page = await context.newPage();
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/");
+    await expect(page.getByText(`Hechas hoy`, { exact: true })).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     const order = await page.locator("main section").evaluateAll((sections) =>

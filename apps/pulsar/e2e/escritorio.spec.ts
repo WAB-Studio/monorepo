@@ -431,11 +431,13 @@ deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and t
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1024, 800);
   try {
     await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
     const goalCard = await cardWidth(page.getByText(LAYOUT_GOAL, { exact: true }).first());
     const oneOffs = await cardWidth(page.getByText("Sueltas", { exact: true }).first());
     expect(goalCard).toBeGreaterThan(oneOffs);
 
     await page.goto(`/metas/${desk.layoutGoalId}`);
+    await expect(page.locator("main")).toHaveCount(1);
     const commitments = await cardWidth(page.getByText(LONG_COMMITMENT, { exact: true }));
     const end = page.getByText("el final", { exact: true });
     const side = await cardWidth(end);
@@ -467,8 +469,10 @@ deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on 
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1280, 800);
   try {
     await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
     expect(await cardWidth(page.getByText("Sueltas", { exact: true }).first())).toBe(360);
     await page.goto(`/metas/${desk.layoutGoalId}`);
+    await expect(page.locator("main")).toHaveCount(1);
     expect(await cardWidth(page.getByText("el final", { exact: true }))).toBe(380);
   } finally {
     await context.close();

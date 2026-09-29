@@ -2533,3 +2533,17 @@ limit included, into one word.
 - Read the server log for `magic link verification failed linkInvalid <name · status · code · message>`
   before calling it anything. The route logs Auth's own answer since this entry.
 - Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
+
+## `page.goto` returns with the loading fallback still standing
+
+Measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
+(`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a
+never-used lane. The failure's `error-context.md` showed `main` holding the `(app)/loading.tsx` skeleton
+beside the streamed page. The CI runner reaches the database slower, so `load` fires before the
+Suspense boundary swaps in the content; a box read straight after `goto` measures the skeleton or nothing.
+A fresh identity was not the cause.
+
+- Anchor every measuring spec on the settled page before its first box: a visible element of the
+  content and `await expect(page.locator("main")).toHaveCount(1)`.
+- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
+  from inside the repo) before guessing at a red the local suite does not show.
