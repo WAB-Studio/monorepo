@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { weekSpan } from "@/lib/day/weeks";
-import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, laneNumber } from "./fixtures";
 
@@ -98,7 +98,7 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
       (civilDateToDate(todayInZone()).getTime() - civilDateToDate(openedOn).getTime()) / 86_400_000;
     const backdatedAt = new Date(Date.now() - openedDaysBack * 86_400_000);
     await db`update goals.goals set created_at = ${backdatedAt} where id = ${goalId} and user_id = ${personId}`;
-    expect(dateToCivilDate(backdatedAt)).toBe(openedOn);
+    expect(civilDateInZone(backdatedAt)).toBe(openedOn);
 
     // Facts in two of the three weeks (week 1's own opening day, week 2's
     // own opening day); week 3, today's own, gets none.

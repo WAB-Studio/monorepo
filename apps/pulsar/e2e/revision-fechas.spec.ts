@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, laneNumber } from "./fixtures";
 
@@ -41,6 +41,7 @@ test("each review row prints its dates, week 1 from the opening day to its Sunda
     const openedDaysBack =
       (civilDateToDate(todayInZone()).getTime() - civilDateToDate(openedOn).getTime()) / 86_400_000;
     const backdatedAt = new Date(Date.now() - openedDaysBack * 86_400_000);
+    expect(civilDateInZone(backdatedAt)).toBe(openedOn);
     await db`update goals.goals set created_at = ${backdatedAt} where id = ${goalId} and user_id = ${personId}`;
 
     const week1 = range(openedOn, dayAfter(firstMonday, 6));
@@ -70,6 +71,63 @@ test("each review row prints its dates, week 1 from the opening day to its Sunda
       .nth(0)
       .evaluate((el) => el.getBoundingClientRect().width);
     expect(labelWidth).toBeGreaterThanOrEqual(150);
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});
+
+// A review whose rows include a week that spans two months: every date line
+// stays on one line and the page holds 360px.
+test("a review with a week across two months keeps each date on one line at 360 px (RNP-07)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const lane = laneNumber();
+  const goalName = `Meta fechas mes ${lane} ${Date.now()}`;
+  await page.goto("/metas/nueva");
+  await page.getByLabel("nombre").fill(goalName);
+  await page.getByRole("button", { name: "Abrirla" }).click();
+  await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
+  const goalId = page.url().split("/metas/")[1];
+
+  try {
+    await addMeasure(page, goalId, `Medida fechas mes ${lane} ${Date.now()}`);
+
+    // The latest week, today's included, whose Monday and Sunday sit in different months.
+    let monday = weekOf(todayInZone())[0];
+    while (monday.slice(0, 7) === dayAfter(monday, 6).slice(0, 7)) monday = dayAfter(monday, -7);
+    const openedOn = dayAfter(monday, -14 + 2);
+    const openedDaysBack =
+      (civilDateToDate(todayInZone()).getTime() - civilDateToDate(openedOn).getTime()) / 86_400_000;
+    const backdatedAt = new Date(Date.now() - openedDaysBack * 86_400_000);
+    expect(civilDateInZone(backdatedAt)).toBe(openedOn);
+    await db`update goals.goals set created_at = ${backdatedAt} where id = ${goalId} and user_id = ${personId}`;
+
+    await page.goto(`/metas/${goalId}/revision`);
+    const crossing = range(monday, dayAfter(monday, 6));
+    const items = page.getByRole("listitem");
+    expect(await items.count()).toBeGreaterThanOrEqual(3);
+    await expect(items.filter({ hasText: crossing })).toHaveCount(1);
+
+    const dates = page.locator("li > span:first-child > span");
+    const count = await dates.count();
+    for (let i = 0; i < count; i++) {
+      const box = await dates.nth(i).evaluate((el) => ({
+        height: el.getBoundingClientRect().height,
+        font: parseFloat(getComputedStyle(el).fontSize),
+        overflow: el.scrollWidth - el.clientWidth,
+      }));
+      expect(box.height).toBeLessThan(box.font * 1.8);
+      expect(box.overflow).toBeLessThanOrEqual(0);
+    }
+    // The label column is one width on every row, the longest range included.
+    const labels = await page
+      .locator("li > span:first-child")
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+    expect(new Set(labels).size).toBe(1);
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(360);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

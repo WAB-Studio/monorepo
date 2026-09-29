@@ -43,7 +43,7 @@
 }
 
 .stackLabel {
-  flex: 0 0 96px;
+  flex: 0 0 100px;
   font-size: var(--pulsar-text-meta-size);
   color: var(--pulsar-muted);
 }
@@ -71,7 +71,7 @@
   display: block;
   margin-block-start: 3px;
   font-size: var(--pulsar-text-unit-size);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
   color: var(--pulsar-quiet);
 }
 
