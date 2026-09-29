@@ -228,6 +228,11 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 ## Verification
 
 - Verify once at the end of a slice. Never after a micro-edit.
+- Run every `check:*` script of the app, not only the one named, when a module changes a server
+  action or a query. Measured 2026-09-29: module 88 made `addCommitment` refuse an ended goal and
+  broke three `check:day` probes; neither its worker nor its validator ran `check:day`.
+- Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
+  boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
   2026-09-08. It runs on a pull request only when the change reaches `apps/orbit`, `packages/` or the
   lockfile, and always on the push to `main`. Merge on `typecheck`, `lint` and `voyager-e2e`; read a
