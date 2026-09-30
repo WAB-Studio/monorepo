@@ -9,7 +9,8 @@ import { civilDateToDate, todayInZone } from "@/lib/zone";
 
 import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
-import { flexibleWords, goalWeekProgress } from "./week-progress";
+import { goalWeekProgress } from "./week-progress";
+import { flexibleWords } from "@/lib/day/row-phrases";
 import { WeekTableFace } from "./week-table-face";
 
 type Translate = Awaited<ReturnType<typeof getTranslations>>;

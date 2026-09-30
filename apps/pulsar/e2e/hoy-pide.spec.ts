@@ -69,7 +69,7 @@ test("Hoy says how many it asks, each row's cadence, the hour of a done one and 
     await expect(page.getByText("fase 2 de 3 · desbloquear la boca", { exact: true })).toBeVisible();
     await expect(page.getByText("fase única", { exact: true })).toBeVisible();
     await expect(page.getByText(`solo los ${WEEKDAYS_PLURAL[isoWeekday - 1]}`, { exact: true })).toBeVisible();
-    await expect(page.getByText("3 veces por semana", { exact: true })).toBeVisible();
+    await expect(page.getByText("3 veces por semana · 0 de 3 esta semana", { exact: true })).toBeVisible();
     await expect(page.getByText("10 minutos · 07:40", { exact: true })).toBeVisible();
 
     // A past day carries no count; the goals opened today, so yesterday asks nothing.

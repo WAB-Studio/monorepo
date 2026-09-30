@@ -1997,6 +1997,85 @@ async function runPhasePositionCheck(): Promise<void> {
   }
 }
 
+/**
+ * Module 94: Hoy asks a flexible commitment by its own period. `loadDay`
+ * once selected the week's facts only, so a monthly commitment met in an
+ * earlier week was asked again, and a weekly one met on Monday and Tuesday
+ * was asked on Thursday. Fixed days: 2010-09-03 (Friday), the week of
+ * 2010-09-20, and its Thursday 2010-09-23.
+ */
+async function runFlexibleDayFeedCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runFlexibleDayFeedCheck: no verified session");
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, 'check-day flexible feed probe', '2011-12-31'::date, '2009-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+
+    async function seed(name: string, kind: string, count: number, days: string[]): Promise<string> {
+      const [row] = await db<{ id: string }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+        values (${person!.id}, ${goal.id}, ${name}, ${kind}, ${count}, 'tap', '2009-12-01T00:00:00Z'::timestamptz)
+        returning id
+      `;
+      for (const day of days) {
+        await db`
+          insert into goals.facts (user_id, goal_id, commitment_id, day)
+          values (${person!.id}, ${goal.id}, ${row.id}, ${day}::date)
+        `;
+      }
+      return row.id;
+    }
+
+    const monthly = await seed("feed monthly", "times_per_month", 1, ["2010-09-03"]);
+    const monthlyOpen = await seed("feed monthly open", "times_per_month", 2, ["2010-09-03"]);
+    const weekly = await seed("feed weekly", "times_per_week", 2, ["2010-09-20", "2010-09-21"]);
+
+    const later = await loadDay("2010-09-23");
+    const asked = (id: string) => later.view.slots.some((slot) => slot.commitmentId === id);
+    assert(
+      "a monthly commitment met on the 3rd is not asked on the 23rd, three weeks on",
+      !asked(monthly),
+      `slots asked: ${JSON.stringify(later.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "a monthly commitment one short of its quota is still asked on the 23rd",
+      asked(monthlyOpen),
+      `slots asked: ${JSON.stringify(later.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "a weekly commitment met on Monday and Tuesday is not asked on Thursday",
+      !asked(weekly),
+      `slots asked: ${JSON.stringify(later.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "periodDone counts the month's and the week's days: 1, 1 and 2",
+      later.periodDone[monthly] === 1 && later.periodDone[monthlyOpen] === 1 && later.periodDone[weekly] === 2,
+      `periodDone = ${JSON.stringify(later.periodDone)}`,
+    );
+
+    const factDay = await loadDay("2010-09-03");
+    assert(
+      "the day of the fact still draws the monthly commitment, done, and counts it in periodDone",
+      factDay.view.slots.some((slot) => slot.commitmentId === monthly && slot.satisfied) &&
+        factDay.periodDone[monthly] === 1,
+      `slots = ${JSON.stringify(factDay.view.slots.map((slot) => [slot.commitmentId, slot.satisfied]))}, periodDone = ${JSON.stringify(factDay.periodDone)}`,
+    );
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId}`;
+    await db.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -2079,6 +2158,7 @@ async function runMain(): Promise<void> {
   await runFlexiblePeriodCheck();
   await runEndedThisWeekCheck();
   await runPhasePositionCheck();
+  await runFlexibleDayFeedCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

@@ -111,6 +111,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     phases,
     phasePositions,
     factsByCommitment,
+    periodDone,
   } = loaded;
 
   // A goal opened after the day drawn did not exist on it: it is not drawn
@@ -248,6 +249,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                     target={commitment.target}
                     unit={commitment.unit}
                     cadence={commitment.cadence}
+                    periodDone={periodDone[commitment.id]}
                     factId={logged?.factId}
                     loggedQuantity={logged?.quantity ?? null}
                     note={logged?.note ?? null}

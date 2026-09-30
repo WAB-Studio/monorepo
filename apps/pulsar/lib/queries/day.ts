@@ -3,6 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveDay } from "@/lib/day/derive";
+import { periodDoneOn } from "@/lib/day/period";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek } from "@/lib/day/review";
 import { latestFactByCommitment, type LoggedFact } from "@/lib/day/logged-fact";
@@ -158,6 +159,10 @@ type EvidenceOutcome = {
  * it into the person's own civil day before the cast, the same move
  * `lib/queries/goal.ts`'s `goalSpan` already makes on `created_at`.
  *
+ * `facts` reads from the earlier of the week's Monday and the month's first:
+ * `times_per_month` asks by its month and counts what the week alone never
+ * reads. What is week-bound (the goal's measure) narrows back in TS.
+ *
  * `goals` is the one subquery RP-24 filters: an archived goal is never in
  * this list, and `DayScreen` (module 13) only ever groups a row under a goal
  * it finds here — a commitment or a one-off belonging to an archived goal
@@ -199,7 +204,7 @@ async function queryGoalsRow(
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.day between ${weekStart}::date and ${day}::date) as facts,
+         where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
          from "goals"."one_offs" o
          where o.day <= ${day}::date
@@ -404,6 +409,7 @@ function weekMeasureOf(
   row: GoalsQueryRow,
   evidenceOutcome: EvidenceOutcome,
   day: string,
+  weekStart: string,
 ): Record<string, number> {
   const measure: Record<string, number> = {};
   for (const goal of goals) {
@@ -414,7 +420,7 @@ function weekMeasureOf(
     const facts: DeclaredFact[] = row.facts
       .filter(
         (fact): fact is FactRow & { commitment_id: string } =>
-          fact.goal_id === goal.id && fact.commitment_id !== null,
+          fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= weekStart,
       )
       .map(toDeclaredFact);
     const evidence = evidenceDaysFor(
@@ -479,6 +485,9 @@ export async function loadDay(day: string): Promise<{
   // Each phase's place among its goal's phases, in every phase the goal has.
   phasePositions: Record<string, { ordinal: number; total: number }>;
   factsByCommitment: Record<string, LoggedFact>;
+  // Distinct days a flexible commitment has a fact in its week or month, up
+  // to `day`; absent for a cadence counted by the day.
+  periodDone: Record<string, number>;
 }> {
   const person = await getPerson();
   if (!person) throw new Error("loadDay called without a verified session");
@@ -505,7 +514,9 @@ export async function loadDay(day: string): Promise<{
   // commitment's slot (RP-19's list is this file's own `oneOffs`, read by
   // module 13's screen).
   const dayFacts = row.facts.filter((fact) => fact.day === day);
-  const facts = dayFacts
+  // Every fact of the period, not the day's alone: `asksOn` counts a quota
+  // over the week or the month, and `deriveSlot` reads the day's own by day.
+  const facts = row.facts
     .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);
   const dayEvidence = Object.fromEntries(
@@ -518,6 +529,11 @@ export async function loadDay(day: string): Promise<{
   const goals = row.goals.filter((goal) => goal.horizon > day);
 
   const view = deriveDay({ commitments, phases, facts, evidence, day });
+  const periodDone: Record<string, number> = {};
+  for (const plan of commitments) {
+    const done = periodDoneOn(plan.cadence, plan.id, facts, day);
+    if (done !== null) periodDone[plan.id] = done;
+  }
 
   // `completeOneOff` (module 12) never deletes the one-off's own row — it
   // only writes the fact that explains it — so the `one_offs` subquery
@@ -527,6 +543,7 @@ export async function loadDay(day: string): Promise<{
   // filter and no third query needed.
   return {
     view,
+    periodDone,
     evidence: evidenceOutcome.status,
     goals: goals.map(toGoalSummary),
     oneOffs: row.one_offs.map(toOneOffSummary),
@@ -545,7 +562,7 @@ export async function loadDay(day: string): Promise<{
       name: goal.name,
       lastDay: dayBefore(goal.horizon),
     })),
-    weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day),
+    weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),
