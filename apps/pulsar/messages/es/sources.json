@@ -1,3 +1,4 @@
 {
-  "readingLookups": "diccionario"
+  "readingLookups": "diccionario",
+  "readingLookupsUnit": "{count, plural, one {búsqueda} other {búsquedas}}"
 }
