@@ -86,29 +86,6 @@ async function deleteLookups(db: postgres.Sql, personId: string, deviceId: strin
   await db`delete from reading.lookups where user_id = ${personId} and device_id = ${deviceId}`;
 }
 
-// A second person of this spec's own, registered under the suite's run the way
-// `mint-session.ts` registers the first (the run's teardown drops it if this
-// spec cannot). Nothing else writes its rows, so a count of them cannot race.
-async function createSecondPerson(db: postgres.Sql): Promise<string> {
-  const runId = process.env.HARNESS_RUN_ID?.trim();
-  if (!runId) throw new Error("HARNESS_RUN_ID is unset: this spec runs under check:e2e's own run");
-  const id = randomUUID();
-  const email = `harness-pulsar-${id}@example.invalid`;
-  await db.begin(async (tx) => {
-    await tx`insert into auth.users (id, email) values (${id}, ${email})`;
-    await tx`
-      insert into harness.identities (user_id, run_id, email, disposition)
-      values (${id}, ${runId}, ${email}, 'ephemeral')`;
-  });
-  return id;
-}
-
-async function dropSecondPerson(db: postgres.Sql, id: string): Promise<void> {
-  await db`delete from reading.lookups where user_id = ${id}`;
-  await db`delete from auth.users where id = ${id}`;
-  await db`delete from harness.identities where user_id = ${id}`;
-}
-
 async function lookupCountOf(db: postgres.Sql, personId: string): Promise<number> {
   const [row] = await db<{ count: number }[]>`
     select count(*)::int as count from reading.lookups where user_id = ${personId}
@@ -127,6 +104,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
   page,
   db,
   personId,
+  person,
 }) => {
   const goalName = `Meta evidencia ${Date.now()}`;
   const commitmentName = `Compromiso evidencia ${Date.now()}`;
@@ -137,7 +115,8 @@ test("an evidence commitment names diccionario at creation, stays empty below it
   // Two rows on today's evening: the threshold itself. If the first person's
   // evidence ever counted them, its «one fewer» step below would read satisfied.
   const otherRows = threshold;
-  const otherId = await createSecondPerson(db);
+  // The worker's own person, a harness identity other than the signed-in one.
+  const otherId = person.id;
   const otherDevice = randomUUID();
   let goalId: string | undefined;
 
@@ -224,6 +203,6 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     // only door.
     await deleteLookups(db, personId, deviceId);
     if (goalId) await deleteGoal(db, personId, goalId);
-    await dropSecondPerson(db, otherId);
+    await deleteLookups(db, otherId, otherDevice);
   }
 });
