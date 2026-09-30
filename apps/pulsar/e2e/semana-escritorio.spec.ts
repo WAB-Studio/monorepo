@@ -6,7 +6,7 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// RNP-11, RP-16, RP-20, RP-26 on Semana (`SemanaEscritorio.dc.html`): at 1280
+// RNP-11, RP-16, RP-20, RP-27 on Semana (`SemanaEscritorio.dc.html`): at 1280
 // the week is a table, at 360 it is still the list. Each test seeds its own
 // rows and drops them by id.
 
@@ -202,15 +202,26 @@ test("at 1280 the week is a table: commitments down, days across, today's fact i
   }
 });
 
-test("at 1280 a past day's header opens that day (RP-06)", async ({ page }) => {
-  test.skip(todayIndex === 0, "Monday has no past day in its own week");
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/semana");
-  const past = weekDays[0];
-  const table = page.getByRole("table");
-  await expect(table.getByRole("link", { name: openName(weekDays[todayIndex]) })).toHaveCount(0);
-  await table.getByRole("link", { name: openName(past) }).click();
-  await expect(page).toHaveURL(new RegExp(`/dia/${past}$`));
+// A Monday's week holds no past day: that run asserts no header is a link.
+test("at 1280 a past day's header opens that day (RP-06)", async ({ page, db, personId }) => {
+  const name = `Meta cabecera ${Date.now()}`;
+  const goalId = await seedGoal(db, personId, name, shift(today, 60));
+  try {
+    await seedCommitment(db, personId, goalId, `Compromiso ${name}`, longAgo());
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/semana");
+    const table = page.getByRole("table");
+    await expect(table.getByRole("rowheader", { name: `Compromiso ${name}`, exact: true })).toBeVisible();
+    await expect(table.getByRole("link", { name: openName(weekDays[todayIndex]) })).toHaveCount(0);
+    await expect(table.getByRole("link", { name: /^Abrir el/ })).toHaveCount(todayIndex);
+    if (todayIndex > 0) {
+      const past = weekDays[0];
+      await table.getByRole("link", { name: openName(past) }).click();
+      await expect(page).toHaveURL(new RegExp(`/dia/${past}$`));
+    }
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
 });
 
 test("at 360 the week is still the list, not the table (RNP-07)", async ({ page }) => {
@@ -225,7 +236,7 @@ const endDay = todayIndex === 0 ? shift(today, 1) : today;
 const blankDays = weekDays.filter((day) => day >= endDay);
 const livedDays = weekDays.filter((day) => day < endDay);
 
-test("a goal whose horizon falls this week draws nothing from its horizon on, on both faces (RP-26)", async ({
+test("a goal whose horizon falls this week draws nothing from its horizon on, on both faces (RP-27)", async ({
   page,
   db,
   personId,

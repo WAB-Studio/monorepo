@@ -31,6 +31,9 @@ const creationDay = weekdayIndex(today) === 0 ? shift(today, 1) : today;
 const beforeCreation = weekDays.filter((day) => day < creationDay);
 const fromCreation = weekDays.filter((day) => day >= creationDay);
 const pastDays = weekDays.filter((day) => day < today);
+// What each lived day of the goal reads; a Monday has none, so today's row.
+const countRows: [string, string][] =
+  pastDays.length > 0 ? pastDays.map((day) => [day, "0 de 1"]) : [[today, "hoy"]];
 
 // Noon Bogotá on the civil day: the same civil day in every zone near it.
 function noonOf(day: string): Date {
@@ -85,18 +88,19 @@ test("a goal opened this week draws no dot and no count before it, its dot from 
 });
 
 test("a past day that asked still reads its count (RP-06)", async ({ page, db, personId }) => {
-  test.skip(pastDays.length === 0, "Monday has no past day in its own week");
   const name = `Meta con historia ${Date.now()}`;
   const { goalId } = await seedGoal(db, personId, name, new Date(Date.now() - 30 * 86_400_000));
   try {
     await page.goto("/semana");
     const section = page.locator("section", { hasText: name });
     await expect(section).toBeVisible();
-    for (const day of pastDays) {
-      await expect(
-        section.locator("button, div").filter({ hasText: shortLabel(day) }).first(),
-      ).toContainText("0 de 1");
+    // A Monday's week has no lived day: its own row reads «hoy», never a count.
+    for (const [day, note] of countRows) {
+      await expect(section.locator("button, div").filter({ hasText: shortLabel(day) }).first()).toContainText(note);
     }
+    await expect(section.locator("button, div").filter({ hasText: shortLabel(today) }).first()).not.toContainText(
+      /\d+ de \d+/,
+    );
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
