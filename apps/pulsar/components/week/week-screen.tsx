@@ -163,7 +163,7 @@ export async function WeekScreen() {
 
   // A commitment counted by the week or the month: its own row, under the
   // goal's days, with its cadence and the period's count (`SemanaFlexible.dc.html`).
-  function flexibleSection(goal: GoalSummary) {
+  function flexibleSection(goal: GoalSummary, withEnded = false) {
     const rows = commitments.flatMap((c) => {
       const words = c.goalId === goal.id ? flexibleWords(c, t) : null;
       return words ? [{ commitment: c, words }] : [];
@@ -172,6 +172,7 @@ export async function WeekScreen() {
     return (
       <section key={`${goal.id}-flexible`}>
         <SectionLabel>{t("week.flexible.group", { name: goal.name })}</SectionLabel>
+        {withEnded ? endedNote(goal) : null}
         {rows.map(({ commitment, words }, index) => (
           <Row
             key={commitment.id}
@@ -226,7 +227,8 @@ export async function WeekScreen() {
       flexible === null ||
       commitments.some((c) => c.goalId === goal.id && flexibleWords(c, t) === null) ||
       oneOffFacts.some((fact) => fact.goalId === goal.id);
-    if (!daysToDraw) return flexible;
+    // Its own section carries the ended line when no days section does.
+    if (!daysToDraw) return flexibleSection(goal, true);
 
     return (
       <Fragment key={goal.id}>

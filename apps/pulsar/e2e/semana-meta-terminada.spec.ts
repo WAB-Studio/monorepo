@@ -88,6 +88,28 @@ for (const width of [360, 1280]) {
     });
   });
 
+  test(`at ${width} a goal ended this week with only flexible commitments reads the line too`, async ({
+    browser,
+    baseURL,
+    db,
+  }) => {
+    test.skip(todayIndex === 0, "no day of this week is over on a Monday");
+    await withPerson(browser, baseURL, db, width, async (page, personId) => {
+      const name = `Meta flexible ${Date.now()}`;
+      const id = await seedGoal(db, personId, name, today);
+      await db`delete from goals.commitments where goal_id = ${id}`;
+      await db`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+        values (${personId}, ${id}, 'Empuje', 'times_per_week', 3, 'tap', ${new Date(Date.now() - 60 * 86_400_000)})
+      `;
+      await open(page);
+      await expect(
+        page.getByText(`terminó el ${dayWords(shift(today, -1))} ·`).filter({ visible: true }),
+      ).toHaveCount(1);
+      await expect(page.getByRole("link", { name: `Abrir ${name}` }).filter({ visible: true })).toHaveText("ver");
+    });
+  });
+
   test(`at ${width} a goal still open shows no ended line`, async ({ browser, baseURL, db }) => {
     await withPerson(browser, baseURL, db, width, async (page, personId) => {
       const name = `Meta abierta ${Date.now()}`;
