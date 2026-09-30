@@ -2563,3 +2563,14 @@ A fresh identity was not the cause.
   content and `await expect(page.locator("main")).toHaveCount(1)`.
 - Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
   from inside the repo) before guessing at a red the local suite does not show.
+
+## A pulsar lane has no member identity, so `check:goal-actions` dies there
+
+- Measured 2026-09-30, module 100: in a lane opened with `--app pulsar`, `check:goal-actions` ran 18/2.
+  Both reds said `no member identity — run harness:token for this lane`. The member is minted by
+  orbit's `harness:token`, and that lane has no `apps/orbit/.env.local`.
+- Run `check:goal-actions` from the main checkout, or from a lane opened with `--app finances`.
+  Never insert the member into `auth.users` by hand: a row outside `@repo/harness-registry` is a leak
+  nothing prunes.
+- The 1280 `marco-escritorio.spec.ts` red on a lane's `next dev` is the dev overlay (`<nextjs-portal>`)
+  taking the click. `pulsar-e2e` in CI, on a build, is green on the same commit.
