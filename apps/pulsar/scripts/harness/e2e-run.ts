@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { closeRun, openRun, registeredIdentities } from "@repo/harness-registry";
 import postgres from "postgres";
 
-function runScript(script: string, runId: string): void {
+export function runScript(script: string, runId: string): void {
   execFileSync(
     process.execPath,
     ["--import", "tsx", "--env-file=.env.local", script],
@@ -27,7 +27,7 @@ function runScript(script: string, runId: string): void {
  * stamps `finished_at` over a leak hides it from the reaper for good
  * (`docs/TRAPS.md`, "A run that leaked must not stamp `finished_at`").
  */
-async function dropRun(sql: postgres.Sql): Promise<void> {
+export async function dropRun(sql: postgres.Sql): Promise<void> {
   const failed: string[] = [];
   try {
     const ids = await registeredIdentities(sql, "ephemeral");
