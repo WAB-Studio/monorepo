@@ -2585,3 +2585,24 @@ A fresh identity was not the cause.
   build, which has no badge, so it stayed green.
 - **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/pulsar/next.config.ts`. Never set
   `devIndicators: false`: errors would stay, but the badge is how a dev sees a real issue count.
+
+## The `pulsar-e2e` queue holds one waiting run, and a newer one cancels it
+
+- **What.** The job's `concurrency: { group: pulsar-e2e, cancel-in-progress: false }` keeps one run
+  going and one waiting. A third pull request replaces the waiting one, which ends `cancelled` with no
+  steps. `gh pr checks` prints it as `fail`.
+- **Measured 2026-09-30.** #319 cancelled that way; #329 twice in one hour, each time by a PR opened
+  while it waited (#330, then #331). Both showed `fail 36s`–`1m7s`, `steps: []`.
+- **Do.** Open pulsar pull requests one at a time, each after the previous one's `pulsar-e2e` started.
+  Read `gh api repos/<repo>/actions/jobs/<id> -q .conclusion` before reading a `fail` as a red.
+  Relaunch a cancelled one with `gh run rerun <run> --failed`, or a rebase and push.
+
+## Two `voyager-e2e` runs at once fail `registro.spec.ts:568`
+
+- **What.** `voyager-e2e` has no concurrency group. Two pull requests ran it one minute apart against
+  the one database, and both failed «the foreign row never made it down» at `registro.spec.ts:606`.
+  The spec waits for the sync with `waitForTimeout(2000)`.
+- **Measured 2026-09-30.** #329 at 20:55 and #331 at 20:56, 191 passed / 1 failed each. #330 alone,
+  minutes before, passed. #329's rerun, alone, passed. Logs in `private/ci-reds/`.
+- **Do.** Read two simultaneous `voyager-e2e` reds on that spec as this collision, not as the branch.
+  Rerun it alone. Never answer it with a retry or a longer sleep: the sleep is the defect.
