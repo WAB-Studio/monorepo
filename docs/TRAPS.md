@@ -2572,5 +2572,14 @@ A fresh identity was not the cause.
 - Run `check:goal-actions` from the main checkout, or from a lane opened with `--app finances`.
   Never insert the member into `auth.users` by hand: a row outside `@repo/harness-registry` is a leak
   nothing prunes.
-- The 1280 `marco-escritorio.spec.ts` red on a lane's `next dev` is the dev overlay (`<nextjs-portal>`)
-  taking the click. `pulsar-e2e` in CI, on a build, is green on the same commit.
+
+## The dev badge sits over the desktop rail's toggle, and Playwright reports it as an overlay
+
+- **What.** Under `next dev`, `<nextjs-portal>` holds the always-present Dev Tools badge, bottom-left by
+  default: a 32 px button at x 22–54, y 746–778 at 1280×800. The rail's face toggle is at x 26–70,
+  y 738–782, so `marco-escritorio.spec.ts:31` timed out on «subtree intercepts pointer events».
+- **Measured 2026-09-30, `apps/pulsar`.** No error dialog, no issues count, aria-label
+  «Open Next.js Dev Tools», zero errors or warnings in the dev log and console. CI runs a production
+  build, which has no badge, so it stayed green.
+- **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/pulsar/next.config.ts`. Never set
+  `devIndicators: false`: errors would stay, but the badge is how a dev sees a real issue count.
