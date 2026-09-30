@@ -26,7 +26,7 @@ import {
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -122,12 +122,22 @@ type GoalsQueryRow = {
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
   last_ended: { name: string; horizon: string } | null;
+  ended_this_week: { id: string; name: string; horizon: string }[];
 };
 
 // A goal is open on `day` while its horizon, the first day after it, lies
 // after `day`. The one rule every subquery below that asks "open" reuses.
 function openGoal(alias: string, day: string) {
   return sql`${sql.raw(alias)}.archived_at is null and ${sql.raw(alias)}.horizon > ${day}::date`;
+}
+
+export type EndedGoal = { id: string; name: string; lastDay: string };
+
+// A horizon is the first day after the goal; its last day is the one before.
+function dayBefore(day: string): string {
+  const date = civilDateToDate(day);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateToCivilDate(date);
 }
 
 type EvidenceOutcome = {
@@ -231,7 +241,16 @@ async function queryGoalsRow(
          from "goals"."goals" g
          where g.archived_at is null and g.horizon <= ${day}::date
          order by g.horizon desc
-         limit 1) as last_ended
+         limit 1) as last_ended,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'id', g.id,
+                 'name', g.name,
+                 'horizon', g.horizon
+               ) order by g.horizon desc, g.created_at), '[]'::json)
+         from "goals"."goals" g
+         where g.archived_at is null
+           and g.horizon > ${weekStart}::date
+           and g.horizon <= ${day}::date) as ended_this_week
   `);
 
   return row;
@@ -452,6 +471,9 @@ export async function loadDay(day: string): Promise<{
   scheduledCount: number;
   // The open-less day's own words: the goal whose end came last (name, horizon).
   lastEnded: { name: string; horizon: string } | null;
+  // Goals whose last day fell in the Monday-to-Sunday week of `day`, before
+  // `day` itself, most recent first: what Hoy's «terminó ayer» line names.
+  endedThisWeek: EndedGoal[];
   weekMeasure: Record<string, number>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
@@ -512,6 +534,11 @@ export async function loadDay(day: string): Promise<{
     daylessCount: row.dayless_count,
     scheduledCount: row.scheduled_count,
     lastEnded: row.last_ended,
+    endedThisWeek: row.ended_this_week.map((goal) => ({
+      id: goal.id,
+      name: goal.name,
+      lastDay: dayBefore(goal.horizon),
+    })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day),
     commitments: row.commitments.map(toCommitmentInfo),
     phases: row.phases.map(toPhaseInfo),

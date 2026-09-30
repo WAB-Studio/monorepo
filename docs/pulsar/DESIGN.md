@@ -517,8 +517,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   Decided 2026-09-29 by the coordinator.
 - **A goal's weekly figure is named by its unit** («kilómetros esta semana»), never by the first
   commitment with a number: the sum takes every fact in that unit. Decided 2026-09-29 by the user.
-- **Hoy says when a goal ended**, in one quiet line for the days after its end. Board to draw.
-  Decided 2026-09-29 by the user.
+- **Hoy says when a goal ended**, in one quiet line under the title for the days after its end:
+  «Dejar el azúcar terminó ayer · ver», then «terminó el lunes 28» later in the same week, gone once
+  that week is over (a goal that ended on a Sunday is gone on the Monday). «ver» opens the goal.
+  Board `HoyMetaTerminada.dc.html`, approved by the user 2026-09-29; the desktop face is the same line
+  under «Hoy». Several goals ended that week: one line each, most recent first. Only on today, never
+  on `/dia/<fecha>`, and never beside the all-ended card, which already names the last goal. Wording
+  decided 2026-09-29 by the coordinator.
 - **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the
   daily «hechos» and their row says the cadence and the count: «3 veces por semana · 1 de 3 esta
   semana», «4 al mes · 3 de 4 este mes». On the table the days not done read the quiet «·»; on the

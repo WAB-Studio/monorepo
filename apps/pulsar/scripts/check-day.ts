@@ -2027,10 +2027,76 @@ async function runMain(): Promise<void> {
   await runEndedGoalScheduledCheck();
   await runDesktopSurvivorsCheck();
   await runFlexiblePeriodCheck();
+  await runEndedThisWeekCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
   process.exit(failed ? 1 : 0);
+}
+
+// Hoy's «terminó ayer» line: goals whose last day fell in the week of the
+// viewed day, before it. Rows live in a fixed 2010 week (Mon 06-07).
+async function runEndedThisWeekCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runEndedThisWeekCheck: no verified session");
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const ids: string[] = [];
+
+  async function seedGoal(name: string, horizon: string, archived = false) {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+      values (${person!.id}, ${name}, ${horizon}::date, '2009-12-01T00:00:00Z'::timestamptz,
+              ${archived ? "2010-01-01T00:00:00Z" : null}::timestamptz)
+      returning id
+    `;
+    ids.push(row.id);
+    return row.id;
+  }
+
+  try {
+    const previousWeek = await seedGoal("ended-week last day sunday before", "2010-06-07");
+    const monday = await seedGoal("ended-week last day monday", "2010-06-08");
+    const tuesday = await seedGoal("ended-week last day tuesday", "2010-06-09");
+    await seedGoal("ended-week archived", "2010-06-09", true);
+    await seedGoal("ended-week still open", "2010-06-11");
+    const ended = (await loadDay("2010-06-10")).endedThisWeek;
+    const seeded = ended.filter((goal) => goal.name.startsWith("ended-week"));
+    assert(
+      "endedThisWeek lists the goals whose last day fell this week, most recent first, with the last day",
+      JSON.stringify(seeded) ===
+        JSON.stringify([
+          { id: tuesday, name: "ended-week last day tuesday", lastDay: "2010-06-08" },
+          { id: monday, name: "ended-week last day monday", lastDay: "2010-06-07" },
+        ]),
+      `endedThisWeek = ${JSON.stringify(seeded)}; the previous week's goal ${previousWeek} must be absent`,
+    );
+    const sunday = (await loadDay("2010-06-13")).endedThisWeek.filter((goal) => goal.name.startsWith("ended-week"));
+    assert(
+      "endedThisWeek on the Sunday holds the whole week's endings, the goal open on Thursday included",
+      sunday.length === 3 && sunday[0].lastDay === "2010-06-10",
+      `endedThisWeek on Sunday = ${JSON.stringify(sunday)}`,
+    );
+
+    // A fixed week (Mon 2010-08-02): endings on Monday, Tuesday and Thursday
+    // read from its Friday, in horizon-descending order, and none from before.
+    const before = await seedGoal("fixed-week before", "2010-08-02");
+    const fixedMon = await seedGoal("fixed-week mon", "2010-08-03");
+    const fixedTue = await seedGoal("fixed-week tue", "2010-08-04");
+    const fixedThu = await seedGoal("fixed-week thu", "2010-08-06");
+    const fixed = (await loadDay("2010-08-06")).endedThisWeek.filter((goal) => goal.name.startsWith("fixed-week"));
+    assert(
+      "endedThisWeek from a Friday holds the Thursday, Tuesday and Monday endings in horizon-descending order, none from the week before",
+      JSON.stringify(fixed.map((goal) => [goal.id, goal.lastDay])) ===
+        JSON.stringify([[fixedThu, "2010-08-05"], [fixedTue, "2010-08-03"], [fixedMon, "2010-08-02"]]),
+      `endedThisWeek = ${JSON.stringify(fixed)}; the previous week's goal ${before} must be absent`,
+    );
+  } finally {
+    if (ids.length > 0) await db`delete from goals.goals where id in ${db(ids)}`;
+    await db.end();
+  }
 }
 
 void (async () => {

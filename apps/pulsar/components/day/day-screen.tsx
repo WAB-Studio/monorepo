@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { Button, Face, Figure, Flex, Page, Panel, SectionLabel, Split, Text } from "@/components/ui";
-import { dayPhrase as dayPhraseOf } from "@/lib/day/day-phrase";
+import { dayPhrase as dayPhraseOf, endedPhrase } from "@/lib/day/day-phrase";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -120,6 +120,25 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
 
   // Every goal ended and none open (`HoyTodasTerminadas.dc.html`).
   const lastEnded = !past && openGoals.length === 0 ? loaded.lastEnded : null;
+
+  // Only today, and only while some goal is open: the all-ended card already
+  // names the last one (`HoyMetaTerminada.dc.html`).
+  const endedLines =
+    past || openGoals.length === 0
+      ? []
+      : loaded.endedThisWeek.map((goal) => ({
+          id: goal.id,
+          text: endedPhrase(
+            (key, values) => t(key, values),
+            goal.name,
+            goal.lastDay,
+            todayInZone(),
+            { weekdays: t.raw("day.weekdayLong") as string[], months: t.raw("day.monthLong") as string[] },
+          ),
+          href: `/metas/${goal.id}`,
+          see: t("day.ended.see"),
+          seeLabel: t("day.ended.seeLabel", { goal: goal.name }),
+        }));
 
   const waiting = daylessCount + scheduledCount;
 
@@ -328,6 +347,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           title={t("day.title")}
           back={{ href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }}
           theme={{ toLightLabel: t("day.theme.toLight"), toDarkLabel: t("day.theme.toDark") }}
+          ended={endedLines}
         />
       )}
 
