@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import type { MarkState } from "./mark";
 import styles from "./week-table.module.css";
@@ -32,6 +32,8 @@ export function WeekTable({
   groups: readonly {
     key: string;
     label: string;
+    // A line under the label, for what the group itself says.
+    note?: ReactNode;
     rows: readonly { key: string; name: string; detail?: string; cells: readonly (WeekTableCell | null)[] }[];
   }[];
   footer?: { label: string; cells: readonly string[] };
@@ -67,6 +69,7 @@ export function WeekTable({
             <tr>
               <th scope="rowgroup" className={styles.group}>
                 {group.label}
+                {group.note ? <span className={styles.groupNote}>{group.note}</span> : null}
               </th>
               {columns.map((column, index) => (
                 <td key={column.key} className={join(styles.gap, shade(index))} />

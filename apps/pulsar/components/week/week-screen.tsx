@@ -9,7 +9,9 @@ import { civilDateToDate, todayInZone } from "@/lib/zone";
 
 import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
-import { goalWeekProgress } from "./week-progress";
+import { dayPhrase } from "@/lib/day/day-phrase";
+import { EndedLine } from "./ended-line";
+import { endedLastDay, goalWeekProgress } from "./week-progress";
 import { flexibleWords } from "@/lib/day/row-phrases";
 import { WeekTableFace } from "./week-table-face";
 
@@ -161,7 +163,7 @@ export async function WeekScreen() {
 
   // A commitment counted by the week or the month: its own row, under the
   // goal's days, with its cadence and the period's count (`SemanaFlexible.dc.html`).
-  function flexibleSection(goal: GoalSummary) {
+  function flexibleSection(goal: GoalSummary, withEnded = false) {
     const rows = commitments.flatMap((c) => {
       const words = c.goalId === goal.id ? flexibleWords(c, t) : null;
       return words ? [{ commitment: c, words }] : [];
@@ -170,6 +172,7 @@ export async function WeekScreen() {
     return (
       <section key={`${goal.id}-flexible`}>
         <SectionLabel>{t("week.flexible.group", { name: goal.name })}</SectionLabel>
+        {withEnded ? endedNote(goal) : null}
         {rows.map(({ commitment, words }, index) => (
           <Row
             key={commitment.id}
@@ -184,6 +187,25 @@ export async function WeekScreen() {
           />
         ))}
       </section>
+    );
+  }
+
+  // «terminó el <día> · ver»: Hoy's own phrase and keys, always naming the day
+  // since the week is not read from today.
+  function endedNote(goal: GoalSummary) {
+    const lastDay = endedLastDay(goal.horizon, today);
+    if (lastDay === null) return null;
+    const text = dayPhrase((key, values) => t(key, values), "day.ended.on", lastDay, today, {
+      weekdays: t.raw("day.weekdayLong") as string[],
+      months: t.raw("day.monthLong") as string[],
+    }, { goal: "" });
+    return (
+      <EndedLine
+        text={text.trim()}
+        href={`/metas/${goal.id}`}
+        see={t("day.ended.see")}
+        seeLabel={t("day.ended.seeLabel", { goal: goal.name })}
+      />
     );
   }
 
@@ -205,12 +227,14 @@ export async function WeekScreen() {
       flexible === null ||
       commitments.some((c) => c.goalId === goal.id && flexibleWords(c, t) === null) ||
       oneOffFacts.some((fact) => fact.goalId === goal.id);
-    if (!daysToDraw) return flexible;
+    // Its own section carries the ended line when no days section does.
+    if (!daysToDraw) return flexibleSection(goal, true);
 
     return (
       <Fragment key={goal.id}>
         <section>
           <SectionLabel>{sectionLabel}</SectionLabel>
+          {endedNote(goal)}
           {view.days.map((dayView, index) => {
             const dots = dotsFor(goal, dayView.day);
             const ended = dayView.day >= goal.horizon;
@@ -252,7 +276,7 @@ export async function WeekScreen() {
       ) : null}
 
       <Face on="desktop">
-        <WeekTableFace week={week} today={today} columns={columns} t={t} />
+        <WeekTableFace week={week} today={today} columns={columns} t={t} endedNote={endedNote} />
       </Face>
 
       <Face on="phone">
