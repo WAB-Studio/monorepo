@@ -531,6 +531,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `SemanaFlexible.dc.html` and `SemanaEscritorioFlexible.dc.html`, approved by the user 2026-09-29.
   Decided 2026-09-29 by the user.
 - **A one-column screen caps at 640 px from 1024.** Decided 2026-09-29 by the user.
+- **«N al mes» is the fifth cadence chip** and swaps the row for «veces al mes». Board
+  `CompromisoNuevoMes.dc.html`. Decided 2026-09-29 by the user.
 - **Hoy builds what `HoyEscritorio.dc.html` draws**: «Hoy pide N», each row's cadence, a flexible
   commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.
 - **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed

@@ -8,10 +8,13 @@
       "daily": "todos los días",
       "weekdays": "días sueltos",
       "times_per_week": "N por semana",
-      "every_n_days": "cada N días"
+      "every_n_days": "cada N días",
+      "times_per_month": "N al mes"
     },
     "timesPerWeekLabel": "veces por semana",
     "everyNDaysLabel": "cada cuántos días",
+    "timesPerMonthLabel": "veces al mes",
+    "timesPerMonthHint": "Cualquier día del mes cuenta. Hoy lo muestra «1 de 2 este mes».",
     "doneByLabel": "qué lo da por hecho",
     "satisfaction": {
       "tap": "un toque",

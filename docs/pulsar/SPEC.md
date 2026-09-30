@@ -75,7 +75,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 #### The goal and its plan
 
 - [x] **RP-11** — A person creates a goal with a name and a horizon, and the app holds more than one at a time.
-- [ ] **RP-12** — A goal holds commitments. A commitment names what counts and how often: every day, named weekdays, a number of times a week, every N days, or a number of times a month.
+- [x] **RP-12** — A goal holds commitments. A commitment names what counts and how often: every day, named weekdays, a number of times a week, every N days, or a number of times a month.
   - Widened 2026-09-22 from the three cadences one plan needed. A habit measured by the month — a haircut, a deep clean, a call home — had nowhere to live.
   - Bounded 2026-09-28 by the user: at most 7 times a week, every 365 days at most, 31 times a month; the message says so, and a commitment already stored outside the bounds still reads.
   - **«Every N days» counts from the day the commitment was created.** Decided by the user

@@ -123,7 +123,7 @@ test("a «cada N días» commitment created through CompromisoNuevo lands in goa
   }
 });
 
-test("«N veces al mes» offers no chip on CompromisoNuevo, and a commitment stored with that cadence still reads on the goal (RP-12, decided 2026-09-27)", async ({
+test("«N al mes» is the fifth chip on CompromisoNuevo, and a commitment stored with that cadence reads on the goal (RP-12)", async ({
   page,
   db,
   personId,
@@ -135,15 +135,13 @@ test("«N veces al mes» offers no chip on CompromisoNuevo, and a commitment sto
   try {
     await openNewCommitmentForm(page, goalId);
 
-    // The board draws four cadence chips, never a fifth: scoped to the
-    // "cada cuándo" section so a chip elsewhere on the form (the "doneBy"
-    // section has none naming a month) can never be counted by accident.
+    // Scoped to the "cada cuándo" section so a chip elsewhere on the form
+    // is never counted by accident.
     const cadenceSection = page.locator("section", { hasText: "cada cuándo" });
-    await expect(cadenceSection.getByRole("button")).toHaveCount(4);
-    await expect(cadenceSection.getByRole("button", { name: /mes/i })).toHaveCount(0);
+    await expect(cadenceSection.getByRole("button")).toHaveCount(5);
+    await expect(cadenceSection.getByRole("button", { name: "N al mes", exact: true })).toHaveCount(1);
 
-    // No row from the screen — seeded directly, the only way a
-    // `times_per_month` row is ever written today.
+    // Seeded directly: the read-back is this test's subject, not the form.
     await db`
       insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction)
       values (${personId}, ${goalId}, ${commitmentName}, 'times_per_month', 5, 'tap')
