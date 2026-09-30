@@ -2569,9 +2569,11 @@ A fresh identity was not the cause.
 - Measured 2026-09-30, module 100: in a lane opened with `--app pulsar`, `check:goal-actions` ran 18/2.
   Both reds said `no member identity — run harness:token for this lane`. The member is minted by
   orbit's `harness:token`, and that lane has no `apps/orbit/.env.local`.
-- Run `check:goal-actions` from the main checkout, or from a lane opened with `--app finances`.
-  Never insert the member into `auth.users` by hand: a row outside `@repo/harness-registry` is a leak
-  nothing prunes.
+- Run `npm run harness:token -w apps/orbit` with the lane's `HARNESS_LANE` from the main checkout,
+  which has `apps/orbit/.env.local`. Never insert the member into `auth.users` by hand: a row outside
+  `@repo/harness-registry` is a leak nothing prunes.
+- Lane 1's member is `harness-member@example.invalid`, with no number. Until 2026-09-30
+  `check-goal-actions.ts` looked for `harness-member-1@…` and went red 18/2 on lane 1 too.
 
 ## The dev badge sits over the desktop rail's toggle, and Playwright reports it as an overlay
 
