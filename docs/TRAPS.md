@@ -2537,6 +2537,7 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
   `magic link verification failed linkInvalid AuthApiError · 429 · over_request_rate_limit`. Read that
   line before blaming a collision. A full `check:e2e` mints about 20 people; leave the lane idle a few
   minutes after one.
+- The user raised Auth → Rate Limits → token verifications to 300 per 5 minutes on 2026-09-29. A 429 at that limit means one sign-in per worker (`e2e/fixtures.ts`), not a higher limit.
 - Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
 
 ## `page.goto` returns with the loading fallback still standing

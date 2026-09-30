@@ -15,6 +15,7 @@ import type {
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
+import { phasePositions } from "@/lib/day/row-phrases";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
   toCadence,
@@ -192,9 +193,7 @@ async function queryGoalsRow(
          join "goals"."evidence_sources" s on s.id = c.source_id
          where c.satisfaction = 'evidence') as measure_sources,
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
-         from "goals"."phases" p
-         where p.starts_on <= ${day}::date
-           and (p.ends_on is null or p.ends_on >= ${day}::date)) as phases,
+         from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit
                )), '[]'::json)
@@ -477,6 +476,8 @@ export async function loadDay(day: string): Promise<{
   weekMeasure: Record<string, number>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
+  // Each phase's place among its goal's phases, in every phase the goal has.
+  phasePositions: Record<string, { ordinal: number; total: number }>;
   factsByCommitment: Record<string, LoggedFact>;
 }> {
   const person = await getPerson();
@@ -493,7 +494,12 @@ export async function loadDay(day: string): Promise<{
   ]);
 
   const commitments = row.commitments.map(toCommitmentPlan);
-  const phases = row.phases.map(toPhase);
+  // The statement returns every phase so a goal's phase can say its place
+  // among them; what the day derives from stays the ones in effect on `day`.
+  const inEffect = row.phases.filter(
+    (phase) => phase.starts_on <= day && (phase.ends_on === null || phase.ends_on >= day),
+  );
+  const phases = inEffect.map(toPhase);
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
   // that always does, so a one-off's own fact plays no part in deriving a
   // commitment's slot (RP-19's list is this file's own `oneOffs`, read by
@@ -541,7 +547,8 @@ export async function loadDay(day: string): Promise<{
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day),
     commitments: row.commitments.map(toCommitmentInfo),
-    phases: row.phases.map(toPhaseInfo),
+    phases: inEffect.map(toPhaseInfo),
+    phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),
     factsByCommitment: latestFactByCommitment(dayFacts.map(toFactForCommitment)),
   };
 }
