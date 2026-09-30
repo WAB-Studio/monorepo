@@ -29,6 +29,32 @@ test.describe("a database outage", () => {
     });
   }
 
+  test("/ keeps the nav: the outage lands under the layout, not in global-error", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
+    await expect(page.getByRole("navigation")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Esta página no existe" })).toHaveCount(0);
+  });
+
+  test("Intentar otra vez asks the server again", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Ir a hoy" })).toHaveAttribute("href", "/");
+
+    // `retry()` re-fetches the boundary's children with an `rsc` header; a
+    // `Link` prefetch carries it too, so the prefetch header is excluded.
+    const refetch = page.waitForRequest(async (request) => {
+      if (new URL(request.url()).origin !== new URL(DOWN ?? "").origin) return false;
+      const headers = await request.allHeaders();
+      return headers["rsc"] === "1" && headers["next-router-prefetch"] === undefined;
+    });
+    await page.getByRole("button", { name: "Intentar otra vez" }).click();
+    await refetch;
+
+    await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Esta página no existe" })).toHaveCount(0);
+  });
+
   test("the live server draws the not-found for a goal nobody owns", async ({ page }) => {
     await page.goto(`${LIVE}/metas/${GHOST}`);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
