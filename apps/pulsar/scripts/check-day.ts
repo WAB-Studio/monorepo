@@ -1947,6 +1947,56 @@ async function runFlexiblePeriodCheck(): Promise<void> {
   }
 }
 
+// Module 92: `loadDay` returns every phase of a goal so Hoy can say «fase 2 de
+// 3»; the phases the day derives from stay the ones in effect, and the
+// statement count stays four.
+async function runPhasePositionCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { createGoal, addPhase } = await import("@/app/actions/plan");
+
+  const goal = await createGoal({ name: "check-day phase position probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runPhasePositionCheck: createGoal failed: ${goal.error}`);
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const spans: [string, string][] = [
+      ["2099-01-01", "2099-01-31"],
+      ["2099-02-01", "2099-02-28"],
+      ["2099-03-01", "2099-03-31"],
+    ];
+    const ids: string[] = [];
+    for (const [startsOn, endsOn] of spans) {
+      const phase = await addPhase({ goalId: goal.goalId, aim: `check-day position ${startsOn}`, startsOn, endsOn });
+      if (!phase.ok) throw new Error(`runPhasePositionCheck: addPhase failed: ${phase.error}`);
+      ids.push(phase.phaseId);
+    }
+
+    const start = wireCalls.length;
+    const day = await loadDay("2099-02-10");
+    const statements = applicationStatements(wireCalls.slice(start));
+    assert(
+      "loadDay places the phase in effect as 2 of the goal's 3, by starts_on",
+      JSON.stringify(day.phasePositions[ids[1]]) === JSON.stringify({ ordinal: 2, total: 3 }) &&
+        JSON.stringify(day.phasePositions[ids[0]]) === JSON.stringify({ ordinal: 1, total: 3 }) &&
+        JSON.stringify(day.phasePositions[ids[2]]) === JSON.stringify({ ordinal: 3, total: 3 }),
+      `positions = ${JSON.stringify(ids.map((id) => day.phasePositions[id]))}`,
+    );
+    assert(
+      "loadDay's phases keep only the goal's phase in effect on the day",
+      day.phases.filter((phase) => phase.goalId === goal.goalId).map((phase) => phase.id).join() === ids[1],
+      `phases = ${JSON.stringify(day.phases.filter((phase) => phase.goalId === goal.goalId).map((phase) => phase.id))}`,
+    );
+    assert(
+      "loadDay with every phase selected still issues four application statements",
+      statements === 4,
+      `${statements} application statement(s)`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goal.goalId}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -2028,6 +2078,7 @@ async function runMain(): Promise<void> {
   await runDesktopSurvivorsCheck();
   await runFlexiblePeriodCheck();
   await runEndedThisWeekCheck();
+  await runPhasePositionCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

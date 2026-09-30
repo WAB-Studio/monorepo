@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { Button, Face, Figure, Flex, Page, Panel, SectionLabel, Split, Text } from "@/components/ui";
 import { dayPhrase as dayPhraseOf, endedPhrase } from "@/lib/day/day-phrase";
+import { phaseLine } from "@/lib/day/row-phrases";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -108,6 +109,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     weekMeasure,
     commitments,
     phases,
+    phasePositions,
     factsByCommitment,
   } = loaded;
 
@@ -142,6 +144,13 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
 
   const waiting = daylessCount + scheduledCount;
 
+  const goalIds = new Set(goals.map((goal) => goal.id));
+  const commitmentIds = new Set(
+    commitments.filter((commitment) => goalIds.has(commitment.goalId)).map((commitment) => commitment.id),
+  );
+  // Commitments asking today, across every goal drawn; nothing to say when
+  // none does or when the all-ended card stands in for the goals.
+  const asked = past || goals.length === 0 ? 0 : view.slots.filter((slot) => commitmentIds.has(slot.commitmentId)).length;
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
   // Stable: within each kind, `loadDay`'s own creation order stands.
@@ -218,7 +227,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               <SectionLabel>{goal.name}</SectionLabel>
               {goalPhase ? (
                 <Text as="p" tone="muted" variant="meta">
-                  {goalPhase.name}
+                  {phaseLine((key, values) => t(key, values), goalPhase.name, phasePositions[goalPhase.id])}
                 </Text>
               ) : null}
               {past ? (
@@ -246,6 +255,11 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                     writtenLabel={
                       logged && logged.writtenOn !== day
                         ? dayPhrase("day.past.writtenOn", logged.writtenOn, t)
+                        : undefined
+                    }
+                    writtenTime={
+                      logged && slot.satisfiedBy !== "evidence" && slot.satisfied
+                        ? timeInZone(logged.writtenAt)
                         : undefined
                     }
                   />
@@ -347,6 +361,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           title={t("day.title")}
           back={{ href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }}
           theme={{ toLightLabel: t("day.theme.toLight"), toDarkLabel: t("day.theme.toDark") }}
+          asks={asked > 0 ? t("day.asksToday", { count: countInWords(asked, t) }) : undefined}
           ended={endedLines}
         />
       )}

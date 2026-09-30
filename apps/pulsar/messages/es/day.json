@@ -101,10 +101,16 @@
   "cadence": {
     "daily": "diario",
     "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
-    "timesPerWeek": "{count}×/semana",
+    "weekdayPlural": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
+    "onlyWeekday": "solo los {weekday}",
+    "timesPerWeek": "{count, plural, one {# vez por semana} other {# veces por semana}}",
     "everyNDays": "cada {n} días",
-    "timesPerMonth": "{count}×/mes"
+    "timesPerMonth": "{count, plural, one {# vez al mes} other {# veces al mes}}"
   },
+  "phase": {
+    "of": "fase {ordinal} de {total} · {name}"
+  },
+  "asksToday": "Hoy pide {count}",
   "errors": {
     "notFound": "Eso ya no existe. Recarga la página.",
     "evidenceOnly": "Eso lo cierra una fuente, no un toque.",

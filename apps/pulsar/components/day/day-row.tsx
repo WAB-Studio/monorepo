@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
+import { cadencePhrase } from "@/lib/day/row-phrases";
 import type { Cadence } from "@/lib/day/types";
 import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
@@ -46,43 +47,15 @@ export type DayRowProps = {
   // than the one drawn: the day it counts for and the day it was written are
   // never read as one (RP-06).
   writtenLabel?: string;
+  // «07:40»: the hour a done commitment was written.
+  writtenTime?: string;
 };
-
-// The row's own mono second line for a `quantity` commitment — `HoyCantidad
-// .dc.html` draws "10 min · diario" under the name. `unit` is read as the
-// commitment's own word (`goals.commitments.unit`, e.g. "minutos"), not
-// abbreviated to the board's "min": there is no table mapping an arbitrary
-// unit string to a short form, and guessing one would be a second unit the
-// person never typed.
-function quantityMeta(target: number, unit: string, cadence: Cadence, t: ReturnType<typeof useTranslations>): string {
-  return `${target} ${unit} · ${cadenceLabel(cadence, t)}`;
-}
 
 // A done row's own second line (decided 2026-09-27, `docs/pulsar/DESIGN.md`
 // "Decisions taken here"): what the person actually logged, never the plan's
-// target — "25 minutos", not "10 minutos · diario".
+// target — "25 minutos", not "10 minutos".
 function loggedMeta(quantity: number, unit: string): string {
   return `${quantity} ${unit}`;
-}
-
-function cadenceLabel(cadence: Cadence, t: ReturnType<typeof useTranslations>): string {
-  switch (cadence.kind) {
-    case "daily":
-      return t("day.cadence.daily");
-    case "weekdays": {
-      const names = t.raw("day.cadence.weekdayShort") as string[];
-      return cadence.days.map((day) => names[day - 1]).join(", ");
-    }
-    case "times_per_week":
-      return t("day.cadence.timesPerWeek", { count: cadence.count });
-    case "every_n_days":
-      // "Every 1 day" reads exactly as daily; nothing distinguishes them on
-      // screen (RP-12 anchors `every_n_days` to `created_at`, not to a
-      // visible span, so there is nothing else to say about `n === 1`).
-      return cadence.n === 1 ? t("day.cadence.daily") : t("day.cadence.everyNDays", { n: cadence.n });
-    case "times_per_month":
-      return t("day.cadence.timesPerMonth", { count: cadence.count });
-  }
 }
 
 /**
@@ -111,6 +84,7 @@ export function DayRow({
   note,
   day,
   writtenLabel,
+  writtenTime,
 }: DayRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
@@ -119,15 +93,23 @@ export function DayRow({
 
   const tappable = kind !== "evidence";
   const done = markState === "declared";
-  const baseMeta =
+  // `unit` is the commitment's own word ("minutos"), never abbreviated: no
+  // table maps an arbitrary unit string to a short form.
+  const amount =
     kind === "quantity"
       ? done && loggedQuantity != null && unit != null
         ? loggedMeta(loggedQuantity, unit)
-        : target != null && unit != null && cadence
-          ? quantityMeta(target, unit, cadence, t)
+        : target != null && unit != null
+          ? `${target} ${unit}`
           : sourceName
       : sourceName;
-  const meta = [baseMeta, writtenLabel].filter(Boolean).join(" · ") || undefined;
+  const cadenceText = cadence
+    ? cadencePhrase((key, values) => t(key, values), cadence, {
+        weekdayShort: t.raw("day.cadence.weekdayShort") as string[],
+        weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
+      })
+    : null;
+  const meta = [cadenceText, amount, writtenTime, writtenLabel].filter(Boolean).join(" · ") || undefined;
 
   function handleTap() {
     if (!tappable || pending) return;

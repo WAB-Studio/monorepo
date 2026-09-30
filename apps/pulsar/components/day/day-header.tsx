@@ -18,6 +18,7 @@ export function DayHeader({
   limitNote,
   toToday,
   theme,
+  asks,
   ended,
 }: {
   date: string;
@@ -28,6 +29,8 @@ export function DayHeader({
   limitNote?: string;
   toToday?: HeaderLink;
   theme?: { toLightLabel: string; toDarkLabel: string };
+  // «Hoy pide siete»: under the title, when the day asks anything.
+  asks?: string;
   // One quiet line per goal that ended this week, under the title.
   ended?: { id: string; text: string; href: string; see: string; seeLabel: string }[];
 }) {
@@ -71,6 +74,11 @@ export function DayHeader({
       {title ? (
         <Text as="p" variant="title">
           {title}
+        </Text>
+      ) : null}
+      {asks ? (
+        <Text as="p" variant="meta" tone="muted">
+          {asks}
         </Text>
       ) : null}
       {ended?.map((line) => (
