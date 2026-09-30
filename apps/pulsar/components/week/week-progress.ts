@@ -1,5 +1,5 @@
 import { horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
-import { civilDateInZone } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate } from "@/lib/zone";
 
 export type WeekProgress = { week: number; total: number };
 
@@ -24,4 +24,16 @@ export function goalWeekProgress(
   if (week > total) return null;
 
   return { week, total };
+}
+
+/**
+ * The goal's last day once it is over: `horizon - 1`, and null while today is
+ * still on or before it. The week only draws goals whose horizon is past its
+ * Monday, so a returned day never falls before the week.
+ */
+export function endedLastDay(horizon: string, today: string): string | null {
+  if (horizon > today) return null;
+  const date = civilDateToDate(horizon);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateToCivilDate(date);
 }

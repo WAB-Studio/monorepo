@@ -490,6 +490,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Hoy with every goal ended and none open** reads «Hoy no pide nada.», names the goal that ended
   and its day, and offers «Ver las metas» solid and «Abrir otra meta» outlined; goalless one-offs
   still draw below. Decided 2026-09-29 by the coordinator; board approved by the user.
+- **The Semana says when a goal ended**, «terminó el <día> · ver» under its name, as Hoy does. Board
+  `SemanaMetaTerminada.dc.html`. Decided 2026-09-29 by the coordinator, on the user's delegation.
 - **An archived goal's overline reads «meta · archivada el {date}»**, the day it was archived in the
   person's zone, in place of «meta · abierta el {date}». Decided 2026-09-29 by the coordinator.
 - **Hoy's desktop figure is each open goal's measure this week**, one card per goal with a measure:

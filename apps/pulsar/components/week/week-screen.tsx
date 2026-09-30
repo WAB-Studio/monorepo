@@ -9,7 +9,9 @@ import { civilDateToDate, todayInZone } from "@/lib/zone";
 
 import { EmptyWeek } from "./empty-week";
 import { WeekDayRow, type WeekDot } from "./week-day-row";
-import { goalWeekProgress } from "./week-progress";
+import { dayPhrase } from "@/lib/day/day-phrase";
+import { EndedLine } from "./ended-line";
+import { endedLastDay, goalWeekProgress } from "./week-progress";
 import { flexibleWords } from "@/lib/day/row-phrases";
 import { WeekTableFace } from "./week-table-face";
 
@@ -187,6 +189,25 @@ export async function WeekScreen() {
     );
   }
 
+  // «terminó el <día> · ver»: Hoy's own phrase and keys, always naming the day
+  // since the week is not read from today.
+  function endedNote(goal: GoalSummary) {
+    const lastDay = endedLastDay(goal.horizon, today);
+    if (lastDay === null) return null;
+    const text = dayPhrase((key, values) => t(key, values), "day.ended.on", lastDay, today, {
+      weekdays: t.raw("day.weekdayLong") as string[],
+      months: t.raw("day.monthLong") as string[],
+    }, { goal: "" });
+    return (
+      <EndedLine
+        text={text.trim()}
+        href={`/metas/${goal.id}`}
+        see={t("day.ended.see")}
+        seeLabel={t("day.ended.seeLabel", { goal: goal.name })}
+      />
+    );
+  }
+
   function goalSection(goal: GoalSummary) {
     const progress = goalWeekProgress(goal, view.start);
     // The page's own overline is the date range alone (`Semana.dc.html`
@@ -211,6 +232,7 @@ export async function WeekScreen() {
       <Fragment key={goal.id}>
         <section>
           <SectionLabel>{sectionLabel}</SectionLabel>
+          {endedNote(goal)}
           {view.days.map((dayView, index) => {
             const dots = dotsFor(goal, dayView.day);
             const ended = dayView.day >= goal.horizon;
@@ -252,7 +274,7 @@ export async function WeekScreen() {
       ) : null}
 
       <Face on="desktop">
-        <WeekTableFace week={week} today={today} columns={columns} t={t} />
+        <WeekTableFace week={week} today={today} columns={columns} t={t} endedNote={endedNote} />
       </Face>
 
       <Face on="phone">
