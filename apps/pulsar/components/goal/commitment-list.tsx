@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
+import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { Button, Flex, SectionLabel, Text } from "@/components/ui";
 
 import { CommitmentRow } from "./retire-sheet";
@@ -45,20 +46,6 @@ function cadenceWords(cadence: Cadence, t: Translator): string {
   }
 }
 
-// An evidence source's own unit, read back as a Spanish noun (RP-09):
-// `reading_lookups`' `unit` column holds "searches", never a sentence, and
-// `goal.units` is this screen's own small catalogue of what each known unit
-// is called — a second source names one more case here (RNP-10), never
-// leaves the word to a guess at the raw column.
-function evidenceUnitWords(unit: string, count: number, t: Translator): string {
-  switch (unit) {
-    case "searches":
-      return t("goal.units.searches", { count });
-    default:
-      return unit;
-  }
-}
-
 // What satisfies the commitment, in quiet: a tap, the quantity's own unit —
 // the person's own word, never resolved against a catalogue — or the
 // evidence threshold and source ("1 búsqueda · diccionario").
@@ -70,8 +57,9 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): string {
       return commitment.satisfiedBy.unit;
     case "evidence": {
       const { threshold, unit } = commitment.satisfiedBy;
-      const source = commitment.sourceLabelKey ? t(commitment.sourceLabelKey) : "";
-      return `${threshold} ${evidenceUnitWords(unit, threshold, t)} · ${source}`;
+      const labelKey = commitment.sourceLabelKey;
+      const source = labelKey ? t(labelKey) : "";
+      return `${threshold} ${evidenceUnitWords({ labelKey: labelKey ?? "", unit }, threshold, t)} · ${source}`;
     }
   }
 }
