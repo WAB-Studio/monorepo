@@ -61,7 +61,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
   - Widened 2026-09-22, the day it was written, when the user asked whether the app served anything beyond one plan. A quantity with no unit cannot be summed into a goal's measure and cannot be drawn. The code was unticked and nothing had been verified against it, so no tick is invalidated.
 - [x] **RP-04** — A fact can carry one line the person writes — the two mistakes from today's monologue, what the conversation cost. It is offered, never required, and the day shows it.
 - [x] **RP-05** — A declared fact can be undone. A derived one cannot: it belongs to the app that recorded it.
-- [ ] **RP-06** — A fact can be written for a day already past. It keeps the day it happened and the moment it was written, and the two are never shown as one.
+- [x] **RP-06** — A fact can be written for a day already past. It keeps the day it happened and the moment it was written, and the two are never shown as one.
   - Widened 2026-09-28, unticked, by the user's decisions after the critic: a past day lists only what existed that day, and its oldest reachable day (seven back) says why there is no step further.
 
 #### The evidence another app leaves
@@ -101,15 +101,15 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### The thing that happens once
 
-- [ ] **RP-19** — A person writes down something that happens **once** — call the bank, renew the passport, finish chapter three — with no cadence, no goal and no plan behind it. It takes a day when it has one and sits in the day's list beside the commitments; done, it leaves the list and stays in the log as the fact it produced. Left undone, it carries to every day after its own, showing the day it belonged to, until it is done or deleted. Asked for by the user 2026-09-22: a log of goals that cannot hold a plain errand is not the app they asked for. The carry was added by the user 2026-09-28.
+- [x] **RP-19** — A person writes down something that happens **once** — call the bank, renew the passport, finish chapter three — with no cadence, no goal and no plan behind it. It takes a day when it has one and sits in the day's list beside the commitments; done, it leaves the list and stays in the log as the fact it produced. Left undone, it carries to every day after its own, showing the day it belonged to, until it is done or deleted. Asked for by the user 2026-09-22: a log of goals that cannot hold a plain errand is not the app they asked for. The carry was added by the user 2026-09-28.
   - Widened 2026-09-28, unticked, by the user: done, it stays on the day it was done in a list of what was done, and a second tap undoes it; it is written with a day, today by default, or with none.
 - [x] **RP-20** — A one-off can belong to a goal or to nothing at all. Belonging to one, it counts toward that goal's week; belonging to nothing, it is still a fact with a day, and the week still shows it.
 - [x] **RP-22** — A one-off written by mistake can be deleted, and nothing survives it: it never happened, so there is no fact to keep. The act says, where it is offered, how it differs from marking the thing done — done leaves a record, deleted leaves nothing. Asked for by the user 2026-09-22, after the grant layer was measured refusing it: «llamar al banko» with a typo is a first-week problem and today it stays forever.
 - [x] **RP-23** — A goal can be renamed. Its facts, weeks and commitments keep reading as they did. Asked for by the user 2026-09-27.
 - [x] **RP-24** — A goal can be archived. It leaves the day and the week; its facts and the weeks it governed stay, and it can be opened again from the goals list. Nothing is deleted. Asked for by the user 2026-09-27.
-- [ ] **RP-25** — A goal's horizon can be moved from the goal. Its facts, weeks and phases keep reading as they did, and a horizon never ends before a phase does. Asked for by the user 2026-09-28, to keep «Se puede mover después» true.
-- [ ] **RP-21** — A one-off with no day is not lost. It waits in a list of its own, off the day's screen, and is given a day whenever the person wants one A one-off written for a later day waits in the same list, with its date, and can be moved, done or deleted there.
-- [ ] **RP-26** — A goal past its end says the day it ended, leaves the day and the week, and is listed apart among the goals; it can be archived or have its end moved. Nothing is deleted. Asked for by the user 2026-09-28.
+- [x] **RP-25** — A goal's horizon can be moved from the goal. Its facts, weeks and phases keep reading as they did, and a horizon never ends before a phase does. Asked for by the user 2026-09-28, to keep «Se puede mover después» true.
+- [x] **RP-21** — A one-off with no day is not lost. It waits in a list of its own, off the day's screen, and is given a day whenever the person wants one. A one-off written for a later day waits in the same list, with its date, and can be moved, done or deleted there.
+- [x] **RP-27** — A goal past its end says the day it ended and is listed apart among the goals. Its commitments leave the day. Through the Sunday of the week it ended in, the day and the week still name it with the day it ended and a way to open it; after that it leaves both. It can be archived or have its end moved. Nothing is deleted. Decided by the user 2026-09-30, succeeding RP-26.
 
 #### The week and the review
 
@@ -118,7 +118,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### The account
 
-- [ ] **RP-18** — A person signs in with a link sent to their address, with the session and the claim verification `apps/voyager` already uses. The log is theirs and reaches every device they sign in on.
+- [x] **RP-18** — A person signs in with a link sent to their address, with the session and the claim verification `apps/voyager` already uses. The log is theirs and reaches every device they sign in on.
 
 ### Non-functional requirements
 
@@ -130,11 +130,18 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RNP-06** — The day is the person's day, in their own zone, never UTC. A fact at 23:40 belongs to that day; the same fact read from another zone still belongs to it.
 - [x] **RNP-07** — The app holds at a 360 px viewport: no horizontal overflow, no overlapping control, no tap target under 32 px on its shorter side. It is used with one thumb, in the minute the thing was finished.
 - [x] **RNP-08** — The person chooses light or dark and the choice is remembered on the device. The app opens in the system's mode until a choice is made.
-- [ ] **RNP-10** — A second evidence source costs a reader and a row of configuration, never a migration and never a screen. The shape a source answers in is fixed — a day, a quantity, a unit, a name for the person — and nothing downstream of it knows which app it came from.
-- [ ] **RNP-09** — Every `auth.users` row a script of this app creates is registered through `@repo/harness-registry`. No automated check ever submits the sign-in form with a typed address: it sends a real email from the user's own account and mints a real row.
-- [ ] **RNP-11** — From 1024 px the app has a desktop face: a left rail in place of the bottom nav, Hoy and a goal in two columns, the week as a table of commitments by day, every sheet a centred dialog, every other screen one column in the same frame, with no horizontal overflow at 1280×800. Below 1024 the phone face holds unchanged (RNP-07). Asked for by the user 2026-09-28.
+- [x] **RNP-10** — A second evidence source costs a reader and a row of configuration, never a migration and never a screen. The shape a source answers in is fixed — a day, a quantity, a unit, a name for the person — and nothing downstream of it knows which app it came from.
+  - Limits that remain, 2026-09-30, written and not built: (1) `withReadingDb` in `lib/session.ts` fixes `search_path` to `reading`, so a source in another schema needs a qualified reader plus that app's own grants and RLS. (2) Every reader runs in one transaction, so one failing source makes every source unreadable.
+  - What a second source costs today: one reader in `lib/evidence/registry.ts`, one entry in `lib/evidence/source-rows.ts`, two keys in `messages/es/sources.json` (`<name>` and `<name>Unit`), then `npm run source:add -w apps/pulsar`.
+- [x] **RNP-09** — Every `auth.users` row a script of this app creates is registered through `@repo/harness-registry`. No automated check ever submits the sign-in form with a typed address: it sends a real email from the user's own account and mints a real row.
+- [x] **RNP-11** — From 1024 px the app has a desktop face: a left rail in place of the bottom nav, Hoy and a goal in two columns, the week as a table of commitments by day, every sheet a centred dialog, every other screen one column in the same frame, with no horizontal overflow at 1280×800. Below 1024 the phone face holds unchanged (RNP-07). Asked for by the user 2026-09-28.
 
 ---
+
+### Retired
+
+- [ ] **RP-26** — A goal past its end says the day it ended, leaves the day and the week, and is listed apart among the goals; it can be archived or have its end moved. Nothing is deleted. Asked for by the user 2026-09-28.
+  - Retired 2026-09-30 by the user. The week keeps a goal until the Sunday of the week it ended in (decided 2026-09-29, `SemanaMetaTerminada.dc.html`), so it does not leave the week. Successor: **RP-27**.
 
 ## 2. Model and invariants
 

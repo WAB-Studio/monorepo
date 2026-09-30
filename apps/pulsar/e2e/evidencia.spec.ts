@@ -199,6 +199,8 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await page.reload();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
     await expect(row).toContainText("diccionario");
+    await expect(row).not.toContainText("lo dijiste tú");
+    await expect(row).not.toContainText("pide el número");
     await expect(row).toBeDisabled();
     expect(await factCount(db, commitmentId)).toBe(0);
 

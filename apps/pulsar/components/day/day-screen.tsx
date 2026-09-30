@@ -268,7 +268,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                         : undefined
                     }
                     writtenTime={
-                      logged && slot.satisfiedBy !== "evidence" && slot.satisfied
+                      logged && slot.satisfiedBy !== "evidence" && (slot.satisfied || commitment.kind === "quantity")
                         ? timeInZone(logged.writtenAt)
                         : undefined
                     }

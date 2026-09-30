@@ -149,7 +149,7 @@ test("a quantity row on a past day asks for that day and writes its number there
 
     expect(await factsFor(db, commitmentId)).toEqual([{ day, quantity: 10 }]);
     await expect(page.locator("button", { hasText: name })).toContainText(
-      new RegExp(`10 minutos · \\d{2}:\\d{2} · ${writtenLabel(todayInZone())}`),
+      new RegExp(`10 minutos · \\d{2}:\\d{2} · lo dijiste tú · ${writtenLabel(todayInZone())}`),
     );
   } finally {
     await deleteGoal(db, personId, goalId);

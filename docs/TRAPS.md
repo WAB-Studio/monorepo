@@ -2541,7 +2541,7 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
 - Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
 - Measured 2026-09-29 (module 98), lane 5, full `check:e2e`, 2 workers: **43 verifications before, 6 after**
   (42 disposable people plus the lane's own, down to the lane's own plus what `escritorio.spec.ts` mints per
-  worker). Two full runs after: 204 passed, 2 skipped, 0 failed, no `over_request_rate_limit` in the server log.
+  worker). Two full runs after: 207 passed, 0 skipped, 0 failed, no `over_request_rate_limit` in the server log.
   Before, one run was 203 passed and 1 failed (`tema.spec.ts`, no `linkInvalid`).
 - Take the person from the `person` fixture in `e2e/fixtures.ts`: one mint per worker (`workerPerson`), and its
   rows are deleted before each test. Isolation is by rows, not by person. Never call `mintDisposablePerson` in
@@ -2563,3 +2563,25 @@ A fresh identity was not the cause.
   content and `await expect(page.locator("main")).toHaveCount(1)`.
 - Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
   from inside the repo) before guessing at a red the local suite does not show.
+
+## A pulsar lane has no member identity, so `check:goal-actions` dies there
+
+- Measured 2026-09-30, module 100: in a lane opened with `--app pulsar`, `check:goal-actions` ran 18/2.
+  Both reds said `no member identity — run harness:token for this lane`. The member is minted by
+  orbit's `harness:token`, and that lane has no `apps/orbit/.env.local`.
+- Run `npm run harness:token -w apps/orbit` with the lane's `HARNESS_LANE` from the main checkout,
+  which has `apps/orbit/.env.local`. Never insert the member into `auth.users` by hand: a row outside
+  `@repo/harness-registry` is a leak nothing prunes.
+- Lane 1's member is `harness-member@example.invalid`, with no number. Until 2026-09-30
+  `check-goal-actions.ts` looked for `harness-member-1@…` and went red 18/2 on lane 1 too.
+
+## The dev badge sits over the desktop rail's toggle, and Playwright reports it as an overlay
+
+- **What.** Under `next dev`, `<nextjs-portal>` holds the always-present Dev Tools badge, bottom-left by
+  default: a 32 px button at x 22–54, y 746–778 at 1280×800. The rail's face toggle is at x 26–70,
+  y 738–782, so `marco-escritorio.spec.ts:31` timed out on «subtree intercepts pointer events».
+- **Measured 2026-09-30, `apps/pulsar`.** No error dialog, no issues count, aria-label
+  «Open Next.js Dev Tools», zero errors or warnings in the dev log and console. CI runs a production
+  build, which has no badge, so it stayed green.
+- **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/pulsar/next.config.ts`. Never set
+  `devIndicators: false`: errors would stay, but the badge is how a dev sees a real issue count.
