@@ -2,12 +2,12 @@ import { test, expect } from "./fixtures";
 
 // `lib/theme.ts`'s blocking `<head>` script is the only thing that decides
 // the very first frame (RNP-08); React never repaints it correctly a second
-// time on its own — a mount effect only reacts to a later click. Reading the
-// class any later than the page's own "commit" — the earliest point control
-// ever returns to this file, before the frame is painted — would only prove
-// the class was eventually right, which a real flash could still have beaten
-// on screen. `waitUntil: "commit"` plus an immediate `evaluate` is the
-// closest a test gets to what the eye actually sees first.
+// time on its own — a mount effect only reacts to a later click. A read at
+// the navigation's "commit" is no observation of that frame: the new
+// document may have no `<html>` yet, or an `<html>` the head script has not
+// reached. So an init script samples the class on every animation frame of
+// the reloaded page — a frame callback runs right before that frame is
+// painted — and the test reads the samples once the page has settled.
 test("the theme control, used once, survives a reload with no flash of the other face (RNP-08)", async ({
   page,
 }) => {
@@ -23,12 +23,29 @@ test("the theme control, used once, survives a reload with no flash of the other
   await page.getByRole("button", { name: "Cambiar a modo oscuro" }).click();
   await expect(page.locator("html")).toHaveClass(/\bdark\b/);
 
-  await page.reload({ waitUntil: "commit" });
-  const classAtCommit = await page.evaluate(() => document.documentElement.className);
-  expect(classAtCommit).toContain("dark");
-  expect(classAtCommit).not.toContain("light");
+  await page.addInitScript(() => {
+    const frames: string[] = [];
+    (window as unknown as { __themeFrames: string[] }).__themeFrames = frames;
+    const sample = () => {
+      const root = document.documentElement;
+      if (root) frames.push(root.className);
+      if (document.readyState !== "complete") requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.reload();
 
-  // The client render agrees once it settles — the commit-time read above
-  // is the one that matters, this is only that it does not later contradict it.
+  // Settled: the content, not the loading fallback, is standing.
+  await expect(page.locator("main")).toHaveCount(1);
+  const frames = await page.evaluate(
+    () => (window as unknown as { __themeFrames: string[] }).__themeFrames,
+  );
+  expect(frames.length).toBeGreaterThan(0);
+  expect(frames[0]).toMatch(/\bdark\b/);
+  for (const frame of frames) {
+    expect(frame).toMatch(/\bdark\b/);
+    expect(frame).not.toMatch(/\blight\b/);
+  }
+
   await expect(page.locator("html")).toHaveClass(/\bdark\b/);
 });
