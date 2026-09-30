@@ -22,6 +22,9 @@ const sql =
     // Seconds. postgres@3 defaults to null and would hold the socket forever.
     idle_timeout: 20,
     connect_timeout: 10,
+    // Seconds before a failed connection retries. The default is pool-wide and
+    // grows to 20 s, which holds a retried page on `loading.tsx` in an outage.
+    backoff: () => 0.25,
   });
 
 if (process.env.NODE_ENV !== "production") globalForDb.sql = sql;
