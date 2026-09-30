@@ -543,3 +543,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
 - **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.
+- **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
+  says «pide el número» after its target.** «Anki · 10 min · 07:40 · lo dijiste tú», «Monólogo
+  grabado · 3 min · pide el número». An evidence row keeps its source and never says either; a quiet
+  row met in its period says neither. Drawn on `HoyEscritorio.dc.html` and `HoyHechas.dc.html`
+  since the first boards; decided 2026-09-30 by the user, module 100.
+- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty; «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.

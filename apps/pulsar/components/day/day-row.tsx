@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
-import { cadencePhrase, flexibleWords, metPhrase } from "@/lib/day/row-phrases";
+import { cadencePhrase, flexibleWords, metPhrase, rowMeta } from "@/lib/day/row-phrases";
 import type { Cadence } from "@/lib/day/types";
 import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
@@ -125,9 +125,20 @@ export function DayRow({
     quiet && cadence
       ? metPhrase((key, values) => t(key, values), { cadence, periodDone })
       : null;
-  // The progress says the cadence already: «2 de 3 esta semana», never
-  // «3 veces por semana · 2 de 3 esta semana».
-  const meta = [progress ? null : cadenceText, amount, metWords ?? progress, writtenTime, writtenLabel].filter(Boolean).join(" · ") || undefined;
+  const meta = rowMeta((key, values) => t(key, values), {
+    kind,
+    done: markState === "declared",
+    quiet: Boolean(quiet),
+    cadenceText: progress ? null : cadenceText,
+    amount,
+    status: metWords ?? progress,
+    writtenTime,
+    writtenLabel,
+    partial:
+      kind === "quantity" && loggedQuantity != null && factId !== undefined && target != null && unit != null
+        ? { logged: loggedQuantity, target, unit }
+        : null,
+  });
 
   function handleTap() {
     if (!tappable || pending) return;
@@ -176,9 +187,9 @@ export function DayRow({
           name={name}
           target={target ?? 0}
           unit={unit ?? ""}
-          factId={done ? factId : undefined}
-          loggedQuantity={done ? loggedQuantity : undefined}
-          loggedNote={done ? note : undefined}
+          factId={factId}
+          loggedQuantity={loggedQuantity}
+          loggedNote={note}
           day={day}
         />
       ) : null}

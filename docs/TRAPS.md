@@ -2541,7 +2541,7 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
 - Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
 - Measured 2026-09-29 (module 98), lane 5, full `check:e2e`, 2 workers: **43 verifications before, 6 after**
   (42 disposable people plus the lane's own, down to the lane's own plus what `escritorio.spec.ts` mints per
-  worker). Two full runs after: 204 passed, 2 skipped, 0 failed, no `over_request_rate_limit` in the server log.
+  worker). Two full runs after: 207 passed, 0 skipped, 0 failed, no `over_request_rate_limit` in the server log.
   Before, one run was 203 passed and 1 failed (`tema.spec.ts`, no `linkInvalid`).
 - Take the person from the `person` fixture in `e2e/fixtures.ts`: one mint per worker (`workerPerson`), and its
   rows are deleted before each test. Isolation is by rows, not by person. Never call `mintDisposablePerson` in
@@ -2563,3 +2563,14 @@ A fresh identity was not the cause.
   content and `await expect(page.locator("main")).toHaveCount(1)`.
 - Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
   from inside the repo) before guessing at a red the local suite does not show.
+
+## A pulsar lane has no member identity, so `check:goal-actions` dies there
+
+- Measured 2026-09-30, module 100: in a lane opened with `--app pulsar`, `check:goal-actions` ran 18/2.
+  Both reds said `no member identity — run harness:token for this lane`. The member is minted by
+  orbit's `harness:token`, and that lane has no `apps/orbit/.env.local`.
+- Run `check:goal-actions` from the main checkout, or from a lane opened with `--app finances`.
+  Never insert the member into `auth.users` by hand: a row outside `@repo/harness-registry` is a leak
+  nothing prunes.
+- The 1280 `marco-escritorio.spec.ts` red on a lane's `next dev` is the dev overlay (`<nextjs-portal>`)
+  taking the click. `pulsar-e2e` in CI, on a build, is green on the same commit.
