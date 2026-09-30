@@ -21,11 +21,9 @@ export type CommitmentFormProps = {
   sources: { key: string; labelKey: string; unit: string }[];
 };
 
-// RP-12's five cadences (`lib/day/types.ts`'s `Cadence`), minus
-// `times_per_month`: `CompromisoNuevo.dc.html` draws four chips and none for
-// it. Reported rather than guessed at — a fifth chip is not this module's
-// call to invent.
-const CADENCE_KINDS = ["daily", "weekdays", "times_per_week", "every_n_days"] as const;
+// RP-12's five cadences (`lib/day/types.ts`'s `Cadence`), in the order of
+// `CompromisoNuevoMes.dc.html`.
+const CADENCE_KINDS = ["daily", "weekdays", "times_per_week", "every_n_days", "times_per_month"] as const;
 type CadenceKind = (typeof CADENCE_KINDS)[number];
 
 const SATISFACTION_KINDS = ["tap", "quantity", "evidence"] as const;
@@ -72,7 +70,9 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
           ? ({ cadenceKind: "weekdays", cadenceWeekdays: weekdays } as const)
           : cadenceKind === "times_per_week"
             ? ({ cadenceKind: "times_per_week", cadenceN: Number(cadenceN) } as const)
-            : ({ cadenceKind: "every_n_days", cadenceN: Number(cadenceN) } as const);
+            : cadenceKind === "every_n_days"
+              ? ({ cadenceKind: "every_n_days", cadenceN: Number(cadenceN) } as const)
+              : ({ cadenceKind: "times_per_month", cadenceN: Number(cadenceN) } as const);
 
     const done =
       satisfaction === "tap"
@@ -170,6 +170,20 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
               type="number"
               inputMode="numeric"
               min={1}
+              step={1}
+              value={cadenceN}
+              onChange={(event) => setCadenceN(event.target.value)}
+            />
+          ) : null}
+
+          {cadenceKind === "times_per_month" ? (
+            <Field
+              label={t("plan.commitmentForm.timesPerMonthLabel")}
+              hint={t("plan.commitmentForm.timesPerMonthHint")}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={31}
               step={1}
               value={cadenceN}
               onChange={(event) => setCadenceN(event.target.value)}
