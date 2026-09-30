@@ -101,8 +101,10 @@ test("flexibleWords: weekly speaks of the week, monthly of the month, an unknown
 const rowCatalogue: Record<string, string> = {
   "day.row.saidByYou": "lo dijiste tú",
   "day.row.asksNumber": "pide el número",
+  "day.row.partial": "{logged} de {target} {unit}",
 };
-const rowTranslate = (key: string) => rowCatalogue[key];
+const rowTranslate = (key: string, values: Record<string, string | number> = {}) =>
+  rowCatalogue[key].replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]));
 const base = {
   kind: "tap" as const,
   done: false,
@@ -142,4 +144,25 @@ test("an evidence row says neither, done or not", () => {
 test("a quiet row says neither", () => {
   assert.equal(rowMeta(rowTranslate, { ...base, quiet: true, done: true, status: "cumplida esta semana · 1 de 1" }), "10 min · cumplida esta semana · 1 de 1");
   assert.equal(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true }), "10 min");
+});
+
+const partial = { logged: 1, target: 3, unit: "min" };
+
+test("a quantity row logged under its target reads what it holds, its hour and «lo dijiste tú»", () => {
+  const row = { ...base, kind: "quantity" as const, amount: "3 min", writtenTime: "09:22", partial };
+  assert.equal(rowMeta(rowTranslate, row), "1 de 3 min · 09:22 · lo dijiste tú");
+  assert.equal(
+    rowMeta(rowTranslate, { ...row, writtenLabel: "anotado el lunes 21" }),
+    "1 de 3 min · 09:22 · lo dijiste tú · anotado el lunes 21",
+  );
+});
+
+test("a partial row never asks for the number again", () => {
+  const meta = rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min", writtenTime: "09:22", partial });
+  assert.equal(meta?.includes("pide el número"), false);
+});
+
+test("a partial quiet or evidence row keeps its own line", () => {
+  assert.equal(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true, partial }), "10 min");
+  assert.equal(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", partial }), "Anki");
 });

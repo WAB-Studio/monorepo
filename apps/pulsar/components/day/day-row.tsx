@@ -134,6 +134,10 @@ export function DayRow({
     status: metWords ?? progress,
     writtenTime,
     writtenLabel,
+    partial:
+      kind === "quantity" && loggedQuantity != null && factId !== undefined && target != null && unit != null
+        ? { logged: loggedQuantity, target, unit }
+        : null,
   });
 
   function handleTap() {
@@ -183,9 +187,9 @@ export function DayRow({
           name={name}
           target={target ?? 0}
           unit={unit ?? ""}
-          factId={done ? factId : undefined}
-          loggedQuantity={done ? loggedQuantity : undefined}
-          loggedNote={done ? note : undefined}
+          factId={factId}
+          loggedQuantity={loggedQuantity}
+          loggedNote={note}
           day={day}
         />
       ) : null}

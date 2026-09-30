@@ -107,7 +107,8 @@
   },
   "row": {
     "saidByYou": "lo dijiste tú",
-    "asksNumber": "pide el número"
+    "asksNumber": "pide el número",
+    "partial": "{logged} de {target} {unit}"
   },
   "tally": "hechos {done} de {total}",
   "met": {

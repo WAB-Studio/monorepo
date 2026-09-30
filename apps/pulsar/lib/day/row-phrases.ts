@@ -118,23 +118,29 @@ export type RowMetaPieces = {
   status: string | null;
   writtenTime: string | undefined;
   writtenLabel: string | undefined;
+  // A `quantity` row with a fact that day under its target: not done, yet the
+  // person wrote a number.
+  partial?: { logged: number; target: number; unit: string } | null;
 };
 
 /**
  * A row's second line, pieces joined with « · ». «lo dijiste tú» marks a
  * done `tap` or `quantity` row after its hour; «pide el número» marks a
- * `quantity` row not yet done, after its target. Evidence and quiet rows say
- * neither (`HoyEscritorio.dc.html`).
+ * `quantity` row with nothing logged, after its target. A quantity row logged
+ * under its target reads «1 de 3 min · 09:22 · lo dijiste tú», its mark still
+ * empty. Evidence and quiet rows say neither (`HoyEscritorio.dc.html`).
  */
 export function rowMeta(translate: Translate, pieces: RowMetaPieces): string | undefined {
   const { kind, done, quiet, status } = pieces;
   const loud = !quiet && kind !== "evidence";
-  const said = loud && done ? translate("day.row.saidByYou") : null;
-  const asks = loud && !done && kind === "quantity" ? translate("day.row.asksNumber") : null;
+  const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;
+  const said = loud && (done || partial) ? translate("day.row.saidByYou") : null;
+  const asks = loud && !done && !partial && kind === "quantity" ? translate("day.row.asksNumber") : null;
+  const amount = partial ? translate("day.row.partial", partial) : pieces.amount;
   return (
     [
       pieces.cadenceText,
-      pieces.amount,
+      amount,
       asks,
       status,
       pieces.writtenTime,
