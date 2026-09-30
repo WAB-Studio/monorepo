@@ -6,7 +6,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { test, expect } from "./fixtures";
 
 // `/metas` lists an ended goal apart, under «terminadas», between the open
-// ones and «Archivadas» (RP-26, RP-24, RNP-07).
+// ones and «Archivadas» (RP-27, RP-24, RNP-07).
 
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
