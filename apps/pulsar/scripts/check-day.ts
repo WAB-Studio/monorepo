@@ -2159,6 +2159,7 @@ async function runMain(): Promise<void> {
   await runEndedThisWeekCheck();
   await runPhasePositionCheck();
   await runFlexibleDayFeedCheck();
+  await runSurvivorsOf92To94Check();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
@@ -2226,6 +2227,84 @@ async function runEndedThisWeekCheck(): Promise<void> {
     );
   } finally {
     if (ids.length > 0) await db`delete from goals.goals where id in ${db(ids)}`;
+    await db.end();
+  }
+}
+
+// Module 99: what the mutator found nobody pinning on `loadDay`. Fixed 2012
+// days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
+// before it.
+async function runSurvivorsOf92To94Check(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runSurvivorsOf92To94Check: no verified session");
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, 'check-day survivors probe', '2012-12-31'::date, 'minutos', 'min',
+              '2011-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${goal.id}, 'check-day survivors quantity', 'daily', 'quantity', 10, 'min',
+              '2011-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    for (const [day, quantity] of [["2012-02-26", 50], ["2012-03-11", 7], ["2012-03-12", 10], ["2012-03-13", 5]] as const) {
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${person.id}, ${goal.id}, ${commitment.id}, ${day}::date, ${quantity})
+      `;
+    }
+    const measure = (await loadDay("2012-03-14")).weekMeasure[goal.id];
+    assert(
+      "weekMeasure on a Wednesday adds Monday and Tuesday and nothing from the month or the Sunday before",
+      measure === 15,
+      `weekMeasure = ${measure}, seeded 10 + 5 this week, 7 the Sunday before and 50 the month before`,
+    );
+
+    const phaseIds: string[] = [];
+    for (const [aim, startsOn, endsOn] of [
+      ["check-day survivors uno", "2012-03-01", "2012-03-10"],
+      ["check-day survivors dos", "2012-03-11", "2012-03-20"],
+    ]) {
+      const [phase] = await db<{ id: string }[]>`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${person.id}, ${goal.id}, ${aim}, ${startsOn}::date, ${endsOn}::date)
+        returning id
+      `;
+      phaseIds.push(phase.id);
+    }
+    const first = await loadDay("2012-03-11");
+    assert(
+      "a phase's first day is in effect: the view names it, loadDay lists it and reads «2 de 2»",
+      first.view.phase?.id === phaseIds[1] &&
+        first.phases.some((phase) => phase.id === phaseIds[1]) &&
+        JSON.stringify(first.phasePositions[phaseIds[1]]) === JSON.stringify({ ordinal: 2, total: 2 }),
+      `view.phase = ${JSON.stringify(first.view.phase)}, phases = ${JSON.stringify(first.phases.map((p) => p.id))}`,
+    );
+    const last = await loadDay("2012-03-10");
+    assert(
+      "a phase's last day is still in effect and the next one is not yet",
+      last.view.phase?.id === phaseIds[0] && !last.phases.some((phase) => phase.id === phaseIds[1]),
+      `view.phase = ${JSON.stringify(last.view.phase)}`,
+    );
+    const after = await loadDay("2012-03-21");
+    assert(
+      "a day after every phase has no phase in effect",
+      after.view.phase === null && !after.phases.some((phase) => phaseIds.includes(phase.id)),
+      `view.phase = ${JSON.stringify(after.view.phase)}`,
+    );
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId}`;
     await db.end();
   }
 }

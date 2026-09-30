@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cadencePhrase, metPhrase, phaseLine, phasePositions } from "./row-phrases";
+import { cadencePhrase, flexibleWords, metPhrase, phaseLine, phasePositions } from "./row-phrases";
 
 const names = {
   weekdayShort: ["L", "M", "X", "J", "V", "S", "D"],
@@ -62,4 +62,38 @@ test("metPhrase: a met flexible says its count, and its times once past the quot
   assert.equal(metPhrase(say, { cadence: week, periodDone: undefined }), null);
   assert.equal(metPhrase(say, { cadence: { kind: "times_per_month", count: 2 }, periodDone: 2 }), "day.met.month:2/2");
   assert.equal(metPhrase(say, { cadence: { kind: "daily" }, periodDone: 5 }), null);
+});
+
+test("phaseLine counts a goal with exactly two phases", () => {
+  assert.equal(phaseLine(translate, "empujar", { ordinal: 1, total: 2 }), "fase 1 de 2 · empujar");
+  assert.equal(phaseLine(translate, "empujar", { ordinal: 2, total: 2 }), "fase 2 de 2 · empujar");
+});
+
+test("flexibleWords: weekly speaks of the week, monthly of the month, an unknown count reads 0", () => {
+  const flexible = {
+    "week.flexible.week": "{count} veces por semana",
+    "week.flexible.month": "{count} al mes",
+    "week.flexible.weekProgress": "{done} de {total} esta semana",
+    "week.flexible.monthProgress": "{done} de {total} este mes",
+  } as Record<string, string>;
+  const say = (key: string, values: Record<string, string | number> = {}) =>
+    flexible[key].replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]));
+
+  assert.deepEqual(flexibleWords({ cadence: { kind: "times_per_week", count: 3 }, periodDone: 1 }, say), {
+    cadence: "3 veces por semana",
+    progress: "1 de 3 esta semana",
+  });
+  assert.deepEqual(flexibleWords({ cadence: { kind: "times_per_month", count: 4 }, periodDone: 3 }, say), {
+    cadence: "4 al mes",
+    progress: "3 de 4 este mes",
+  });
+  assert.equal(
+    flexibleWords({ cadence: { kind: "times_per_week", count: 3 }, periodDone: null }, say)?.progress,
+    "0 de 3 esta semana",
+  );
+  assert.equal(
+    flexibleWords({ cadence: { kind: "times_per_month", count: 4 }, periodDone: null }, say)?.progress,
+    "0 de 4 este mes",
+  );
+  assert.equal(flexibleWords({ cadence: { kind: "daily" }, periodDone: null }, say), null);
 });
