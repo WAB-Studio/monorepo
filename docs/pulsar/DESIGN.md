@@ -533,7 +533,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **A one-column screen caps at 640 px from 1024.** Decided 2026-09-29 by the user.
 - **«N al mes» is the fifth cadence chip** and swaps the row for «veces al mes». Board
   `CompromisoNuevoMes.dc.html`. Decided 2026-09-29 by the user.
-- **Hoy builds what `HoyEscritorio.dc.html` draws**: «Hoy pide N», each row's cadence, a flexible
+- **Hoy builds what `HoyEscritorio.dc.html` draws**: each row's cadence, a flexible
   commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.
+- **Hoy says «hechos N de M» over the same rows as the Semana's «hechos»**; a flexible row with
+  progress says only its progress; a flexible met in its period stays as a quiet row «cumplida esta
+  semana», and can be marked again. Board `HoyCuenta.dc.html`. Decided 2026-09-29 by the coordinator,
+  on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
 - **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.

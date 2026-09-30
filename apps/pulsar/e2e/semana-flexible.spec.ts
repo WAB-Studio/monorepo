@@ -166,7 +166,7 @@ test("Hoy carries a flexible commitment's period count on its row and asks it on
   }
   await seed(weekly, "times_per_week", 3, inWeek);
   await seed(monthly, "times_per_month", 4, inMonth);
-  // Met in an earlier week of the month, never today: it must not be asked.
+  // Met in an earlier week of the month: not asked today, drawn quiet.
   const earlier = `${month}-01`;
   if (earlier < week[0]) await seed(met, "times_per_month", 1, [earlier]);
 
@@ -177,9 +177,9 @@ test("Hoy carries a flexible commitment's period count on its row and asks it on
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByText(goalName, { exact: true })).toBeVisible();
     const row = (name: string) => page.getByRole("button", { name: new RegExp(`^${name}`) });
-    await expect(row(weekly)).toContainText(`3 veces por semana · ${inWeek.length} de 3 esta semana`);
-    await expect(row(monthly)).toContainText(`4 veces al mes · ${inMonth.length} de 4 este mes`);
-    if (earlier < week[0]) await expect(page.getByText(met)).toHaveCount(0);
+    await expect(row(weekly)).toContainText(`${inWeek.length} de 3 esta semana`);
+    await expect(row(monthly)).toContainText(`${inMonth.length} de 4 este mes`);
+    if (earlier < week[0]) await expect(row(met)).toContainText("cumplida este mes · 1 de 1");
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;

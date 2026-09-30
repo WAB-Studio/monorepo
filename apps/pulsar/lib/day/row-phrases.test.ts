@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cadencePhrase, phaseLine, phasePositions } from "./row-phrases";
+import { cadencePhrase, metPhrase, phaseLine, phasePositions } from "./row-phrases";
 
 const names = {
   weekdayShort: ["L", "M", "X", "J", "V", "S", "D"],
@@ -51,4 +51,15 @@ test("phasePositions orders each goal's phases by start, apart from other goals"
 test("phaseLine counts phases when there are several and names alone when there is one", () => {
   assert.equal(phaseLine(translate, "desbloquear la boca", { ordinal: 1, total: 3 }), "fase 1 de 3 · desbloquear la boca");
   assert.equal(phaseLine(translate, "desbloquear la boca", { ordinal: 1, total: 1 }), "desbloquear la boca");
+});
+
+test("metPhrase: a met flexible says its count, and its times once past the quota", () => {
+  const say = (key: string, values?: Record<string, string | number>) => `${key}:${values?.done}/${values?.total}`;
+  const week = { kind: "times_per_week", count: 1 } as const;
+  assert.equal(metPhrase(say, { cadence: week, periodDone: 1 }), "day.met.week:1/1");
+  assert.equal(metPhrase(say, { cadence: week, periodDone: 2 }), "day.met.weekOver:2/1");
+  assert.equal(metPhrase(say, { cadence: week, periodDone: 0 }), null);
+  assert.equal(metPhrase(say, { cadence: week, periodDone: undefined }), null);
+  assert.equal(metPhrase(say, { cadence: { kind: "times_per_month", count: 2 }, periodDone: 2 }), "day.met.month:2/2");
+  assert.equal(metPhrase(say, { cadence: { kind: "daily" }, periodDone: 5 }), null);
 });

@@ -64,3 +64,10 @@
   box-shadow: none;
   border: 1.5px dashed currentcolor;
 }
+
+/* A check that asks nothing: the quiet tone filled, the same text-on-fill
+   colour as `declared`. Follows `.declared` so it wins the cascade. */
+.quiet {
+  background: var(--pulsar-quiet);
+  color: var(--pulsar-on-accent);
+}
