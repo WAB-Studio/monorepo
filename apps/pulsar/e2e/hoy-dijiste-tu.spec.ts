@@ -5,6 +5,8 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 // a marked one says «lo dijiste tú» after its hour, an unmarked quantity one
 // says «pide el número» after its target, one logged under its target says
 // what it holds, an unmarked tap row and a quiet met row say neither.
+// Paths by day: the flexible row is quiet every day but a Monday the 1st, when
+// nothing earlier in its week or month met it and it reads its own progress.
 
 test("Hoy says «lo dijiste tú» on a marked row and «pide el número» on an unmarked quantity row", async ({
   person,
@@ -34,11 +36,13 @@ test("Hoy says «lo dijiste tú» on a marked row and «pide el número» on an 
   await insertCommitment("Sin marcar", "tap", null, null);
   await insertCommitment("Sin número", "quantity", 3, "min");
   const partial = await insertCommitment("Parcial", "quantity", 3, "min");
-  // Met earlier in its week, or its month on a Monday: a quiet row.
+  // Met earlier in its week, or its month on a Monday. Monday the 1st has
+  // neither: the fact seeded yesterday falls in the period before, so the row
+  // is still owed.
   const weekday = (civilDateToDate(today).getUTCDay() + 6) % 7;
   const monthDay = Number(today.slice(8));
-  test.skip(weekday === 0 && monthDay === 1, "nothing earlier in the week or month to have met it");
   const period = weekday > 0 ? "week" : "month";
+  const met = weekday > 0 || monthDay > 1;
   const [quietRow] = await db<{ id: string }[]>`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
     values (${person.id}, ${goal.id}, 'Cumplida', ${period === "week" ? "times_per_week" : "times_per_month"}, 1, 'tap',
@@ -77,9 +81,12 @@ test("Hoy says «lo dijiste tú» on a marked row and «pide el número» on an 
     await expect(page.getByText("pide el número")).toHaveCount(1);
     await expect(page.getByText("lo dijiste tú")).toHaveCount(3);
     // A flexible row met earlier in its period stays quiet.
-    await expect(
-      page.getByText(period === "week" ? "cumplida esta semana · 1 de 1" : "cumplida este mes · 1 de 1", { exact: true }),
-    ).toBeVisible();
+    const metPhrase = period === "week" ? "cumplida esta semana · 1 de 1" : "cumplida este mes · 1 de 1";
+    await expect(page.getByText(metPhrase, { exact: true })).toHaveCount(met ? 1 : 0);
+    await expect(page.getByText(/cumplida (esta semana|este mes)/)).toHaveCount(met ? 1 : 0);
+    // Owed, it is a row asking for a tap with its own progress.
+    const quiet = page.getByRole("button", { name: /^Cumplida/ });
+    await expect(quiet).toContainText(met ? metPhrase : "0 de 1 este mes");
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;

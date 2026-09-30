@@ -1,10 +1,11 @@
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // What the mutator found nobody pinning on Hoy (module 99): every goal that
 // ended this week gets its own line, and a row's second line reads in the
 // order `HoyEscritorio.dc.html` and `HoyCuenta.dc.html` draw it: cadence,
 // amount, count, hour, and the day it was written when that is not the day.
+// Paths by day: Monday asserts both ended lines absent; Tuesday to Sunday draw them.
 
 function shift(day: string, by: number): string {
   const date = civilDateToDate(day);
@@ -24,9 +25,9 @@ async function settled(page: import("@playwright/test").Page): Promise<void> {
   await expect(page.locator("main :is(h1, p, a, button, input)").first()).toBeVisible();
 }
 
-test("two goals ended this week draw one «terminó ayer · ver» line each", async ({ browser, baseURL, db }) => {
-  test.skip(todayIndex === 0, "yesterday was Sunday: its week is over, so no line draws");
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+test("two goals ended this week draw one «terminó ayer · ver» line each", async ({ browser, baseURL, person, db }) => {
+  // On a Monday yesterday was Sunday: its week is over, so no line draws.
+  const drawn = todayIndex > 0;
   const stamp = Date.now();
   const first = `Terminada uno ${stamp}`;
   const second = `Terminada dos ${stamp}`;
@@ -45,19 +46,20 @@ test("two goals ended this week draw one «terminó ayer · ver» line each", as
     await page.goto("/");
     await settled(page);
     await expect(page.getByText(openName).first()).toBeVisible();
-    await expect(page.getByText(`${first} terminó ayer ·`)).toBeVisible();
-    await expect(page.getByText(`${second} terminó ayer ·`)).toBeVisible();
-    await expect(page.getByText(/ terminó ayer ·/)).toHaveCount(2);
-    await expect(page.getByRole("link", { name: `Abrir ${first}` })).toHaveText("ver");
-    await expect(page.getByRole("link", { name: `Abrir ${second}` })).toHaveText("ver");
+    await expect(page.getByText(`${first} terminó ayer ·`)).toHaveCount(drawn ? 1 : 0);
+    await expect(page.getByText(`${second} terminó ayer ·`)).toHaveCount(drawn ? 1 : 0);
+    await expect(page.getByText(/ terminó ayer ·/)).toHaveCount(drawn ? 2 : 0);
+    for (const name of [first, second]) {
+      await expect(page.getByRole("link", { name: `Abrir ${name}`, exact: true })).toHaveCount(drawn ? 1 : 0);
+      await expect(page.getByRole("link", { name: `Abrir ${name}` }).filter({ hasText: /^ver$/ })).toHaveCount(drawn ? 1 : 0);
+    }
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
 
-test("a row's second line reads cadence, amount, count, hour, in that order", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+test("a row's second line reads cadence, amount, count, hour, in that order", async ({ browser, baseURL, person, db }) => {
   const stamp = Date.now();
   const goalName = `Orden ${stamp}`;
   const context = await browser.newContext({ baseURL: baseURL!, storageState: person.sessionFile });

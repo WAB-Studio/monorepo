@@ -25,12 +25,12 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
   const metWeekly = `Cumplida semana ${stamp}`;
   const today = todayInZone();
   const week = weekOf(today);
-  // The monthly one is met by a fact on the 1st, so it is quiet every day but
-  // the 1st; the weekly one needs a day earlier in the week.
+  // A row is met by a fact earlier in its period. The 1st has no earlier day
+  // in its month and a Monday none in its week: the fact is seeded yesterday,
+  // which falls in the period before, so the row stays owed.
   const firstOfMonth = `${today.slice(0, 7)}-01`;
-  const earlier = firstOfMonth < today ? firstOfMonth : null;
-  const earlierInWeek = week[0] < today ? week[0] : null;
-
+  const monthlyMet = firstOfMonth < today;
+  const weeklyMet = week[0] < today;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
     values (${person.id}, ${goalName}, ${plusDays(90)}, now() - interval '20 days') returning id
@@ -52,8 +52,8 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     insert into goals.facts (user_id, commitment_id, goal_id, day, written_at)
     values (${person.id}, ${id}, ${goal.id}, ${day}, now())
   `;
-  if (earlier) await fact(metId, earlier);
-  if (earlierInWeek) await fact(metWeeklyId, earlierInWeek);
+  await fact(metId, monthlyMet ? firstOfMonth : plusDays(-1));
+  await fact(metWeeklyId, weeklyMet ? week[0] : plusDays(-1));
 
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
@@ -85,14 +85,14 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     await expect(table).toBeVisible();
     await expect(table.locator("tfoot td").nth(week.indexOf(today))).toHaveText("2 de 2");
 
-    if (earlier) {
-      await page.setViewportSize({ width: 360, height: 800 });
-      await page.goto("/");
-      await expect(page.locator("main")).toHaveCount(1);
-      const quiet = page.getByRole("button", { name: new RegExp(`^${met}`) });
-      await expect(quiet).toContainText("cumplida este mes · 1 de 1");
-      await expect(page.getByText("hechos 2 de 2", { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
+    const quiet = page.getByRole("button", { name: new RegExp(`^${met}`) });
+    await expect(quiet).toContainText(monthlyMet ? "cumplida este mes · 1 de 1" : "0 de 1 este mes");
+    await expect(page.getByText("hechos 2 de 2", { exact: true })).toBeVisible();
 
+    if (monthlyMet) {
       await quiet.click();
       await expect(quiet).toContainText("cumplida este mes · 2 veces");
       await expect(page.getByText("hechos 2 de 2", { exact: true })).toBeVisible();
@@ -104,13 +104,12 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
       await quiet.click();
       await expect(quiet).toContainText("cumplida este mes · 1 de 1");
     }
-    if (earlierInWeek) {
-      await page.goto("/");
-      await expect(page.locator("main")).toHaveCount(1);
-      await expect(page.getByRole("button", { name: new RegExp(`^${metWeekly}`) })).toContainText(
-        "cumplida esta semana · 1 de 1",
-      );
-    }
+
+    await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: new RegExp(`^${metWeekly}`) })).toContainText(
+      weeklyMet ? "cumplida esta semana · 1 de 1" : "0 de 1 esta semana",
+    );
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;

@@ -6,8 +6,9 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Hoy says when a goal ended (`HoyMetaTerminada.dc.html`): «X terminó ayer ·
 // ver» for the day after, the weekday later in the same week, nothing once
-// the week it ended in is over. Every test seeds a person of its own and
-// horizons relative to today.
+// the week it ended in is over. Every test seeds horizons relative to today.
+// Paths by day: Monday asserts the lines absent (yesterday and the day before
+// are last week); Tuesday draws «ayer» only; Wednesday to Sunday draw both.
 
 function shift(day: string, by: number): string {
   const date = civilDateToDate(day);
@@ -19,6 +20,8 @@ const today = todayInZone();
 // 0 is Monday.
 const todayIndex = (civilDateToDate(today).getUTCDay() + 6) % 7;
 const weekStart = shift(today, -todayIndex);
+// Whether the day `by` days ago belongs to this week, so its line draws.
+const inThisWeek = (by: number) => todayIndex >= by;
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function dayWords(day: string): string {
@@ -68,26 +71,31 @@ async function open(page: Page, path = "/"): Promise<void> {
 }
 
 test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ browser, baseURL, person, db }) => {
-  test.skip(todayIndex === 0, "yesterday was Sunday: its week is over, so the line is gone (covered by the last-week case)");
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Dejar el azúcar ${Date.now()}`;
-    await seedOpen(db, personId, `Abierta ${Date.now()}`);
+    const openName = `Abierta ${Date.now()}`;
+    await seedOpen(db, personId, openName);
     await seedEnded(db, personId, name, shift(today, -1));
     await open(page);
-    const line = page.getByText(`${name} terminó ayer ·`);
-    await expect(line).toBeVisible();
+    // On a Monday yesterday was Sunday: its week is over and the line is gone.
+    await expect(page.getByText(openName).first()).toBeVisible();
+    await expect(page.getByText(`${name} terminó ayer ·`)).toHaveCount(inThisWeek(1) ? 1 : 0);
     await expect(page.getByText(/terminó el /)).toHaveCount(0);
   });
 });
 
 test("a goal that ended two days ago this week names the day", async ({ browser, baseURL, person, db }) => {
-  test.skip(todayIndex < 2, "two days ago is in the previous week on a Monday or Tuesday");
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Dejar el café ${Date.now()}`;
-    await seedOpen(db, personId, `Abierta ${Date.now()}`);
+    const openName = `Abierta ${Date.now()}`;
+    await seedOpen(db, personId, openName);
     await seedEnded(db, personId, name, shift(today, -2));
     await open(page);
-    await expect(page.getByText(`${name} terminó el ${dayWords(shift(today, -2))} ·`)).toBeVisible();
+    // On a Monday or Tuesday two days ago is last week: no line.
+    await expect(page.getByText(openName).first()).toBeVisible();
+    await expect(page.getByText(`${name} terminó el ${dayWords(shift(today, -2))} ·`)).toHaveCount(
+      inThisWeek(2) ? 1 : 0,
+    );
     await expect(page.getByText(/terminó ayer/)).toHaveCount(0);
   });
 });
@@ -106,22 +114,26 @@ test("a goal that ended last week shows nothing", async ({ browser, baseURL, per
 });
 
 test("«ver» opens the goal that ended", async ({ browser, baseURL, person, db }) => {
-  test.skip(todayIndex === 0, "yesterday was Sunday: its week is over, so there is no line to follow");
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Meta que ver ${Date.now()}`;
-    await seedOpen(db, personId, `Abierta ${Date.now()}`);
+    const openName = `Abierta ${Date.now()}`;
+    await seedOpen(db, personId, openName);
     const id = await seedEnded(db, personId, name, shift(today, -1));
     await open(page);
+    // On a Monday yesterday was Sunday: there is no line, so no link to follow.
+    await expect(page.getByText(openName).first()).toBeVisible();
     const link = page.getByRole("link", { name: `Abrir ${name}` });
-    await expect(link).toHaveText("ver");
-    await link.click();
-    await expect(page).toHaveURL(new RegExp(`/metas/${id}$`));
-    await expect(page.getByText(name).first()).toBeVisible();
+    await expect(link).toHaveCount(inThisWeek(1) ? 1 : 0);
+    if (inThisWeek(1)) {
+      await expect(link).toHaveText("ver");
+      await link.click();
+      await expect(page).toHaveURL(new RegExp(`/metas/${id}$`));
+      await expect(page.getByText(name).first()).toBeVisible();
+    }
   });
 });
 
 test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser, baseURL, person, db }) => {
-  test.skip(todayIndex === 0, "yesterday was Sunday: its week is over, so there is no line to place");
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const stamp = Date.now();
     const openName = `Abierta ${stamp}`;
@@ -131,30 +143,42 @@ test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser
     await page.setViewportSize({ width: 1280, height: 800 });
     await open(page);
     const line = page.getByText(`${name} terminó ayer ·`);
-    await expect(line).toBeVisible();
+    await expect(line).toHaveCount(inThisWeek(1) ? 1 : 0);
     const box = async (locator: Locator) => (await locator.boundingBox())!;
-    const [t, l, g] = [await box(page.getByRole("main").getByText("Hoy", { exact: true })), await box(line), await box(page.getByText(openName).first())];
-    expect(l.y).toBeGreaterThanOrEqual(t.y + t.height - 1);
-    expect(g.y).toBeGreaterThan(l.y);
-    expect(Math.abs(l.x - t.x)).toBeLessThan(2);
+    const t = await box(page.getByRole("main").getByText("Hoy", { exact: true }));
+    const g = await box(page.getByText(openName).first());
+    // On a Monday no line draws: the goal sits straight under the title.
+    expect(g.y).toBeGreaterThanOrEqual(t.y + t.height - 1);
+    if (inThisWeek(1)) {
+      const l = await box(line);
+      expect(l.y).toBeGreaterThanOrEqual(t.y + t.height - 1);
+      expect(g.y).toBeGreaterThan(l.y);
+      expect(Math.abs(l.x - t.x)).toBeLessThan(2);
+    }
   });
 });
 
 test("several goals ended this week read one line each, most recent first", async ({ browser, baseURL, person, db }) => {
-  test.skip(todayIndex < 2, "two goals ended on different days of this week need a Wednesday or later");
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const stamp = Date.now();
     const older = `Antigua ${stamp}`;
     const newer = `Reciente ${stamp}`;
-    await seedOpen(db, personId, `Abierta ${stamp}`);
+    const openName = `Abierta ${stamp}`;
+    await seedOpen(db, personId, openName);
     await seedEnded(db, personId, older, shift(today, -2));
     await seedEnded(db, personId, newer, shift(today, -1));
     await open(page);
-    const first = page.getByText(`${newer} terminó ayer ·`);
-    const second = page.getByText(`${older} terminó el ${dayWords(shift(today, -2))} ·`);
-    await expect(first).toBeVisible();
-    await expect(second).toBeVisible();
-    expect((await first.boundingBox())!.y).toBeLessThan((await second.boundingBox())!.y);
+    await expect(page.getByText(openName).first()).toBeVisible();
+    // Monday draws none, Tuesday only the newer one, Wednesday on both.
+    const expected = [
+      ...(inThisWeek(1) ? [`${newer} terminó ayer ·`] : []),
+      ...(inThisWeek(2) ? [`${older} terminó el ${dayWords(shift(today, -2))} ·`] : []),
+    ];
+    const lines = page.getByText(/ terminó (ayer|el) /);
+    await expect(lines).toHaveCount(expected.length);
+    const texts = await lines.allTextContents();
+    // The page's order is the test: most recent first.
+    expected.forEach((line, index) => expect(texts[index]).toContain(line));
   });
 });
 

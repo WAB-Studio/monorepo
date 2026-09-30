@@ -5,6 +5,8 @@ import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zon
 // The words Hoy says at every width: a goal's name as written, a far date with
 // its month, a goal that ended off the screen, and the day that has no goal
 // left (`HoyTodasTerminadas.dc.html`; RP-19, RP-20, RP-06, RNP-07).
+// Paths by day: on a Monday this week's Monday is today's own one-off, so its
+// «del …» is asserted absent; every other day asserts it drawn.
 
 const WEEKDAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 const MONTHS = [
@@ -70,9 +72,8 @@ test("a one-off carried from before this week names its month; one from this wee
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.getByText(`del ${words(far, true)}`, { exact: true })).toBeVisible();
-    if (near < todayInZone()) {
-      await expect(page.getByText(`del ${words(near, false)}`, { exact: true })).toBeVisible();
-    }
+    await expect(page.getByText("Reciente", { exact: true })).toBeVisible();
+    await expect(page.getByText(`del ${words(near, false)}`, { exact: true })).toHaveCount(near < todayInZone() ? 1 : 0);
   } finally {
     await context.close();
     await db`delete from goals.one_offs where user_id = ${person.id}`;
