@@ -118,7 +118,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 #### The account
 
-- [ ] **RP-18** — A person signs in with a link sent to their address, with the session and the claim verification `apps/voyager` already uses. The log is theirs and reaches every device they sign in on.
+- [x] **RP-18** — A person signs in with a link sent to their address, with the session and the claim verification `apps/voyager` already uses. The log is theirs and reaches every device they sign in on.
 
 ### Non-functional requirements
 
