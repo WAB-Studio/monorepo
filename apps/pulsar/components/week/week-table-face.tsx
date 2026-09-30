@@ -6,7 +6,8 @@ import { tallyDays } from "@/lib/day/tally";
 import type { DaySlot } from "@/lib/day/types";
 import type { loadWeek } from "@/lib/queries/week";
 
-import { flexibleWords, goalWeekProgress } from "./week-progress";
+import { goalWeekProgress } from "./week-progress";
+import { flexibleWords } from "@/lib/day/row-phrases";
 
 type Translate = Awaited<ReturnType<typeof getTranslations>>;
 type Week = Awaited<ReturnType<typeof loadWeek>>;

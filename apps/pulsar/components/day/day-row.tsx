@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
-import { cadencePhrase } from "@/lib/day/row-phrases";
+import { cadencePhrase, flexibleWords } from "@/lib/day/row-phrases";
 import type { Cadence } from "@/lib/day/types";
 import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
@@ -30,6 +30,9 @@ export type DayRowProps = {
   target?: number | null;
   unit?: string | null;
   cadence?: Cadence;
+  // Days a flexible commitment has a fact in its week or month, the day's own
+  // included; absent for a cadence counted by the day.
+  periodDone?: number;
   // Today's own fact for this commitment, the most recent one when more than
   // one landed (`lib/queries/day.ts`'s `LoggedFact`) — undefined while the
   // row is still empty, which is exactly when there is nothing to undo yet.
@@ -79,6 +82,7 @@ export function DayRow({
   target,
   unit,
   cadence,
+  periodDone,
   factId,
   loggedQuantity,
   note,
@@ -109,7 +113,10 @@ export function DayRow({
         weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
       })
     : null;
-  const meta = [cadenceText, amount, writtenTime, writtenLabel].filter(Boolean).join(" · ") || undefined;
+  const progress = cadence
+    ? (flexibleWords({ cadence, periodDone: periodDone ?? null }, (key, values) => t(key, values))?.progress ?? null)
+    : null;
+  const meta = [cadenceText, amount, progress, writtenTime, writtenLabel].filter(Boolean).join(" · ") || undefined;
 
   function handleTap() {
     if (!tappable || pending) return;
