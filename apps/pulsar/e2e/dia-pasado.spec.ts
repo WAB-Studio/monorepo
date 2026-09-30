@@ -171,7 +171,7 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
   try {
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
-    await expect(page.getByText(/ese día pedía/i).first()).toBeVisible();
+    await expect(page.getByText(/hechos \d+ de \d+/).first()).toBeVisible();
     await expect(page.getByText(name, { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Algo suelto")).toHaveCount(0);
 
@@ -232,7 +232,7 @@ test("a day before every goal this person holds says it asked for nothing, with 
   await page.goto(`/dia/${day}`);
   await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
   await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
-  await expect(page.getByText(/ese día pedía/i)).toHaveCount(0);
+  await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
   if (earliest !== null) await expect(page.getByText(/empezó el/)).toBeVisible();
 
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -266,7 +266,7 @@ for (const [label, fecha] of [
   test(`/dia/<${label}> draws no day (RP-06)`, async ({ page }) => {
     await page.goto(`/dia/${fecha}`);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
-    await expect(page.getByText(/ese día pedía/i)).toHaveCount(0);
+    await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Ver (ayer|el día anterior)/ })).toHaveCount(0);
     expect(new URL(page.url()).pathname).toBe(`/dia/${fecha}`);

@@ -3,7 +3,8 @@ import { getTranslations } from "next-intl/server";
 
 import { Button, Face, Figure, Flex, Page, Panel, SectionLabel, Split, Text } from "@/components/ui";
 import { dayPhrase as dayPhraseOf, endedPhrase } from "@/lib/day/day-phrase";
-import { phaseLine } from "@/lib/day/row-phrases";
+import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
+import { tallyDay } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -60,11 +61,6 @@ function dayPhrase(key: string, day: string, t: Translate, extra: Record<string,
     { weekdays: t.raw("day.weekdayLong") as string[], months: t.raw("day.monthLong") as string[] },
     extra,
   );
-}
-
-function countInWords(count: number, t: Translate): string {
-  const words = t.raw("day.past.countWords") as string[];
-  return words[count] ?? String(count);
 }
 
 /**
@@ -145,13 +141,18 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
 
   const waiting = daylessCount + scheduledCount;
 
-  const goalIds = new Set(goals.map((goal) => goal.id));
-  const commitmentIds = new Set(
-    commitments.filter((commitment) => goalIds.has(commitment.goalId)).map((commitment) => commitment.id),
-  );
-  // Commitments asking today, across every goal drawn; nothing to say when
-  // none does or when the all-ended card stands in for the goals.
-  const asked = past || goals.length === 0 ? 0 : view.slots.filter((slot) => commitmentIds.has(slot.commitmentId)).length;
+  // The same count the Semana's cell for this day makes; nothing to say when
+  // it counts nothing or when the all-ended card stands in for the goals.
+  const counted = tallyDay({
+    view,
+    goals: openGoals,
+    commitments,
+    oneOffFacts: doneOneOffs.map((oneOff) => ({ day, goalId: oneOff.goalId })),
+  });
+  const tally =
+    goals.length === 0 || lastEnded || counted.total === 0
+      ? undefined
+      : t("day.tally", { done: counted.done, total: counted.total });
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
   // Stable: within each kind, `loadDay`'s own creation order stands.
@@ -212,15 +213,25 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {goals.map((goal) => {
         const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
         const goalPhase = phaseOn(goalPhases, day);
-        const rows = commitments
+        const own = commitments
           .filter((commitment) => commitment.goalId === goal.id)
-          .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }))
-          // A commitment that does not ask on `day` has no slot at all
-          // (`deriveDay`'s own contract) — nothing to draw for it today.
+          .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }));
+        // A commitment that does not ask on `day` has no slot at all
+        // (`deriveDay`'s own contract): one still owed draws nothing, one
+        // already met in its period draws quiet after the asked rows.
+        const rows = own.filter(
+          (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } => entry.slot !== undefined,
+        );
+        const met = own
           .filter(
-            (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } =>
-              entry.slot !== undefined,
-          );
+            (entry) =>
+              entry.slot === undefined &&
+              metPhrase((key, values) => t(key, values), {
+                cadence: entry.commitment.cadence,
+                periodDone: periodDone[entry.commitment.id],
+              }) !== null,
+          )
+          .map((entry) => entry.commitment);
 
         return (
           <Panel as="div" key={goal.id}>
@@ -230,9 +241,6 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 <Text as="p" tone="muted" variant="meta">
                   {phaseLine((key, values) => t(key, values), goalPhase.name, phasePositions[goalPhase.id])}
                 </Text>
-              ) : null}
-              {past ? (
-                <SectionLabel>{t("day.past.asked", { count: countInWords(rows.length, t) })}</SectionLabel>
               ) : null}
               {rows.map(({ commitment, slot }) => {
                 const logged = factsByCommitment[commitment.id];
@@ -264,6 +272,27 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                         ? timeInZone(logged.writtenAt)
                         : undefined
                     }
+                  />
+                );
+              })}
+              {met.map((commitment) => {
+                const logged = factsByCommitment[commitment.id];
+                return (
+                  <DayRow
+                    key={commitment.id}
+                    commitmentId={commitment.id}
+                    name={commitment.name}
+                    kind={commitment.kind}
+                    markState="declared"
+                    quiet
+                    target={commitment.target}
+                    unit={commitment.unit}
+                    cadence={commitment.cadence}
+                    periodDone={periodDone[commitment.id]}
+                    factId={logged?.factId}
+                    loggedQuantity={logged?.quantity ?? null}
+                    note={logged?.note ?? null}
+                    day={past ? day : undefined}
                   />
                 );
               })}
@@ -356,6 +385,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           }
           limitNote={day > oldestPastDay(today) ? undefined : t("day.past.limit")}
           toToday={{ href: "/", label: t("day.nav.today") }}
+          tally={tally}
         />
       ) : (
         <DayHeader
@@ -363,7 +393,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           title={t("day.title")}
           back={{ href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }}
           theme={{ toLightLabel: t("day.theme.toLight"), toDarkLabel: t("day.theme.toDark") }}
-          asks={asked > 0 ? t("day.asksToday", { count: countInWords(asked, t) }) : undefined}
+          tally={tally}
           ended={endedLines}
         />
       )}

@@ -38,6 +38,9 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // `<button>`. `leadingLabel` names it for a reader.
   leadingHref?: string;
   leadingLabel?: string;
+  // The name reads muted: a commitment already met, still tappable
+  // (`HoyCuenta.dc.html`).
+  quiet?: boolean;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -50,6 +53,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     onLeadingClick,
     leadingHref,
     leadingLabel,
+    quiet,
     className,
     type = "button",
     disabled,
@@ -70,7 +74,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
   const body = (
     <>
       <span className={styles.body}>
-        <Text as="span" variant="name">
+        <Text as="span" variant="name" tone={quiet ? "muted" : undefined}>
           {name}
         </Text>
         {meta ? (

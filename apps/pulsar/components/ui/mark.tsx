@@ -18,6 +18,7 @@ export function Mark({
   dashed,
   label,
   size = "row",
+  quiet,
 }: {
   state: MarkState;
   // The one dashed stroke in the design: the row nothing has written yet
@@ -31,11 +32,15 @@ export function Mark({
   // same filled/outlined shape, standing on its own with no check, since a
   // phase is never "satisfied", only in effect or not (RP-15).
   size?: "row" | "dot";
+  // A declared check with no accent: a commitment already met in its period
+  // (`HoyCuenta.dc.html`), done for now and asking nothing today.
+  quiet?: boolean;
 }) {
   const className = [
     styles.mark,
     states[state],
     dashed ? styles.dashed : undefined,
+    quiet ? styles.quiet : undefined,
     size === "dot" ? styles.dot : undefined,
   ]
     .filter(Boolean)

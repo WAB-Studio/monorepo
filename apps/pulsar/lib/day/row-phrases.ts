@@ -56,6 +56,29 @@ export function phasePositions(
   return positions;
 }
 
+/**
+ * A flexible commitment already met in its period, drawn quiet: «cumplida
+ * esta semana · 1 de 1». Past its quota the count is said as times, since
+ * «2 de 1» reads as a mistake. Null for a cadence counted by the day, or one
+ * not yet met.
+ */
+export function metPhrase(
+  translate: Translate,
+  commitment: { cadence: Cadence; periodDone: number | undefined },
+): string | null {
+  const { cadence, periodDone } = commitment;
+  if (periodDone === undefined) return null;
+  let period: "week" | "month";
+  if (cadence.kind === "times_per_week") period = "week";
+  else if (cadence.kind === "times_per_month") period = "month";
+  else return null;
+  if (periodDone < cadence.count) return null;
+  return translate(periodDone > cadence.count ? `day.met.${period}Over` : `day.met.${period}`, {
+    done: periodDone,
+    total: cadence.count,
+  });
+}
+
 type Say = (key: string, values?: Record<string, number | string>) => string;
 
 /**

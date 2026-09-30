@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
-import { cadencePhrase, flexibleWords } from "@/lib/day/row-phrases";
+import { cadencePhrase, flexibleWords, metPhrase } from "@/lib/day/row-phrases";
 import type { Cadence } from "@/lib/day/types";
 import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
@@ -52,6 +52,9 @@ export type DayRowProps = {
   writtenLabel?: string;
   // «07:40»: the hour a done commitment was written.
   writtenTime?: string;
+  // A flexible commitment already met in its period, asking nothing today:
+  // drawn muted, tappable all the same. `periodDone` says how far it went.
+  quiet?: boolean;
 };
 
 // A done row's own second line (decided 2026-09-27, `docs/pulsar/DESIGN.md`
@@ -89,6 +92,7 @@ export function DayRow({
   day,
   writtenLabel,
   writtenTime,
+  quiet,
 }: DayRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
@@ -96,7 +100,8 @@ export function DayRow({
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const tappable = kind !== "evidence";
-  const done = markState === "declared";
+  // A quiet row has no slot, so what it holds today is the fact itself.
+  const done = quiet ? factId !== undefined : markState === "declared";
   // `unit` is the commitment's own word ("minutos"), never abbreviated: no
   // table maps an arbitrary unit string to a short form.
   const amount =
@@ -116,7 +121,13 @@ export function DayRow({
   const progress = cadence
     ? (flexibleWords({ cadence, periodDone: periodDone ?? null }, (key, values) => t(key, values))?.progress ?? null)
     : null;
-  const meta = [cadenceText, amount, progress, writtenTime, writtenLabel].filter(Boolean).join(" · ") || undefined;
+  const metWords =
+    quiet && cadence
+      ? metPhrase((key, values) => t(key, values), { cadence, periodDone })
+      : null;
+  // The progress says the cadence already: «2 de 3 esta semana», never
+  // «3 veces por semana · 2 de 3 esta semana».
+  const meta = [progress ? null : cadenceText, amount, metWords ?? progress, writtenTime, writtenLabel].filter(Boolean).join(" · ") || undefined;
 
   function handleTap() {
     if (!tappable || pending) return;
@@ -140,7 +151,8 @@ export function DayRow({
   return (
     <>
       <Row
-        leading={<Mark state={markState} />}
+        leading={<Mark state={markState} quiet={quiet} />}
+        quiet={quiet}
         name={name}
         meta={meta}
         onClick={handleTap}

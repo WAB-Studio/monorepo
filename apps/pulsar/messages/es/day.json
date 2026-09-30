@@ -12,11 +12,6 @@
     "today": "volver a hoy"
   },
   "past": {
-    "asked": "Ese día pedía {count}",
-    "countWords": [
-      "nada", "uno", "dos", "tres", "cuatro", "cinco", "seis",
-      "siete", "ocho", "nueve", "diez", "once", "doce"
-    ],
     "writtenOn": "anotado el {weekday} {day}",
     "nothingTitle": "Ese día no pedía nada",
     "writtenOnFar": "anotado el {weekday} {day} de {month}",
@@ -110,7 +105,13 @@
   "phase": {
     "of": "fase {ordinal} de {total} · {name}"
   },
-  "asksToday": "Hoy pide {count}",
+  "tally": "hechos {done} de {total}",
+  "met": {
+    "week": "cumplida esta semana · {done} de {total}",
+    "month": "cumplida este mes · {done} de {total}",
+    "weekOver": "cumplida esta semana · {done} veces",
+    "monthOver": "cumplida este mes · {done} veces"
+  },
   "errors": {
     "notFound": "Eso ya no existe. Recarga la página.",
     "evidenceOnly": "Eso lo cierra una fuente, no un toque.",
