@@ -5,7 +5,7 @@ import { addWeeksToCivilDate, civilDateInZone, civilDateLabel, todayInZone, week
 
 import { test, expect } from "./fixtures";
 
-// RP-26, RP-25: a goal whose horizon has arrived says it ended, offers to
+// RP-27, RP-25: a goal whose horizon has arrived says it ended, offers to
 // move the end or archive it, and adds nothing. `createGoal` refuses such a
 // horizon, so the goal is seeded by SQL under this spec's own identity and
 // deleted by id in `finally`.
@@ -37,7 +37,7 @@ async function horizonOf(db: postgres.Sql, goalId: string): Promise<string> {
   return row.horizon;
 }
 
-test("an ended goal reads «terminó el» and yesterday, offers both acts and neither «Añadir» (RP-26)", async ({
+test("an ended goal reads «terminó el» and yesterday, offers both acts and neither «Añadir» (RP-27)", async ({
   page,
   db,
   personId,

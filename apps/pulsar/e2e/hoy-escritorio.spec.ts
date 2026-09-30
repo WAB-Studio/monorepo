@@ -50,7 +50,7 @@ async function seedGoals(db: postgres.Sql, personId: string, stamp: number) {
   return { measuredId: measured.id, plainId: plain.id };
 }
 
-test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «hechas hoy» right, with no overlap, one theme toggle and the figure of the review's current week (RNP-11, RP-26)", async ({
+test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «hechas hoy» right, with no overlap, one theme toggle and the figure of the review's current week (RNP-11, RP-27)", async ({
   person,
   browser,
   db,
