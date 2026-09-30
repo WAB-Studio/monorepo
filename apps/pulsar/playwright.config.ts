@@ -16,6 +16,17 @@ const baseURL = process.env.PULSAR_BASE_URL ?? "http://localhost:3200";
 // exist and the ordinary suite is unchanged.
 const downBaseURL = process.env.PULSAR_DOWN_BASE_URL;
 
+// A third `next start` of the same build with `PULSAR_FAULT_SEAM` set, so
+// every evidence source reads as unreadable (`e2e/fuente-caida.spec.ts`).
+// Absent, the project does not exist.
+const faultBaseURL = process.env.PULSAR_FAULT_BASE_URL;
+
+const phone = {
+  ...devices["Desktop Chrome"],
+  viewport: { width: 360, height: 740 },
+  hasTouch: true,
+};
+
 export default defineConfig({
   testDir: "./e2e",
   // Opens the suite's harness run, mints and seeds the lane's person under it,
@@ -38,24 +49,25 @@ export default defineConfig({
     // RNP-07's own case: a phone, held one-handed, standing.
     {
       name: "mobile",
-      use: {
-        ...devices["Desktop Chrome"],
-        viewport: { width: 360, height: 740 },
-        hasTouch: true,
-      },
-      testIgnore: /caida\.spec\.ts/,
+      use: phone,
+      testIgnore: /(caida|fuente-caida)\.spec\.ts/,
     },
     ...(downBaseURL
       ? [
           {
             name: "caida",
-            testMatch: /caida\.spec\.ts/,
-            use: {
-              ...devices["Desktop Chrome"],
-              viewport: { width: 360, height: 740 },
-              hasTouch: true,
-              baseURL: downBaseURL,
-            },
+            // Anchored: `fuente-caida.spec.ts` ends in the same name.
+            testMatch: /(^|[\\/])caida\.spec\.ts$/,
+            use: { ...phone, baseURL: downBaseURL },
+          },
+        ]
+      : []),
+    ...(faultBaseURL
+      ? [
+          {
+            name: "fuente",
+            testMatch: /fuente-caida\.spec\.ts/,
+            use: { ...phone, baseURL: faultBaseURL },
           },
         ]
       : []),

@@ -1,3 +1,4 @@
+import { unreadableSources } from "./fault-seam";
 import { readReadingLookups } from "./reading-lookups";
 import type { EvidenceReader } from "./types";
 
@@ -10,7 +11,14 @@ const READERS: Record<string, EvidenceReader> = {
   reading_lookups: readReadingLookups,
 };
 
+// Read per call, never at import: the seam is a property of the process a
+// test starts, and `next.config.ts` refuses a build that carries it on Vercel.
 export function readerFor(key: string): EvidenceReader | null {
+  if (unreadableSources(process.env.PULSAR_FAULT_SEAM, process.env.VERCEL).has(key)) {
+    return async () => {
+      throw new Error(`PULSAR_FAULT_SEAM: ${key} unreadable`);
+    };
+  }
   return READERS[key] ?? null;
 }
 
