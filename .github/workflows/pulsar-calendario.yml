@@ -1,0 +1,141 @@
+# Drives the specs that assert per weekday (modules 106, 107, 108) once a day.
+# A push only ever meets today's weekday; this run is what meets the rest over
+# a week. 08:00 UTC is 03:00 in Bogota (UTC-5): before the working day, and the
+# same calendar date in UTC and in Bogota, so the weekday the specs read is
+# the one the schedule means. Lane 6: local lanes are 1-5, `pulsar-checks` is
+# 7, `pulsar-e2e` is 8, orbit's `e2e` is 9. Its own concurrency group, never
+# `pulsar-e2e`'s, and never cancelled: two runs would seed one lane at once.
+name: pulsar-calendario
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  weekday-specs:
+    runs-on: ubuntu-latest
+    # The suite is about two minutes; `playwright install --with-deps` alone
+    # took eight on 2026-09-30, when apt was slow.
+    timeout-minutes: 20
+    concurrency:
+      group: pulsar-calendario
+      cancel-in-progress: false
+    env:
+      HARNESS_LANE: 6
+      SPECS: >-
+        e2e/dia-pasado.spec.ts
+        e2e/hoy-cuenta.spec.ts
+        e2e/hoy-dijiste-tu.spec.ts
+        e2e/hoy-meta-terminada.spec.ts
+        e2e/hoy-palabras.spec.ts
+        e2e/semana-creada.spec.ts
+        e2e/semana-escritorio.spec.ts
+        e2e/semana-flexible.spec.ts
+        e2e/semana-meta-terminada.spec.ts
+        e2e/semana-pasado.spec.ts
+        e2e/sobrevivientes-hoy.spec.ts
+        e2e/sobrevivientes-la-critica.spec.ts
+        e2e/sueltas-programadas.spec.ts
+      PULSAR_BASE_URL: http://localhost:3206
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # `check:e2e` and the harness scripts its global setup spawns all read
+      # `--env-file=.env.local`, not the job environment.
+      - name: Write .env.local from the secrets
+        working-directory: apps/pulsar
+        run: |
+          missing=""
+          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
+                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+            printf '%s=%s\n' "$name" "${!name}" >> .env.local
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secrets:$missing"
+            exit 1
+          fi
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run build -w apps/pulsar
+
+      # `--port` explicitly: the `start` script is a bare `next start`, which
+      # defaults to 3000 — only `dev` carries `--port ${PORT:-3200}`.
+      - name: Start the app and wait for it to answer
+        run: |
+          npm run start -w apps/pulsar -- --port 3206 > /tmp/pulsar.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3206/; then
+              echo "up after ${SECONDS}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "the server never answered"; tail -50 /tmp/pulsar.log; exit 1
+
+      # Its global setup (`scripts/harness/e2e-run.ts`) opens the one harness
+      # run, mints and seeds lane 8's person under it — no typed address, no
+      # email sent (RNP-09) — and its teardown drops every identity and closes
+      # the run, so the reap below is never blocked by this job's own run.
+      - run: npm run check:e2e -w apps/pulsar -- $SPECS
+
+      # The reaper lives in `apps/orbit` — `harness.identities` and
+      # `harness.runs` carry no app column, so the one script that owns
+      # tearing a dead run down reaches a pulsar-minted row exactly as it
+      # reaches its own. It reads its own `.env.local`, not pulsar's; the
+      # only variable its own import chain reaches through `process.env` is
+      # `DATABASE_URL` (`apps/orbit/scripts/harness/fixtures.ts`), already
+      # named present by this job's own secret check above. `always()`, like
+      # the reap it feeds: skipped after a red suite, the reap died on a
+      # missing `.env.local` exactly when it had a run to take.
+      - name: Write apps/orbit/.env.local for the reaper
+        if: always()
+        working-directory: apps/orbit
+        run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env.local
+
+      # Same reasoning and the same BLOCKED handling as orbit's own `e2e`
+      # job's step of the same name — copied in behaviour, not repeated.
+      - name: Reap orphaned harness data
+        if: always()
+        run: |
+          set +e
+          npm run harness:reap -w apps/orbit -- --yes 2>&1 | tee /tmp/harness-reap.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if grep -q '^BLOCKED' /tmp/harness-reap.log; then
+            echo "::warning::harness:reap was blocked by a live run elsewhere; nothing reaped this run"
+            exit 0
+          fi
+          echo "::error::harness:reap failed for a reason other than a live run blocking it"
+          exit "$status"
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-calendario-log
+          path: /tmp/pulsar.log
+
+      - name: Upload the Playwright artefacts
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-calendario-playwright-results
+          path: apps/pulsar/private/playwright-results
