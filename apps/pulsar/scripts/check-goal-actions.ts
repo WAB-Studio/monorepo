@@ -36,6 +36,9 @@ function laneNumber(): number {
 
 const lane = laneNumber();
 
+// Lane 1 carries no number: `harness-member@…`, as orbit's `harness:token` names it.
+const memberEmail = `harness-member${lane === 1 ? "" : `-${lane}`}@example.invalid`;
+
 function sessionFile(): string {
   return resolve(process.cwd(), `private/session-${lane}.json`);
 }
@@ -432,7 +435,7 @@ test("moveHorizon: moves an own goal; before the last phase, or in the past, is 
 
 test("moveHorizon: another person's goal answers notFound and is unchanged", async () => {
   const [member] = await sql<{ id: string }[]>`
-    select id from auth.users where email = ${`harness-member-${lane}@example.invalid`}`;
+    select id from auth.users where email = ${memberEmail}`;
   if (!member) throw new Error("no member identity — run harness:token for this lane");
   const [foreign] = await sql<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)
@@ -450,7 +453,7 @@ test("moveHorizon: another person's goal answers notFound and is unchanged", asy
 test("scheduleOneOff: a one-off dated after today moves; one dated today is refused; another person's is notFound", async () => {
   const ids: string[] = [];
   const [member] = await sql<{ id: string }[]>`
-    select id from auth.users where email = ${`harness-member-${lane}@example.invalid`}`;
+    select id from auth.users where email = ${memberEmail}`;
   if (!member) throw new Error("no member identity — run harness:token for this lane");
   try {
     const made = await createOneOff({ name: "RP-21 mover", day: shiftDay(today, 1) });
