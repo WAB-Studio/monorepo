@@ -1,7 +1,7 @@
 
 import type postgres from "postgres";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // The one-offs with no day wait in `/sueltas` (`SueltasSinDia.dc.html`): each
@@ -137,11 +137,10 @@ test("completed from the list it lands in «hechas hoy» (RP-21, RP-19)", async 
 });
 
 test("deleted from the sheet its row is gone from the database, and the last one draws the empty state (RP-22)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const name = `Suelta a borrar de la lista ${Date.now()}`;
   const oneOffId = await seedDayless(db, person.id, name);
   const context = await browser.newContext({ storageState: person.sessionFile });

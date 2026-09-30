@@ -1,4 +1,4 @@
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // `HoyCuenta.dc.html` (module 96): Hoy counts «hechos N de M» over the rows
@@ -11,11 +11,11 @@ function plusDays(days: number): string {
 }
 
 test("«hechos» moves as a row is tapped and matches the Semana's cell; a met flexible stays quiet and tappable; a flexible row fits at 360", async ({
+  person,
   browser,
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const stamp = Date.now();
   const goalName = `Meta cuenta ${stamp}`;
   const first = `Primero ${stamp}`;

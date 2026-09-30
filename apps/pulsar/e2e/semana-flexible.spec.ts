@@ -1,4 +1,4 @@
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // «N veces por semana» and «N al mes» leave the daily «hechos N de M» and
@@ -11,11 +11,11 @@ function plusDays(days: number): string {
 }
 
 test("a flexible cadence is counted by its period, leaves «hechos», and its undone days read quiet (phone and 1280)", async ({
+  person,
   browser,
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const personId = person.id;
   const stamp = Date.now();
   const goalName = `Meta flexible ${stamp}`;
@@ -109,8 +109,7 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
   }
 });
 
-test("on the phone a goal with no commitment still draws its own section", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+test("on the phone a goal with no commitment still draws its own section", async ({ person, browser, baseURL, db }) => {
   const goalName = `Meta sin compromisos ${Date.now()}`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -130,11 +129,11 @@ test("on the phone a goal with no commitment still draws its own section", async
 });
 
 test("Hoy carries a flexible commitment's period count on its row and asks it only while its quota is open", async ({
+  person,
   browser,
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const stamp = Date.now();
   const goalName = `Meta hoy flexible ${stamp}`;
   const weekly = `Empuje ${stamp}`;

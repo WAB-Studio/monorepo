@@ -1,7 +1,7 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Hoy says when a goal ended (`HoyMetaTerminada.dc.html`): «X terminó ayer ·
@@ -44,10 +44,10 @@ async function seedOpen(db: postgres.Sql, personId: string, name: string) {
 async function withPerson(
   browser: Browser,
   baseURL: string | undefined,
+  person: Person,
   db: postgres.Sql,
   body: (page: Page, personId: string) => Promise<void>,
 ) {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ baseURL: baseURL!, storageState: person.sessionFile });
   try {
     const page = await context.newPage();
@@ -67,9 +67,9 @@ async function open(page: Page, path = "/"): Promise<void> {
   await expect(page.locator("main")).toHaveCount(1);
 }
 
-test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ browser, baseURL, db }) => {
+test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ browser, baseURL, person, db }) => {
   test.skip(todayIndex === 0, "yesterday was Sunday: its week is over, so the line is gone (covered by the last-week case)");
-  await withPerson(browser, baseURL, db, async (page, personId) => {
+  await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Dejar el azúcar ${Date.now()}`;
     await seedOpen(db, personId, `Abierta ${Date.now()}`);
     await seedEnded(db, personId, name, shift(today, -1));
@@ -80,9 +80,9 @@ test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ brow
   });
 });
 
-test("a goal that ended two days ago this week names the day", async ({ browser, baseURL, db }) => {
+test("a goal that ended two days ago this week names the day", async ({ browser, baseURL, person, db }) => {
   test.skip(todayIndex < 2, "two days ago is in the previous week on a Monday or Tuesday");
-  await withPerson(browser, baseURL, db, async (page, personId) => {
+  await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Dejar el café ${Date.now()}`;
     await seedOpen(db, personId, `Abierta ${Date.now()}`);
     await seedEnded(db, personId, name, shift(today, -2));
@@ -92,8 +92,8 @@ test("a goal that ended two days ago this week names the day", async ({ browser,
   });
 });
 
-test("a goal that ended last week shows nothing", async ({ browser, baseURL, db }) => {
-  await withPerson(browser, baseURL, db, async (page, personId) => {
+test("a goal that ended last week shows nothing", async ({ browser, baseURL, person, db }) => {
+  await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Meta de la semana pasada ${Date.now()}`;
     await seedOpen(db, personId, `Abierta ${Date.now()}`);
     // The Sunday before this week: yesterday on a Monday, and still not this week's.
@@ -105,9 +105,9 @@ test("a goal that ended last week shows nothing", async ({ browser, baseURL, db 
   });
 });
 
-test("«ver» opens the goal that ended", async ({ browser, baseURL, db }) => {
+test("«ver» opens the goal that ended", async ({ browser, baseURL, person, db }) => {
   test.skip(todayIndex === 0, "yesterday was Sunday: its week is over, so there is no line to follow");
-  await withPerson(browser, baseURL, db, async (page, personId) => {
+  await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Meta que ver ${Date.now()}`;
     await seedOpen(db, personId, `Abierta ${Date.now()}`);
     const id = await seedEnded(db, personId, name, shift(today, -1));
@@ -120,9 +120,9 @@ test("«ver» opens the goal that ended", async ({ browser, baseURL, db }) => {
   });
 });
 
-test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser, baseURL, db }) => {
+test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser, baseURL, person, db }) => {
   test.skip(todayIndex === 0, "yesterday was Sunday: its week is over, so there is no line to place");
-  await withPerson(browser, baseURL, db, async (page, personId) => {
+  await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const stamp = Date.now();
     const openName = `Abierta ${stamp}`;
     const name = `Reciente ${stamp}`;
@@ -140,9 +140,9 @@ test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser
   });
 });
 
-test("several goals ended this week read one line each, most recent first", async ({ browser, baseURL, db }) => {
+test("several goals ended this week read one line each, most recent first", async ({ browser, baseURL, person, db }) => {
   test.skip(todayIndex < 2, "two goals ended on different days of this week need a Wednesday or later");
-  await withPerson(browser, baseURL, db, async (page, personId) => {
+  await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const stamp = Date.now();
     const older = `Antigua ${stamp}`;
     const newer = `Reciente ${stamp}`;
@@ -161,9 +161,10 @@ test("several goals ended this week read one line each, most recent first", asyn
 test("when every goal has ended the card names the last one and the line is not repeated", async ({
   browser,
   baseURL,
+  person,
   db,
 }) => {
-  await withPerson(browser, baseURL, db, async (page, personId) => {
+  await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const name = `Última ${Date.now()}`;
     await seedEnded(db, personId, name, shift(today, -1));
     await open(page);

@@ -2539,6 +2539,16 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
   minutes after one.
 - The user raised Auth → Rate Limits → token verifications to 300 per 5 minutes on 2026-09-29. A 429 at that limit means one sign-in per worker (`e2e/fixtures.ts`), not a higher limit.
 - Save `private/playwright-results` and that log line the first time. No retry: `retries: 0` stays.
+- Measured 2026-09-29 (module 98), lane 5, full `check:e2e`, 2 workers: **43 verifications before, 6 after**
+  (42 disposable people plus the lane's own, down to the lane's own plus what `escritorio.spec.ts` mints per
+  worker). Two full runs after: 204 passed, 2 skipped, 0 failed, no `over_request_rate_limit` in the server log.
+  Before, one run was 203 passed and 1 failed (`tema.spec.ts`, no `linkInvalid`).
+- Take the person from the `person` fixture in `e2e/fixtures.ts`: one mint per worker (`workerPerson`), and its
+  rows are deleted before each test. Isolation is by rows, not by person. Never call `mintDisposablePerson` in
+  a test body; a new spec that needs a person with no history takes `person`.
+- Still minting, on purpose: `escritorio.spec.ts`'s `world` and `desk` fixtures. They are already worker-scoped
+  and seed rows that must outlive a test, which the `person` fixture would delete. Any spec that needs
+  `auth.users.created_at` fresh or tests sign-in itself would also mint; none does today.
 
 ## `page.goto` returns with the loading fallback still standing
 

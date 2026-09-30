@@ -3,7 +3,7 @@ import type postgres from "postgres";
 
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 
 // `/metas` lists an ended goal apart, under «terminadas», between the open
 // ones and «Archivadas» (RP-26, RP-24, RNP-07).
@@ -34,12 +34,10 @@ async function seedGoal(
 }
 
 test("one open, one ended and one archived goal list each under its heading, in order, and each row opens its goal", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const url = baseURL ?? "http://localhost:3200";
-  const person = mintDisposablePerson(url);
   const context = await browser.newContext({ storageState: person.sessionFile });
   try {
     const page = await context.newPage();
@@ -97,12 +95,10 @@ test("one open, one ended and one archived goal list each under its heading, in 
 });
 
 test("a person whose only goal ended lands on the list, not on /metas/nueva", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const url = baseURL ?? "http://localhost:3200";
-  const person = mintDisposablePerson(url);
   const context = await browser.newContext({ storageState: person.sessionFile });
   try {
     const page = await context.newPage();

@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Semana says when a goal ended (`SemanaMetaTerminada.dc.html`): «terminó el
@@ -40,11 +40,11 @@ async function seedGoal(db: postgres.Sql, personId: string, name: string, horizo
 async function withPerson(
   browser: Browser,
   baseURL: string | undefined,
+  person: Person,
   db: postgres.Sql,
   width: number,
   body: (page: Page, personId: string) => Promise<void>,
 ) {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({
     baseURL: baseURL!,
     storageState: person.sessionFile,
@@ -70,11 +70,12 @@ for (const width of [360, 1280]) {
   test(`at ${width} a goal that ended this week reads «terminó el <día> · ver» and opens`, async ({
     browser,
     baseURL,
+    person,
     db,
   }) => {
     // Yesterday was Sunday: its goal ended before this week and is not drawn.
     test.skip(todayIndex === 0, "no day of this week is over on a Monday");
-    await withPerson(browser, baseURL, db, width, async (page, personId) => {
+    await withPerson(browser, baseURL, person, db, width, async (page, personId) => {
       const name = `Meta terminada ${Date.now()}`;
       const lastDay = shift(today, -1);
       const id = await seedGoal(db, personId, name, today);
@@ -91,10 +92,11 @@ for (const width of [360, 1280]) {
   test(`at ${width} a goal ended this week with only flexible commitments reads the line too`, async ({
     browser,
     baseURL,
+    person,
     db,
   }) => {
     test.skip(todayIndex === 0, "no day of this week is over on a Monday");
-    await withPerson(browser, baseURL, db, width, async (page, personId) => {
+    await withPerson(browser, baseURL, person, db, width, async (page, personId) => {
       const name = `Meta flexible ${Date.now()}`;
       const id = await seedGoal(db, personId, name, today);
       await db`delete from goals.commitments where goal_id = ${id}`;
@@ -110,8 +112,8 @@ for (const width of [360, 1280]) {
     });
   });
 
-  test(`at ${width} a goal still open shows no ended line`, async ({ browser, baseURL, db }) => {
-    await withPerson(browser, baseURL, db, width, async (page, personId) => {
+  test(`at ${width} a goal still open shows no ended line`, async ({ browser, baseURL, person, db }) => {
+    await withPerson(browser, baseURL, person, db, width, async (page, personId) => {
       const name = `Meta abierta ${Date.now()}`;
       await seedGoal(db, personId, name, shift(today, 30));
       await open(page);
