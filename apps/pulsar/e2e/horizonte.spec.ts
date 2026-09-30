@@ -203,14 +203,7 @@ test("the horizon line and its sheet hold at 360 (RNP-07)", async ({ page, db, p
     await link.click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
-    await expect
-      .poll(async () => {
-        const first = await sheet.boundingBox();
-        await page.waitForTimeout(150);
-        const second = await sheet.boundingBox();
-        return first?.y === second?.y;
-      })
-      .toBe(true);
+    await expect.poll(() => sheet.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
     for (const control of [sheet.getByRole("button", { name: "Moverlo" }), sheet.getByRole("button", { name: "Dejarlo como está" })]) {
       const b = await control.boundingBox();
       expect(b?.height).toBeGreaterThanOrEqual(48);

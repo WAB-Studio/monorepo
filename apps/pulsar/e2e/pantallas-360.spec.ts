@@ -90,15 +90,8 @@ async function expectHolds(page: Page, minControls: number, rootSelector: string
 async function openSheet(page: Page): Promise<void> {
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();
-  // Let its slide-in settle: a box measured mid-transition is not its own.
-  await expect
-    .poll(async () => {
-      const first = await sheet.boundingBox();
-      await page.waitForTimeout(150);
-      const second = await sheet.boundingBox();
-      return first?.y === second?.y && first?.height === second?.height;
-    })
-    .toBe(true);
+  // Its open animation has run out: a box measured mid-slide is not its own.
+  await expect.poll(() => sheet.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
 }
 
 function dayFromToday(daysAhead: number): string {
@@ -256,7 +249,7 @@ test("the archive sheet holds at 360 (RNP-07)", async ({ page, db, personId }) =
   });
 });
 
-// RNP-11 · RP-21 · RP-26: this slice's new states at 360. A person of their
+// RNP-11 · RP-21 · RP-27: this slice's new states at 360. A person of their
 // own, since an ended goal and a scheduled one-off are states the shared
 // identity's siblings would count.
 async function withNewStates(
@@ -317,5 +310,14 @@ test("/metas with «terminadas» holds at 360 (RNP-07)", async ({ browser, baseU
     await page.goto("/metas");
     await expect(page.getByText("terminadas", { exact: false }).first()).toBeVisible();
     await expectHolds(page, 3);
+  });
+});
+
+test("/ holds at 360 (RNP-07)", async ({ page, db, personId }) => {
+  await withSeed(db, personId, async () => {
+    await page.goto("/");
+    await expect(page.getByText(new RegExp(`^${LONG_GOAL}`)).first()).toBeVisible();
+    await expect(page.locator("main")).toHaveCount(1);
+    await expectHolds(page, 4);
   });
 });
