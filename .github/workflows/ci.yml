@@ -370,13 +370,29 @@ jobs:
           done
           echo "the down server never answered"; tail -50 /tmp/pulsar-down.log; exit 1
 
+      # Same build, every `reading_lookups` read rejecting
+      # (`apps/pulsar/lib/evidence/fault-seam.ts`), for `fuente-caida.spec.ts`.
+      # Never set in `build-pulsar`, `pulsar-checks` or on Vercel.
+      - name: Start the app with an unreadable evidence source and wait for it to answer
+        run: |
+          PULSAR_FAULT_SEAM=reading_lookups \
+            npm run start -w apps/pulsar -- --port 3227 > /tmp/pulsar-fault.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3227/entrar; then
+              echo "up after ${SECONDS}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "the fault server never answered"; tail -50 /tmp/pulsar-fault.log; exit 1
+
       # Its global setup (`scripts/harness/e2e-run.ts`) opens the one harness
       # run, mints and seeds lane 8's person under it — no typed address, no
       # email sent (RNP-09) — and its teardown drops every identity and closes
       # the run, so the reap below is never blocked by this job's own run.
-      - name: Run the e2e suite, caida project included
+      - name: Run the e2e suite, caida and fuente projects included
         env:
           PULSAR_DOWN_BASE_URL: http://localhost:3217
+          PULSAR_FAULT_BASE_URL: http://localhost:3227
         run: npm run check:e2e -w apps/pulsar
 
       # The reaper lives in `apps/orbit` — `harness.identities` and
@@ -425,6 +441,13 @@ jobs:
         with:
           name: pulsar-down-log
           path: /tmp/pulsar-down.log
+
+      - name: Upload the fault server log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-fault-log
+          path: /tmp/pulsar-fault.log
 
       - name: Upload the Playwright artefacts
         if: failure()
