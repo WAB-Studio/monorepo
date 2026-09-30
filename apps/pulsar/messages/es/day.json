@@ -105,6 +105,10 @@
   "phase": {
     "of": "fase {ordinal} de {total} · {name}"
   },
+  "row": {
+    "saidByYou": "lo dijiste tú",
+    "asksNumber": "pide el número"
+  },
   "tally": "hechos {done} de {total}",
   "met": {
     "week": "cumplida esta semana · {done} de {total}",

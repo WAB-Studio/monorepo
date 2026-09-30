@@ -105,3 +105,43 @@ export function flexibleWords(
   }
   return null;
 }
+
+export type RowMetaPieces = {
+  kind: "tap" | "quantity" | "evidence";
+  done: boolean;
+  quiet: boolean;
+  // Already null where the status says the cadence: «2 de 3 esta semana»,
+  // never «3 veces por semana · 2 de 3 esta semana».
+  cadenceText: string | null;
+  amount: string | undefined;
+  // The met phrase of a quiet row, or the progress of a flexible one.
+  status: string | null;
+  writtenTime: string | undefined;
+  writtenLabel: string | undefined;
+};
+
+/**
+ * A row's second line, pieces joined with « · ». «lo dijiste tú» marks a
+ * done `tap` or `quantity` row after its hour; «pide el número» marks a
+ * `quantity` row not yet done, after its target. Evidence and quiet rows say
+ * neither (`HoyEscritorio.dc.html`).
+ */
+export function rowMeta(translate: Translate, pieces: RowMetaPieces): string | undefined {
+  const { kind, done, quiet, status } = pieces;
+  const loud = !quiet && kind !== "evidence";
+  const said = loud && done ? translate("day.row.saidByYou") : null;
+  const asks = loud && !done && kind === "quantity" ? translate("day.row.asksNumber") : null;
+  return (
+    [
+      pieces.cadenceText,
+      pieces.amount,
+      asks,
+      status,
+      pieces.writtenTime,
+      said,
+      pieces.writtenLabel,
+    ]
+      .filter(Boolean)
+      .join(" · ") || undefined
+  );
+}
