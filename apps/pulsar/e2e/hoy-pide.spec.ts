@@ -1,4 +1,4 @@
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // What Hoy's rows and goal lines say (`HoyEscritorio.dc.html`, module 92): the
@@ -14,12 +14,11 @@ function plusDays(days: number): string {
 }
 
 test("Hoy says how many it asks, each row's cadence, the hour of a done one and «fase 2 de 3»", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
   // A person of this spec's own: the count spans every goal of the identity.
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const today = todayInZone();
   const isoWeekday = ((civilDateToDate(today).getUTCDay() + 6) % 7) + 1;

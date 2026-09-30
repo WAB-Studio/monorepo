@@ -5,7 +5,7 @@ import type postgres from "postgres";
 import { weekIndex } from "@/components/goal/phase-weeks";
 import { civilDateInZone, dateToCivilDate } from "@/lib/zone";
 
-import { test, expect, laneNumber, mintDisposablePerson } from "./fixtures";
+import { test, expect, laneNumber } from "./fixtures";
 
 // Opens `/metas/nueva`, the least it takes to open a goal (RP-11) — the same
 // helper `compromiso.spec.ts` and `varias-metas.spec.ts` each keep their own
@@ -42,10 +42,9 @@ async function phaseCount(db: postgres.Sql, goalId: string): Promise<number> {
 }
 
 test("a fresh goal draws its own way in solid; the first phase added lists as semanas 1–4 and the day names it", async ({
+  person,
   browser,
-  baseURL,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
 
   const context = await browser.newContext({
     storageState: person.sessionFile,

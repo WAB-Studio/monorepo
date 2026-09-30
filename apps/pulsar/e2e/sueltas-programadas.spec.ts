@@ -1,7 +1,7 @@
 
 import type postgres from "postgres";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `/sueltas` holds the one-offs dated after today under «programadas»: each
@@ -40,11 +40,10 @@ function words(day: string): string {
 }
 
 test("a one-off for tomorrow is listed under «programadas» with tomorrow's words, its goal as written (RP-21, RNP-07)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const personId = person.id;
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
@@ -209,11 +208,10 @@ const MONTHS = [
 ];
 
 test("the scheduled list reads in day order, whatever order the one-offs were made in (RP-21)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   // Made latest-day first: creation order is the reverse of day order.
@@ -239,11 +237,10 @@ test("the scheduled list reads in day order, whatever order the one-offs were ma
 });
 
 test("«Nada espera» shows only when nothing waits: not with dayless ones alone, not with scheduled ones alone (RP-21)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const empty = /^Nada espera/;
@@ -274,11 +271,10 @@ test("«Nada espera» shows only when nothing waits: not with dayless ones alone
 });
 
 test("a scheduled day names its month only when it falls outside this week: «martes 30», «martes 30 de octubre» (RP-21)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const far = plusDays(14);

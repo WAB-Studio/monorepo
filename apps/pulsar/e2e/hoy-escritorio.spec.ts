@@ -2,7 +2,7 @@
 import type { Locator } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Hoy at 1024 and beyond (`HoyEscritorio.dc.html`, RNP-11): the goals left, the
@@ -51,11 +51,10 @@ async function seedGoals(db: postgres.Sql, personId: string, stamp: number) {
 }
 
 test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «hechas hoy» right, with no overlap, one theme toggle and the figure of the review's current week (RNP-11, RP-26)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const { measuredId } = await seedGoals(db, person.id, stamp);
@@ -121,11 +120,10 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
 });
 
 test("at 360 the sections come in the phone's own order and the figure is not drawn (RNP-07)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   await seedGoals(db, person.id, stamp);
@@ -173,11 +171,10 @@ test("at 360 the sections come in the phone's own order and the figure is not dr
 });
 
 test("«N esperan» is dayless plus scheduled at the same moment, and opens /sueltas (RP-21)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   await db`insert into goals.one_offs (user_id, name, day) values (${person.id}, ${`Sin día ${stamp}`}, null)`;
@@ -208,8 +205,7 @@ test("«N esperan» is dayless plus scheduled at the same moment, and opens /sue
   }
 });
 
-test("a one-off done at a known instant reads its HH:mm in «hechas hoy» (RP-19)", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+test("a one-off done at a known instant reads its HH:mm in «hechas hoy» (RP-19)", async ({ person, browser, db }) => {
   const context = await browser.newContext({ storageState: person.sessionFile });
   const name = `Hecha con hora ${Date.now()}`;
   const [done] = await db<{ id: string }[]>`

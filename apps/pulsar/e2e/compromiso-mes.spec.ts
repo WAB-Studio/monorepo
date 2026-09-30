@@ -1,4 +1,4 @@
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // «N al mes», the fifth chip of «cada cuándo» (`CompromisoNuevoMes.dc.html`, RP-12).
@@ -10,11 +10,10 @@ function plusDays(days: number): string {
 }
 
 test("«N al mes» swaps the row for «veces al mes», stores times_per_month and the goal screen names it (RP-12)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const commitmentName = `Llamar ${stamp}`;
@@ -53,8 +52,7 @@ test("«N al mes» swaps the row for «veces al mes», stores times_per_month an
   }
 });
 
-test("«N al mes» with 32 is refused on screen and writes no row (RP-12)", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+test("«N al mes» with 32 is refused on screen and writes no row (RP-12)", async ({ person, browser, db }) => {
   const context = await browser.newContext({ storageState: person.sessionFile });
   const stamp = Date.now();
   const [goal] = await db<{ id: string }[]>`
