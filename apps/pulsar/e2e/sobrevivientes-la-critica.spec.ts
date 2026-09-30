@@ -8,6 +8,7 @@ import { test, expect } from "./fixtures";
 // Assertions the mutator's survivors of «la crítica» slice (2026-09-28) asked
 // for, written from the contract. Every row is seeded under this identity and
 // deleted by id in `finally`.
+// Paths by day: none; the goals open 6 and 3 days before today, in any week.
 
 function shiftDay(day: string, days: number): string {
   const date = civilDateToDate(day);
@@ -74,23 +75,18 @@ async function openHorizonSheet(page: Page, goalId: string) {
 }
 
 test("a past day before every goal names the goal that opened first after it, not the last (RNP-07)", async ({
-  page,
+  person,
+  browser,
   db,
-  personId,
 }) => {
   const day = shiftDay(todayInZone(), -7);
   const first = shiftDay(day, 1);
-  const [{ earliest }] = await db<{ earliest: string | null }[]>`
-    select min((created_at at time zone 'America/Bogota')::date)::text as earliest
-    from goals.goals where user_id = ${personId} and archived_at is null
-  `;
-  // Another goal already open on or before `first` would take the line.
-  test.skip(earliest !== null && earliest <= first, "a goal already open by then");
-
   const stamp = Date.now();
-  const early = await seedGoal(db, personId, `Alfa temprana ${stamp}`, { openedOn: first });
-  const late = await seedGoal(db, personId, `Omega tardía ${stamp}`, { openedOn: shiftDay(day, 4) });
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  const early = await seedGoal(db, person.id, `Alfa temprana ${stamp}`, { openedOn: first });
+  const late = await seedGoal(db, person.id, `Omega tardía ${stamp}`, { openedOn: shiftDay(day, 4) });
   try {
+    const page = await context.newPage();
     await page.goto(`/dia/${day}`);
     await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
     await expect(
@@ -98,8 +94,9 @@ test("a past day before every goal names the goal that opened first after it, no
     ).toBeVisible();
     await expect(page.getByText(/omega tardía/)).toHaveCount(0);
   } finally {
-    await dropGoal(db, personId, early.goalId);
-    await dropGoal(db, personId, late.goalId);
+    await context.close();
+    await dropGoal(db, person.id, early.goalId);
+    await dropGoal(db, person.id, late.goalId);
   }
 });
 
