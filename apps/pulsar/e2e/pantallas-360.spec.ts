@@ -2,7 +2,7 @@
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RNP-07 over every built screen and every sheet: at 360 × 740 (the
@@ -262,10 +262,10 @@ test("the archive sheet holds at 360 (RNP-07)", async ({ page, db, personId }) =
 async function withNewStates(
   browser: Browser,
   baseURL: string | undefined,
+  person: Person,
   db: postgres.Sql,
   run: (page: Page, seed: { endedId: string; scheduledName: string }) => Promise<void>,
 ): Promise<void> {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ baseURL, storageState: person.sessionFile });
   const stamp = Date.now();
   const scheduledName = `Programada de medición ${stamp}`;
@@ -296,24 +296,24 @@ async function withNewStates(
   }
 }
 
-test("the programadas list holds at 360 (RNP-07)", async ({ browser, baseURL, db }) => {
-  await withNewStates(browser, baseURL, db, async (page, { scheduledName }) => {
+test("the programadas list holds at 360 (RNP-07)", async ({ browser, baseURL, person, db }) => {
+  await withNewStates(browser, baseURL, person, db, async (page, { scheduledName }) => {
     await page.goto("/sueltas");
     await expect(page.getByRole("button", { name: new RegExp(`^${scheduledName}`) })).toBeVisible();
     await expectHolds(page, 3);
   });
 });
 
-test("an ended goal holds at 360 (RNP-07)", async ({ browser, baseURL, db }) => {
-  await withNewStates(browser, baseURL, db, async (page, { endedId }) => {
+test("an ended goal holds at 360 (RNP-07)", async ({ browser, baseURL, person, db }) => {
+  await withNewStates(browser, baseURL, person, db, async (page, { endedId }) => {
     await page.goto(`/metas/${endedId}`);
     await expect(page.getByRole("button", { name: "Renombrar" })).toBeVisible();
     await expectHolds(page, 4);
   });
 });
 
-test("/metas with «terminadas» holds at 360 (RNP-07)", async ({ browser, baseURL, db }) => {
-  await withNewStates(browser, baseURL, db, async (page) => {
+test("/metas with «terminadas» holds at 360 (RNP-07)", async ({ browser, baseURL, person, db }) => {
+  await withNewStates(browser, baseURL, person, db, async (page) => {
     await page.goto("/metas");
     await expect(page.getByText("terminadas", { exact: false }).first()).toBeVisible();
     await expectHolds(page, 3);

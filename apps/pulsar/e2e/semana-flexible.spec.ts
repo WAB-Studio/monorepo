@@ -1,4 +1,4 @@
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // «N veces por semana» and «N al mes» leave the daily «hechos N de M» and
@@ -11,11 +11,11 @@ function plusDays(days: number): string {
 }
 
 test("a flexible cadence is counted by its period, leaves «hechos», and its undone days read quiet (phone and 1280)", async ({
+  person,
   browser,
   baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const personId = person.id;
   const stamp = Date.now();
   const goalName = `Meta flexible ${stamp}`;
@@ -109,8 +109,7 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
   }
 });
 
-test("on the phone a goal with no commitment still draws its own section", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+test("on the phone a goal with no commitment still draws its own section", async ({ person, browser, baseURL, db }) => {
   const goalName = `Meta sin compromisos ${Date.now()}`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -123,6 +122,63 @@ test("on the phone a goal with no commitment still draws its own section", async
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByText(goalName)).toBeVisible();
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id}`;
+  }
+});
+
+test("Hoy carries a flexible commitment's period count on its row and asks it only while its quota is open", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalName = `Meta hoy flexible ${stamp}`;
+  const weekly = `Empuje ${stamp}`;
+  const monthly = `Pesarse ${stamp}`;
+  const met = `Cumplida ${stamp}`;
+
+  const today = todayInZone();
+  const week = weekOf(today);
+  const month = today.slice(0, 7);
+  const doneDays = [...new Set([today, week[0], `${month}-01`])];
+  const inWeek = doneDays.filter((day) => week.includes(day));
+  const inMonth = doneDays.filter((day) => day.slice(0, 7) === month);
+
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${goalName}, ${plusDays(90)}::date, now() - interval '40 days') returning id
+  `;
+  async function seed(name: string, kind: string, count: number, days: string[]) {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+      values (${person.id}, ${goal.id}, ${name}, ${kind}, ${count}, 'tap', now() - interval '40 days') returning id
+    `;
+    for (const day of days) {
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day)
+        values (${person.id}, ${goal.id}, ${row.id}, ${day}::date)
+      `;
+    }
+  }
+  await seed(weekly, "times_per_week", 3, inWeek);
+  await seed(monthly, "times_per_month", 4, inMonth);
+  // Met in an earlier week of the month: not asked today, drawn quiet.
+  const earlier = `${month}-01`;
+  if (earlier < week[0]) await seed(met, "times_per_month", 1, [earlier]);
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
+    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
+    const row = (name: string) => page.getByRole("button", { name: new RegExp(`^${name}`) });
+    await expect(row(weekly)).toContainText(`${inWeek.length} de 3 esta semana`);
+    await expect(row(monthly)).toContainText(`${inMonth.length} de 4 este mes`);
+    if (earlier < week[0]) await expect(row(met)).toContainText("cumplida este mes · 1 de 1");
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;

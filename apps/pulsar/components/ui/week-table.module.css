@@ -114,6 +114,13 @@
   color: var(--pulsar-muted);
 }
 
+.groupNote {
+  display: block;
+  margin-block-start: 4px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .name {
   padding: 14px 12px 14px 0;
   border-block-start: 1px solid var(--pulsar-line);

@@ -12,11 +12,6 @@
     "today": "volver a hoy"
   },
   "past": {
-    "asked": "Ese día pedía {count}",
-    "countWords": [
-      "nada", "uno", "dos", "tres", "cuatro", "cinco", "seis",
-      "siete", "ocho", "nueve", "diez", "once", "doce"
-    ],
     "writtenOn": "anotado el {weekday} {day}",
     "nothingTitle": "Ese día no pedía nada",
     "writtenOnFar": "anotado el {weekday} {day} de {month}",
@@ -26,6 +21,13 @@
   },
   "weekFigure": {
     "caption": "esta semana"
+  },
+  "ended": {
+    "yesterday": "{goal} terminó ayer ·",
+    "on": "{goal} terminó el {weekday} {day} ·",
+    "onFar": "{goal} terminó el {weekday} {day} de {month} ·",
+    "see": "ver",
+    "seeLabel": "Abrir {goal}"
   },
   "allEnded": {
     "title": "Hoy no pide nada.",
@@ -94,9 +96,21 @@
   "cadence": {
     "daily": "diario",
     "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
-    "timesPerWeek": "{count}×/semana",
+    "weekdayPlural": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
+    "onlyWeekday": "solo los {weekday}",
+    "timesPerWeek": "{count, plural, one {# vez por semana} other {# veces por semana}}",
     "everyNDays": "cada {n} días",
-    "timesPerMonth": "{count}×/mes"
+    "timesPerMonth": "{count, plural, one {# vez al mes} other {# veces al mes}}"
+  },
+  "phase": {
+    "of": "fase {ordinal} de {total} · {name}"
+  },
+  "tally": "hechos {done} de {total}",
+  "met": {
+    "week": "cumplida esta semana · {done} de {total}",
+    "month": "cumplida este mes · {done} de {total}",
+    "weekOver": "cumplida esta semana · {done} veces",
+    "monthOver": "cumplida este mes · {done} veces"
   },
   "errors": {
     "notFound": "Eso ya no existe. Recarga la página.",

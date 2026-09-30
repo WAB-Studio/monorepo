@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { tallyDays } from "./tally";
+import { tallyDay, tallyDays } from "./tally";
 import type { DayView, WeekView } from "./types";
 
 // 2026-09-28 is a Monday.
@@ -108,4 +108,40 @@ test("tallyDays: weekday and every-n-days commitments still count by the day", (
     oneOffFacts: [],
   });
   assert.deepEqual(tally[2], { day: DAYS[2], done: 1, total: 2 });
+});
+
+test("tallyDay: equals tallyDays' cell for the same day, flexible and one-offs included", () => {
+  const view = week((d) => [
+    ["c1", d === DAYS[1]],
+    ["flex", true],
+    ["c2", true],
+  ]);
+  const input = {
+    view,
+    goals: [
+      { id: "g1", horizon: "2026-12-01", createdAt: "2026-09-01T12:00:00Z" },
+      { id: "g2", horizon: "2026-09-30", createdAt: "2026-09-01T12:00:00Z" },
+    ],
+    commitments: [
+      { id: "c1", goalId: "g1" },
+      { id: "flex", goalId: "g1", cadence: { kind: "times_per_week" as const, count: 3 } },
+      { id: "c2", goalId: "g2" },
+    ],
+    oneOffFacts: [
+      { day: DAYS[1], goalId: null },
+      { day: DAYS[1], goalId: "g2" },
+      { day: DAYS[2], goalId: "g1" },
+    ],
+  };
+  const cells = tallyDays(input);
+  for (const [i, dayView_] of view.days.entries()) {
+    const single = tallyDay({
+      view: dayView_,
+      goals: input.goals.map((g) => ({ id: g.id, openedOn: g.createdAt.slice(0, 10), horizon: g.horizon })),
+      commitments: input.commitments,
+      oneOffFacts: input.oneOffFacts,
+    });
+    assert.deepEqual(single, cells[i]);
+  }
+  assert.deepEqual(cells[1], { day: DAYS[1], done: 4, total: 4 });
 });

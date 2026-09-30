@@ -1,6 +1,5 @@
-import type { Cadence } from "@/lib/day/types";
 import { horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
-import { civilDateInZone } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate } from "@/lib/zone";
 
 export type WeekProgress = { week: number; total: number };
 
@@ -27,29 +26,14 @@ export function goalWeekProgress(
   return { week, total };
 }
 
-type Say = (key: string, values?: Record<string, number | string>) => string;
-
 /**
- * A flexible commitment's own two phrases (`SemanaFlexible.dc.html`): its
- * cadence, «3 veces por semana», and the period's count, «1 de 3 esta
- * semana». Null for a cadence counted by the day.
+ * The goal's last day once it is over: `horizon - 1`, and null while today is
+ * still on or before it. The week only draws goals whose horizon is past its
+ * Monday, so a returned day never falls before the week.
  */
-export function flexibleWords(
-  commitment: { cadence: Cadence; periodDone: number | null },
-  t: Say,
-): { cadence: string; progress: string } | null {
-  const { cadence, periodDone } = commitment;
-  if (cadence.kind === "times_per_week") {
-    return {
-      cadence: t("week.flexible.week", { count: cadence.count }),
-      progress: t("week.flexible.weekProgress", { done: periodDone ?? 0, total: cadence.count }),
-    };
-  }
-  if (cadence.kind === "times_per_month") {
-    return {
-      cadence: t("week.flexible.month", { count: cadence.count }),
-      progress: t("week.flexible.monthProgress", { done: periodDone ?? 0, total: cadence.count }),
-    };
-  }
-  return null;
+export function endedLastDay(horizon: string, today: string): string | null {
+  if (horizon > today) return null;
+  const date = civilDateToDate(horizon);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateToCivilDate(date);
 }

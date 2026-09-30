@@ -1,7 +1,7 @@
 
 import type postgres from "postgres";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 
 // Seeded by `harness:seed-goal`, the one goal this identity always carries
 // (`compromiso.spec.ts`'s own constant, word for word) — this suite never
@@ -64,10 +64,9 @@ test("the Meta tab opens the goals list, and a second goal is opened from it, no
 });
 
 test("an empty week says what to do and links to opening one (RP-11, RP-16)", async ({
+  person,
   browser,
-  baseURL,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
 
   const context = await browser.newContext({
     storageState: person.sessionFile,

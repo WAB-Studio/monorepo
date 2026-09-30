@@ -1,3 +1,4 @@
+import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
 import { dayWords } from "@/lib/day/day-words";
 
 export type DayNames = { weekdays: string[]; months: string[] };
@@ -28,4 +29,19 @@ export function dayPhrase(
 ): string {
   const { far, parts } = farDayParts(day, today, names);
   return translate(far ? `${key}Far` : key, { ...parts, ...extra });
+}
+
+// Hoy's «terminó» line for a goal whose last day was `lastDay`: «ayer» the day
+// after, the named day later, with its month once it falls outside the week.
+export function endedPhrase(
+  translate: (key: string, values: Record<string, string | number>) => string,
+  goal: string,
+  lastDay: string,
+  today: string,
+  names: DayNames,
+): string {
+  const date = civilDateToDate(today);
+  date.setUTCDate(date.getUTCDate() - 1);
+  if (lastDay === dateToCivilDate(date)) return translate("day.ended.yesterday", { goal });
+  return dayPhrase(translate, "day.ended.on", lastDay, today, names, { goal });
 }

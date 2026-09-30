@@ -91,6 +91,8 @@ export function mintDisposablePerson(baseUrl: string): { id: string; sessionFile
   return { id: claimsFromAccessToken(accessTokenFromCookies(cookies)).id, sessionFile: absolute };
 }
 
+export type Person = { id: string; sessionFile: string };
+
 type Fixtures = {
   // One connection per test, bypassing RLS the same way `MIGRATION_DATABASE_URL`
   // does for every harness script — never the app's own `DATABASE_URL` role
@@ -98,13 +100,31 @@ type Fixtures = {
   // proving from outside the app (`check-policies.ts` owns that).
   db: postgres.Sql;
   personId: string;
+  // The worker's own person with no rows: what a spec seeds is all there is.
+  person: Person;
 };
+
+type WorkerFixtures = {
+  workerPerson: Person;
+};
+
+// Every table a pulsar person owns, children first. `goals.goals` cascades to
+// commitments, phases and the facts and one-offs under them, but a dayless
+// one-off and a fact with no goal hang off the person alone. Sources are the
+// app's catalogue, not a person's rows.
+async function clearPerson(sql: postgres.Sql, id: string): Promise<void> {
+  await sql`delete from goals.facts where user_id = ${id}`;
+  await sql`delete from goals.one_offs where user_id = ${id}`;
+  await sql`delete from goals.commitments where user_id = ${id}`;
+  await sql`delete from goals.phases where user_id = ${id}`;
+  await sql`delete from goals.goals where user_id = ${id}`;
+}
 
 // Named `provide`, not Playwright's own `use`: an identically-named
 // parameter here reads to `eslint-plugin-react-hooks` as the `use` hook,
 // which this file, being test wiring rather than a component, is not
 // (`apps/voyager/e2e/fixtures.ts`'s own fix for the same warning).
-export const test = base.extend<Fixtures>({
+export const test = base.extend<Fixtures, WorkerFixtures>({
   db: async ({}, provide) => {
     const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
     await provide(sql);
@@ -113,6 +133,24 @@ export const test = base.extend<Fixtures>({
 
   personId: async ({}, provide) => {
     await provide(seededPerson().id);
+  },
+
+  // One magic-link verification per worker, not per test: Auth's token
+  // verification rate limit counts every mint of every lane and CI at once
+  // (docs/TRAPS.md, `linkInvalid`). Registered under the suite's run, whose
+  // teardown drops the identity.
+  workerPerson: [
+    async ({}, provide, workerInfo) => {
+      await provide(mintDisposablePerson(workerInfo.project.use.baseURL ?? "http://localhost:3200"));
+    },
+    { scope: "worker" },
+  ],
+
+  // Isolation by rows, not by person: cleared before the test, so a spec that
+  // died mid-seed leaves nothing for the next one.
+  person: async ({ workerPerson, db }, provide) => {
+    await clearPerson(db, workerPerson.id);
+    await provide(workerPerson);
   },
 });
 

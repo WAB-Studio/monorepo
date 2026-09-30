@@ -1947,6 +1947,135 @@ async function runFlexiblePeriodCheck(): Promise<void> {
   }
 }
 
+// Module 92: `loadDay` returns every phase of a goal so Hoy can say «fase 2 de
+// 3»; the phases the day derives from stay the ones in effect, and the
+// statement count stays four.
+async function runPhasePositionCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { createGoal, addPhase } = await import("@/app/actions/plan");
+
+  const goal = await createGoal({ name: "check-day phase position probe", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runPhasePositionCheck: createGoal failed: ${goal.error}`);
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const spans: [string, string][] = [
+      ["2099-01-01", "2099-01-31"],
+      ["2099-02-01", "2099-02-28"],
+      ["2099-03-01", "2099-03-31"],
+    ];
+    const ids: string[] = [];
+    for (const [startsOn, endsOn] of spans) {
+      const phase = await addPhase({ goalId: goal.goalId, aim: `check-day position ${startsOn}`, startsOn, endsOn });
+      if (!phase.ok) throw new Error(`runPhasePositionCheck: addPhase failed: ${phase.error}`);
+      ids.push(phase.phaseId);
+    }
+
+    const start = wireCalls.length;
+    const day = await loadDay("2099-02-10");
+    const statements = applicationStatements(wireCalls.slice(start));
+    assert(
+      "loadDay places the phase in effect as 2 of the goal's 3, by starts_on",
+      JSON.stringify(day.phasePositions[ids[1]]) === JSON.stringify({ ordinal: 2, total: 3 }) &&
+        JSON.stringify(day.phasePositions[ids[0]]) === JSON.stringify({ ordinal: 1, total: 3 }) &&
+        JSON.stringify(day.phasePositions[ids[2]]) === JSON.stringify({ ordinal: 3, total: 3 }),
+      `positions = ${JSON.stringify(ids.map((id) => day.phasePositions[id]))}`,
+    );
+    assert(
+      "loadDay's phases keep only the goal's phase in effect on the day",
+      day.phases.filter((phase) => phase.goalId === goal.goalId).map((phase) => phase.id).join() === ids[1],
+      `phases = ${JSON.stringify(day.phases.filter((phase) => phase.goalId === goal.goalId).map((phase) => phase.id))}`,
+    );
+    assert(
+      "loadDay with every phase selected still issues four application statements",
+      statements === 4,
+      `${statements} application statement(s)`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goal.goalId}`;
+    await migrationDb.end();
+  }
+}
+
+/**
+ * Module 94: Hoy asks a flexible commitment by its own period. `loadDay`
+ * once selected the week's facts only, so a monthly commitment met in an
+ * earlier week was asked again, and a weekly one met on Monday and Tuesday
+ * was asked on Thursday. Fixed days: 2010-09-03 (Friday), the week of
+ * 2010-09-20, and its Thursday 2010-09-23.
+ */
+async function runFlexibleDayFeedCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runFlexibleDayFeedCheck: no verified session");
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, 'check-day flexible feed probe', '2011-12-31'::date, '2009-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+
+    async function seed(name: string, kind: string, count: number, days: string[]): Promise<string> {
+      const [row] = await db<{ id: string }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+        values (${person!.id}, ${goal.id}, ${name}, ${kind}, ${count}, 'tap', '2009-12-01T00:00:00Z'::timestamptz)
+        returning id
+      `;
+      for (const day of days) {
+        await db`
+          insert into goals.facts (user_id, goal_id, commitment_id, day)
+          values (${person!.id}, ${goal.id}, ${row.id}, ${day}::date)
+        `;
+      }
+      return row.id;
+    }
+
+    const monthly = await seed("feed monthly", "times_per_month", 1, ["2010-09-03"]);
+    const monthlyOpen = await seed("feed monthly open", "times_per_month", 2, ["2010-09-03"]);
+    const weekly = await seed("feed weekly", "times_per_week", 2, ["2010-09-20", "2010-09-21"]);
+
+    const later = await loadDay("2010-09-23");
+    const asked = (id: string) => later.view.slots.some((slot) => slot.commitmentId === id);
+    assert(
+      "a monthly commitment met on the 3rd is not asked on the 23rd, three weeks on",
+      !asked(monthly),
+      `slots asked: ${JSON.stringify(later.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "a monthly commitment one short of its quota is still asked on the 23rd",
+      asked(monthlyOpen),
+      `slots asked: ${JSON.stringify(later.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "a weekly commitment met on Monday and Tuesday is not asked on Thursday",
+      !asked(weekly),
+      `slots asked: ${JSON.stringify(later.view.slots.map((slot) => slot.commitmentId))}`,
+    );
+    assert(
+      "periodDone counts the month's and the week's days: 1, 1 and 2",
+      later.periodDone[monthly] === 1 && later.periodDone[monthlyOpen] === 1 && later.periodDone[weekly] === 2,
+      `periodDone = ${JSON.stringify(later.periodDone)}`,
+    );
+
+    const factDay = await loadDay("2010-09-03");
+    assert(
+      "the day of the fact still draws the monthly commitment, done, and counts it in periodDone",
+      factDay.view.slots.some((slot) => slot.commitmentId === monthly && slot.satisfied) &&
+        factDay.periodDone[monthly] === 1,
+      `slots = ${JSON.stringify(factDay.view.slots.map((slot) => [slot.commitmentId, slot.satisfied]))}, periodDone = ${JSON.stringify(factDay.periodDone)}`,
+    );
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId}`;
+    await db.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), false);
 
@@ -2027,10 +2156,157 @@ async function runMain(): Promise<void> {
   await runEndedGoalScheduledCheck();
   await runDesktopSurvivorsCheck();
   await runFlexiblePeriodCheck();
+  await runEndedThisWeekCheck();
+  await runPhasePositionCheck();
+  await runFlexibleDayFeedCheck();
+  await runSurvivorsOf92To94Check();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
   process.exit(failed ? 1 : 0);
+}
+
+// Hoy's «terminó ayer» line: goals whose last day fell in the week of the
+// viewed day, before it. Rows live in a fixed 2010 week (Mon 06-07).
+async function runEndedThisWeekCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runEndedThisWeekCheck: no verified session");
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const ids: string[] = [];
+
+  async function seedGoal(name: string, horizon: string, archived = false) {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+      values (${person!.id}, ${name}, ${horizon}::date, '2009-12-01T00:00:00Z'::timestamptz,
+              ${archived ? "2010-01-01T00:00:00Z" : null}::timestamptz)
+      returning id
+    `;
+    ids.push(row.id);
+    return row.id;
+  }
+
+  try {
+    const previousWeek = await seedGoal("ended-week last day sunday before", "2010-06-07");
+    const monday = await seedGoal("ended-week last day monday", "2010-06-08");
+    const tuesday = await seedGoal("ended-week last day tuesday", "2010-06-09");
+    await seedGoal("ended-week archived", "2010-06-09", true);
+    await seedGoal("ended-week still open", "2010-06-11");
+    const ended = (await loadDay("2010-06-10")).endedThisWeek;
+    const seeded = ended.filter((goal) => goal.name.startsWith("ended-week"));
+    assert(
+      "endedThisWeek lists the goals whose last day fell this week, most recent first, with the last day",
+      JSON.stringify(seeded) ===
+        JSON.stringify([
+          { id: tuesday, name: "ended-week last day tuesday", lastDay: "2010-06-08" },
+          { id: monday, name: "ended-week last day monday", lastDay: "2010-06-07" },
+        ]),
+      `endedThisWeek = ${JSON.stringify(seeded)}; the previous week's goal ${previousWeek} must be absent`,
+    );
+    const sunday = (await loadDay("2010-06-13")).endedThisWeek.filter((goal) => goal.name.startsWith("ended-week"));
+    assert(
+      "endedThisWeek on the Sunday holds the whole week's endings, the goal open on Thursday included",
+      sunday.length === 3 && sunday[0].lastDay === "2010-06-10",
+      `endedThisWeek on Sunday = ${JSON.stringify(sunday)}`,
+    );
+
+    // A fixed week (Mon 2010-08-02): endings on Monday, Tuesday and Thursday
+    // read from its Friday, in horizon-descending order, and none from before.
+    const before = await seedGoal("fixed-week before", "2010-08-02");
+    const fixedMon = await seedGoal("fixed-week mon", "2010-08-03");
+    const fixedTue = await seedGoal("fixed-week tue", "2010-08-04");
+    const fixedThu = await seedGoal("fixed-week thu", "2010-08-06");
+    const fixed = (await loadDay("2010-08-06")).endedThisWeek.filter((goal) => goal.name.startsWith("fixed-week"));
+    assert(
+      "endedThisWeek from a Friday holds the Thursday, Tuesday and Monday endings in horizon-descending order, none from the week before",
+      JSON.stringify(fixed.map((goal) => [goal.id, goal.lastDay])) ===
+        JSON.stringify([[fixedThu, "2010-08-05"], [fixedTue, "2010-08-03"], [fixedMon, "2010-08-02"]]),
+      `endedThisWeek = ${JSON.stringify(fixed)}; the previous week's goal ${before} must be absent`,
+    );
+  } finally {
+    if (ids.length > 0) await db`delete from goals.goals where id in ${db(ids)}`;
+    await db.end();
+  }
+}
+
+// Module 99: what the mutator found nobody pinning on `loadDay`. Fixed 2012
+// days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
+// before it.
+async function runSurvivorsOf92To94Check(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runSurvivorsOf92To94Check: no verified session");
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId: string | null = null;
+
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, 'check-day survivors probe', '2012-12-31'::date, 'minutos', 'min',
+              '2011-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${goal.id}, 'check-day survivors quantity', 'daily', 'quantity', 10, 'min',
+              '2011-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    for (const [day, quantity] of [["2012-02-26", 50], ["2012-03-11", 7], ["2012-03-12", 10], ["2012-03-13", 5]] as const) {
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${person.id}, ${goal.id}, ${commitment.id}, ${day}::date, ${quantity})
+      `;
+    }
+    const measure = (await loadDay("2012-03-14")).weekMeasure[goal.id];
+    assert(
+      "weekMeasure on a Wednesday adds Monday and Tuesday and nothing from the month or the Sunday before",
+      measure === 15,
+      `weekMeasure = ${measure}, seeded 10 + 5 this week, 7 the Sunday before and 50 the month before`,
+    );
+
+    const phaseIds: string[] = [];
+    for (const [aim, startsOn, endsOn] of [
+      ["check-day survivors uno", "2012-03-01", "2012-03-10"],
+      ["check-day survivors dos", "2012-03-11", "2012-03-20"],
+    ]) {
+      const [phase] = await db<{ id: string }[]>`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${person.id}, ${goal.id}, ${aim}, ${startsOn}::date, ${endsOn}::date)
+        returning id
+      `;
+      phaseIds.push(phase.id);
+    }
+    const first = await loadDay("2012-03-11");
+    assert(
+      "a phase's first day is in effect: the view names it, loadDay lists it and reads «2 de 2»",
+      first.view.phase?.id === phaseIds[1] &&
+        first.phases.some((phase) => phase.id === phaseIds[1]) &&
+        JSON.stringify(first.phasePositions[phaseIds[1]]) === JSON.stringify({ ordinal: 2, total: 2 }),
+      `view.phase = ${JSON.stringify(first.view.phase)}, phases = ${JSON.stringify(first.phases.map((p) => p.id))}`,
+    );
+    const last = await loadDay("2012-03-10");
+    assert(
+      "a phase's last day is still in effect and the next one is not yet",
+      last.view.phase?.id === phaseIds[0] && !last.phases.some((phase) => phase.id === phaseIds[1]),
+      `view.phase = ${JSON.stringify(last.view.phase)}`,
+    );
+    const after = await loadDay("2012-03-21");
+    assert(
+      "a day after every phase has no phase in effect",
+      after.view.phase === null && !after.phases.some((phase) => phaseIds.includes(phase.id)),
+      `view.phase = ${JSON.stringify(after.view.phase)}`,
+    );
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId}`;
+    await db.end();
+  }
 }
 
 void (async () => {

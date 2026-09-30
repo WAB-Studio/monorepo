@@ -490,6 +490,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Hoy with every goal ended and none open** reads «Hoy no pide nada.», names the goal that ended
   and its day, and offers «Ver las metas» solid and «Abrir otra meta» outlined; goalless one-offs
   still draw below. Decided 2026-09-29 by the coordinator; board approved by the user.
+- **The Semana says when a goal ended**, «terminó el <día> · ver» under its name, as Hoy does. Board
+  `SemanaMetaTerminada.dc.html`. Decided 2026-09-29 by the coordinator, on the user's delegation.
 - **An archived goal's overline reads «meta · archivada el {date}»**, the day it was archived in the
   person's zone, in place of «meta · abierta el {date}». Decided 2026-09-29 by the coordinator.
 - **Hoy's desktop figure is each open goal's measure this week**, one card per goal with a measure:
@@ -517,8 +519,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   Decided 2026-09-29 by the coordinator.
 - **A goal's weekly figure is named by its unit** («kilómetros esta semana»), never by the first
   commitment with a number: the sum takes every fact in that unit. Decided 2026-09-29 by the user.
-- **Hoy says when a goal ended**, in one quiet line for the days after its end. Board to draw.
-  Decided 2026-09-29 by the user.
+- **Hoy says when a goal ended**, in one quiet line under the title for the days after its end:
+  «Dejar el azúcar terminó ayer · ver», then «terminó el lunes 28» later in the same week, gone once
+  that week is over (a goal that ended on a Sunday is gone on the Monday). «ver» opens the goal.
+  Board `HoyMetaTerminada.dc.html`, approved by the user 2026-09-29; the desktop face is the same line
+  under «Hoy». Several goals ended that week: one line each, most recent first. Only on today, never
+  on `/dia/<fecha>`, and never beside the all-ended card, which already names the last goal. Wording
+  decided 2026-09-29 by the coordinator.
 - **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the
   daily «hechos» and their row says the cadence and the count: «3 veces por semana · 1 de 3 esta
   semana», «4 al mes · 3 de 4 este mes». On the table the days not done read the quiet «·»; on the
@@ -526,7 +533,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `SemanaFlexible.dc.html` and `SemanaEscritorioFlexible.dc.html`, approved by the user 2026-09-29.
   Decided 2026-09-29 by the user.
 - **A one-column screen caps at 640 px from 1024.** Decided 2026-09-29 by the user.
-- **Hoy builds what `HoyEscritorio.dc.html` draws**: «Hoy pide N», each row's cadence, a flexible
+- **«N al mes» is the fifth cadence chip** and swaps the row for «veces al mes». Board
+  `CompromisoNuevoMes.dc.html`. Decided 2026-09-29 by the user.
+- **Hoy builds what `HoyEscritorio.dc.html` draws**: each row's cadence, a flexible
   commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.
+- **Hoy says «hechos N de M» over the same rows as the Semana's «hechos»**; a flexible row with
+  progress says only its progress; a flexible met in its period stays as a quiet row «cumplida esta
+  semana», and can be marked again. Board `HoyCuenta.dc.html`. Decided 2026-09-29 by the coordinator,
+  on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
 - **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.

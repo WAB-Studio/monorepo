@@ -3,6 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveDay } from "@/lib/day/derive";
+import { periodDoneOn } from "@/lib/day/period";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek } from "@/lib/day/review";
 import { latestFactByCommitment, type LoggedFact } from "@/lib/day/logged-fact";
@@ -15,6 +16,7 @@ import type {
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
+import { phasePositions } from "@/lib/day/row-phrases";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
   toCadence,
@@ -26,7 +28,7 @@ import {
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -122,12 +124,22 @@ type GoalsQueryRow = {
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
   last_ended: { name: string; horizon: string } | null;
+  ended_this_week: { id: string; name: string; horizon: string }[];
 };
 
 // A goal is open on `day` while its horizon, the first day after it, lies
 // after `day`. The one rule every subquery below that asks "open" reuses.
 function openGoal(alias: string, day: string) {
   return sql`${sql.raw(alias)}.archived_at is null and ${sql.raw(alias)}.horizon > ${day}::date`;
+}
+
+export type EndedGoal = { id: string; name: string; lastDay: string };
+
+// A horizon is the first day after the goal; its last day is the one before.
+function dayBefore(day: string): string {
+  const date = civilDateToDate(day);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateToCivilDate(date);
 }
 
 type EvidenceOutcome = {
@@ -146,6 +158,10 @@ type EvidenceOutcome = {
  * would still ask for one more day. `at time zone ${TIME_ZONE}` first turns
  * it into the person's own civil day before the cast, the same move
  * `lib/queries/goal.ts`'s `goalSpan` already makes on `created_at`.
+ *
+ * `facts` reads from the earlier of the week's Monday and the month's first:
+ * `times_per_month` asks by its month and counts what the week alone never
+ * reads. What is week-bound (the goal's measure) narrows back in TS.
  *
  * `goals` is the one subquery RP-24 filters: an archived goal is never in
  * this list, and `DayScreen` (module 13) only ever groups a row under a goal
@@ -182,15 +198,13 @@ async function queryGoalsRow(
          join "goals"."evidence_sources" s on s.id = c.source_id
          where c.satisfaction = 'evidence') as measure_sources,
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
-         from "goals"."phases" p
-         where p.starts_on <= ${day}::date
-           and (p.ends_on is null or p.ends_on >= ${day}::date)) as phases,
+         from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.day between ${weekStart}::date and ${day}::date) as facts,
+         where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
          from "goals"."one_offs" o
          where o.day <= ${day}::date
@@ -231,7 +245,16 @@ async function queryGoalsRow(
          from "goals"."goals" g
          where g.archived_at is null and g.horizon <= ${day}::date
          order by g.horizon desc
-         limit 1) as last_ended
+         limit 1) as last_ended,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'id', g.id,
+                 'name', g.name,
+                 'horizon', g.horizon
+               ) order by g.horizon desc, g.created_at), '[]'::json)
+         from "goals"."goals" g
+         where g.archived_at is null
+           and g.horizon > ${weekStart}::date
+           and g.horizon <= ${day}::date) as ended_this_week
   `);
 
   return row;
@@ -386,6 +409,7 @@ function weekMeasureOf(
   row: GoalsQueryRow,
   evidenceOutcome: EvidenceOutcome,
   day: string,
+  weekStart: string,
 ): Record<string, number> {
   const measure: Record<string, number> = {};
   for (const goal of goals) {
@@ -396,7 +420,7 @@ function weekMeasureOf(
     const facts: DeclaredFact[] = row.facts
       .filter(
         (fact): fact is FactRow & { commitment_id: string } =>
-          fact.goal_id === goal.id && fact.commitment_id !== null,
+          fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= weekStart,
       )
       .map(toDeclaredFact);
     const evidence = evidenceDaysFor(
@@ -452,10 +476,18 @@ export async function loadDay(day: string): Promise<{
   scheduledCount: number;
   // The open-less day's own words: the goal whose end came last (name, horizon).
   lastEnded: { name: string; horizon: string } | null;
+  // Goals whose last day fell in the Monday-to-Sunday week of `day`, before
+  // `day` itself, most recent first: what Hoy's «terminó ayer» line names.
+  endedThisWeek: EndedGoal[];
   weekMeasure: Record<string, number>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
+  // Each phase's place among its goal's phases, in every phase the goal has.
+  phasePositions: Record<string, { ordinal: number; total: number }>;
   factsByCommitment: Record<string, LoggedFact>;
+  // Distinct days a flexible commitment has a fact in its week or month, up
+  // to `day`; absent for a cadence counted by the day.
+  periodDone: Record<string, number>;
 }> {
   const person = await getPerson();
   if (!person) throw new Error("loadDay called without a verified session");
@@ -471,13 +503,20 @@ export async function loadDay(day: string): Promise<{
   ]);
 
   const commitments = row.commitments.map(toCommitmentPlan);
-  const phases = row.phases.map(toPhase);
+  // The statement returns every phase so a goal's phase can say its place
+  // among them; what the day derives from stays the ones in effect on `day`.
+  const inEffect = row.phases.filter(
+    (phase) => phase.starts_on <= day && (phase.ends_on === null || phase.ends_on >= day),
+  );
+  const phases = inEffect.map(toPhase);
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
   // that always does, so a one-off's own fact plays no part in deriving a
   // commitment's slot (RP-19's list is this file's own `oneOffs`, read by
   // module 13's screen).
   const dayFacts = row.facts.filter((fact) => fact.day === day);
-  const facts = dayFacts
+  // Every fact of the period, not the day's alone: `asksOn` counts a quota
+  // over the week or the month, and `deriveSlot` reads the day's own by day.
+  const facts = row.facts
     .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);
   const dayEvidence = Object.fromEntries(
@@ -490,6 +529,11 @@ export async function loadDay(day: string): Promise<{
   const goals = row.goals.filter((goal) => goal.horizon > day);
 
   const view = deriveDay({ commitments, phases, facts, evidence, day });
+  const periodDone: Record<string, number> = {};
+  for (const plan of commitments) {
+    const done = periodDoneOn(plan.cadence, plan.id, facts, day);
+    if (done !== null) periodDone[plan.id] = done;
+  }
 
   // `completeOneOff` (module 12) never deletes the one-off's own row — it
   // only writes the fact that explains it — so the `one_offs` subquery
@@ -499,6 +543,7 @@ export async function loadDay(day: string): Promise<{
   // filter and no third query needed.
   return {
     view,
+    periodDone,
     evidence: evidenceOutcome.status,
     goals: goals.map(toGoalSummary),
     oneOffs: row.one_offs.map(toOneOffSummary),
@@ -512,9 +557,15 @@ export async function loadDay(day: string): Promise<{
     daylessCount: row.dayless_count,
     scheduledCount: row.scheduled_count,
     lastEnded: row.last_ended,
-    weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day),
+    endedThisWeek: row.ended_this_week.map((goal) => ({
+      id: goal.id,
+      name: goal.name,
+      lastDay: dayBefore(goal.horizon),
+    })),
+    weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     commitments: row.commitments.map(toCommitmentInfo),
-    phases: row.phases.map(toPhaseInfo),
+    phases: inEffect.map(toPhaseInfo),
+    phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),
     factsByCommitment: latestFactByCommitment(dayFacts.map(toFactForCommitment)),
   };
 }

@@ -1,5 +1,5 @@
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // The words Hoy says at every width: a goal's name as written, a far date with
@@ -27,11 +27,10 @@ function words(day: string, withMonth: boolean): string {
 // A person of this spec's own: a goal named on Hoy or ended must be the only
 // one there. Registered under the suite's run, whose teardown drops it.
 test("a goal named «Inglés Crítico» keeps its capitals on its field, and on a day before it opened (RP-20, RNP-07)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)
@@ -56,11 +55,10 @@ test("a goal named «Inglés Crítico» keeps its capitals on its field, and on 
 });
 
 test("a one-off carried from before this week names its month; one from this week does not (RP-19)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   const far = plusDays(-21);
   const near = weekOf(todayInZone())[0];
@@ -81,8 +79,7 @@ test("a one-off carried from before this week names its month; one from this wee
   }
 });
 
-test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ browser, baseURL, db }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
+test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ person, browser, db }) => {
   const context = await browser.newContext({ storageState: person.sessionFile });
   await db`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -94,7 +91,8 @@ test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ browser, b
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.getByText("Meta abierta", { exact: true })).toBeVisible();
-    await expect(page.getByText("Meta que terminó")).toHaveCount(0);
+    // Its last day was yesterday: at most the «terminó ayer» line names it, never a goal entry.
+    await expect(page.getByText("Meta que terminó", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Hoy no pide nada.")).toHaveCount(0);
   } finally {
     await context.close();
@@ -103,11 +101,10 @@ test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ browser, b
 });
 
 test("with every goal ended and none open and a suelta due, Hoy names the goal and its last day, offers two ways on, keeps the sueltas and drops the sentence (RP-19)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   await db`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -136,11 +133,10 @@ test("with every goal ended and none open and a suelta due, Hoy names the goal a
 });
 
 test("at 1280 the all-ended message stands in a card, its title and buttons padded inside it (RNP-11)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const context = await browser.newContext({ storageState: person.sessionFile });
   await db`
     insert into goals.goals (user_id, name, horizon, created_at)

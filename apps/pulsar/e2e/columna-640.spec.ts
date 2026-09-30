@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { test, expect, mintDisposablePerson } from "./fixtures";
+import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // A one-column screen is 640 px of content beside the rail, on any computer
@@ -39,11 +39,10 @@ async function widest(page: Page): Promise<number> {
 const CAPPED = 640;
 
 test("a one-column screen holds 640 px at 1280 and 1024, and the two-column ones keep the rail's room, and 360 does not move (module 90)", async ({
+  person,
   browser,
-  baseURL,
   db,
 }) => {
-  const person = mintDisposablePerson(baseURL ?? "http://localhost:3200");
   const stamp = Date.now();
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)

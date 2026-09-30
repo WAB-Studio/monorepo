@@ -50,9 +50,9 @@
   "cadence": {
     "daily": "todos los días",
     "weekdayFull": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
-    "timesPerWeek": "{count} veces por semana",
+    "timesPerWeek": "{count, plural, one {# vez por semana} other {# veces por semana}}",
     "everyNDays": "cada {n} días",
-    "timesPerMonth": "{count} veces al mes"
+    "timesPerMonth": "{count, plural, one {# vez al mes} other {# veces al mes}}"
   },
   "satisfaction": {
     "tap": "toque"

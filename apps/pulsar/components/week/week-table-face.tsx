@@ -1,12 +1,14 @@
+import type { ReactNode } from "react";
 import type { getTranslations } from "next-intl/server";
 
 import { Panel, WeekTable, type MarkState } from "@/components/ui";
 import type { WeekTableColumn } from "@/components/ui/week-table";
 import { tallyDays } from "@/lib/day/tally";
 import type { DaySlot } from "@/lib/day/types";
-import type { loadWeek } from "@/lib/queries/week";
+import type { GoalSummary, loadWeek } from "@/lib/queries/week";
 
-import { flexibleWords, goalWeekProgress } from "./week-progress";
+import { goalWeekProgress } from "./week-progress";
+import { flexibleWords } from "@/lib/day/row-phrases";
 
 type Translate = Awaited<ReturnType<typeof getTranslations>>;
 type Week = Awaited<ReturnType<typeof loadWeek>>;
@@ -36,11 +38,13 @@ export function WeekTableFace({
   today,
   columns,
   t,
+  endedNote,
 }: {
   week: Week;
   today: string;
   columns: readonly WeekTableColumn[];
   t: Translate;
+  endedNote: (goal: GoalSummary) => ReactNode;
 }) {
   const { view, goals, commitments, oneOffFacts } = week;
   const days = view.days.map((dayView) => dayView.day);
@@ -100,6 +104,7 @@ export function WeekTableFace({
               total: progress.total,
             })
           : goal.name,
+        note: endedNote(goal),
         rows: [...commitmentRows(goal.id), ...oneOffRows(goal.id)],
       };
     }),
