@@ -25,3 +25,54 @@ test("zero reads as \"0\", not an empty string", () => {
 test("a value that is not a number — already-worded text a caller built — draws untouched", () => {
   assert.equal(formatFigureValue("55 búsquedas"), "55 búsquedas");
 });
+
+// The catalogue's own shape (`messages/es/units.json`), so the test needs no
+// translator and still reads what the screen reads.
+const words = {
+  h: (h: string) => `${h} h`,
+  min: (min: string) => `${min} min`,
+  join: (h: string, min: string) => `${h} ${min}`,
+};
+
+test("750 in «minutos» comes back as 12 h and 30 min, each figure followed by its word (RP-35)", () => {
+  assert.deepEqual(formatFigureValue(750, "minutos", words), {
+    kind: "time",
+    tokens: [
+      { text: "12", figure: true },
+      { text: "h", figure: false },
+      { text: "30", figure: true },
+      { text: "min", figure: false },
+    ],
+  });
+});
+
+test("an exact hour and an hour count past a thousand keep 145's own rules (RP-35)", () => {
+  assert.deepEqual(formatFigureValue(120, "min", words), {
+    kind: "time",
+    tokens: [
+      { text: "2", figure: true },
+      { text: "h", figure: false },
+    ],
+  });
+  assert.deepEqual(formatFigureValue(1234 * 60 + 5, "Minutos", words), {
+    kind: "time",
+    tokens: [
+      { text: "1.234", figure: true },
+      { text: "h", figure: false },
+      { text: "5", figure: true },
+      { text: "min", figure: false },
+    ],
+  });
+});
+
+test("750 in «páginas» reads «750», as before", () => {
+  assert.equal(formatFigureValue(750, "páginas", words), "750");
+});
+
+test("a time unit with no words to print it in reads as a plain number", () => {
+  assert.equal(formatFigureValue(750, "minutos"), "750");
+});
+
+test("a string value in a time unit passes through untouched", () => {
+  assert.equal(formatFigureValue("12 h 30 min", "minutos", words), "12 h 30 min");
+});

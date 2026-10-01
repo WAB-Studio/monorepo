@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 
-import { formatFigureValue } from "./format-figure";
+import { isTimeUnit, type TimeWords } from "@/lib/units/time";
+
+import { TimeParts, useTimeWords } from "./figure";
+import { formatFigureValue, isTimeFigure } from "./format-figure";
 import styles from "./table.module.css";
 
 // docs/pulsar/DESIGN.md, the review (RP-17): one set of props, two faces. The
@@ -29,7 +32,9 @@ type TableProps = {
   // Indexes into `columns` set as figures. The first is the one figure the
   // phone shows and the one the wide face sets at the measure's size.
   figures?: readonly number[];
-  // Beside the phone's figure; the wide face names it in its header.
+  // Beside the phone's figure; the wide face names it in its header. A unit
+  // of time (RP-35) is spelled out in every figure cell instead, as
+  // `RevisionHoras.dc.html` draws: no unit word beside them, none in the header.
   unit?: string;
   // Index into `rows`. Marked `data-current` only: the boards draw the
   // current week by its note alone, never by a fill or a weight.
@@ -40,13 +45,17 @@ function isEmpty(cell: ReactNode): boolean {
   return cell === null || cell === undefined;
 }
 
-function figureCell(cell: ReactNode): ReactNode {
-  return isEmpty(cell) ? <span className={styles.pending}>—</span> : formatFigureValue(cell);
+function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords): ReactNode {
+  if (isEmpty(cell)) return <span className={styles.pending}>—</span>;
+  const formatted = formatFigureValue(cell, unit, words);
+  return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
 export function Table({ caption, columns, rows, figures = [], unit, current }: TableProps) {
+  const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
+  const unitWord = unit && !isTimeUnit(unit) ? unit : undefined;
 
   const cellClass = (column: number): string => {
     if (column === 0) return styles.label;
@@ -83,9 +92,9 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
               </span>
               {lead === undefined ? null : (
                 <span className={styles.stackFigure}>
-                  {figureCell(row.cells[lead])}
-                  {unit && !isEmpty(row.cells[lead]) ? (
-                    <span className={styles.unit}>{unit}</span>
+                  {figureCell(row.cells[lead], unit, words)}
+                  {unitWord && !isEmpty(row.cells[lead]) ? (
+                    <span className={styles.unit}>{unitWord}</span>
                   ) : null}
                 </span>
               )}
@@ -102,7 +111,9 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
             {columns.map((header, column) => (
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>
                 {header}
-                {column === lead && unit ? <span className={styles.headerUnit}>{unit}</span> : null}
+                {column === lead && unitWord ? (
+                  <span className={styles.headerUnit}>{unitWord}</span>
+                ) : null}
               </th>
             ))}
           </tr>
@@ -112,7 +123,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
             <tr key={row.key} data-current={index === current ? "" : undefined}>
               {columns.map((_, column) => (
                 <td key={column} className={join(styles.cell, cellClass(column))}>
-                  {figures.includes(column) ? figureCell(row.cells[column]) : row.cells[column]}
+                  {figures.includes(column) ? figureCell(row.cells[column], unit, words) : row.cells[column]}
                   {column === 0 && row.detail ? (
                     <span className={styles.detailWide}>{row.detail}</span>
                   ) : null}

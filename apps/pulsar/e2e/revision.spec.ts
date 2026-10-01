@@ -19,8 +19,10 @@ function dayAfter(openedOn: string, days: number): string {
 // (RP-17), whatever weekday the spec runs on, and week 1 is partial. Every
 // week's own start comes from `weekSpan`, never a fixed count of days.
 const OPENED_WEEKDAY_OFFSET = 2;
-const WEEK1_TOTAL = 12;
-const WEEK2_TOTAL = 9;
+// In minutes: 690 and 60 sum to the 750 the goal reads as «12 h 30 min»
+// (RP-35), and each week reads in hours and minutes of its own.
+const WEEK1_TOTAL = 690;
+const WEEK2_TOTAL = 60;
 // Week 3 (today's own) gets no fact at all: the zero `measureByWeek` must
 // still draw, on the same row `current` marks.
 
@@ -66,7 +68,7 @@ async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): P
   await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
 }
 
-test("a goal opened on a Wednesday two weeks back draws its measure week by week, the current week's zero included (RP-17)", async ({
+test("a goal opened on a Wednesday two weeks back draws its measure week by week in hours and minutes, the current week's zero included (RP-17, RP-35)", async ({
   page,
   db,
   personId,
@@ -109,6 +111,12 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
         (${personId}, ${id}, ${goalId}, ${weekSpan(openedOn, 2, 2).startsOn}, ${WEEK2_TOTAL})
     `;
 
+    // The goal's own figure: 750 minutes in hours and minutes, and no
+    // «minutos» after them; «mide en minutos» above it stays as it was.
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("12 h 30 min", { exact: true })).toBeVisible();
+
     await page.goto(`/metas/${goalId}/revision`);
 
     // Header: the goal's own name as the kicker, the measure's unit as the
@@ -124,11 +132,13 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     const items = page.getByRole("listitem");
     await expect(items).toHaveCount(3);
     await expect(items.nth(0)).toContainText("semana 1");
-    await expect(items.nth(0)).toContainText(String(WEEK1_TOTAL));
+    await expect(items.nth(0)).toContainText("11 h 30 min");
     await expect(items.nth(1)).toContainText("semana 2");
-    await expect(items.nth(1)).toContainText(String(WEEK2_TOTAL));
+    await expect(items.nth(1)).toContainText("1 h");
     await expect(items.nth(2)).toContainText("semana 3");
-    await expect(items.nth(2)).toContainText("0");
+    await expect(items.nth(2)).toContainText("0 min");
+    // The unit word no longer follows each figure (`RevisionHoras.dc.html`).
+    await expect(items.filter({ hasText: unit })).toHaveCount(0);
     await expect(items.nth(2)).toContainText("en curso");
     await expect(items.nth(0)).not.toContainText("en curso");
     await expect(items.nth(1)).not.toContainText("en curso");
@@ -149,12 +159,12 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
 
     const week1Row = rows.nth(1);
     await expect(week1Row.getByRole("cell").nth(0)).toContainText("semana 1");
-    await expect(week1Row.getByRole("cell").nth(1)).toHaveText(String(WEEK1_TOTAL));
+    await expect(week1Row.getByRole("cell").nth(1)).toHaveText("11 h 30 min");
     await expect(week1Row).not.toHaveAttribute("data-current", "");
 
     const week3Row = rows.nth(3);
     await expect(week3Row.getByRole("cell").nth(0)).toContainText("semana 3");
-    await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0");
+    await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0 min");
     await expect(week3Row.getByRole("cell").nth(3)).toHaveText("en curso");
     await expect(week3Row).toHaveAttribute("data-current", "");
 
@@ -199,4 +209,38 @@ test("an id that is no uuid 404s the review on a live database, never the failur
   await page.goto("/metas/not-a-uuid/revision");
   await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toHaveCount(0);
+});
+
+test("a goal measured in «páginas» reads its plain number on the goal and in the review, the unit beside it (RP-35)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const lane = laneNumber();
+  const goalName = `Meta revisión páginas ${lane} ${Date.now()}`;
+  const measureName = `Medida páginas ${lane} ${Date.now()}`;
+  const unit = "páginas";
+  const goalId = await createGoal(page, goalName);
+
+  try {
+    await addQuantityCommitment(page, goalId, measureName, unit, 5);
+    const id = await commitmentId(db, personId, measureName);
+    await db`
+      insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
+      values (${personId}, ${id}, ${goalId}, ${todayInZone()}, 750)
+    `;
+
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(`750${unit}`, { exact: true })).toBeVisible();
+
+    await page.goto(`/metas/${goalId}/revision`);
+    await expect(page.locator("li[data-current]")).toContainText(`750${unit}`);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const table = page.getByRole("table");
+    await expect(table.getByRole("columnheader").nth(1)).toHaveText(`total${unit}`);
+    await expect(table.locator("tr[data-current]").getByRole("cell").nth(1)).toHaveText("750");
+  } finally {
+    await deleteGoal(db, personId, goalId);
+  }
 });
