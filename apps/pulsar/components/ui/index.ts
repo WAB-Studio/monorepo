@@ -56,3 +56,5 @@ export { Split } from "./split";
 export { WeekTable } from "./week-table";
 
 export { SheetActions } from "./sheet-actions";
+
+export { PrintPage, PrintBlock, PrintHidden } from "./print";
