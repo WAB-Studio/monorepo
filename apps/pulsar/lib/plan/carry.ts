@@ -11,6 +11,8 @@ export type Task = {
   estimate: number | null;
   // The day of the one-off's own fact; null while undone.
   doneOn: string | null;
+  // The one-off's own fact, for `undoFact`; absent where a caller never reads it.
+  factId?: string | null;
 };
 
 export type MonthItem = {

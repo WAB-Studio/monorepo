@@ -37,3 +37,16 @@
     margin-block-start: 0;
   }
 }
+
+/* `MesCorrer.dc.html`'s proposal: a box at every width, phone included. */
+.bordered,
+.bordered.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 16px;
+  background: var(--pulsar-raised);
+  border: 1.5px solid var(--pulsar-line);
+  border-radius: 12px;
+}
