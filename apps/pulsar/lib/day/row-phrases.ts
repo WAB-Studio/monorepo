@@ -119,8 +119,8 @@ export type RowMetaPieces = {
   writtenTime: string | undefined;
   writtenLabel: string | undefined;
   // A `quantity` row with a fact that day under its target: not done, yet the
-  // person wrote a number.
-  partial?: { logged: number; target: number; unit: string } | null;
+  // person wrote a number. Both already formatted, a time as «45 min».
+  partial?: { logged: string; target: string } | null;
 };
 
 /**
@@ -136,7 +136,7 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): string | u
   const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;
   const said = loud && (done || partial) ? translate("day.row.saidByYou") : null;
   const asks = loud && !done && !partial && kind === "quantity" ? translate("day.row.asksNumber") : null;
-  const amount = partial ? translate("day.row.partial", partial) : pieces.amount;
+  const amount = partial ? translate("day.row.partialAmount", partial) : pieces.amount;
   return (
     [
       pieces.cadenceText,

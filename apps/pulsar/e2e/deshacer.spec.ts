@@ -148,13 +148,13 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
     await expect(sheet).toBeVisible();
 
     await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
-    await sheet.getByLabel("Otra cantidad").fill(String(chosen));
+    await sheet.getByLabel("otro número, en minutos").fill(String(chosen));
     await sheet.getByLabel("Una línea, si quieres").fill(note);
     await sheet.getByRole("button", { name: "Anotar" }).click();
     await expect(sheet).toBeHidden();
 
     // What was logged, never the plan's own target (RP-04's own "done row").
-    await expect(row).toContainText(`${chosen} minutos`);
+    await expect(row).toContainText(`${chosen} min`);
     await expect(page.getByText(note)).toBeVisible();
     await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
 
@@ -162,7 +162,7 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
     // «Deshacer» beside «Cambiar».
     await row.click();
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByLabel("Otra cantidad")).toHaveValue(String(chosen));
+    await expect(sheet.getByLabel("otro número, en minutos")).toHaveValue(String(chosen));
     await expect(sheet.getByLabel("Una línea, si quieres")).toHaveValue(note);
     await expect(sheet.getByRole("button", { name: "Cambiar" })).toBeVisible();
 
@@ -196,7 +196,7 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
-    await sheet.getByLabel("Otra cantidad").fill("25");
+    await sheet.getByLabel("otro número, en minutos").fill("25");
     await sheet.getByRole("button", { name: "Anotar" }).click();
     await expect(sheet).toBeHidden();
 
@@ -211,7 +211,7 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     // goal reading 55).
     await row.click();
     await expect(sheet).toBeVisible();
-    await sheet.getByLabel("Otra cantidad").fill("30");
+    await sheet.getByLabel("otro número, en minutos").fill("30");
     await sheet.getByRole("button", { name: "Cambiar" }).click();
     await expect(sheet).toBeHidden();
 
@@ -219,7 +219,7 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     expect(rows).toHaveLength(1);
     expect(rows[0].quantity).toBe(30);
 
-    await expect(row).toContainText("30 minutos");
+    await expect(row).toContainText("30 min");
 
     await page.goto(`/metas/${goalId}`);
     // The goal's total, in hours and minutes (RP-35): the figure reads the

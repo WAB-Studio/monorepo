@@ -58,7 +58,7 @@ test("the quantity sheet writes the chip picked, not the plan's own target (RP-0
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
 
-    await sheet.getByRole("button", { name: String(CHOSEN), exact: true }).click();
+    await sheet.getByRole("button", { name: `${CHOSEN} min`, exact: true }).click();
     await sheet.getByRole("button", { name: "Anotar" }).click();
 
     await expect(sheet).toBeHidden();

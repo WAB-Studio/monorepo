@@ -101,7 +101,7 @@ test("flexibleWords: weekly speaks of the week, monthly of the month, an unknown
 const rowCatalogue: Record<string, string> = {
   "day.row.saidByYou": "lo dijiste tú",
   "day.row.asksNumber": "pide el número",
-  "day.row.partial": "{logged} de {target} {unit}",
+  "day.row.partialAmount": "{logged} de {target}",
 };
 const rowTranslate = (key: string, values: Record<string, string | number> = {}) =>
   rowCatalogue[key].replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]));
@@ -146,14 +146,14 @@ test("a quiet row says neither", () => {
   assert.equal(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true }), "10 min");
 });
 
-const partial = { logged: 1, target: 3, unit: "min" };
+const partial = { logged: "1 min", target: "3 min" };
 
 test("a quantity row logged under its target reads what it holds, its hour and «lo dijiste tú»", () => {
   const row = { ...base, kind: "quantity" as const, amount: "3 min", writtenTime: "09:22", partial };
-  assert.equal(rowMeta(rowTranslate, row), "1 de 3 min · 09:22 · lo dijiste tú");
+  assert.equal(rowMeta(rowTranslate, row), "1 min de 3 min · 09:22 · lo dijiste tú");
   assert.equal(
     rowMeta(rowTranslate, { ...row, writtenLabel: "anotado el lunes 21" }),
-    "1 de 3 min · 09:22 · lo dijiste tú · anotado el lunes 21",
+    "1 min de 3 min · 09:22 · lo dijiste tú · anotado el lunes 21",
   );
 });
 

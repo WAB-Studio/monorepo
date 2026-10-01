@@ -4,7 +4,9 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { quantitySchema } from "@/lib/validation/fact";
+import { useTimeWords } from "@/components/ui/figure";
 import { Button, Chip, Field, Flex, Sheet, Text } from "@/components/ui";
 
 export type QuantitySheetProps = {
@@ -59,6 +61,7 @@ export function QuantitySheet({
   day,
 }: QuantitySheetProps) {
   const t = useTranslations();
+  const words = useTimeWords();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(loggedQuantity ?? target);
@@ -165,18 +168,21 @@ export function QuantitySheet({
             selected={!customMode && selected === value}
             onClick={() => pickChip(value)}
           >
-            {value}
+            {isTimeUnit(unit) ? formatQuantity(value, unit, words) : value}
           </Chip>
         ))}
-        {/* The heading stays neutral; a unit inside it would need a gender. */}
-        <Text variant="meta" tone="quiet">
-          {unit}
-        </Text>
+        {/* The heading stays neutral; a unit inside it would need a gender.
+            A time carries its own «h» and «min», so no word follows it. */}
+        {isTimeUnit(unit) ? null : (
+          <Text variant="meta" tone="quiet">
+            {unit}
+          </Text>
+        )}
       </Flex>
 
       {customMode ? (
         <Field
-          label={t("day.quantitySheet.customLabel")}
+          label={t(isTimeUnit(unit) ? "day.quantitySheet.customLabelMinutes" : "day.quantitySheet.customLabel")}
           type="number"
           inputMode="numeric"
           min={1}

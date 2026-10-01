@@ -87,6 +87,7 @@
     "questionPast": "¿Cuánto hiciste ese día?",
     "otherAmount": "Escribir otra cantidad",
     "customLabel": "Otra cantidad",
+    "customLabelMinutes": "otro número, en minutos",
     "noteLabel": "Una línea, si quieres",
     "notePlaceholder": "¿Qué pasó?",
     "accept": "Anotar",
@@ -108,7 +109,6 @@
   "row": {
     "saidByYou": "lo dijiste tú",
     "asksNumber": "pide el número",
-    "partial": "{logged} de {target} {unit}",
     "partialAmount": "{logged} de {target}"
   },
   "monthLine": {

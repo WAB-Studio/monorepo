@@ -73,10 +73,10 @@ test("Hoy says «lo dijiste tú» on a marked row and «pide el número» on an 
     await expect(page.getByText("Marcada", { exact: true })).toBeVisible();
 
     await expect(page.getByText("07:40 · lo dijiste tú", { exact: true })).toBeVisible();
-    await expect(page.getByText("10 minutos · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("10 min · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
     await expect(page.getByText("3 min · pide el número", { exact: true })).toBeVisible();
     // Logged under its target: what it holds, never a second ask.
-    await expect(page.getByText("1 de 3 min · 09:22 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 min de 3 min · 09:22 · lo dijiste tú", { exact: true })).toBeVisible();
     // Only the quantity row with nothing logged asks for a number.
     await expect(page.getByText("pide el número")).toHaveCount(1);
     await expect(page.getByText("lo dijiste tú")).toHaveCount(3);
