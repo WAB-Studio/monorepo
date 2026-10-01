@@ -2160,6 +2160,7 @@ async function runMain(): Promise<void> {
   await runPhasePositionCheck();
   await runFlexibleDayFeedCheck();
   await runSurvivorsOf92To94Check();
+  await runMonthLineCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
@@ -2305,6 +2306,172 @@ async function runSurvivorsOf92To94Check(): Promise<void> {
     );
   } finally {
     if (goalId) await db`delete from goals.goals where id = ${goalId}`;
+    await db.end();
+  }
+}
+
+// Module 128: Hoy's month line (RP-28, RP-29), the month task leaving the
+// dayless list (RP-31) and a done estimate joining the measure (RP-36).
+// Fixed October 2010: Wed 2010-10-20 is the pace day, Tue 10-19 is not.
+async function runMonthLineCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { listDaylessOneOffs } = await import("@/lib/queries/one-offs");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runMonthLineCheck: no verified session");
+  const userId = person.id;
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  const deviceId = "00000000-0000-4000-8000-0000000000e8";
+
+  async function seedGoal(name: string): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${userId}, ${name}, '2099-12-31'::date, 'searches', 'searches',
+              '2010-09-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalIds.push(row.id);
+    return row.id;
+  }
+
+  try {
+    // 720 planned; 400 + 26 declared and 5 searched on 10-02 reach 431.
+    const goal = await seedGoal("month-line probe");
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${userId}, ${goal}, '2010-10-01'::date, 720)
+    `;
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${goal}, 'month-line quantity', 'daily', 'quantity', 10, 'searches',
+              '2010-09-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    for (const [day, quantity] of [["2010-10-05", 400], ["2010-10-06", 26]] as const) {
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${userId}, ${goal}, ${commitment.id}, ${day}::date, ${quantity})
+      `;
+    }
+    const [source] = await db<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (${userId}, ${goal}, 'month-line evidence', 'daily', 'evidence', ${source.id}, 1,
+              '2009-12-01T00:00:00Z'::timestamptz)
+    `;
+    for (let i = 1; i <= 5; i++) {
+      await db`
+        insert into reading.lookups
+          (user_id, device_id, local_id, at, received_at, text, normalised, kind, outcome,
+           dictionary_ready, record_schema)
+        values (${userId}, ${deviceId}::uuid, ${i}, '2010-10-02T17:00:00Z'::timestamptz,
+                '2010-10-02T17:00:00Z'::timestamptz, 'x', 'x', 'word', 'exact', true, 1)
+      `;
+    }
+
+    const pace = await loadDay("2010-10-20");
+    const line = pace.monthLine[goal];
+    assert(
+      "720 planned and 431 reached on the 20th reads under pace, the 10-02 evidence counted in the month",
+      line?.planned === 720 && line.reached === 431 && line.underPace === true,
+      `monthLine = ${JSON.stringify(line)}`,
+    );
+    assert(
+      "the 10-02 evidence counts toward the month and not toward the week",
+      pace.weekMeasure[goal] === 0,
+      `weekMeasure = ${pace.weekMeasure[goal]}`,
+    );
+    const eve = (await loadDay("2010-10-19")).monthLine[goal];
+    assert(
+      "the same 431 of 720 on the 19th does not read under pace",
+      eve?.reached === 431 && eve.underPace === false,
+      `monthLine = ${JSON.stringify(eve)}`,
+    );
+
+    // Estimates: a done leaf adds its 60, its undone sibling nothing.
+    const estimated = await seedGoal("month-line estimate probe");
+    const [slotCommitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${estimated}, 'month-line estimate slot', 'daily', 'quantity', 10, 'searches',
+              '2010-09-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    const slotOf = (day: Awaited<ReturnType<typeof loadDay>>) =>
+      JSON.stringify(day.view.slots.find((slot) => slot.commitmentId === slotCommitment.id));
+    const slotBefore = slotOf(await loadDay("2010-10-20"));
+    const [done] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${userId}, ${estimated}, 'month-line done task', '2010-10-01'::date, 60)
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${userId}, ${estimated}, 'month-line undone sibling', '2010-10-01'::date, 40)
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${userId}, ${estimated}, ${done.id}, '2010-10-20'::date)
+    `;
+    const withEstimate = await loadDay("2010-10-20");
+    assert(
+      "a done task estimated at 60 adds 60 to weekMeasure and to the month's reached, its undone sibling nothing",
+      withEstimate.weekMeasure[estimated] === 60 && withEstimate.monthLine[estimated]?.reached === 60,
+      `weekMeasure = ${withEstimate.weekMeasure[estimated]}, monthLine = ${JSON.stringify(withEstimate.monthLine[estimated])}`,
+    );
+    assert(
+      "a commitment's slot is unchanged by the estimate",
+      slotOf(withEstimate) === slotBefore,
+      `before ${slotBefore}, after ${slotOf(withEstimate)}`,
+    );
+
+    // The month task and its sub-task leave /sueltas; a plain one stays.
+    const [parent] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${userId}, ${estimated}, 'month-line parent', '2010-10-01'::date)
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id)
+      values (${userId}, ${estimated}, 'month-line child', null, ${parent.id})
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, ${estimated}, 'month-line plain dayless')
+    `;
+    const baseline = (await loadDay("2010-10-20")).daylessCount;
+    const listed = (await listDaylessOneOffs()).filter((o) => o.name.startsWith("month-line"));
+    assert(
+      "a month-planned one-off and its sub-task are absent from the dayless list, a plain one is present",
+      listed.length === 1 && listed[0].name === "month-line plain dayless",
+      `listed = ${JSON.stringify(listed.map((o) => o.name))}`,
+    );
+    const [{ n }] = await db<{ n: number }[]>`
+      select count(*)::int as n from goals.one_offs o
+        where o.user_id = ${userId} and o.day is null and o.planned_month is null and o.parent_id is null
+          and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
+          and (o.goal_id is null or exists (
+            select 1 from goals.goals g where g.id = o.goal_id and g.archived_at is null and g.horizon > '2010-10-20'::date))
+    `;
+    assert(
+      "daylessCount excludes the month task and its sub-task and counts the plain one",
+      baseline === n,
+      `daylessCount = ${baseline}, expected ${n}`,
+    );
+
+    // The overlap and the four statements, on the day with a budget.
+    await loadDay("2010-10-20");
+    const start = wireCalls.length;
+    await loadDay("2010-10-20");
+    reportRun("month-line", wireCalls.slice(start), true);
+  } finally {
+    await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
     await db.end();
   }
 }

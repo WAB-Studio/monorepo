@@ -34,6 +34,7 @@ export async function listDaylessOneOffs(): Promise<DaylessOneOff[]> {
         from "goals"."one_offs" o
         left join "goals"."goals" g on g.id = o.goal_id
         where o.day is null
+          and o.planned_month is null and o.parent_id is null
           and not exists (
             select 1 from "goals"."facts" f where f.one_off_id = o.id
           )
