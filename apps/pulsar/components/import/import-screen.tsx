@@ -113,7 +113,7 @@ export function ImportScreen() {
     void send(form, text);
   }
 
-  function readFile(file: File) {
+  async function readFile(file: File) {
     if (busy) return;
     if (file.size > MAX_BYTES) {
       fail({
@@ -128,7 +128,9 @@ export function ImportScreen() {
     }
     const form = new FormData();
     form.set("file", file);
-    void send(form, "");
+    // Only a text file can fail on a template line; its text is the line's source.
+    const binary = file.type === "application/pdf" || file.type.startsWith("image/") || /\.pdf$/i.test(file.name);
+    await send(form, binary ? "" : await file.text().catch(() => ""));
   }
 
   function copyTemplate() {
@@ -177,7 +179,7 @@ export function ImportScreen() {
         label={t("import.upload")}
         hint={t("import.uploadHint")}
         disabled={busy || modelShut}
-        onPick={readFile}
+        onPick={(file) => void readFile(file)}
       />
 
       {placed?.place === "upload" ? notice : null}

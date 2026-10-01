@@ -119,6 +119,26 @@ test.describe("the import screen (RP-37)", () => {
     }
   });
 
+  test("an uploaded text file with a broken month line quotes that line", async ({ person, browser, baseURL }) => {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas/importar");
+      await settled(page);
+
+      await page.getByLabel(messages.upload).setInputFiles({
+        name: "plan.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h")),
+      });
+      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(
+        /^Línea 12: «- 2026-13 · 20 h»\. Esperaba/,
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
   test("a text with nothing in it answers the empty notice and offers the template", async ({
     person,
     browser,
