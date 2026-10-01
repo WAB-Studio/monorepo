@@ -18,6 +18,15 @@ import {
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
+import { estimateFacts, type Task } from "@/lib/plan/carry";
+import {
+  monthLine,
+  monthOf,
+  monthRows,
+  reachedByMonth,
+  type MonthBudget,
+  type MonthRow,
+} from "@/lib/plan/months";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts` and
@@ -67,6 +76,21 @@ type GoalQueryRow = {
   phases: PhaseRow[];
   commitments: CommitmentRow[];
   facts: FactRow[];
+  budgets: { month: string; amount: number }[];
+  tasks: TaskRow[];
+  shifts: string[];
+};
+
+// A one-off of the goal; `done_on` is the day of its own fact, null while
+// undone.
+type TaskRow = {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  planned_month: string | null;
+  day: string | null;
+  estimate: number | null;
+  done_on: string | null;
 };
 
 // What a commitment reads as on the goal's own screen: its cadence and what
@@ -128,6 +152,15 @@ export type GoalView = {
   // when this reads `"unreadable"`: it is the declared half alone, never a
   // blank goal and never an error page.
   evidence: "read" | "unreadable";
+  // The current month's line (RP-29); null without a measure or when today
+  // sits outside the goal's span.
+  month: { month: string; planned: number | null; reached: number; underPace: boolean } | null;
+  // Every month of the span, a month with nothing included (RP-16).
+  months: MonthRow[];
+  budgets: MonthBudget[];
+  tasks: Task[];
+  // The months of this goal already shifted (RP-34).
+  shifts: string[];
 };
 
 export type GoalSummary = {
@@ -140,8 +173,8 @@ export type GoalSummary = {
 };
 
 /**
- * One statement, four subqueries: the goal row scoped by id, and every phase,
- * commitment and fact that name it — unfiltered by `retired_at` or by day, so
+ * One statement, seven subqueries: the goal row scoped by id, and every phase,
+ * commitment, fact, month budget, one-off and month shift that name it — unfiltered by `retired_at` or by day, so
  * a goal's screen reads its whole history in the one round trip. RLS alone
  * narrows every row to the caller's own (RNP-05); `goalId` alone would let a
  * caller read a goal id they merely guessed, so `goal` still comes back
@@ -167,7 +200,19 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.goal_id = ${goalId}) as facts
+         where f.goal_id = ${goalId}) as facts,
+      (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
+                                order by b.month), '[]'::json)
+         from "goals"."month_budgets" b
+         where b.goal_id = ${goalId}) as budgets,
+      (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
+                 'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
+               ) order by o.created_at, o.id), '[]'::json)
+         from "goals"."one_offs" o
+         where o.goal_id = ${goalId}) as tasks,
+      (select coalesce(json_agg(m.month order by m.month), '[]'::json)
+         from "goals"."month_shifts" m
+         where m.goal_id = ${goalId}) as shifts
   `);
 
   return row;
@@ -319,7 +364,10 @@ function evidenceDaysForMeasure(
  * either transaction opens — no round trip spent asking the database to
  * refuse a shape it was never going to match (`22P02`).
  */
-export async function loadGoal(goalId: string): Promise<GoalView | null> {
+export async function loadGoal(
+  goalId: string,
+  today: string = todayInZone(),
+): Promise<GoalView | null> {
   if (!z.uuid().safeParse(goalId).success) return null;
 
   const person = await getPerson();
@@ -346,26 +394,61 @@ export async function loadGoal(goalId: string): Promise<GoalView | null> {
     .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);
 
+  // The same civil-day conversion `goalSpan`'s own SQL runs
+  // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
+  // one row this statement already carries: week 1 opens the day the goal
+  // was created (decided by the user 2026-09-28), never a second query.
+  const openedOn = civilDateInZone(new Date(row.goal.created_at));
+  const tasks: Task[] = row.tasks.map((task) => ({
+    id: task.id,
+    parentId: task.parent_id,
+    name: task.name,
+    plannedMonth: task.planned_month,
+    day: task.day,
+    estimate: task.estimate,
+    doneOn: task.done_on,
+  }));
+  // A done task's estimate counts as declared quantity (RP-36): feeds the
+  // measure alone, never a commitment's slot.
+  const measureFacts = [...facts, ...estimateFacts(tasks, row.goal.measure_unit)];
+
   // Null until the first quantity commitment names it (§0.3, 3): nothing to
   // sum into yet, so the total stays zero rather than matching facts with no
   // unit of their own against a measure the goal does not have.
-  const declaredTotal = row.goal.measure_unit ? measureOf(row.goal.measure_unit, facts) : 0;
+  const declaredTotal = row.goal.measure_unit ? measureOf(row.goal.measure_unit, measureFacts) : 0;
   const evidenceDays =
     evidenceOutcome.status === "read"
       ? evidenceDaysForMeasure(row.goal, row.commitments, evidenceOutcome.bySourceKey)
       : [];
   const evidenceTotal = evidenceDays.reduce((total, day) => total + day.quantity, 0);
 
-  // The same civil-day conversion `goalSpan`'s own SQL runs
-  // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
-  // one row this statement already carries: week 1 opens the day the goal
-  // was created (decided by the user 2026-09-28), never a second query.
-  const weeks = measureByWeek({
-    openedOn: civilDateInZone(new Date(row.goal.created_at)),
+  const months = monthRows({
+    openedOn,
     horizon: row.goal.horizon,
-    today: todayInZone(),
+    today,
+    budgets: row.budgets,
+    reached: reachedByMonth({ unit: row.goal.measure_unit, facts: measureFacts, evidence: evidenceDays }),
+  });
+  const thisMonth = months.find((entry) => entry.current);
+  const currentMonth =
+    row.goal.measure_unit === null || !thisMonth
+      ? null
+      : {
+          month: thisMonth.month,
+          ...monthLine({
+            month: thisMonth.month,
+            today,
+            budget: row.budgets.find((budget) => budget.month === monthOf(today)) ?? null,
+            reached: thisMonth.reached,
+          }),
+        };
+
+  const weeks = measureByWeek({
+    openedOn,
+    horizon: row.goal.horizon,
+    today,
     unit: row.goal.measure_unit,
-    facts,
+    facts: measureFacts,
     evidence: evidenceDays,
     phases,
   });
@@ -374,7 +457,7 @@ export async function loadGoal(goalId: string): Promise<GoalView | null> {
     id: row.goal.id,
     name: row.goal.name,
     horizon: row.goal.horizon,
-    endedOn: row.goal.horizon <= todayInZone() ? dayBefore(row.goal.horizon) : null,
+    endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
     createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
     measureUnit: row.goal.measure_unit,
@@ -384,6 +467,11 @@ export async function loadGoal(goalId: string): Promise<GoalView | null> {
     commitments,
     weeks,
     evidence: evidenceOutcome.status,
+    month: currentMonth,
+    months,
+    budgets: row.budgets,
+    tasks,
+    shifts: row.shifts,
   };
 }
 
