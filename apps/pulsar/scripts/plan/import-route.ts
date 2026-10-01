@@ -291,4 +291,5 @@ test("a file type the reader refuses: 415 import.errors.unreadableType", async (
   assert.equal(response.status, 415);
   assert.equal((await answer(response)).error, "import.errors.unreadableType");
   assert.equal(modelCalls.length, 0);
+  assert.equal((await rows()).length, 0, "a refused type spends no claim");
 });

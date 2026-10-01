@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { MODEL_NAME, modelAvailable, readPlan, type PlanInput } from "@/lib/import/model";
+import { MODEL_NAME, fileRoute, modelAvailable, readPlan, type PlanInput } from "@/lib/import/model";
 import { claimModelCall, settleModelCall, type ModelCallOutcome } from "@/lib/import/spend";
 import { parseTemplate } from "@/lib/import/template";
 import { getPerson } from "@/lib/session";
@@ -12,8 +12,6 @@ export const maxDuration = 150;
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
-const TEXT_EXTENSIONS = [".txt", ".md", ".markdown", ".csv", ".json"];
-
 function reply(status: number, body: Record<string, unknown>): NextResponse {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -22,16 +20,10 @@ function fail(status: number, error: string): NextResponse {
   return reply(status, { error });
 }
 
-function isTextFile(file: File): boolean {
-  const mime = file.type.toLowerCase().split(";")[0].trim();
-  const name = file.name.toLowerCase();
-  return mime.startsWith("text/") || mime === "application/json" || TEXT_EXTENSIONS.some((ext) => name.endsWith(ext));
-}
-
 /**
  * Reads a pasted plan or one file (RP-37, RNP-13) in a fixed order: the
- * template first, which needs neither key nor claim; then the key, named when
- * absent; then the claim; then the model. Every branch answers a body, never a
+ * template first, which needs neither key nor claim; then a file type the reader
+ * refuses, which must not spend a claim; then the key, named when absent; then the claim; then the model. Every branch answers a body, never a
  * 204: an absent key is a 503 a person can read.
  */
 export async function POST(request: NextRequest) {
@@ -58,7 +50,7 @@ export async function POST(request: NextRequest) {
   if (file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     input = { kind: "file", name: file.name, type: file.type, bytes };
-    if (isTextFile(file)) text = new TextDecoder().decode(bytes);
+    if (fileRoute(file.name, file.type) === "text") text = new TextDecoder().decode(bytes);
   } else if (typeof pasted === "string" && pasted.trim() !== "") {
     input = { kind: "text", text: pasted };
     text = pasted;
@@ -79,6 +71,8 @@ export async function POST(request: NextRequest) {
       return reply(200, { via: "template", draft: template.draft });
     }
   }
+
+  if (file && fileRoute(file.name, file.type) === null) return fail(415, "import.errors.unreadableType");
 
   if (!modelAvailable()) return fail(503, "import.errors.noKey");
 
