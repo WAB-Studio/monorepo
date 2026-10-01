@@ -14,7 +14,8 @@ import {
   type RemoveMonthBudgetInput,
   type SetMonthBudgetInput,
 } from "@/lib/validation/budget";
-import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { isClosed } from "@/lib/validation/closed";
+import { civilDateInZone } from "@/lib/zone";
 
 export type SetMonthBudgetResult = { ok: true } | { ok: false; error: string };
 export type RemoveMonthBudgetResult = { ok: true } | { ok: false; error: string };
@@ -22,11 +23,6 @@ export type RemoveMonthBudgetResult = { ok: true } | { ok: false; error: string 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
 class NamedError extends Error {}
-
-// `plan.ts`'s own `isClosed`: archived, or its horizon already reached.
-function isClosed(goal: { horizon: string; archivedAt: Date | string | null }): boolean {
-  return goal.archivedAt !== null || goal.horizon <= todayInZone();
-}
 
 function revalidateMonthScreens(goalId: string, month: string): void {
   revalidatePath("/");

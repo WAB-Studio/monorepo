@@ -7,6 +7,7 @@ import { and, eq, isNull, max, sql } from "drizzle-orm";
 import { commitments, evidenceSources, goals, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
+import { isClosed } from "@/lib/validation/closed";
 import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
 import { todayInZone } from "@/lib/zone";
 import {
@@ -42,13 +43,6 @@ export type MoveHorizonResult = { ok: true } | { ok: false; error: string };
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
 class NamedError extends Error {}
-
-// An archived or ended goal takes no new phase or commitment, and is refused
-// as a goal that is not there — what `compromisos/nuevo` and `fases/nueva`
-// answer with a 404. `listGoals` draws the same line.
-function isClosed(goal: { horizon: string; archivedAt: Date | string | null }): boolean {
-  return goal.archivedAt !== null || goal.horizon <= todayInZone();
-}
 
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal
@@ -129,6 +123,7 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
         .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, goalId));
+      // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
       if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       // A goal names one horizon; a phase is a span of it, never past it.
@@ -190,6 +185,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
         .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, data.goalId));
+      // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
       if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       let sourceId: string | null = null;
