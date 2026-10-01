@@ -1188,6 +1188,8 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
     ["P108", "month_budgets", "DELETE INSERT(amount,goal_id,month,user_id) SELECT UPDATE(amount)"],
     ["P109", "month_shifts", "INSERT(goal_id,month,user_id) SELECT"],
     ["P110", "model_calls", "INSERT(model,source,user_id) SELECT UPDATE(input_tokens,outcome,output_tokens)"],
+    // 0008: a phase moves in time with a shift (RP-34) and never changes its aim.
+    ["P113", "phases", "INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT UPDATE(ends_on,starts_on)"],
   ];
   for (const [label, table, wanted] of expected) {
     const authenticated = await privilegesOf(q, table, "authenticated");
@@ -1210,12 +1212,12 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
 
   const policies = await q<{ tablename: string; count: number }[]>`
     select tablename, count(*)::int as count from pg_policies
-    where schemaname = 'goals' and tablename in ('month_budgets', 'month_shifts', 'model_calls', 'one_offs')
+    where schemaname = 'goals' and tablename in ('month_budgets', 'month_shifts', 'model_calls', 'one_offs', 'phases')
     group by tablename order by tablename`;
   const counts = policies.map((r) => `${r.tablename}=${r.count}`).join(",");
   assert(
     "P112",
-    counts === "model_calls=3,month_budgets=4,month_shifts=2,one_offs=4",
+    counts === "model_calls=3,month_budgets=4,month_shifts=2,one_offs=4,phases=4",
     `policies per table = ${counts || "none"}`,
   );
 }
@@ -1515,7 +1517,38 @@ async function checkPlanByMonth(): Promise<void> {
       );
       assert("P104", badSource.code === "23514", `a call from source 'x', sqlstate = ${badSource.code ?? "none"}`);
 
+      // -- phases: dates move, nothing else does (0008) --
+      const [shiftable] = await tx<{ id: string }[]>`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${subject}, ${goal.id}, 'fase corrible', '2026-12-01', '2026-12-31') returning id`;
+      const phaseMoves = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.phases set starts_on = '2027-01-01', ends_on = '2027-01-31'
+          where id = ${shiftable.id} returning id`,
+      );
+      assert(
+        "P114",
+        phaseMoves.code === undefined && phaseMoves.rows.length === 1,
+        `own phase's dates move, sqlstate = ${phaseMoves.code ?? "none"}, rows = ${phaseMoves.rows.length}`,
+      );
+      const phaseAim = await attempt(tx, (sp) => sp`update goals.phases set aim = 'otra' where id = ${shiftable.id}`);
+      assert("P115", phaseAim.code === "42501", `update phases.aim, sqlstate = ${phaseAim.code ?? "none"}`);
+      const phaseBackwards = await attempt(
+        tx,
+        (sp) => sp`update goals.phases set ends_on = '2026-12-31' where id = ${shiftable.id}`,
+      );
+      assert("P116", phaseBackwards.code === "23514", `a phase ending before it starts, sqlstate = ${phaseBackwards.code ?? "none"}`);
+
       await enterUserContext(tx, intruder);
+      const foreignPhase = await attemptCount(
+        tx,
+        (sp) => sp`update goals.phases set starts_on = '2027-02-01', ends_on = '2027-02-28' where id = ${shiftable.id}`,
+      );
+      assert(
+        "P117",
+        foreignPhase.code === undefined && foreignPhase.count === 0,
+        `another person's phase dates move, sqlstate = ${foreignPhase.code ?? "none"}, rows = ${foreignPhase.count}`,
+      );
       const foreignShift = await tx<{ id: string }[]>`select id from goals.month_shifts where id = ${shift.id}`;
       assert("P105", foreignShift.length === 0, `another person's shift, rows visible = ${foreignShift.length}`);
       const foreignCall = await tx<{ id: string }[]>`select id from goals.model_calls where id = ${call.id}`;
