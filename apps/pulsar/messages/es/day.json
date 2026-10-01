@@ -113,7 +113,7 @@
   },
   "monthLine": {
     "title": "este mes",
-    "of": "de {planned}",
+    "of": "de",
     "pace": "día {day} · {percent} %, bajo el {threshold} %"
   },
   "tally": "hechos {done} de {total}",
