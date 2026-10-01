@@ -1,7 +1,6 @@
 import type { DeclaredFact } from "@/lib/day/types";
 import { dayBefore } from "@/lib/day/weeks";
-import { dateToCivilDate } from "@/lib/zone";
-import { monthOf } from "./months";
+import { monthOf, nextMonth } from "./months";
 
 export type Task = {
   id: string;
@@ -56,12 +55,6 @@ export function owedAt(task: Task, children: Task[], before: string): number {
   return open ? (task.estimate ?? 0) : 0;
 }
 
-function nextMonthStart(month: string): string {
-  const year = Number(month.slice(0, 4));
-  const index = Number(month.slice(5, 7));
-  return dateToCivilDate(new Date(Date.UTC(year, index, 1, 12)));
-}
-
 function childrenOf(tasks: Task[], task: Task): Task[] {
   return tasks.filter((other) => other.parentId === task.id);
 }
@@ -97,7 +90,7 @@ function carriedIn(tasks: Task[], month: string): MonthItem[] {
 // Carried tasks first, then the month's own (RP-30). `done` reads at the
 // earlier of `today` and the month's last day.
 export function monthList(tasks: Task[], month: string, today: string): MonthItem[] {
-  const lastDay = dayBefore(nextMonthStart(month));
+  const lastDay = dayBefore(nextMonth(month));
   const readAt = today < lastDay ? today : lastDay;
   const carried = carriedIn(tasks, month);
   const own: MonthItem[] = [];
@@ -118,7 +111,7 @@ export function carryShare(
   tasks: Task[],
   month: string,
 ): { carried: number; planned: number } | null {
-  const after = nextMonthStart(month);
+  const after = nextMonth(month);
   let planned = 0;
   let carried = 0;
   for (const item of carriedIn(tasks, month)) {

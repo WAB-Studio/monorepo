@@ -22,7 +22,8 @@ export function monthOf(day: string): string {
   return `${day.slice(0, 7)}-01`;
 }
 
-function nextMonth(month: string): string {
+// "YYYY-MM-01" of the month after `month`.
+export function nextMonth(month: string): string {
   const year = Number(month.slice(0, 4));
   const index = Number(month.slice(5, 7));
   return index === 12
