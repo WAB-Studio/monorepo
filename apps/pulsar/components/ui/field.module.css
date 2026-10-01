@@ -88,3 +88,10 @@
 .control.control input:autofill {
   -webkit-text-fill-color: var(--pulsar-ink);
 }
+
+/* A unit after the value: mono and muted, the way a label reads. */
+.suffix {
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-meta-size);
+  color: var(--pulsar-muted);
+}

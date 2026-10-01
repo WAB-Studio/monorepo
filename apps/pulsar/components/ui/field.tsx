@@ -16,10 +16,12 @@ type FieldProps = Omit<TextField.RootProps, "size" | "variant" | "color" | "radi
   hint?: ReactNode;
   // The refusal reads in the hint's place, in ink, and the ring darkens.
   invalid?: boolean;
+  // A unit read after the typed value («h», «min»), inside the control.
+  suffix?: ReactNode;
 };
 
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
-  { label, hideLabel, hint, invalid, id, className, ...props },
+  { label, hideLabel, hint, invalid, suffix, id, className, children, ...props },
   ref,
 ) {
   const generated = useId();
@@ -44,7 +46,14 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         aria-invalid={invalid ? true : undefined}
         {...props}
         className={[styles.control, className].filter(Boolean).join(" ")}
-      />
+      >
+        {children}
+        {suffix ? (
+          <TextField.Slot side="right" className={styles.suffix}>
+            {suffix}
+          </TextField.Slot>
+        ) : null}
+      </TextField.Root>
       {hint ? (
         <span id={hintId} className={invalid ? styles.refusal : styles.hint}>
           {hint}

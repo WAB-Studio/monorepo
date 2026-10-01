@@ -14,12 +14,14 @@ type ChipProps = Omit<ComponentPropsWithoutRef<"button">, "children"> & {
   shape?: "pill" | "day" | "choice";
   // One of a set the person picks a single one of: a radio, not a toggle.
   radio?: boolean;
+  // A single yes-or-no the person ticks: a checkbox, not a toggle.
+  checkbox?: boolean;
   // A quantity is a figure, and a figure is set in mono.
   mono?: boolean;
 };
 
 export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
-  { children, selected, shape = "pill", radio, mono, className, type = "button", ...props },
+  { children, selected, shape = "pill", radio, checkbox, mono, className, type = "button", ...props },
   ref,
 ) {
   const merged = [
@@ -36,8 +38,8 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
     <button
       ref={ref}
       type={type}
-      {...(radio
-        ? { role: "radio", "aria-checked": selected ?? false }
+      {...(radio || checkbox
+        ? { role: radio ? "radio" : "checkbox", "aria-checked": selected ?? false }
         : { "aria-pressed": selected ?? false })}
       className={merged}
       {...props}
