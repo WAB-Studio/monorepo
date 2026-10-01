@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
+import { timeChipsAround } from "@/lib/day/time-chips";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { quantitySchema } from "@/lib/validation/fact";
 import { useTimeWords } from "@/components/ui/figure";
@@ -40,6 +41,11 @@ function chipsAround(target: number): number[] {
   return [target - 1, target, target + 1, target + 2];
 }
 
+// A time unit offers the board's wider spread; every other unit the four neighbours.
+function chipsFor(target: number, unit: string): number[] {
+  return isTimeUnit(unit) ? timeChipsAround(target) : chipsAround(target);
+}
+
 /**
  * Takes a commitment's number in the same gesture that satisfies it (RP-03),
  * plus one optional line (RP-04). Offered as chips, the target already
@@ -70,7 +76,7 @@ export function QuantitySheet({
   const [note, setNote] = useState(loggedNote ?? "");
   const [wasOpen, setWasOpen] = useState(open);
 
-  const chips = chipsAround(target);
+  const chips = chipsFor(target, unit);
 
   // Every open starts where today's own row stands: the logged figure and
   // note when the row is done (RP-04, RP-05), the plan's own target and a
@@ -81,7 +87,7 @@ export function QuantitySheet({
     setWasOpen(open);
     if (open) {
       setSelected(loggedQuantity ?? target);
-      setCustomMode(loggedQuantity != null && !chipsAround(target).includes(loggedQuantity));
+      setCustomMode(loggedQuantity != null && !chipsFor(target, unit).includes(loggedQuantity));
       setCustomValue(loggedQuantity != null ? String(loggedQuantity) : "");
       setNote(loggedNote ?? "");
       setError(null);

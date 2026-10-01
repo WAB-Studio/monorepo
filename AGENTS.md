@@ -202,9 +202,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
-- Push a worker's branch from the main session when the environment denied the worker's push.
-  A working branch only, never `main` or `integracion`; say it in the report. Decided by the user
-  2026-09-27.
+- Commit and push a worker's branch from the main session when the environment denied the worker's
+  commit or push. A working branch only, never `main` or `integracion`; say it in the report. Decided by
+  the user 2026-09-27 for the push and 2026-09-30 for the commit.
 - **Point every PR at `integracion`. Never at `main`.**
 - **Take `integracion` to `main` once per slice, at most once a day.** That merge is the deploy.
   Both apps ship from `main` alone (`apps/*/vercel.json`, `deploymentEnabled` `main` only), so every
@@ -231,6 +231,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run every `check:*` script of the app, not only the one named, when a module changes a server
   action or a query. Measured 2026-09-29: module 88 made `addCommitment` refuse an ended goal and
   broke three `check:day` probes; neither its worker nor its validator ran `check:day`.
+- Run the whole pulsar e2e suite, never a selection, on a module that changes what a screen prints.
+  Measured 2026-09-30: a chosen list missed `deshacer.spec.ts` under module 146 and `cifra-unidad.spec.ts`
+  under module 135; both went red in CI. Run at most two whole suites at once: a third exhausts the
+  shared pool (`EMAXCONNSESSION`, 15 clients).
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
   boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified

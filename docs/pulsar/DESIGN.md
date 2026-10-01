@@ -645,3 +645,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **In a time unit, the wide review's measure column is headed «total» alone**; each cell carries its own
   «h» and «min», so «total minutos» would say the unit twice. `RevisionHoras.dc.html` draws the phone face
   only. Decided 2026-09-30 by the coordinator, module 146.
+- **In a time unit, the quantity sheet offers `CantidadHoras.dc.html`'s spread, not four neighbours.** The
+  target, up to four 15-minute steps below it (only those above zero) and three 30-minute steps above, at
+  most eight chips, the target selected: 90 min reads «30 min, 45 min, 1 h, 1 h 15 min, 1 h 30 min, 2 h,
+  2 h 30 min, 3 h». Other units keep the four
+  integers. The own field «otro número, en minutos» stays. Decided 2026-09-30 by the user.
+  **Under an hour the steps are 5 minutes**, four below (only those above zero) and three above: 10 min
+  reads «5, 10, 15, 20, 25 min», 45 min reads «25 … 60 min». Decided 2026-09-30 by the coordinator.

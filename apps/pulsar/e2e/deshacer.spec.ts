@@ -136,7 +136,8 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
   const goalId = await createGoal(page, `Meta cantidad ${Date.now()}`);
   await addQuantityCommitment(page, goalId, name, 10, "minutos");
   const note = `nota de prueba ${Date.now()}`;
-  const chosen = 25;
+  // Off the 10-minute spread's chips, so the sheet reopens on its own field.
+  const chosen = 27;
 
   try {
     const id = await commitmentId(db, personId, name);
@@ -211,6 +212,8 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     // goal reading 55).
     await row.click();
     await expect(sheet).toBeVisible();
+    // 25 is one of the 10-minute spread's chips, so the sheet reopens on chips.
+    await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
     await sheet.getByLabel("otro número, en minutos").fill("30");
     await sheet.getByRole("button", { name: "Cambiar" }).click();
     await expect(sheet).toBeHidden();

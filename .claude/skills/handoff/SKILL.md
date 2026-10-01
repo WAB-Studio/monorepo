@@ -17,13 +17,11 @@ The one document that survives a session. `private/handoffs/HANDOFF-<YYYY-MM-DD>
 
 ## Closing — "cerremos handoff", or on the window's own warning
 
-The `context-watch.sh` hook says when the window passes 400k tokens. Take it as the phrase:
-finish the step in hand, close, and tell the user to open a new chat. Start nothing new.
+The `context-watch.sh` hook says when the window passes 400k tokens. Take it as the phrase and close
+at once, forced. Decided by the user 2026-10-01: «en el momento que lleguemos a 400k cerrar todo forzado».
 
-1. **Wait for every subagent still running.** They are the step in hand. Writing the handoff over
-   four working agents describes a repo that does not exist yet, and killing them throws away work
-   nobody measured. A subagent's transcript file is written when it finishes, so **zero bytes says
-   nothing about whether it is alive** — ask the user what they see before calling one dead.
+1. **Stop every subagent still running** (`TaskStop`). Never wait for one. Its branch holds what it
+   committed; say in the file what it was doing and what it had proved.
 2. Commit and push every branch that carries work. Leave no tree dirty.
 3. Run `git log <base>..HEAD --format='%h %an <%ae>%n%(trailers)'` on each. No Claude attribution.
 4. Write the file.
