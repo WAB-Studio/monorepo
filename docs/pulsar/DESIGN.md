@@ -184,6 +184,7 @@ throughout: the 2026–2027 roadmap, goal «IA aplicada». Export (PDF) and impo
 | `TareaNueva.dc.html` | a new task: name, time in hours and minutes, month preset, «con sub-tareas» |
 | `SubtareaNueva.dc.html` | a sub-task under a named parent; one level only |
 | `TareaSinMedida.dc.html` | a goal that measures nothing: no time field, and why in one line |
+| `MesSubtarea.dc.html` | the way into a sub-task: a row «Otra sub-tarea» closing each parent's children, indented as they are, dashed circle; open months only. Chosen 2026-10-01 by the coordinator, the user having left it to them |
 
 ### Page «Exportar»
 

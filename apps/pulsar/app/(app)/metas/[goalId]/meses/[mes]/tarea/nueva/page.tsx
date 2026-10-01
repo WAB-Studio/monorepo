@@ -57,6 +57,8 @@ export default async function NewTaskPage({
 
   return (
     <TaskForm
+      // Saving a parent navigates here from the same form: remount it, or its typed name and checkbox ride along.
+      key={parent?.id ?? "new"}
       goalId={goal.id}
       goalName={goal.name}
       unit={goal.measureUnit}

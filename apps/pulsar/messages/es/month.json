@@ -51,6 +51,7 @@
     "doneOf": "{done} de {total} hechas",
     "staysIn": "sigue en {month}",
     "addTask": "Otra tarea de {month}",
+    "addSubtask": "Otra sub-tarea",
     "empty": "{month} no tiene tareas. Las que escribas aquí suman su tiempo a la meta cuando las marques hechas.",
     "emptyAction": "Escribir una tarea",
     "closedNote": "Un mes cerrado no toma tareas nuevas.",

@@ -101,7 +101,8 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
     startTransition(() => {
       void createOneOff(parsed.data).then((result) => {
         if (result.ok) {
-          router.push(monthHref);
+          // A parent with no child yet is a dead end: go on to its first one.
+          router.push(!parent && withChildren ? `${monthHref}/tarea/nueva?padre=${result.oneOffId}` : monthHref);
           router.refresh();
         } else {
           setError(result.error);

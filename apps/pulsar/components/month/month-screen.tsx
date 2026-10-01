@@ -26,6 +26,18 @@ function sum(tasks: Task[], pick: (task: Task) => number): number {
   return tasks.reduce((total, task) => total + pick(task), 0);
 }
 
+/** The dashed-circle link that closes a list: «Otra tarea», or, indented as the children, «Otra sub-tarea». */
+function AddRow({ href, label, child }: { href: string; label: string; child?: boolean }) {
+  return (
+    <Flex align="center" gap="3" minHeight="48px" ml={child ? "30px" : undefined}>
+      <Mark state="empty" dashed />
+      <Text asChild tone="accent">
+        <Link href={href}>{label}</Link>
+      </Text>
+    </Flex>
+  );
+}
+
 /**
  * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (RP-30, RP-31,
  * RP-32, RP-34): one month of a goal. The amount comes from `loadGoal`'s
@@ -109,6 +121,18 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
       meta = t("month.list.staysIn", { month: monthLabel(nextMonth(mes)) });
     }
 
+    // The form's own rule (`tarea/nueva/page.tsx`): an open month's own parent, no day, no time, nothing done.
+    const subtaskable =
+      open &&
+      !closed &&
+      (isParent || (unit !== null && children.length === 0)) &&
+      entry.carriedFrom === null &&
+      task.parentId === null &&
+      task.plannedMonth?.slice(0, 7) === month &&
+      task.day === null &&
+      task.estimate === null &&
+      task.doneOn === null;
+
     return (
       <Flex key={task.id} direction="column">
         <TaskRow
@@ -131,6 +155,9 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
             trailing={unit && child.estimate ? say(child.estimate) : undefined}
           />
         ))}
+        {subtaskable ? (
+          <AddRow child href={`${addHref}?padre=${task.id}`} label={t("month.list.addSubtask")} />
+        ) : null}
       </Flex>
     );
   }
@@ -228,12 +255,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
       ) : null}
 
       {open && !closed && !empty ? (
-        <Flex align="center" gap="3">
-          <Mark state="empty" dashed />
-          <Text asChild tone="accent">
-            <Link href={addHref}>{t("month.list.addTask", { month: name })}</Link>
-          </Text>
-        </Flex>
+        <AddRow href={addHref} label={t("month.list.addTask", { month: name })} />
       ) : null}
 
       {closed ? (

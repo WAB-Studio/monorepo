@@ -102,8 +102,9 @@ test("writes a task of 1 h, a parent «con sub-tareas» and two sub-tasks of 1 h
     await expect(page.getByLabel("minutos")).toHaveCount(0);
     await page.getByLabel("qué hay que hacer").fill(`Padre ${stamp}`);
     await page.getByRole("button", { name: "Guardar la tarea" }).click();
-    await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses/${seg(thisMonth)}$`));
-    await expect(page.getByText(`Padre ${stamp}`)).toBeVisible();
+    // Saving «con sub-tareas» goes straight on to its first sub-task.
+    await expect(page).toHaveURL(/\/tarea\/nueva\?padre=/);
+    await expect(page.getByText(`PADRE ${stamp} · ${label(thisMonth).toUpperCase()}`)).toBeVisible();
 
     const [parent] = await db<{ id: string; estimate: number | null }[]>`
       select id, estimate from goals.one_offs where goal_id = ${goalId} and name = ${`Padre ${stamp}`}
@@ -111,8 +112,6 @@ test("writes a task of 1 h, a parent «con sub-tareas» and two sub-tasks of 1 h
     expect(parent.estimate).toBeNull();
 
     // Two sub-tasks; the sum line counts the amount being typed.
-    await page.goto(`${newHref(goalId, thisMonth)}?padre=${parent.id}`);
-    await expect(page.getByText(`PADRE ${stamp} · ${label(thisMonth).toUpperCase()}`)).toBeVisible();
     await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
     await expect(page.getByText(`«Padre ${stamp}» suma 0 min con esta.`)).toBeVisible();
@@ -122,7 +121,9 @@ test("writes a task of 1 h, a parent «con sub-tareas» and two sub-tasks of 1 h
     await page.getByRole("button", { name: "Guardar la sub-tarea" }).click();
     await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses/${seg(thisMonth)}$`));
 
-    await page.goto(`${newHref(goalId, thisMonth)}?padre=${parent.id}`);
+    // The second is reached through the month's own «Otra sub-tarea» row.
+    await page.getByRole("link", { name: "Otra sub-tarea" }).click();
+    await expect(page).toHaveURL(`${newHref(goalId, thisMonth)}?padre=${parent.id}`);
     await page.getByLabel("qué hay que hacer").fill(`Segunda ${stamp}`);
     await page.getByLabel("horas").fill("6");
     await expect(page.getByText(`«Padre ${stamp}» suma 7 h con esta.`)).toBeVisible();
@@ -333,3 +334,57 @@ for (const width of [360, 1280]) {
     }
   });
 }
+
+test("«Otra sub-tarea» closes each open parent's children and is offered under a parent and a bare task of a measured goal, never in a closed month, a carried or sub-task row, or a goal that measures nothing (RP-31)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalId = await seedGoal(db, person.id, `Meta fila ${stamp}`);
+  const open = await seedTask(db, person.id, goalId, `Abierto ${stamp}`, thisMonth, null);
+  await seedTask(db, person.id, goalId, `Hijo abierto ${stamp}`, null, 30, open);
+  await seedTask(db, person.id, goalId, `Hoja ${stamp}`, thisMonth, 45);
+  const bare = await seedTask(db, person.id, goalId, `Sin hijos ${stamp}`, thisMonth, null);
+  const plainGoal = await seedGoal(db, person.id, `Meta lisa ${stamp}`, false);
+  await seedTask(db, person.id, plainGoal, `Trámite ${stamp}`, thisMonth, null);
+  const old = await seedTask(db, person.id, goalId, `Viejo ${stamp}`, lastMonth, null);
+  await seedTask(db, person.id, goalId, `Hijo viejo ${stamp}`, null, 30, old);
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    const link = page.getByRole("link", { name: "Otra sub-tarea" });
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
+      await expect(page.getByText(`Hijo abierto ${stamp}`)).toBeVisible();
+      // Own parent and the childless no-estimate task: not the leaf with time, the sub-task or the carried parent.
+      await expect(page.getByText(`Viejo ${stamp}`).first()).toBeVisible();
+      await expect(link, `${width}`).toHaveCount(2);
+      await expect(link.first()).toHaveAttribute("href", `${newHref(goalId, thisMonth)}?padre=${open}`);
+      await expect(link.last()).toHaveAttribute("href", `${newHref(goalId, thisMonth)}?padre=${bare}`);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+      const child = (await page.getByText(`Hijo abierto ${stamp}`).boundingBox())!;
+      const row = (await link.first().evaluate((el) => el.parentElement!.getBoundingClientRect()))!;
+      expect(row.height).toBeGreaterThanOrEqual(48);
+      const circle = (await link.first().evaluate((el) => el.previousElementSibling!.getBoundingClientRect()))!;
+      const mark = (await page.locator("[data-done]").first().boundingBox())!;
+      expect(circle.x - mark.x).toBeGreaterThanOrEqual(30);
+      expect(row.y).toBeGreaterThan(child.y);
+    }
+
+    await page.goto(`/metas/${goalId}/meses/${seg(lastMonth)}`);
+    await expect(page.getByText(`Hijo viejo ${stamp}`)).toBeVisible();
+    await expect(link).toHaveCount(0);
+
+    // A goal that measures nothing never offers it, not even under a bare task.
+    await page.goto(`/metas/${plainGoal}/meses/${seg(thisMonth)}`);
+    await expect(page.getByText(`Trámite ${stamp}`)).toBeVisible();
+    await expect(link).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
