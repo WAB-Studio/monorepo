@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { declareFact, undoFact } from "@/app/actions/facts";
 import { cadencePhrase, flexibleWords, metPhrase, rowMeta } from "@/lib/day/row-phrases";
 import type { Cadence } from "@/lib/day/types";
+import { formatQuantity } from "@/lib/units/time";
+import { useTimeWords } from "@/components/ui/figure";
 import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
 import { QuantitySheet } from "./quantity-sheet";
@@ -57,13 +59,6 @@ export type DayRowProps = {
   quiet?: boolean;
 };
 
-// A done row's own second line (decided 2026-09-27, `docs/pulsar/DESIGN.md`
-// "Decisions taken here"): what the person actually logged, never the plan's
-// target — "25 minutos", not "10 minutos".
-function loggedMeta(quantity: number, unit: string): string {
-  return `${quantity} ${unit}`;
-}
-
 /**
  * One commitment's row (RP-01, RP-02, RP-05, RP-08). A `tap` commitment is
  * satisfied outright, and a second tap on a done one undoes it through
@@ -95,6 +90,7 @@ export function DayRow({
   quiet,
 }: DayRowProps) {
   const t = useTranslations();
+  const words = useTimeWords();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -102,14 +98,15 @@ export function DayRow({
   const tappable = kind !== "evidence";
   // A quiet row has no slot, so what it holds today is the fact itself.
   const done = quiet ? factId !== undefined : markState === "declared";
-  // `unit` is the commitment's own word ("minutos"), never abbreviated: no
-  // table maps an arbitrary unit string to a short form.
+  // A done row's second line is what the person actually logged, never the
+  // plan's target (decided 2026-09-27, `docs/pulsar/DESIGN.md`). A time unit prints as «1 h 30 min» (RP-35); any other keeps the
+  // commitment's own word.
   const amount =
     kind === "quantity"
       ? done && loggedQuantity != null && unit != null
-        ? loggedMeta(loggedQuantity, unit)
+        ? formatQuantity(loggedQuantity, unit, words)
         : target != null && unit != null
-          ? `${target} ${unit}`
+          ? formatQuantity(target, unit, words)
           : sourceName
       : sourceName;
   const cadenceText = cadence
@@ -136,7 +133,7 @@ export function DayRow({
     writtenLabel,
     partial:
       kind === "quantity" && loggedQuantity != null && factId !== undefined && target != null && unit != null
-        ? { logged: loggedQuantity, target, unit }
+        ? { logged: formatQuantity(loggedQuantity, unit, words), target: formatQuantity(target, unit, words) }
         : null,
   });
 
