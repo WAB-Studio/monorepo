@@ -63,7 +63,7 @@ function parseAmount(text: string, timeUnit: boolean): number | null {
 type Spot = { line: number; expected: string };
 
 export function parseTemplate(text: string): TemplateResult {
-  const lines = text.replace(/^﻿/, "").split(/\r?\n/).map((l) => l.trimEnd());
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).map((l) => l.trimEnd());
   const first = lines.findIndex((l) => l.trim() !== "");
   if (first === -1 || lines[first] !== TEMPLATE_HEADER) return { matched: false };
 
