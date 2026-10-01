@@ -136,10 +136,16 @@ export function draftRefusals(draft: ImportDraft, today: string): DraftRefusal[]
       if (commitment.satisfaction === "quantity" && goal.measure === null) {
         refuse(`commitments.${c}`, "month.errors.noMeasure");
       }
+      // A tap counts nothing: the table refuses a target or a unit on one.
+      if (commitment.satisfaction === "tap" && (commitment.targetQuantity !== null || commitment.unit !== null)) {
+        refuse(`commitments.${c}`, "import.errors.tapWithAmount");
+      }
     });
 
     goal.tasks.forEach((task, t) => {
       if (outside(task.month)) refuse(`tasks.${t}`, "month.errors.outsideSpan");
+      // A parent is measured by its sub-tasks; the policy refuses one with an estimate.
+      if (task.children.length > 0 && task.estimate !== null) refuse(`tasks.${t}`, "import.errors.parentWithAmount");
       if (goal.measure === null) {
         if (task.estimate !== null) refuse(`tasks.${t}`, "month.errors.noMeasure");
         task.children.forEach((child, c) => {

@@ -17,7 +17,7 @@ function goal(over: Partial<ImportDraft["goals"][number]> = {}): ImportDraft["go
     commitments: [
       { name: "Inglés", cadenceKind: "daily", cadenceWeekdays: null, cadenceN: null, satisfaction: "tap", targetQuantity: null, unit: null },
     ],
-    tasks: [{ name: "Leer", month: "2026-10", estimate: 240, children: [{ name: "Cap. 1", estimate: 60 }] }],
+    tasks: [{ name: "Leer", month: "2026-10", estimate: null, children: [{ name: "Cap. 1", estimate: 60 }] }],
     ...over,
   };
 }
@@ -140,6 +140,7 @@ test("draftRefusals: an amount or an estimate on a goal with no measure", () => 
   });
   assert.deepEqual(draftRefusals(draft(g), TODAY), [
     { path: "goals.0.months.0", key: "month.errors.noMeasure" },
+    { path: "goals.0.tasks.0", key: "import.errors.parentWithAmount" },
     { path: "goals.0.tasks.0", key: "month.errors.noMeasure" },
     { path: "goals.0.tasks.0.children.0", key: "month.errors.noMeasure" },
   ]);
@@ -216,4 +217,20 @@ test("draftRefusals: a quantity commitment on a goal with no measure, and a tap,
     { path: "goals.0.commitments.1", key: "month.errors.noMeasure" },
   ]);
   assert.deepEqual(draftRefusals(draft(goal({ commitments: [quantity] })), TODAY), []);
+});
+
+test("draftRefusals: a task with sub-tasks and an estimate of its own, at the parent", () => {
+  const g = goal({ tasks: [{ name: "Leer", month: "2026-10", estimate: 240, children: [{ name: "Cap. 1", estimate: 60 }] }] });
+  assert.deepEqual(draftRefusals(draft(g), TODAY), [{ path: "goals.0.tasks.0", key: "import.errors.parentWithAmount" }]);
+  const clean = goal({ tasks: [{ name: "Leer", month: "2026-10", estimate: null, children: [{ name: "Cap. 1", estimate: 60 }] }] });
+  assert.deepEqual(draftRefusals(draft(clean), TODAY), []);
+});
+
+test("draftRefusals: a tap commitment carrying a target or a unit, at the commitment", () => {
+  const tap = { name: "Inglés", cadenceKind: "daily", cadenceWeekdays: null, cadenceN: null, satisfaction: "tap" } as const;
+  const withTarget = goal({ commitments: [{ ...tap, targetQuantity: 5, unit: null }] });
+  const withUnit = goal({ commitments: [{ ...tap, targetQuantity: null, unit: "minutos" }] });
+  for (const g of [withTarget, withUnit]) {
+    assert.deepEqual(draftRefusals(draft(g), TODAY), [{ path: "goals.0.commitments.0", key: "import.errors.tapWithAmount" }]);
+  }
 });

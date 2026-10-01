@@ -2621,3 +2621,16 @@ A fresh identity was not the cause.
 - **Do.** Run DDL mutants only while no other lane and no CI run touches the schema. Say so in the
   dispatch, and wait for `gh run list --status in_progress` to be empty first. Never add `LOCK TABLE`
   to a probe. Read a burst of timeouts across unrelated suites in one window as this, not as a branch.
+
+## A cleanup that deletes by name can take a real person's row
+
+- **What.** The harness shares one database with the people who use pulsar. A fixture's name is not
+  unique to the harness: the template example's goal is «IA aplicada», which is also a real goal's
+  name. A `delete ... where name = ...` on the owner connection (`MIGRATION_DATABASE_URL`) bypasses
+  RLS and matches every user's row of that name.
+- **Measured 2026-10-01.** Module 156's validator cleaned leftovers from three mutated runs of
+  `import-actions.ts` with `delete from goals.goals where name like 'RP-37 fixture%' or name='IA
+  aplicada'`, on the owner connection, no `user_id`. It returned 8 rows. Nobody printed their `user_id`.
+- **Do.** Delete fixtures by the ids the run collected, as `import-actions.ts`'s `after` does, or by
+  name **and** the lane identity's `user_id`. Never by name alone. Select the `user_id` before any
+  owner-connection delete. Say it in every dispatch that runs mutations against a check that writes rows.
