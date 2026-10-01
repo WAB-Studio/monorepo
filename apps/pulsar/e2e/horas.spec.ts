@@ -60,9 +60,11 @@ test("a time row reads in hours and minutes, a page row as written; the partial 
     await timeRow.click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
-    for (const label of ["1 h 29 min", "1 h 30 min", "1 h 31 min", "1 h 32 min"]) {
+    const spread = ["30 min", "45 min", "1 h", "1 h 15 min", "1 h 30 min", "2 h", "2 h 30 min", "3 h"];
+    for (const label of spread) {
       await expect(sheet.getByRole("button", { name: label, exact: true })).toBeVisible();
     }
+    await expect(sheet.getByRole("button", { name: "1 h 29 min", exact: true })).toHaveCount(0);
     await expect(sheet).not.toContainText("min minutos");
     await expect(sheet).not.toContainText("minutos");
     // The chips wrap inside the sheet: nothing is wider than the viewport.
@@ -72,14 +74,17 @@ test("a time row reads in hours and minutes, a page row as written; the partial 
     );
     expect(Math.max(...edges)).toBeLessThanOrEqual(360);
 
-    await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
-    await sheet.getByLabel("otro número, en minutos").fill("45");
+    // One tap on a chip lands 45 (RNP-02's measure).
+    const tapped = Date.now();
+    await sheet.getByRole("button", { name: "45 min", exact: true }).click();
     await sheet.getByRole("button", { name: "Anotar" }).click();
     await expect(sheet).toBeHidden();
+    expect(Date.now() - tapped).toBeLessThan(5000);
     await expect(timeRow).toContainText("45 min de 1 h 30 min");
 
     // Past the target the row is done and reads what was logged.
     await timeRow.click();
+    await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
     await sheet.getByLabel("otro número, en minutos").fill("100");
     await sheet.getByRole("button", { name: "Cambiar" }).click();
     await expect(sheet).toBeHidden();
