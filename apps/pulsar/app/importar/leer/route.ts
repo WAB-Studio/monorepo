@@ -23,8 +23,9 @@ function fail(status: number, error: string): NextResponse {
 /**
  * Reads a pasted plan or one file (RP-37, RNP-13) in a fixed order: the
  * template first, which needs neither key nor claim; then a file type the reader
- * refuses, which must not spend a claim; then the key, named when absent; then the claim; then the model. Every branch answers a body, never a
- * 204: an absent key is a 503 a person can read.
+ * refuses, which must not spend a claim; then the key, named when absent; then
+ * the claim; then the model. Every branch answers a body, never a 204: an
+ * absent key is a 503 a person can read.
  */
 export async function POST(request: NextRequest) {
   const person = await getPerson();

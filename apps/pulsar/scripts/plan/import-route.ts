@@ -293,3 +293,14 @@ test("a file type the reader refuses: 415 import.errors.unreadableType", async (
   assert.equal(modelCalls.length, 0);
   assert.equal((await rows()).length, 0, "a refused type spends no claim");
 });
+
+test("a refused file type answers 415 even with no key: the type is judged before the key", async () => {
+  delete envHandle.OPENAI_API_KEY;
+  const file = new File([new Uint8Array([80, 75, 3, 4])], "plan.docx", {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+  const response = await route.POST(request({ file }));
+  assert.equal(response.status, 415);
+  assert.equal((await answer(response)).error, "import.errors.unreadableType");
+  assert.equal((await rows()).length, 0);
+});
