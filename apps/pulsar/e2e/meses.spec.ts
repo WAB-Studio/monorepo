@@ -23,7 +23,7 @@ const NAMES = [
 ];
 
 function label(month: string): string {
-  return `${NAMES[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
+  return NAMES[Number(month.slice(5, 7)) - 1];
 }
 
 const thisMonth = monthOf(todayInZone());
@@ -90,6 +90,11 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(last).toContainText("1 h 40 min");
     await expect(last).toContainText("de 10 h");
     await expect(last).toContainText("se arrastró 66 %");
+    // The name stands alone: no year, and the state sits under it, never in the note.
+    await expect(last.getByRole("link", { name: label(lastMonth), exact: true })).toBeVisible();
+    await expect(last).not.toContainText(lastMonth.slice(0, 4));
+    await expect(last.locator("span").filter({ hasText: /^se arrastró 66 %$/ })).toHaveCount(1);
+    await expect(last.getByRole("link", { name: "de 10 h", exact: true })).toBeVisible();
     await expect(last.getByRole("link", { name: label(lastMonth) })).toHaveAttribute(
       "href",
       `/metas/${goalId}/meses/${lastMonth.slice(0, 7)}`,
@@ -103,6 +108,7 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(items.nth(2)).toContainText(label(followingMonth));
     await expect(items.nth(2)).toContainText("sin monto");
     await expect(items.nth(2)).not.toContainText("%");
+    await expect(items.nth(2)).not.toContainText("planeado");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     // Set: 12 and 30 are 750, read back in the row with no reload.
@@ -118,6 +124,20 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(current).toContainText("de 12 h 30 min");
     await expect(current).not.toContainText("sin monto");
     expect(await stored()).toEqual([750]);
+
+    // A future month with an amount reads «planeado» under its name, «—» for the
+    // figure and the bare amount, with no «de».
+    await page.goto(`/metas/${goalId}/meses?planear=${followingMonth.slice(0, 7)}`);
+    await sheet.getByLabel("horas", { exact: true }).fill("12");
+    await sheet.getByLabel("minutos", { exact: true }).fill("0");
+    await sheet.getByRole("button", { name: "Guardar" }).click();
+    await expect(sheet).toHaveCount(0);
+    const future = items.nth(2);
+    await expect(future).toContainText("planeado");
+    await expect(future).toContainText("—");
+    await expect(future.getByRole("link", { name: "12 h", exact: true })).toBeVisible();
+    await expect(future).not.toContainText("de 12 h");
+    await expect(future).not.toContainText("sin monto");
 
     // Refused: 60 minutes is no minute count, and nothing changes.
     await current.getByRole("link", { name: "de 12 h 30 min" }).click();
@@ -148,10 +168,12 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(table).toBeVisible();
     const rows = table.getByRole("row");
     await expect(rows).toHaveCount(4);
+    await expect(table.getByRole("columnheader")).toHaveText(["mes", "alcanzado", "planeado"]);
+    await expect(rows.nth(1).getByRole("cell")).toHaveCount(3);
     await expect(rows.nth(1).getByRole("cell").nth(1)).toHaveText("1 h 40 min");
-    await expect(rows.nth(1).getByRole("cell").nth(2)).toHaveText("10 h");
+    await expect(rows.nth(1).getByRole("cell").nth(2)).toHaveText("de 10 h");
     await expect(rows.nth(2)).toHaveAttribute("data-current", "");
-    await expect(rows.nth(2).getByRole("cell").nth(3)).toContainText("en curso");
+    await expect(rows.nth(2).getByRole("cell").nth(0)).toContainText("en curso");
     const width = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
     // 640 px of content with the 56 px padding standing outside it on each side.
     expect(width).toBe(752);

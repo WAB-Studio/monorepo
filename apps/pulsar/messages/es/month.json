@@ -35,8 +35,7 @@
     "columns": {
       "month": "mes",
       "reached": "alcanzado",
-      "planned": "planeado",
-      "note": "estado"
+      "planned": "planeado"
     }
   },
   "list": {

@@ -69,7 +69,7 @@ async function railWidth(page: Page): Promise<number> {
 type Db = Parameters<Parameters<typeof test>[2]>[0]["db"];
 
 // A route may need a goal; the test seeds it under the person and deletes it by id.
-type Route = { path: (goalId: string) => string; needsGoal: boolean };
+type Route = { path: (goalId: string) => string; needsGoal: boolean; measured?: boolean };
 
 const fixed = (path: string): Route => ({ path: () => path, needsGoal: false });
 const ofGoal = (path: (goalId: string) => string): Route => ({ path, needsGoal: true });
@@ -80,21 +80,23 @@ const one: Route[] = [
   fixed("/sueltas"),
   ofGoal((id) => `/metas/${id}/compromisos/nuevo`),
   ofGoal((id) => `/metas/${id}/fases/nueva`),
+  { ...ofGoal((id) => `/metas/${id}/meses`), measured: true },
   fixed(`/dia/${plusDays(-1)}`),
 ];
 const two: Route[] = [fixed("/"), ofGoal((id) => `/metas/${id}`)];
 
-async function seedGoal(db: Db, userId: string): Promise<string> {
+// A measured goal is what draws the months table instead of the no-measure notice.
+async function seedGoal(db: Db, userId: string, measured = false): Promise<string> {
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon)
-    values (${userId}, ${`Meta de la columna ${Date.now()}`}, ${plusDays(90)}) returning id
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+    values (${userId}, ${`Meta de la columna ${Date.now()}`}, ${plusDays(90)}, ${measured ? "minutos" : null}, ${measured ? "minutos" : null}) returning id
   `;
   return goal.id;
 }
 
 for (const route of one) {
   test(`${route.path("<id>")} holds 640 px at 1280 and 1024, 600 from 700 to 1023, and 360 does not move (module 90)`, async ({ person, browser, db }) => {
-    const goalId = route.needsGoal ? await seedGoal(db, person.id) : "";
+    const goalId = route.needsGoal ? await seedGoal(db, person.id, route.measured) : "";
     const context = await browser.newContext({ storageState: person.sessionFile });
     try {
       const path = route.path(goalId);

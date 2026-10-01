@@ -6,13 +6,13 @@ import { BudgetSheet } from "@/components/month/budget-sheet";
 import { carryShare } from "@/lib/plan/carry";
 import { loadGoal } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
-import { Button, Page, Table, Text, type TableRow } from "@/components/ui";
+import { Button, Flex, Page, Table, Text, type TableRow } from "@/components/ui";
 
-const monthFormat = new Intl.DateTimeFormat("es", { month: "long", year: "numeric", timeZone: "UTC" });
+const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
-// "2026-10-01" as «octubre 2026».
+// "2026-10-01" as «octubre».
 function monthLabel(month: string): string {
-  return monthFormat.format(new Date(`${month}T12:00:00Z`)).replace(" de ", " ");
+  return monthFormat.format(new Date(`${month}T12:00:00Z`));
 }
 
 /**
@@ -43,9 +43,11 @@ export async function MonthsScreen({
         <Text as="p" tone="secondary">
           {t("month.errors.noMeasure")}
         </Text>
-        <Button asChild variant="ghost">
-          <Link href={`/metas/${goal.id}`}>{t("goal.review.back")}</Link>
-        </Button>
+        <Flex>
+          <Button asChild variant="ghost">
+            <Link href={`/metas/${goal.id}`}>{t("goal.review.back")}</Link>
+          </Button>
+        </Flex>
       </Page>
     );
   }
@@ -65,29 +67,30 @@ export async function MonthsScreen({
     const started = row.past || row.current;
     const share = row.past ? carryShare(goal.tasks, row.month.slice(0, 7) + "-01") : null;
 
+    const figure =
+      row.planned === null ? null : formatQuantity(row.planned, unit, words);
     const amount = (
       <Text tone="secondary">
-        {row.planned === null
+        {figure === null
           ? t("month.months.noAmount")
-          : t("month.months.of", { planned: formatQuantity(row.planned, unit, words) })}
+          : started
+            ? t("month.months.of", { planned: figure })
+            : figure}
       </Text>
     );
     const state = row.current
       ? t("month.months.current")
       : share
         ? t("month.months.carried", { share: Math.floor((share.carried * 100) / share.planned) })
-        : "";
-    const note = (
-      <>
-        {open ? (
-          <Text asChild tone="accent">
-            <Link href={planHref(row.month)}>{amount}</Link>
-          </Text>
-        ) : (
-          amount
-        )}
-        {state ? ` · ${state}` : ""}
-      </>
+        : row.planned !== null && !started
+          ? t("month.months.planned")
+          : null;
+    const note = open ? (
+      <Text asChild tone="accent">
+        <Link href={planHref(row.month)}>{amount}</Link>
+      </Text>
+    ) : (
+      amount
     );
 
     return {
@@ -97,9 +100,9 @@ export async function MonthsScreen({
           {label}
         </Link>,
         started ? row.reached : null,
-        row.planned,
         note,
       ],
+      detail: state,
       note,
     };
   });
@@ -139,10 +142,9 @@ export async function MonthsScreen({
           t("month.months.columns.month"),
           t("month.months.columns.reached"),
           t("month.months.columns.planned"),
-          t("month.months.columns.note"),
         ]}
         rows={rows}
-        figures={[1, 2]}
+        figures={[1]}
         unit={unit}
         current={currentIndex === -1 ? undefined : currentIndex}
       />
@@ -151,9 +153,11 @@ export async function MonthsScreen({
           {t("month.months.hint")}
         </Text>
       ) : null}
-      <Button asChild variant="ghost">
-        <Link href={`/metas/${goal.id}`}>{t("goal.review.back")}</Link>
-      </Button>
+      <Flex>
+        <Button asChild variant="ghost">
+          <Link href={`/metas/${goal.id}`}>{t("goal.review.back")}</Link>
+        </Button>
+      </Flex>
       {planned ? (
         <BudgetSheet
           key={planned.month}
