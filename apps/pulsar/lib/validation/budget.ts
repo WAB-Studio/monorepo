@@ -28,6 +28,11 @@ export const removeMonthBudgetSchema = z.object({ goalId, month });
 
 export type RemoveMonthBudgetInput = z.infer<typeof removeMonthBudgetSchema>;
 
+// The act of RP-34: the closed month whose undone work moves forward.
+export const acceptShiftSchema = z.object({ goalId, month });
+
+export type AcceptShiftInput = z.infer<typeof acceptShiftSchema>;
+
 // "2026-10" as the column stores it, the month's first day.
 export function monthStart(month: string): string {
   return `${month}-01`;
