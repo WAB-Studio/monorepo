@@ -45,6 +45,8 @@ export { Notice } from "./notice";
 
 export { CodeBlock } from "./code-block";
 
+export { CheckRow, ActionBar } from "./check-row";
+
 export { Chip } from "./chip";
 
 export { Skeleton } from "./skeleton";

@@ -40,6 +40,11 @@
     "sumOfMarked": "{month} · la suma de lo marcado",
     "create": "{count, plural, one {Crear # meta} other {Crear # metas}}",
     "creating": "Creando…",
+    "failed": "No se pudo crear el plan. Inténtalo otra vez.",
+    "amountOf": "Cambiar el monto de {name}",
+    "edit": {
+      "title": "Cambiar el monto"
+    },
     "blocked": {
       "title": "No se puede crear",
       "hint": "se queda fuera; corrígelo en tu texto y vuelve a leerlo",
