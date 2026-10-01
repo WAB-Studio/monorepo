@@ -1,11 +1,38 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
-import { formatFigureValue } from "./format-figure";
+import type { TimeWords } from "@/lib/units/time";
+
+import { formatFigureValue, isTimeFigure, type TimeFigure } from "./format-figure";
 import styles from "./figure.module.css";
+
+// The catalogue's «h» and «min» (`messages/es/units.json`), shaped the way
+// `lib/units/time.ts` takes them.
+export function useTimeWords(): TimeWords {
+  const t = useTranslations("units");
+  return {
+    h: (h) => t("h", { h }),
+    min: (min) => t("min", { min }),
+    join: (h, min) => t("join", { h, min }),
+  };
+}
+
+// Each figure in mono, each word after it in the caller's quiet class. The
+// spaces are flex-collapsed where the parent is a flex box and keep the
+// text reading «12 h 30 min» wherever it is copied or read aloud.
+export function TimeParts({ time, unitClass }: { time: TimeFigure; unitClass: string }) {
+  return time.tokens.map((token, index) => (
+    <Fragment key={index}>
+      {index > 0 ? " " : null}
+      {token.figure ? token.text : <span className={unitClass}>{token.text}</span>}
+    </Fragment>
+  ));
+}
 
 // docs/pulsar/DESIGN.md: hours, counts, minutes, dates and quantities are the
 // log's substance, so they are set in mono and their unit sits beside them in
-// quiet. `measure` is the 26px figure; `meta` the 12px one inside a row.
+// quiet. `measure` is the 26px figure; `meta` the 12px one inside a row. A
+// time (RP-35) carries its own «h» and «min», so its unit word is not drawn.
 export function Figure({
   value,
   unit,
@@ -15,11 +42,13 @@ export function Figure({
   unit?: string;
   variant?: "measure" | "meta";
 }) {
+  const words = useTimeWords();
   const size = variant === "meta" ? styles.meta : styles.measure;
+  const formatted = formatFigureValue(value, unit, words);
   return (
     <span className={`${styles.figure} ${size}`}>
-      {formatFigureValue(value)}
-      {unit ? <span className={styles.unit}>{unit}</span> : null}
+      {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
+      {unit && !isTimeFigure(formatted) ? <span className={styles.unit}>{unit}</span> : null}
     </span>
   );
 }

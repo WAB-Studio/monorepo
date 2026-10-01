@@ -642,3 +642,6 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `duplicateMonth`, `unreadableType`, `draftInvalid`), «plantilla copiada», «Creando…». The catalogue
   is the source of these words; a board that later draws one follows it. Decided 2026-09-30 by the
   coordinator.
+- **In a time unit, the wide review's measure column is headed «total» alone**; each cell carries its own
+  «h» and «min», so «total minutos» would say the unit twice. `RevisionHoras.dc.html` draws the phone face
+  only. Decided 2026-09-30 by the coordinator, module 146.

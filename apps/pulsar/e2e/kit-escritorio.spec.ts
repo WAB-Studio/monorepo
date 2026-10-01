@@ -80,7 +80,7 @@ for (const [width, pageBox] of [
   });
 }
 
-test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 800, and the review's header prints the unit (RNP-11)", async ({
+test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 800, and the review's header names the column alone for a time unit (RNP-11, RP-35)", async ({
   page,
   db,
   personId,
@@ -146,7 +146,8 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}/revision`);
-    await expect(page.getByRole("table").getByRole("columnheader").nth(1)).toContainText("minutos");
+    // Each cell spells out its hours and minutes, so the header carries no unit.
+    await expect(page.getByRole("table").getByRole("columnheader").nth(1)).toHaveText("total");
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
