@@ -31,6 +31,8 @@ export { SectionLabel } from "./section-label";
 
 export { Figure } from "./figure";
 
+export { Progress } from "./progress";
+
 export { Sheet } from "./sheet";
 
 export { Field } from "./field";

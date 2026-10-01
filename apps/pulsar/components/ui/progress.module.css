@@ -1,0 +1,12 @@
+.track {
+  display: block;
+  inline-size: 100%;
+  block-size: 4px;
+  background: var(--pulsar-line);
+}
+
+.fill {
+  display: block;
+  block-size: 100%;
+  background: var(--pulsar-ink);
+}

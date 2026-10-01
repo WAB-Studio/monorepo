@@ -27,7 +27,6 @@
     "reopen": "Reabrir",
     "reviewLink": "Ver por semana",
     "monthsLink": "Ver por mes",
-    "monthOf": "de {planned}",
     "monthNoPlan": "sin monto planeado",
     "monthPlanLink": "Planear {month}",
     "monthProgress": "llevas {percent} % · faltan {days, plural, one {# día} other {# días}}",

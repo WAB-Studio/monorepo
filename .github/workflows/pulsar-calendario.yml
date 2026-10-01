@@ -35,6 +35,7 @@ jobs:
         e2e/hoy-cuenta.spec.ts
         e2e/hoy-dijiste-tu.spec.ts
         e2e/hoy-mes.spec.ts
+        e2e/meta-mes.spec.ts
         e2e/hoy-meta-terminada.spec.ts
         e2e/hoy-palabras.spec.ts
         e2e/semana-creada.spec.ts

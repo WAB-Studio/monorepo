@@ -115,7 +115,8 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     // «minutos» after them; «mide en minutos» above it stays as it was.
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
-    await expect(page.getByText("12 h 30 min", { exact: true })).toBeVisible();
+    // The total comes first; the month block under it may repeat it (RP-28).
+    await expect(page.getByText("12 h 30 min", { exact: true }).first()).toBeVisible();
 
     await page.goto(`/metas/${goalId}/revision`);
 

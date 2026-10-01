@@ -123,6 +123,55 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
     }
   });
 
+  test("the goal's month block says it holds only what was declared, with the declared figure, at 360 and 1280", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    // `MetaMesSinEvidencia.dc.html` (module 136): 5 declared pages of a
+    // 12-page month, the reading source unreadable.
+    const seeded = await seed(db, person);
+    const monthStart = `${seeded.today.slice(0, 7)}-01`;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${seeded.goalId}, ${monthStart}::date, 12)
+    `;
+    const [quantity] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${seeded.goalId}, ${`Páginas ${Date.now()}`}, 'daily', 'quantity', 10, 'páginas',
+              now() - interval '20 days')
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${person.id}, ${seeded.goalId}, ${quantity.id}, ${seeded.today}::date, 5)
+    `;
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      for (const width of [360, 1280]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(`/metas/${seeded.goalId}`);
+        await settle(page, seeded.goalName);
+
+        const visible = (text: string) => page.getByText(text, { exact: true }).locator("visible=true");
+        await expect(
+          visible("solo lo que dijiste tú · no pudimos leer el diccionario de lectura"),
+        ).toHaveCount(1);
+        await expect(visible("de 12")).toHaveCount(1);
+        // The month block prints the bare figure; the total beside «mide en» keeps its unit.
+        await expect(visible("5")).toHaveCount(1);
+        await expect(page.getByText(/llevas \d+ %|bajo el 60 %/).locator("visible=true")).toHaveCount(0);
+        await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toBeVisible();
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+
   test("the ordinary server draws none of the three notices over the same seed", async ({
     person,
     browser,
