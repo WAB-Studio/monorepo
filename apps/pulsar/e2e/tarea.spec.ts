@@ -102,43 +102,39 @@ test("writes a task of 1 h, a parent «con sub-tareas» and two sub-tasks of 1 h
     await expect(page.getByLabel("minutos")).toHaveCount(0);
     await page.getByLabel("qué hay que hacer").fill(`Padre ${stamp}`);
     await page.getByRole("button", { name: "Guardar la tarea" }).click();
-    await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses/${seg(thisMonth)}$`));
-    await expect(page.getByText(`Padre ${stamp}`)).toBeVisible();
+    // Saving «con sub-tareas» goes straight on to its first sub-task.
+    await expect(page).toHaveURL(/\/tarea\/nueva\?padre=/);
+    await expect(page.getByText(`PADRE ${stamp} · ${label(thisMonth).toUpperCase()}`)).toBeVisible();
 
     const [parent] = await db<{ id: string; estimate: number | null }[]>`
       select id, estimate from goals.one_offs where goal_id = ${goalId} and name = ${`Padre ${stamp}`}
     `;
     expect(parent.estimate).toBeNull();
 
-    // Two sub-tasks; the sum line counts the amount being typed. The first
-    // is reached through the month's own «Otra sub-tarea» row, no typed URL;
-    // a parent with no child yet is seeded by the second test below.
-    await seedTask(db, person.id, goalId, `Semilla ${stamp}`, null, 15, parent.id);
-    await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
-    await page.getByRole("link", { name: "Otra sub-tarea" }).click();
-    await expect(page).toHaveURL(`${newHref(goalId, thisMonth)}?padre=${parent.id}`);
-    await expect(page.getByText(`PADRE ${stamp} · ${label(thisMonth).toUpperCase()}`)).toBeVisible();
+    // Two sub-tasks; the sum line counts the amount being typed.
     await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
-    await expect(page.getByText(`«Padre ${stamp}» suma 15 min con esta.`)).toBeVisible();
+    await expect(page.getByText(`«Padre ${stamp}» suma 0 min con esta.`)).toBeVisible();
     await page.getByLabel("qué hay que hacer").fill(`Primera ${stamp}`);
     await page.getByLabel("horas").fill("1");
-    await expect(page.getByText(`«Padre ${stamp}» suma 1 h 15 min con esta.`)).toBeVisible();
+    await expect(page.getByText(`«Padre ${stamp}» suma 1 h con esta.`)).toBeVisible();
     await page.getByRole("button", { name: "Guardar la sub-tarea" }).click();
     await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses/${seg(thisMonth)}$`));
 
-    await page.goto(`${newHref(goalId, thisMonth)}?padre=${parent.id}`);
+    // The second is reached through the month's own «Otra sub-tarea» row.
+    await page.getByRole("link", { name: "Otra sub-tarea" }).click();
+    await expect(page).toHaveURL(`${newHref(goalId, thisMonth)}?padre=${parent.id}`);
     await page.getByLabel("qué hay que hacer").fill(`Segunda ${stamp}`);
     await page.getByLabel("horas").fill("6");
-    await expect(page.getByText(`«Padre ${stamp}» suma 7 h 15 min con esta.`)).toBeVisible();
+    await expect(page.getByText(`«Padre ${stamp}» suma 7 h con esta.`)).toBeVisible();
     await page.getByRole("button", { name: "Guardar la sub-tarea" }).click();
     await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses/${seg(thisMonth)}$`));
 
     await expect(page.getByText(`Primera ${stamp}`)).toBeVisible();
     await expect(page.getByText(`Segunda ${stamp}`)).toBeVisible();
     const parentRow = page.locator("[data-done]").filter({ hasText: `Padre ${stamp}` });
-    await expect(parentRow).toContainText("7 h 15 min");
-    await expect(parentRow).toContainText("0 min de 7 h 15 min");
+    await expect(parentRow).toContainText("7 h");
+    await expect(parentRow).toContainText("0 min de 7 h");
 
     const rows = await db<{ name: string; estimate: number | null; parent_id: string | null }[]>`
       select name, estimate, parent_id from goals.one_offs where goal_id = ${goalId} order by created_at
@@ -146,7 +142,6 @@ test("writes a task of 1 h, a parent «con sub-tareas» and two sub-tasks of 1 h
     expect(rows.map((row) => `${row.name}:${row.estimate}:${row.parent_id === null ? "-" : "child"}`)).toEqual([
       `Una hora ${stamp}:60:-`,
       `Padre ${stamp}:null:-`,
-      `Semilla ${stamp}:15:child`,
       `Primera ${stamp}:60:child`,
       `Segunda ${stamp}:360:child`,
     ]);
@@ -340,7 +335,7 @@ for (const width of [360, 1280]) {
   });
 }
 
-test("«Otra sub-tarea» closes each open parent's children and is absent from a closed month (RP-31)", async ({
+test("«Otra sub-tarea» closes each open parent's children and is offered under a parent and a bare task of a measured goal, never in a closed month, a carried or sub-task row, or a goal that measures nothing (RP-31)", async ({
   person,
   browser,
   baseURL,
@@ -351,6 +346,9 @@ test("«Otra sub-tarea» closes each open parent's children and is absent from a
   const open = await seedTask(db, person.id, goalId, `Abierto ${stamp}`, thisMonth, null);
   await seedTask(db, person.id, goalId, `Hijo abierto ${stamp}`, null, 30, open);
   await seedTask(db, person.id, goalId, `Hoja ${stamp}`, thisMonth, 45);
+  const bare = await seedTask(db, person.id, goalId, `Sin hijos ${stamp}`, thisMonth, null);
+  const plainGoal = await seedGoal(db, person.id, `Meta lisa ${stamp}`, false);
+  await seedTask(db, person.id, plainGoal, `Trámite ${stamp}`, thisMonth, null);
   const old = await seedTask(db, person.id, goalId, `Viejo ${stamp}`, lastMonth, null);
   await seedTask(db, person.id, goalId, `Hijo viejo ${stamp}`, null, 30, old);
 
@@ -362,14 +360,17 @@ test("«Otra sub-tarea» closes each open parent's children and is absent from a
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
       await expect(page.getByText(`Hijo abierto ${stamp}`)).toBeVisible();
-      await expect(link, `${width}`).toHaveCount(1);
-      await expect(link).toHaveAttribute("href", `${newHref(goalId, thisMonth)}?padre=${open}`);
+      // Own parent and the childless no-estimate task: not the leaf with time, the sub-task or the carried parent.
+      await expect(page.getByText(`Viejo ${stamp}`).first()).toBeVisible();
+      await expect(link, `${width}`).toHaveCount(2);
+      await expect(link.first()).toHaveAttribute("href", `${newHref(goalId, thisMonth)}?padre=${open}`);
+      await expect(link.last()).toHaveAttribute("href", `${newHref(goalId, thisMonth)}?padre=${bare}`);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
       const child = (await page.getByText(`Hijo abierto ${stamp}`).boundingBox())!;
-      const row = (await link.evaluate((el) => el.parentElement!.getBoundingClientRect()))!;
+      const row = (await link.first().evaluate((el) => el.parentElement!.getBoundingClientRect()))!;
       expect(row.height).toBeGreaterThanOrEqual(48);
-      const circle = (await link.evaluate((el) => el.previousElementSibling!.getBoundingClientRect()))!;
+      const circle = (await link.first().evaluate((el) => el.previousElementSibling!.getBoundingClientRect()))!;
       const mark = (await page.locator("[data-done]").first().boundingBox())!;
       expect(circle.x - mark.x).toBeGreaterThanOrEqual(30);
       expect(row.y).toBeGreaterThan(child.y);
@@ -377,6 +378,11 @@ test("«Otra sub-tarea» closes each open parent's children and is absent from a
 
     await page.goto(`/metas/${goalId}/meses/${seg(lastMonth)}`);
     await expect(page.getByText(`Hijo viejo ${stamp}`)).toBeVisible();
+    await expect(link).toHaveCount(0);
+
+    // A goal that measures nothing never offers it, not even under a bare task.
+    await page.goto(`/metas/${plainGoal}/meses/${seg(thisMonth)}`);
+    await expect(page.getByText(`Trámite ${stamp}`)).toBeVisible();
     await expect(link).toHaveCount(0);
   } finally {
     await context.close();

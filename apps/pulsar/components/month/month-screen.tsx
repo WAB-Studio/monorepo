@@ -125,7 +125,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
     const subtaskable =
       open &&
       !closed &&
-      isParent &&
+      (isParent || (unit !== null && children.length === 0)) &&
       entry.carriedFrom === null &&
       task.parentId === null &&
       task.plannedMonth?.slice(0, 7) === month &&
