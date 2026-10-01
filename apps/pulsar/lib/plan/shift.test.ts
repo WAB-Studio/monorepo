@@ -99,6 +99,11 @@ test("shiftPlan: an undone November task moves a month, the done one and the clo
   assert.deepEqual(moved[0], { id: "undone", name: "undone", from: NOV, to: "2026-12-01" });
 });
 
+test("shiftPlan: a task dated today has begun and stays", () => {
+  const tasks = [task("today", { day: "2026-11-05" }), task("tomorrow", { day: "2026-11-06" })];
+  assert.deepEqual(plan({ tasks }).tasks.map((t) => t.id), ["tomorrow"]);
+});
+
 test("shiftPlan: a sub-task follows its parent and is never listed; a parent with every child done stays", () => {
   const tasks = [
     task("open"),
