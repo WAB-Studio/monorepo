@@ -1,5 +1,6 @@
-# Drives the specs that assert per weekday (modules 106, 107, 108) once a day.
-# A push only ever meets today's weekday; this run is what meets the rest over
+# Drives the specs that assert per weekday (modules 106, 107, 108) and per day
+# of the month (135: the pace line from the 20th) once a day.
+# A push only ever meets today's weekday and date; this run is what meets the rest over
 # a week. 08:00 UTC is 03:00 in Bogota (UTC-5): before the working day, and the
 # same calendar date in UTC and in Bogota, so the weekday the specs read is
 # the one the schedule means. Lane 6: local lanes are 1-5, `pulsar-checks` is
@@ -33,6 +34,7 @@ jobs:
         e2e/dia-pasado.spec.ts
         e2e/hoy-cuenta.spec.ts
         e2e/hoy-dijiste-tu.spec.ts
+        e2e/hoy-mes.spec.ts
         e2e/hoy-meta-terminada.spec.ts
         e2e/hoy-palabras.spec.ts
         e2e/semana-creada.spec.ts

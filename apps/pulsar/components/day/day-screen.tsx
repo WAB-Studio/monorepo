@@ -5,7 +5,6 @@ import { Button, Face, Figure, Flex, Page, Panel, SectionLabel, Split, Text } fr
 import { dayPhrase as dayPhraseOf, endedPhrase } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
 import { tallyDay } from "@/lib/day/tally";
-import { formatQuantity } from "@/lib/units/time";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -321,12 +320,6 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
 
   // The same two lines on the phone block and in the desktop card: reached
   // «de» planned, and from the 20th the pace in ink, never an alarm.
-  const units = await getTranslations("units");
-  const timeWords = {
-    h: (h: string) => units("h", { h }),
-    min: (min: string) => units("min", { min }),
-    join: (h: string, min: string) => units("join", { h, min }),
-  };
   const monthLines = (goal: (typeof goals)[number]) => {
     const line = loaded.monthLine[goal.id];
     const planned = line.planned as number;
@@ -335,9 +328,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <Flex align="baseline" gap="2" wrap="wrap">
           <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
           <Text variant="meta" tone="muted">
-            {t("day.monthLine.of", {
-              planned: formatQuantity(planned, goal.measureUnit ?? "", timeWords),
-            })}
+            {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
           </Text>
         </Flex>
         {line.underPace ? (
