@@ -513,14 +513,33 @@ async function checkStatementAttributionByConnection(): Promise<void> {
   const sqlA = postgres(DATABASE_URL!, { prepare: false, max: 1, debug: (id, query) => wireA.push({ connId: id, sql: query }) });
   const sqlB = postgres(DATABASE_URL!, { prepare: false, max: 1, debug: (id, query) => wireB.push({ connId: id, sql: query }) });
 
+  // Barrier: each transaction holds its connection open until both have read
+  // their pid, so the pooler cannot hand one backend to both. The finally
+  // releases on a throw too, so one side failing never hangs the other.
+  let releaseA!: () => void;
+  let releaseB!: () => void;
+  const readA = new Promise<void>((resolve) => (releaseA = resolve));
+  const readB = new Promise<void>((resolve) => (releaseB = resolve));
   const [[pidA], [pidB]] = await Promise.all([
     sqlA.begin(async (tx) => {
-      await tx`select pg_sleep(0.05)`;
-      return tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      try {
+        const rows = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+        releaseA();
+        await readB;
+        return rows;
+      } finally {
+        releaseA();
+      }
     }),
     sqlB.begin(async (tx) => {
-      await tx`select pg_sleep(0.05)`;
-      return tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      try {
+        const rows = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+        releaseB();
+        await readA;
+        return rows;
+      } finally {
+        releaseB();
+      }
     }),
   ]);
 
