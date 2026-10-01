@@ -635,3 +635,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   Decided 2026-09-30 by the user.
 - **The export and the import are built as the 15 boards of «Exportar» and «Importar» draw them.**
   Approved by the user 2026-09-30.
+- **Words no board drew, worded by module 134 in the boards' voice** (`apps/pulsar/messages/es/`): the
+  amount and task sheets' labels («horas», «minutos», «cuánto, en {unit}», «Guardar», «Cancelar»), the
+  plan errors (`month.errors.*`, e.g. «Ese mes queda fuera del plazo de la meta.», «Esta tarea se da
+  por hecha cuando lo están sus sub-tareas.»), the import errors no board shows (`horizonPast`,
+  `duplicateMonth`, `unreadableType`, `draftInvalid`), «plantilla copiada», «Creando…». The catalogue
+  is the source of these words; a board that later draws one follows it. Decided 2026-09-30 by the
+  coordinator.

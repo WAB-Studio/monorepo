@@ -108,7 +108,13 @@
   "row": {
     "saidByYou": "lo dijiste tú",
     "asksNumber": "pide el número",
-    "partial": "{logged} de {target} {unit}"
+    "partial": "{logged} de {target} {unit}",
+    "partialAmount": "{logged} de {target}"
+  },
+  "monthLine": {
+    "title": "este mes",
+    "of": "de {planned}",
+    "pace": "día {day} · {percent} %, bajo el {threshold} %"
   },
   "tally": "hechos {done} de {total}",
   "met": {
