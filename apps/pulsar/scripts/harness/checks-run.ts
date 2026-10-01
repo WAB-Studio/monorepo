@@ -1,4 +1,4 @@
-// `check:day`, `check:goal` and `check:goal-actions` under a run of their own.
+// `check:day`, `check:goal`, `check:goal-actions` and `check:plan` under a run of their own.
 // `e2e-run.ts`'s shape with another person: the run is opened here, mint and
 // seed register under it, and `dropRun` takes the identity and closes it, so
 // the checks never read a session another process minted and the order of
@@ -13,13 +13,15 @@ import postgres from "postgres";
 
 import { dropRun, runScript } from "./e2e-run";
 
-const CHECKS = ["check:day", "check:goal", "check:goal-actions"] as const;
+const CHECKS = ["check:day", "check:goal", "check:goal-actions", "check:plan"] as const;
 
 function argvOf(name: string): string[] {
   const { scripts } = JSON.parse(readFileSync("package.json", "utf8")) as {
     scripts: Record<string, string>;
   };
-  const words = scripts[name]?.split(/\s+/) ?? [];
+  // No shell runs these words, so a quoted glob keeps its quotes unless they
+  // are cut here; `node --test` expands the glob itself.
+  const words = (scripts[name]?.split(/\s+/) ?? []).map((word) => word.replace(/^"(.*)"$/, "$1"));
   if (words[0] !== "node") {
     throw new Error(`checks-run: package.json "${name}" is not a bare node command`);
   }

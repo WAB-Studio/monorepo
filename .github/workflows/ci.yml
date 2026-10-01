@@ -456,7 +456,7 @@ jobs:
           name: pulsar-playwright-results
           path: apps/pulsar/private/playwright-results
 
-  # `check:day`, `check:goal` and `check:goal-actions` under one harness run of
+  # `check:day`, `check:goal`, `check:goal-actions` and `check:plan` under one harness run of
   # their own (`scripts/harness/checks-run.ts`), never `pulsar-e2e`'s person:
   # its teardown drops it. A job of its own so the two run side by side. Lane
   # 7: local lanes are 1-5, `pulsar-e2e` is 8, orbit's `e2e` is 9, so the
@@ -527,7 +527,7 @@ jobs:
           done
           echo "the server never answered"; tail -50 /tmp/pulsar-checks.log; exit 1
 
-      - name: Run the three checks under one harness run
+      - name: Run the four checks under one harness run
         working-directory: apps/pulsar
         run: node --import tsx --env-file=.env.local scripts/harness/checks-run.ts
 

@@ -19,6 +19,7 @@
     "check:day": "node --import tsx --env-file=.env.local scripts/check-day.ts",
     "check:goal": "node --import tsx --env-file=.env.local scripts/check-goal.ts",
     "check:goal-actions": "node --import tsx --env-file=.env.local --test scripts/check-goal-actions.ts",
+    "check:plan": "node --import tsx --env-file=.env.local --test \"scripts/plan/*.ts\"",
     "source:add": "node --import tsx --env-file=.env.local scripts/add-evidence-source.ts",
     "harness:mint-session": "node --import tsx --env-file=.env.local scripts/harness/mint-session.ts",
     "harness:seed-goal": "node --import tsx --env-file=.env.local scripts/harness/seed-goal.ts"
