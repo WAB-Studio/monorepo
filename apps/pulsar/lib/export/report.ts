@@ -5,7 +5,8 @@ export type CarriedReport = {
   name: string;
   from: string;
   owes: number;
-  children: { name: string; owes: number }[];
+  hasAmount: boolean;
+  children: { name: string; owes: number; hasAmount: boolean }[];
 };
 
 export type GoalReport = {
@@ -18,7 +19,7 @@ export type GoalReport = {
   toDate: { planned: number; reached: number };
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
   carried: CarriedReport[];
-  months: MonthRow[];
+  months: (MonthRow & { carried: number | null })[];
   weeks: ReviewWeek[];
 };
 

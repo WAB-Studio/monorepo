@@ -7,7 +7,7 @@ import type { EvidenceDay } from "@/lib/day/types";
 import { dayBefore } from "@/lib/day/weeks";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import type { GoalReport, Report } from "@/lib/export/report";
-import { monthList, owedAt } from "@/lib/plan/carry";
+import { carryShare, monthList } from "@/lib/plan/carry";
 import { monthOf, toDate } from "@/lib/plan/months";
 import {
   goalFigures,
@@ -156,17 +156,32 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         current: current?.id === phase.id,
       })),
       carried: monthList(figures.tasks, thisMonth, today)
-        .filter((item) => item.carriedFrom !== null)
-        .map((item) => ({
-          name: item.task.name,
-          from: item.carriedFrom as string,
-          owes: item.owes,
-          children: item.children.map((child) => ({
-            name: child.name,
-            owes: owedAt(child, [], thisMonth),
-          })),
-        })),
-      months: figures.months,
+        .filter((item) => item.carriedFrom !== null && !item.done)
+        .map((item) => {
+          // Only what is undone today: a child done this month owes nothing.
+          const children = item.children
+            .filter((child) => child.doneOn === null)
+            .map((child) => ({
+              name: child.name,
+              owes: child.estimate ?? 0,
+              hasAmount: child.estimate !== null,
+            }));
+          const leaf = item.children.length === 0;
+          return {
+            name: item.task.name,
+            from: item.carriedFrom as string,
+            owes: leaf ? (item.task.estimate ?? 0) : children.reduce((sum, c) => sum + c.owes, 0),
+            hasAmount: leaf ? item.task.estimate !== null : children.some((c) => c.hasAmount),
+            children,
+          };
+        }),
+      months: figures.months.map((row) => {
+        const share = row.past ? carryShare(figures.tasks, row.month) : null;
+        return {
+          ...row,
+          carried: share ? Math.floor((share.carried * 100) / share.planned) : null,
+        };
+      }),
       weeks: figures.weeks,
     };
   });
