@@ -6,10 +6,10 @@ import { todayInZone } from "@/lib/zone";
 // Seeded by `harness:seed-goal`: target 10 `minutos`, daily (RP-03).
 const QUANTITY_COMMITMENT = "Anki";
 const TARGET = 10;
-// One of `timeChipsAround(10)`'s own four (`lib/day/time-chips.ts`), never the
+// One of `timeChipsAround(10)`'s own five (`lib/day/time-chips.ts`), never the
 // target itself — proves the sheet writes the number picked, not the plan's
 // own default.
-const CHOSEN = TARGET + 30;
+const CHOSEN = TARGET + 5;
 
 async function commitmentId(db: postgres.Sql, personId: string, name: string): Promise<string> {
   const [row] = await db<{ id: string }[]>`

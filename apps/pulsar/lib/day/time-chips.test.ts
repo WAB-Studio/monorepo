@@ -7,12 +7,16 @@ test("a 90-minute target is the board's spread, target included", () => {
   assert.deepEqual(timeChipsAround(90), [30, 45, 60, 75, 90, 120, 150, 180]);
 });
 
-test("a 15-minute target keeps every chip above zero", () => {
-  assert.deepEqual(timeChipsAround(15), [15, 45, 75, 105]);
+test("a 10-minute target steps by 5 and keeps every chip above zero", () => {
+  assert.deepEqual(timeChipsAround(10), [5, 10, 15, 20, 25]);
 });
 
-test("a target under 15 minutes offers itself and the steps above", () => {
-  assert.deepEqual(timeChipsAround(10), [10, 40, 70, 100]);
+test("a 30-minute target steps by 5 both ways", () => {
+  assert.deepEqual(timeChipsAround(30), [10, 15, 20, 25, 30, 35, 40, 45]);
+});
+
+test("a 45-minute target reaches the hour", () => {
+  assert.deepEqual(timeChipsAround(45), [25, 30, 35, 40, 45, 50, 55, 60]);
 });
 
 test("a 4-hour target stays at eight whole, ascending chips", () => {
