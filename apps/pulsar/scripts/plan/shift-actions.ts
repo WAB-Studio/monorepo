@@ -7,6 +7,7 @@
 // rows are written through the pooler (as `postgres`) and ended by exact id;
 // every accept goes through the action, as `authenticated`.
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
@@ -43,6 +44,8 @@ const revalidated: string[] = [];
 
 type WireCall = { connection: number; query: string };
 let wire: WireCall[] | null = null;
+// A request with no cookie: the one way to reach the signed-out guard.
+let signedOut = false;
 
 type PostgresFactory = (url: string, options: Record<string, unknown>) => unknown;
 
@@ -54,7 +57,7 @@ function installStubs(cookies: StoredCookie[]): void {
   untyped._load = (request, parent, isMain) => {
     if (request === "server-only") return {};
     if (request === "next/headers") {
-      return { cookies: async () => ({ getAll: () => cookies, set() {} }) };
+      return { cookies: async () => ({ getAll: () => (signedOut ? [] : cookies), set() {} }) };
     }
     if (request === "next/cache") {
       return { revalidatePath: (path: string) => void revalidated.push(path) };
@@ -81,7 +84,12 @@ let createGoal: typeof import("@/app/actions/plan").createGoal;
 let addMonths: typeof import("@/lib/plan/shift").addMonths;
 let pgCode: typeof import("@/lib/db-error").pgCode;
 
-const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+// Bounded, so a fixture a mutation left half-moved cannot hang the cleanup.
+const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
+  prepare: false,
+  max: 1,
+  connection: { statement_timeout: 15_000, lock_timeout: 10_000 },
+});
 
 // "YYYY-MM" `delta` months from the one `day` sits in.
 function monthFrom(day: string, delta: number): string {
@@ -201,17 +209,20 @@ async function snapshot(goalId: string): Promise<Snapshot> {
 
 // The application statements `acceptShift` put on the wire: begin, commit and
 // the one-time type fetch of a cold connection are not statements it chose.
-async function counted<T>(run: () => Promise<T>): Promise<{ result: T; statements: number }> {
+async function counted<T>(
+  run: () => Promise<T>,
+  ends: "commit" | "rollback" = "commit",
+): Promise<{ result: T; statements: number }> {
   wire = [];
   try {
     const result = await run();
     const calls = wire.map((call) => ({ ...call, query: call.query.trim().toLowerCase() }));
     const begins = calls.filter((c) => c.query === "begin").length;
-    const commits = calls.filter((c) => c.query === "commit").length;
+    const ended = calls.filter((c) => c.query === ends).length;
     assert.equal(begins, 1, "one begin");
-    assert.equal(commits, 1, "one commit");
+    assert.equal(ended, 1, `one ${ends}`);
     const statements = calls.filter(
-      (c) => c.query !== "begin" && c.query !== "commit" && !c.query.includes("pg_catalog.pg_type"),
+      (c) => c.query !== "begin" && c.query !== ends && !c.query.includes("pg_catalog.pg_type"),
     ).length;
     return { result, statements };
   } finally {
@@ -238,8 +249,15 @@ before(async () => {
 
 after(async () => {
   // Cascades to each fixture's amounts, phases, tasks, facts and shifts.
-  if (goalIds.length > 0) await sql`delete from goals.goals where id in ${sql(goalIds)}`;
-  await sql.end();
+  // One by one: a goal that will not go is reported and does not hold the rest.
+  for (const id of goalIds) {
+    try {
+      await sql`delete from goals.goals where id = ${id}`;
+    } catch (error) {
+      console.error(`# fixture ${id} not deleted:`, error);
+    }
+  }
+  await sql.end({ timeout: 5 });
 });
 
 const measured: Record<string, number> = {};
@@ -282,8 +300,14 @@ test("acceptShift: a closed month that carried 23 of 44 moves the plan one month
 
   // The second accept names the same key and changes nothing.
   const before = await snapshot(goalId);
-  const again = await acceptShift({ goalId, month: closed });
+  // Still 23 of 44 undone, so only the taken month refuses it, and it does so
+  // on the read alone: settle and select, no write reaches the UNIQUE.
+  const { result: again, statements: refusedStatements } = await counted(
+    () => acceptShift({ goalId, month: closed }),
+    "rollback",
+  );
   assert.deepEqual(again, { ok: false, error: "month.errors.shiftNotOffered" });
+  assert.equal(refusedStatements, 2);
   assert.deepEqual(await snapshot(goalId), before);
 });
 
@@ -395,4 +419,74 @@ test("acceptShift: a failure in the tasks statement leaves the budgets, phases a
   }
   assert.equal(code, "42501");
   assert.deepEqual(await snapshot(built.goalId), before);
+});
+
+test("acceptShift: a signed-out call answers signedOut", async () => {
+  signedOut = true;
+  try {
+    const result = await acceptShift({ goalId: randomUUID(), month: closed });
+    assert.deepEqual(result, { ok: false, error: "month.errors.signedOut" });
+  } finally {
+    signedOut = false;
+  }
+});
+
+test("acceptShift: a shift recorded between its read and its write is refused by the UNIQUE and moves nothing", async () => {
+  const { goalId } = await buildGoal("RP-34 fixture: carrera", 2, [21, 23]);
+  const before = await snapshot(goalId);
+  const holder = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let inserted!: () => void;
+  const hasInserted = new Promise<void>((resolve) => (inserted = resolve));
+  // An open transaction holding the act: the action's read cannot see it, its
+  // own insert of the same month waits on it.
+  const held = holder.begin(async (tx) => {
+    await tx`insert into goals.month_shifts (user_id, goal_id, month) values (${personId}, ${goalId}, ${`${closed}-01`})`;
+    inserted();
+    await gate;
+  });
+  try {
+    await hasInserted;
+    const pending = acceptShift({ goalId, month: closed });
+    pending.catch(() => {});
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      const waiting = await sql`
+        select 1 from pg_stat_activity
+        where wait_event_type = 'Lock' and query ilike '%goals"."month_shifts%' and pid <> pg_backend_pid()`;
+      if (waiting.length > 0) break;
+      if (Date.now() > deadline) throw new Error("the action never reached the month_shifts insert");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    release();
+    await held;
+    assert.deepEqual(await pending, { ok: false, error: "month.errors.shiftNotOffered" });
+  } finally {
+    release();
+    await held.catch(() => {});
+    await holder.end({ timeout: 5 });
+  }
+  assert.deepEqual(await snapshot(goalId), { ...before, shifts: 1 });
+});
+
+test("acceptShift: a phase of another goal named by the client never moves", async () => {
+  const mine = await buildGoal("RP-34 fixture: fase ajena, la mía", 2, [21, 23]);
+  const other = await buildGoal("RP-34 fixture: fase ajena, la otra", 2, [21, 23]);
+  const untouched = await snapshot(other.goalId);
+  const result = await acceptShift({
+    goalId: mine.goalId,
+    month: closed,
+    plan: {
+      phases: [
+        {
+          id: other.phases.notBegun,
+          toStartsOn: `${monthFrom(today, 6)}-01`,
+          toEndsOn: `${monthFrom(today, 6)}-28`,
+        },
+      ],
+    },
+  } as Parameters<typeof acceptShift>[0]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(await snapshot(other.goalId), untouched);
 });
