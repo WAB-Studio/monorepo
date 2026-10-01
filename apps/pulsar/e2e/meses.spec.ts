@@ -245,3 +245,53 @@ test("a goal with no measure says why no amount can be set and links back; an un
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
+
+test("an ended goal and an archived one read their months and offer no way into the sheet (RP-28)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const openedOn = new Date(Date.now() - 20 * 86_400_000);
+  const [ended] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${`Meta terminada ${stamp}`}, ${todayInZone()}::date, 'minutos', 'minutos', ${openedOn})
+    returning id
+  `;
+  const archivedId = await seedGoal(db, person.id, `Meta archivada ${stamp}`);
+  await db`update goals.goals set archived_at = now() where id = ${archivedId}`;
+  const openedMonth = monthOf(openedOn.toISOString().slice(0, 10));
+  // A budget keeps the empty face out of the way: the guard under test is the row's.
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${ended.id}, ${openedMonth}::date, 600),
+           (${person.id}, ${archivedId}, ${lastMonth}::date, 600)
+  `;
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    for (const [goalId, month] of [
+      [ended.id, openedMonth],
+      [archivedId, lastMonth],
+    ]) {
+      await page.goto(`/metas/${goalId}/meses`);
+      await expect(page.locator("main")).toHaveCount(1);
+      await expect(page.getByRole("listitem").first()).toContainText("de 10 h");
+      await expect(page.getByRole("link", { name: "de 10 h" })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: /^Planear / })).toHaveCount(0);
+      await expect(page.getByText(/^Toca un mes/)).toHaveCount(0);
+      await expect(
+        page.getByRole("listitem").first().getByRole("link", { name: label(month) }),
+      ).toHaveAttribute("href", `/metas/${goalId}/meses/${month.slice(0, 7)}`);
+
+      await page.goto(`/metas/${goalId}/meses?planear=${month.slice(0, 7)}`);
+      await expect(page.locator("main")).toHaveCount(1);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
