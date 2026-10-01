@@ -2606,3 +2606,18 @@ A fresh identity was not the cause.
   minutes before, passed. #329's rerun, alone, passed. Logs in `private/ci-reds/`.
 - **Do.** Read two simultaneous `voyager-e2e` reds on that spec as this collision, not as the branch.
   Rerun it alone. Never answer it with a retry or a longer sleep: the sleep is the defect.
+
+## A policy mutant proved inside a rollback locks the shared database for everyone
+
+- **What.** Proving a policy red by applying the migration plus a mutant inside a transaction that
+  rolls back still runs DDL on the one database. `ALTER TABLE` and `CREATE POLICY` take `ACCESS
+  EXCLUSIVE` locks on `goals.one_offs`, `goals.facts` and their neighbours until the rollback. Every
+  other lane and every CI job that touches those tables waits, times out or deadlocks meanwhile.
+- **Measured 2026-09-30.** Module 123's worker ran six such mutants from 01:2x UTC, taking explicit
+  table locks after two deadlocks. In that window #345 went red on three jobs: `pulsar-checks`
+  (`Failed query` on `goals.goals` in `check:day`), `voyager-e2e` (`deadlock detected` at
+  `registro.spec.ts:568`) and `pulsar-e2e` (14 tests at the 30 s timeout, `CONNECTION_ENDED`).
+  `gh run rerun --failed`, minutes later, passed all three untouched. Logs in `private/ci-reds/pr345-*`.
+- **Do.** Run DDL mutants only while no other lane and no CI run touches the schema. Say so in the
+  dispatch, and wait for `gh run list --status in_progress` to be empty first. Never add `LOCK TABLE`
+  to a probe. Read a burst of timeouts across unrelated suites in one window as this, not as a branch.
