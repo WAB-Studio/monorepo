@@ -44,12 +44,16 @@ const SYSTEM_PROMPT =
 
 // Strict mode wants every key required and no extra keys on every object;
 // `$schema` is not part of its subset. The shape of `importDraftJsonSchema`
-// already nulls what is absent, so this only enforces the two rules at depth.
+// already nulls what is absent, so this enforces the two rules at depth.
+// Length, count and range bounds are left to `importDraftSchema`, which judges
+// the answer unchanged; `pattern`, `format` and `enum` stay.
+const STRIPPED_KEYS = new Set(["$schema", "minLength", "maxLength", "minItems", "maxItems", "minimum", "maximum"]);
+
 function strictify(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(strictify);
   if (node === null || typeof node !== "object") return node;
   const entries = Object.entries(node as Record<string, unknown>)
-    .filter(([key]) => key !== "$schema")
+    .filter(([key]) => !STRIPPED_KEYS.has(key))
     .map(([key, value]) => [key, strictify(value)] as const);
   const out = Object.fromEntries(entries) as Record<string, unknown>;
   if (out.type === "object" && out.properties && typeof out.properties === "object") {

@@ -28,3 +28,8 @@ test("production ignores the stub (VERCEL set), whatever the seam says", () => {
     assert.equal(modelStub(seam, "1"), null);
   }
 });
+
+test("a padded value is trimmed", () => {
+  assert.deepEqual(modelStub(" fail ", undefined), { kind: "fail" });
+  assert.deepEqual(modelStub("  draft:/tmp/p.json ", undefined), { kind: "draft", path: "/tmp/p.json" });
+});

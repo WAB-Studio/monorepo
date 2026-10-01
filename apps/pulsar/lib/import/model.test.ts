@@ -249,3 +249,153 @@ test("under VERCEL the stub is off: the real call is made and the key rules", as
   assert.equal(result.status, "ok");
   assert.equal(calls.length, 1);
 });
+
+const valid = () => completion({ goals: [goal] });
+const readText = async () => (await import("./model")).readPlan({ kind: "text", text: "plan" });
+
+test("the strict schema carries none of the stripped bounds and keeps pattern and enum", async () => {
+  const { importDraftStrictSchema } = await import("./model");
+  const stripped = ["minLength", "maxLength", "minItems", "maxItems", "minimum", "maximum", "$schema"];
+  const keys = new Set<string>();
+  const walk = (node: unknown) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (node === null || typeof node !== "object") return;
+    for (const [key, value] of Object.entries(node as object)) {
+      if (key !== "properties") keys.add(key);
+      walk(value);
+    }
+  };
+  walk(importDraftStrictSchema);
+  for (const key of stripped) assert.equal(keys.has(key), false, key);
+  assert.ok(keys.has("pattern"));
+  assert.ok(keys.has("enum"));
+});
+
+test("a refusal answers failed even when the content would parse", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(() =>
+    Response.json({ choices: [{ message: { content: JSON.stringify({ goals: [goal] }), refusal: "no" }, finish_reason: "stop" }] }),
+  );
+  assert.equal((await readText()).status, "failed");
+});
+
+test("finish_reason length answers failed even when the content would parse", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(() =>
+    Response.json({ choices: [{ message: { content: JSON.stringify({ goals: [goal] }) }, finish_reason: "length" }] }),
+  );
+  assert.equal((await readText()).status, "failed");
+});
+
+test("a non-2xx status answers failed even when the body would parse", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(() => Response.json({ choices: [{ message: { content: JSON.stringify({ goals: [goal] }) }, finish_reason: "stop" }] }, { status: 429 }));
+  assert.equal((await readText()).status, "failed");
+});
+
+test("blank text answers empty with no call", async () => {
+  const { readPlan } = await import("./model");
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(valid);
+  assert.equal((await readPlan({ kind: "text", text: "" })).status, "empty");
+  assert.equal((await readPlan({ kind: "text", text: " \n\t " })).status, "empty");
+  assert.equal(calls.length, 0);
+});
+
+async function contentOf(name: string, type: string, bytes = new Uint8Array([1, 2, 3])) {
+  const { readPlan } = await import("./model");
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(valid);
+  const result = await readPlan({ kind: "file", name, type, bytes });
+  return { result, content: calls[0] ? bodyOf(calls[0]).messages[1].content : null };
+}
+
+test("a PDF is told by its mime alone and by its extension alone", async () => {
+  const byMime = await contentOf("plan", "application/pdf");
+  assert.equal(byMime.content[0].type, "file");
+  const byExtension = await contentOf("PLAN.PDF", "application/octet-stream");
+  assert.equal(byExtension.content[0].type, "file");
+  assert.equal(byExtension.content[0].file.file_data, "data:application/pdf;base64,AQID");
+});
+
+test("a mime parameter is stripped: charset on text, on a PDF and on an image", async () => {
+  const text = await contentOf("x", "text/markdown; charset=utf-8", new TextEncoder().encode("hola"));
+  assert.deepEqual(text.content, [{ type: "text", text: "hola" }]);
+  const pdf = await contentOf("x", "Application/PDF; charset=binary");
+  assert.equal(pdf.content[0].type, "file");
+  const image = await contentOf("x", "IMAGE/PNG; charset=binary");
+  assert.deepEqual(image.content, [{ type: "image_url", image_url: { url: "data:image/png;base64,AQID" } }]);
+});
+
+test("text/plain and application/json are read as text with no extension to help", async () => {
+  for (const type of ["text/plain", "application/json"]) {
+    const { content } = await contentOf("x", type, new TextEncoder().encode("hola"));
+    assert.deepEqual(content, [{ type: "text", text: "hola" }]);
+  }
+});
+
+test("each text extension is read as text when the mime says nothing", async () => {
+  for (const name of ["a.txt", "a.md", "a.markdown", "a.csv", "a.json"]) {
+    const { content } = await contentOf(name, "", new TextEncoder().encode("hola"));
+    assert.deepEqual(content, [{ type: "text", text: "hola" }], name);
+  }
+});
+
+test("each accepted image type goes as an image_url with its own mime", async () => {
+  for (const type of ["image/png", "image/jpeg", "image/webp", "image/gif"]) {
+    const { content } = await contentOf("x", type);
+    assert.deepEqual(content, [{ type: "image_url", image_url: { url: `data:${type};base64,AQID` } }], type);
+  }
+});
+
+test("an unknown type with an unknown extension answers unreadableType with no call", async () => {
+  const { result, content } = await contentOf("x.xyz", "application/octet-stream");
+  assert.equal(result.status, "unreadableType");
+  assert.equal(content, null);
+});
+
+test("modelAvailable is true with a key only", async () => {
+  const { modelAvailable } = await import("./model");
+  delete process.env.VERCEL;
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  assert.equal(modelAvailable(), true);
+});
+
+test("usage is read exactly: whole, partial, and absent", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  const content = JSON.stringify({ goals: [goal] });
+
+  replyWith(() => Response.json({ choices: [{ message: { content } }], usage: { prompt_tokens: 7, completion_tokens: 9 } }));
+  const whole = await readText();
+  assert.equal(whole.status === "ok" && whole.usage.input, 7);
+  assert.equal(whole.status === "ok" && whole.usage.output, 9);
+
+  replyWith(() => Response.json({ choices: [{ message: { content } }], usage: { completion_tokens: 9 } }));
+  const partial = await readText();
+  assert.deepEqual(partial.usage, { input: 0, output: 9 });
+
+  replyWith(() => Response.json({ choices: [{ message: { content } }] }));
+  const absent = await readText();
+  assert.equal(absent.status, "ok");
+  assert.deepEqual(absent.usage, { input: 0, output: 0 });
+
+  replyWith(() => Response.json({ choices: [{ message: { content: JSON.stringify({ goals: [{}] }) } }] }));
+  const invalid = await readText();
+  assert.equal(invalid.status, "invalid");
+  assert.equal(invalid.usage, undefined);
+});
+
+test("the request carries reasoning effort, an output budget, the schema name and a timeout signal", async () => {
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  replyWith(valid);
+  await readText();
+  const body = bodyOf(calls[0]);
+  assert.equal(body.reasoning_effort, "low");
+  assert.equal(typeof body.max_completion_tokens, "number");
+  assert.ok(body.max_completion_tokens > 0);
+  assert.equal(body.response_format.json_schema.name, "import_draft");
+  assert.equal(body.messages[0].role, "system");
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal((calls[0].init.headers as Record<string, string>)["content-type"], "application/json");
+});
