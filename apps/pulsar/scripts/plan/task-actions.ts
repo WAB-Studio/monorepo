@@ -369,3 +369,19 @@ test("createOneOff: an ended goal's month takes no task, and its parent takes no
     ["RP-30 padre terminada"],
   );
 });
+
+test("createOneOff: a sub-task under a goal's one-off with no planned month is refused as parentInvalid", async () => {
+  const plainId = await created({ name: "RP-20 suelta de meta", day: null, goalId: measuredGoalId });
+  const child = await call("createOneOff", { name: "RP-30 hija de suelta", day: null, parentId: plainId });
+  assert.deepEqual(child, { ok: false, error: "month.errors.parentInvalid" });
+  assert.equal((await rowsOf(measuredGoalId)).filter((row) => row.parent_id === plainId).length, 0);
+});
+
+test("createOneOff: a plain one-off of an archived goal still lands, as RP-20 wrote it", async () => {
+  const id = await created({ name: "RP-20 suelta de archivada", day: null, goalId: archivedGoalId });
+  const row = (await rowsOf(archivedGoalId)).find((r) => r.id === id)!;
+  assert.deepEqual(
+    [row.goal_id, row.parent_id, row.planned_month, row.estimate, row.day],
+    [archivedGoalId, null, null, null, null],
+  );
+});
