@@ -91,6 +91,8 @@ export type TaskRow = {
   day: string | null;
   estimate: number | null;
   done_on: string | null;
+  // The id of its own fact, what `undoFact` takes back; null while undone.
+  fact_id?: string | null;
 };
 
 // What a commitment reads as on the goal's own screen: its cadence and what
@@ -206,7 +208,8 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
          from "goals"."month_budgets" b
          where b.goal_id = ${goalId}) as budgets,
       (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
-                 'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
+                 'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id),
+                 'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
                ) order by o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.goal_id = ${goalId}) as tasks,
@@ -390,6 +393,7 @@ export function goalFigures(input: {
     day: task.day,
     estimate: task.estimate,
     doneOn: task.done_on,
+    factId: task.fact_id ?? null,
   }));
   // A done task's estimate counts as declared quantity (RP-36): feeds the
   // measure alone, never a commitment's slot.

@@ -9,11 +9,17 @@ export function Panel({
   children,
   as: Tag = "section",
   row = false,
+  bordered = false,
 }: {
   children?: ReactNode;
   as?: "section" | "div";
   // From 1024px a plain row of its children, no card: a title beside its acts.
   row?: boolean;
+  // A box at every width, for a note that stands apart on the phone too.
+  bordered?: boolean;
 }) {
-  return <Tag className={row ? `${styles.panel} ${styles.row}` : styles.panel}>{children}</Tag>;
+  const className = [styles.panel, row ? styles.row : undefined, bordered ? styles.bordered : undefined]
+    .filter(Boolean)
+    .join(" ");
+  return <Tag className={className}>{children}</Tag>;
 }
