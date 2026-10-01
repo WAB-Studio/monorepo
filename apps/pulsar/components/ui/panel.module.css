@@ -47,6 +47,6 @@
   box-sizing: border-box;
   padding: 16px;
   background: var(--pulsar-raised);
-  border: 1.5px solid var(--pulsar-line);
+  border: 1.5px solid var(--pulsar-border);
   border-radius: 12px;
 }
