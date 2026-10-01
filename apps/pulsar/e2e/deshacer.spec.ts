@@ -224,7 +224,8 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     await page.goto(`/metas/${goalId}`);
     // The goal's total, in hours and minutes (RP-35): the figure reads the
     // one fact, never both summed into «55 min».
-    await expect(page.getByText("30 min", { exact: true })).toBeVisible();
+    // First of the two: the total, then the month's reached figure under it (RP-28).
+    await expect(page.getByText("30 min", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("55 min", { exact: true })).toHaveCount(0);
   } finally {
     await deleteGoal(db, personId, goalId);

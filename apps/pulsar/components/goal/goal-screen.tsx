@@ -11,6 +11,7 @@ import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
 import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
+import { isTimeUnit } from "@/lib/units/time";
 import {
   civilDateInZone,
   civilDateLabel,
@@ -25,6 +26,7 @@ import {
   Mark,
   Page,
   Panel,
+  Progress,
   Row,
   SectionLabel,
   Split,
@@ -119,6 +121,68 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     </Face>
   ) : null;
 
+  // `MetaMes*.dc.html` (RP-28, RP-29): the current month's amount, drawn only
+  // with a measure and a month inside the span. A time unit prints itself in
+  // hours and minutes; any other unit is already named by «mide en».
+  const month = goal.month;
+  const figureUnit = isTimeUnit(goal.measureUnit) ? (goal.measureUnit ?? undefined) : undefined;
+  const monthName = (t.raw("day.monthLong") as string[])[Number(today.slice(5, 7)) - 1];
+  const daysLeft = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate() - Number(today.slice(8, 10));
+  const planned = month?.planned ?? null;
+  const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
+  const monthBlock =
+    goal.measureUnit && month ? (
+      <section>
+        <SectionLabel>{monthName}</SectionLabel>
+        <Flex align="baseline" gap="2" wrap="wrap">
+          <Figure value={month.reached} unit={figureUnit} variant="measure" />
+          {planned !== null ? (
+            <Text variant="meta" tone="muted">
+              {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
+            </Text>
+          ) : (
+            <Text variant="meta" tone="muted">
+              {t("goal.detail.monthNoPlan")}
+            </Text>
+          )}
+        </Flex>
+        {planned !== null && planned > 0 ? (
+          <>
+            <Progress percent={percent} />
+            {goal.evidence === "unreadable" ? (
+              <Text as="p" variant="meta" tone="muted">
+                {t("goal.detail.monthDeclaredOnly")}
+              </Text>
+            ) : month.underPace ? (
+              <Text as="p" variant="meta">
+                {t("goal.detail.monthPace", {
+                  day: Number(today.slice(8, 10)),
+                  percent,
+                  threshold: 60,
+                })}
+              </Text>
+            ) : (
+              <Text as="p" variant="meta" tone="muted">
+                {t("goal.detail.monthProgress", { percent, days: daysLeft })}
+              </Text>
+            )}
+          </>
+        ) : null}
+        <Flex gap="2" wrap="wrap">
+          {planned === null && !archived && !ended ? (
+            <Button asChild variant="outline">
+              <Link href={`/metas/${goal.id}/meses?planear=${today.slice(0, 7)}`}>
+                {t("goal.detail.monthPlanLink", { month: monthName })}
+              </Link>
+            </Button>
+          ) : null}
+          <Button asChild variant="ghost">
+            <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
+          </Button>
+        </Flex>
+      </section>
+    ) : null;
+
   const before = (
     <>
       <Panel>
@@ -157,6 +221,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               variant="measure"
             />
           ) : null}
+
+          {monthBlock}
 
           {goal.measureUnit ? (
             <Button asChild variant="ghost">
