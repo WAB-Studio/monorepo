@@ -131,6 +131,13 @@ export function draftRefusals(draft: ImportDraft, today: string): DraftRefusal[]
       if (goal.measure === null) refuse(`months.${m}`, "month.errors.noMeasure");
     });
 
+    // A quantity counts in the goal's unit: with no measure there is none.
+    goal.commitments.forEach((commitment, c) => {
+      if (commitment.satisfaction === "quantity" && goal.measure === null) {
+        refuse(`commitments.${c}`, "month.errors.noMeasure");
+      }
+    });
+
     goal.tasks.forEach((task, t) => {
       if (outside(task.month)) refuse(`tasks.${t}`, "month.errors.outsideSpan");
       if (goal.measure === null) {

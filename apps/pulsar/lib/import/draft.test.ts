@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { readFileSync } from "node:fs";
+import { parseTemplate } from "./template";
 import { draftRefusals, importDraftJsonSchema, importDraftSchema, type ImportDraft } from "./draft";
 
 const TODAY = "2026-10-15";
@@ -152,4 +154,66 @@ test("draftRefusals: each goal is judged on its own and paths name it", () => {
   const refusals = draftRefusals(draft(goal(), goal({ horizon: "2026-10-01" })), TODAY);
   assert.equal(refusals.every((r) => r.path.startsWith("goals.1.")), true);
   assert.equal(refusals.length > 0, true);
+});
+
+const exampleDraft = (): ImportDraft => {
+  const example = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8")).template.example;
+  const result = parseTemplate(example);
+  assert.ok(result.matched && "draft" in result);
+  return result.draft;
+};
+
+test("draftRefusals: the catalogue's example, a month after October, refuses October's month and both its tasks", () => {
+  assert.deepEqual(draftRefusals(exampleDraft(), "2026-11-15"), [
+    { path: "goals.0.months.0", key: "month.errors.outsideSpan" },
+    { path: "goals.0.tasks.0", key: "month.errors.outsideSpan" },
+    { path: "goals.0.tasks.1", key: "month.errors.outsideSpan" },
+  ]);
+});
+
+test("draftRefusals: the catalogue's example, the day before October ends, refuses nothing", () => {
+  assert.deepEqual(draftRefusals(exampleDraft(), "2026-09-30"), []);
+});
+
+test("importDraftSchema: a measure unit of 41 characters and an empty one are refused", () => {
+  const withUnit = (unit: string) => errorsOf(draft(goal({ measure: { name: "horas", unit } })));
+  assert.deepEqual(withUnit("x".repeat(41)), ["plan.errors.unitTooLong"]);
+  assert.deepEqual(withUnit("x".repeat(40)), []);
+  assert.deepEqual(withUnit("  "), ["plan.errors.unitEmpty"]);
+});
+
+test("importDraftSchema: an unknown key inside a measure is refused", () => {
+  assert.notDeepEqual(errorsOf(draft(goal({ measure: { name: "horas", unit: "min", extra: 1 } as never }))), []);
+});
+
+test("importDraftSchema: issues of a nested phase and commitment carry no goalId segment", () => {
+  const paths = (g: ImportDraft["goals"][number]) => {
+    const parsed = importDraftSchema.safeParse(draft(g));
+    return parsed.success ? [] : parsed.error.issues.map((i) => i.path);
+  };
+  assert.deepEqual(paths(goal({ phases: [{ aim: "x", startsOn: "2026-12-31", endsOn: "2026-10-01" }] })), [
+    ["goals", 0, "phases", 0, "endsOn"],
+  ]);
+  const bad = { name: "x", cadenceKind: "times_per_week" as const, cadenceWeekdays: null, cadenceN: 8, satisfaction: "tap" as const, targetQuantity: null, unit: null };
+  assert.deepEqual(paths(goal({ commitments: [bad] })), [["goals", 0, "commitments", 0, "cadenceN"]]);
+});
+
+test("draftRefusals: a phase that overlaps and also passes the horizon reports only the horizon", () => {
+  const g = goal({
+    horizon: "2027-01-01",
+    phases: [
+      { aim: "a", startsOn: "2026-10-01", endsOn: "2026-12-01" },
+      { aim: "b", startsOn: "2026-11-01", endsOn: "2027-02-01" },
+    ],
+  });
+  assert.deepEqual(draftRefusals(draft(g), TODAY), [{ path: "goals.0.phases.1", key: "plan.errors.phasePastHorizon" }]);
+});
+
+test("draftRefusals: a quantity commitment on a goal with no measure, and a tap, which needs none", () => {
+  const quantity = { name: "q", cadenceKind: "daily" as const, cadenceWeekdays: null, cadenceN: null, satisfaction: "quantity" as const, targetQuantity: 5, unit: "min" };
+  const tap = { ...quantity, name: "t", satisfaction: "tap" as const, targetQuantity: null, unit: null };
+  assert.deepEqual(draftRefusals(draft(goal({ measure: null, months: [], tasks: [], commitments: [tap, quantity] })), TODAY), [
+    { path: "goals.0.commitments.1", key: "month.errors.noMeasure" },
+  ]);
+  assert.deepEqual(draftRefusals(draft(goal({ commitments: [quantity] })), TODAY), []);
 });

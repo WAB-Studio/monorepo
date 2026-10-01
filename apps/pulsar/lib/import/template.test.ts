@@ -150,3 +150,58 @@ test("a quantity commitment on a goal with no measure is refused at its line", (
   const text = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n## Compromisos\n- x · cada día · 2 h\n";
   assert.equal(errorOf(text).line, 5);
 });
+
+function draftOf(text: string) {
+  const result = parseTemplate(text);
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+  return result.draft.goals[0];
+}
+
+test("a sub-task whose amount is not an amount stops at its line", () => {
+  const error = errorOf(`${HEAD}## Tareas\n- 2026-10 · Tutor\n  - abc · Nombre\n`);
+  assert.equal(error.line, 8);
+  assert.equal(error.expected, "  - nombre, o   - monto · nombre");
+});
+
+test("a leading BOM still matches", () => {
+  assert.equal(draftOf("﻿pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n").name, "A");
+});
+
+test("«todos los días» reads as daily", () => {
+  assert.equal(draftOf(`${HEAD}## Compromisos\n- x · todos los días · toque\n`).commitments[0].cadenceKind, "daily");
+});
+
+test("miércoles, sábados and domingos are recognised, in any order, once each", () => {
+  const days = (words: string) => draftOf(`${HEAD}## Compromisos\n- x · ${words} · toque\n`).commitments[0].cadenceWeekdays;
+  assert.deepEqual(days("miércoles, sábados y domingos"), [3, 6, 7]);
+  assert.deepEqual(days("jueves y lunes"), [1, 4]);
+  assert.deepEqual(days("lunes y lunes"), [1]);
+});
+
+test("«1 vez por semana» and «Toque» are accepted", () => {
+  const c = draftOf(`${HEAD}## Compromisos\n- x · 1 vez por semana · Toque\n`).commitments[0];
+  assert.equal(c.cadenceKind, "times_per_week");
+  assert.equal(c.cadenceN, 1);
+  assert.equal(c.satisfaction, "tap");
+  assert.equal(draftOf(`${HEAD}## Compromisos\n- x · 1 vez al mes · toque\n`).commitments[0].cadenceKind, "times_per_month");
+});
+
+test("a name keeps its « · », in a task and in a sub-task", () => {
+  const task = draftOf(`${HEAD}## Tareas\n- 2026-10 · 4 h · A · B\n  - 1 h · E · F\n`).tasks;
+  assert.equal(task[0].name, "A · B");
+  assert.equal(task[0].estimate, 240);
+  assert.equal(task[0].children[0].name, "E · F");
+});
+
+test("with a non-time unit, «2 h» fails with the whole-number form", () => {
+  const text = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\nmedida: páginas · páginas\n## Tareas\n- 2026-10 · 2 h · Leer\n";
+  assert.deepEqual(errorOf(text), { line: 6, expected: "- AAAA-MM · nombre, o - AAAA-MM · monto · nombre" });
+});
+
+test("a sub-task cannot follow a task across a section switch back to tasks", () => {
+  assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-10 · A\n## Tareas\n  - c\n`).line, 9);
+});
+
+test("a sub-task cannot follow a task across another section", () => {
+  assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-10 · A\n## Meses\n  - c\n`).line, 9);
+});

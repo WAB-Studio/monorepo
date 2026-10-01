@@ -44,9 +44,9 @@ function parseCadence(text: string): Cadence | null {
   }
   let m = /^cada (\d+) días?$/.exec(t);
   if (m) return { cadenceKind: "every_n_days", cadenceWeekdays: null, cadenceN: Number(m[1]) };
-  m = /^(\d+) veces? por semana$/.exec(t);
+  m = /^(\d+) (?:vez|veces) por semana$/.exec(t);
   if (m) return { cadenceKind: "times_per_week", cadenceWeekdays: null, cadenceN: Number(m[1]) };
-  m = /^(\d+) veces? al mes$/.exec(t);
+  m = /^(\d+) (?:vez|veces) al mes$/.exec(t);
   if (m) return { cadenceKind: "times_per_month", cadenceWeekdays: null, cadenceN: Number(m[1]) };
   const days = t.split(/\s*,\s*|\s+y\s+/).map((name) => WEEKDAYS[name]);
   if (days.length === 0 || days.some((d) => d === undefined)) return null;
