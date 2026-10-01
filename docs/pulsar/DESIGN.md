@@ -133,7 +133,7 @@ Two variants, and no third until a board draws one:
 
 ## The boards
 
-On the canvas, in four pages. A module that draws a screen cites its board by name.
+On the canvas, in six pages. A module that draws a screen cites its board by name.
 
 | board | what it holds |
 |---|---|
@@ -184,6 +184,35 @@ throughout: the 2026–2027 roadmap, goal «IA aplicada». Export (PDF) and impo
 | `TareaNueva.dc.html` | a new task: name, time in hours and minutes, month preset, «con sub-tareas» |
 | `SubtareaNueva.dc.html` | a sub-task under a named parent; one level only |
 | `TareaSinMedida.dc.html` | a goal that measures nothing: no time field, and why in one line |
+
+### Page «Exportar»
+
+Drawn 2026-09-30, approved by the user the same day: «Apruebo los 5».
+
+| board | what it holds |
+|---|---|
+| `Exportar.dc.html` | `/metas` gains «el plan»: «Exportar» (absent with no goal open) and «Importar un plan» (always) |
+| `Reporte.dc.html` | `/exportar` on the phone: per goal this month, to date, phases, carried, months, weeks; «Descargar PDF» (RP-33) |
+| `ReporteImpreso.dc.html` | the same page printed on A4: no nav, no button, black on white, «pulsar» and the date in the head |
+| `ReporteSinEvidencia.dc.html` | the source unreadable: one line at the top, each figure from it says «solo lo que dijiste tú» |
+| `ReporteVacio.dc.html` | no goal open: one line and the way back |
+
+### Page «Importar»
+
+Drawn 2026-09-30, approved by the user the same day: «Apruebo los 10».
+
+| board | what it holds |
+|---|---|
+| `Importar.dc.html` | paste or upload, the privacy line before sending, the template shown and copied, «Leer el plan» (RP-37) |
+| `ImportarLeyendo.dc.html` | sent: the text stays, dimmed; the button busy; «Puede tardar un minuto.» |
+| `ImportarRevisar.dc.html` | the proposal by goal, everything marked; unmark, change an amount in hours and minutes, «Crear N metas» |
+| `ImportarRevisarAvisos.dc.html` | what cannot be written, on top, unmarked and not markable, each with why |
+| `ImportarPlantillaError.dc.html` | the template broken at one line: its number, the line, what was expected |
+| `ImportarVacio.dc.html` | the model found nothing; the text stays |
+| `ImportarFallo.dc.html` | the model failed; the text stays; «Intentar otra vez» |
+| `ImportarSinClave.dc.html` | no key: the AI read is not available, the upload is off, the template still reads (RNP-13) |
+| `ImportarTope.dc.html` | ten AI reads today: tomorrow again; the template still reads |
+| `ImportarFormato.dc.html` | a file over 4 MB or of a kind not read: paste its text |
 
 ## The boards that do not exist
 
@@ -246,6 +275,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   cover loading and failure. Approved 2026-09-30 by the user.
 - **A month of an ended or archived goal.** It reads and takes no task and no amount, as
   `MetaTerminada.dc.html` already does for commitments and phases; the layout does not change.
+- **The export and the import at 1280.** `/metas`, `/exportar` and the review sit in the 640 px column;
+  the layout does not change. Approved 2026-09-30 by the user.
+- **`/metas` after «Crear N metas».** It is the list `Exportar.dc.html` draws, with the new goals.
+- **A template read.** It is `ImportarRevisar.dc.html` with «leído con la plantilla, sin IA» in place of
+  «leído por OpenAI».
 
 ## Decisions taken here
 
@@ -599,3 +633,5 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   it, as `MetaMesSinPlan.dc.html` draws. Decided 2026-09-30 by the user (question 7, option a).
 - **The export is a PDF through the browser's print**, a print page and `window.print()`, no library.
   Decided 2026-09-30 by the user.
+- **The export and the import are built as the 15 boards of «Exportar» and «Importar» draw them.**
+  Approved by the user 2026-09-30.
