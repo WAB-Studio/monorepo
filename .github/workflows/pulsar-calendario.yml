@@ -12,8 +12,11 @@ on:
     - cron: "0 8 * * *"
   workflow_dispatch:
 
+# `issues: write` is for the failure notice below: a red scheduled run mails
+# only whoever last touched the cron, and nobody reads it on a quiet day.
 permissions:
   contents: read
+  issues: write
 
 jobs:
   weekday-specs:
@@ -139,3 +142,14 @@ jobs:
         with:
           name: pulsar-calendario-playwright-results
           path: apps/pulsar/private/playwright-results
+
+      - name: Open an issue for the failed run
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "pulsar-calendario failed $(date -u +%F)" \
+            --body "The daily weekday-bound specs failed: $RUN_URL"

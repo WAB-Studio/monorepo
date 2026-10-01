@@ -22,3 +22,11 @@ test("two sources split on the comma", () => {
     ["fake_minutes", "reading_lookups"],
   );
 });
+
+test("a space after the comma is not part of the key", () => {
+  assert.deepEqual(
+    [...unreadableSources("reading_lookups, fake_minutes", undefined)].sort(),
+    ["fake_minutes", "reading_lookups"],
+  );
+  assert.deepEqual([...unreadableSources("  reading_lookups  ", undefined)], ["reading_lookups"]);
+});
