@@ -142,6 +142,7 @@ let minutesGoalId: string;
 let searchesGoalId: string;
 let archivedGoalId: string;
 let foreignGoalId: string;
+let sharesGoalId: string;
 let loadReport: typeof import("@/lib/queries/report").loadReport;
 let loadGoal: typeof import("@/lib/queries/goal").loadGoal;
 
@@ -225,6 +226,34 @@ before(async () => {
     insert into goals.facts (user_id, goal_id, one_off_id, day)
     values (${owner.user_id}, ${minutesGoalId}, ${done.id}, ${today})`;
 
+  // A goal opened two months ago, so last month is closed and has a share.
+  const shares = await goal("RP-33 fixture: cuota", "minutos");
+  sharesGoalId = shares.goalId;
+  await sql`
+    update goals.goals set created_at = now() - interval '70 days'
+    where id = ${sharesGoalId} and user_id = ${owner.user_id}`;
+  const lastMonth = `${monthFrom(today, -1)}-01`;
+  async function task(name: string, fields: { estimate?: number; parent?: string; month?: boolean }) {
+    const [row] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, estimate)
+      values (${owner.user_id}, ${sharesGoalId}, ${name},
+              ${fields.month === false ? null : lastMonth}, ${fields.parent ?? null}, ${fields.estimate ?? null})
+      returning id`;
+    return row.id;
+  }
+  async function doneOn(id: string, day: string) {
+    await sql`insert into goals.facts (user_id, goal_id, one_off_id, day)
+              values (${owner.user_id}, ${sharesGoalId}, ${id}, ${day})`;
+  }
+  await doneOn(await task("RP-33 cuota: hecha", { estimate: 60 }), `${monthFrom(today, -1)}-05`);
+  await task("RP-33 cuota: debe", { estimate: 40 });
+  const half = await task("RP-33 cuota: mitad", {});
+  await doneOn(await task("RP-33 cuota: mitad hecha", { parent: half, month: false, estimate: 10 }), `${monthFrom(today, -1)}-06`);
+  await task("RP-33 cuota: mitad pendiente", { parent: half, month: false, estimate: 15 });
+  await task("RP-33 cuota: sin monto", {});
+  const whole = await task("RP-33 cuota: toda hecha", {});
+  await doneOn(await task("RP-33 cuota: toda hecha hija", { parent: whole, month: false, estimate: 20 }), `${monthFrom(today, -1)}-06`);
+
   const archivedResult = await plan.archiveGoal({ goalId: archivedGoalId });
   if (!archivedResult.ok) throw new Error(`archiveGoal: ${archivedResult.error}`);
 
@@ -275,7 +304,10 @@ test("loadReport: a goal's month and to-date figures are what loadGoal reads", a
       underPace: loaded.month?.underPace ?? false,
     });
     assert.deepEqual(entry.toDate, toDate(loaded.months));
-    assert.deepEqual(entry.months, loaded.months);
+    assert.deepEqual(
+      entry.months.map((row) => ({ ...row, carried: null })),
+      loaded.months.map((row) => ({ ...row, carried: null })),
+    );
     assert.deepEqual(entry.weeks, loaded.weeks);
   }
   // The fixtures make those figures nonzero, so equality is not two zeros.
@@ -302,7 +334,8 @@ test("loadReport: phases and the carried task read as the goal holds them", asyn
       name: "RP-33 fixture: arrastrada",
       from: `${monthFrom(today, -1)}-01`,
       owes: 40,
-      children: [{ name: "RP-33 fixture: hija", owes: 40 }],
+      hasAmount: true,
+      children: [{ name: "RP-33 fixture: hija", owes: 40, hasAmount: true }],
     },
   ]);
 });
@@ -337,4 +370,34 @@ test("loadReport: evidence that cannot be read says so and both goals keep their
   } finally {
     evidenceRejects = false;
   }
+});
+
+test("loadReport: a carried parent lists only what is undone, owing its estimate; no estimate reads hasAmount false", async () => {
+  const report = await loadReport(today);
+  const entry = report.goals.find((goal) => goal.id === sharesGoalId)!;
+  const from = `${monthFrom(today, -1)}-01`;
+  assert.deepEqual(entry.carried, [
+    { name: "RP-33 cuota: debe", from, owes: 40, hasAmount: true, children: [] },
+    {
+      name: "RP-33 cuota: mitad",
+      from,
+      owes: 15,
+      hasAmount: true,
+      children: [{ name: "RP-33 cuota: mitad pendiente", owes: 15, hasAmount: true }],
+    },
+    { name: "RP-33 cuota: sin monto", from, owes: 0, hasAmount: false, children: [] },
+  ]);
+  // «toda hecha» finished its children before this month: it is not listed at all.
+  assert.ok(!entry.carried.some((item) => item.name === "RP-33 cuota: toda hecha"));
+});
+
+test("loadReport: a closed month reads its share carried; the current and future months read null", async () => {
+  const report = await loadReport(today);
+  const entry = report.goals.find((goal) => goal.id === sharesGoalId)!;
+  const byMonth = new Map(entry.months.map((row) => [row.month.slice(0, 7), row]));
+  // 60 + 40 + 10 + 15 + 20 planned; 40 + 15 still carried.
+  assert.equal(byMonth.get(monthFrom(today, -1))!.carried, Math.floor((55 * 100) / 145));
+  assert.equal(byMonth.get(monthFrom(today, -2))!.carried, null);
+  assert.equal(byMonth.get(today.slice(0, 7))!.carried, null);
+  assert.equal(byMonth.get(monthFrom(today, 1))!.carried, null);
 });
