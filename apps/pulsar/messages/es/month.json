@@ -22,7 +22,7 @@
   "months": {
     "title": "Por mes",
     "subtitle": "lo planeado, lo alcanzado y lo que se arrastró",
-    "caption": "{word} {count, plural, one {mes} other {meses}}",
+    "caption": "{count, plural, one {# mes} other {# meses}}",
     "planned": "planeado",
     "noAmount": "sin monto",
     "of": "de {planned}",

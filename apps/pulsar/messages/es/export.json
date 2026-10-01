@@ -11,6 +11,7 @@
   "download": "Descargar PDF",
   "printBrand": "pulsar",
   "measures": "mide {unit} · hasta el {date}",
+  "measuresFed": "mide {unit} · alimentada por el diccionario",
   "noMeasure": "no mide nada · hasta el {date}",
   "sections": {
     "toDate": "hasta hoy",
@@ -27,6 +28,7 @@
   "current": "en curso",
   "weekLabel": "semana {n}",
   "declaredOnly": "solo lo que dijiste tú",
+  "declaredShort": "solo lo dicho",
   "unreadable": "No pudimos leer el diccionario de lectura. Las cifras que salen de él son solo lo que dijiste tú.",
   "empty": "No tienes metas abiertas. No hay nada que exportar.",
   "back": "volver a metas"
