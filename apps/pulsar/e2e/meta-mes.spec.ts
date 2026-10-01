@@ -172,6 +172,38 @@ test("a measure with no amount says so and offers to plan the month; no measure 
   }
 });
 
+test("a month budgeted at zero shows its figure and months link, but no bar and no pace (RP-28)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  const page = await context.newPage();
+  try {
+    const zero = await seedGoal(db, person, { name: `Meta cero ${stamp}`, budget: 0 });
+    await quantity(db, person, zero, 90, monthStart);
+
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/metas/${zero}`);
+      await expect(seen(page, monthName)).toHaveCount(1);
+      await expect(seen(page, "de 0 min")).toHaveCount(1);
+      await expect(page.locator("span[aria-hidden][class] > span[style*=\"inline-size\"]")).toHaveCount(0);
+      await expect(visible(page, /llevas \d+ %|bajo el 60 %/)).toHaveCount(0);
+      await expect(seen(page, "sin monto planeado")).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveAttribute(
+        "href",
+        `/metas/${zero}/meses`,
+      );
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
 test("an archived or ended goal reads its month and offers no way to plan it (RP-28)", async ({
   person,
   browser,
