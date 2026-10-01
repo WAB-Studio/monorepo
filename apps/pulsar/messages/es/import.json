@@ -61,6 +61,8 @@
     "modelInvalid": "No pudimos leer el plan. Tu texto sigue aquí.",
     "horizonPast": "El final de la meta ya pasó. Pon una fecha por venir.",
     "duplicateMonth": "Hay dos montos para un mismo mes.",
+    "parentWithAmount": "Una tarea con sub-tareas no lleva monto propio. Quítalo o quita las sub-tareas.",
+    "tapWithAmount": "Un compromiso de un toque no lleva monto ni unidad. Quítalos.",
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez."
   }
 }

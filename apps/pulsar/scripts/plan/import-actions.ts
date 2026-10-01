@@ -314,12 +314,28 @@ test("confirmImport: a draft with an extra unknown field is refused by the schem
   assert.deepEqual(await confirmImport({ goals: [] }), { ok: false, error: "import.errors.empty", at: "goals" });
 });
 
+test("confirmImport: a parent task with its own estimate is refused at the parent and writes nothing", async () => {
+  const name = "RP-37 fixture: padre con monto";
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  draft.goals[0].tasks[1] = { ...draft.goals[0].tasks[1], estimate: 30 };
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.parentWithAmount", at: "goals.0.tasks.1" });
+  assert.equal(await countGoals(name), 0);
+});
+
+test("confirmImport: a tap commitment with a target is refused at the commitment and writes nothing", async () => {
+  const name = "RP-37 fixture: toque con monto";
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], targetQuantity: 5, unit: "minutos" };
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.tapWithAmount", at: "goals.0.commitments.1" });
+  assert.equal(await countGoals(name), 0);
+});
+
 test("confirmImport: a commitment the table refuses leaves no goal behind", async () => {
   const name = "RP-37 fixture: atómica";
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
-  // A tap with a target passes the form's schema and meets
-  // `commitments_quantity_for_quantity` at the commitments insert, after the goals.
-  draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], targetQuantity: 5, unit: "minutos" };
+  // A daily commitment with a count passes the form's schema and meets
+  // `commitments_n_for_counted_kinds` at the commitments insert, after the goals.
+  draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], cadenceN: 3 };
   await assert.rejects(() => confirmImport(draft));
   assert.equal(await countGoals(name), 0);
 });
