@@ -88,8 +88,9 @@ export async function setMonthBudget(input: SetMonthBudgetInput): Promise<SetMon
 }
 
 /**
- * Takes a month's amount away (RP-28). A month with none already is the
- * outcome asked for, so deleting nothing is not a refusal.
+ * Takes a month's amount away (RP-28). A closed goal's months are refused the
+ * way `setMonthBudget` refuses them: removing is a write. A month with none
+ * already is the outcome asked for, so deleting nothing is not a refusal.
  * `month_budgets_delete_self` scopes the delete to the caller's own rows.
  */
 export async function removeMonthBudget(
@@ -103,11 +104,23 @@ export async function removeMonthBudget(
 
   const { goalId, month } = parsed.data;
 
-  await withGoalsDb((tx) =>
-    tx
-      .delete(monthBudgets)
-      .where(and(eq(monthBudgets.goalId, goalId), eq(monthBudgets.month, monthStart(month)))),
-  );
+  try {
+    await withGoalsDb(async (tx) => {
+      const [goal] = await tx
+        .select({ horizon: goals.horizon, archivedAt: goals.archivedAt })
+        .from(goals)
+        .where(eq(goals.id, goalId));
+      if (!goal) throw new NamedError("month.errors.notFound");
+      if (isClosed(goal)) throw new NamedError("month.errors.closed");
+
+      await tx
+        .delete(monthBudgets)
+        .where(and(eq(monthBudgets.goalId, goalId), eq(monthBudgets.month, monthStart(month))));
+    });
+  } catch (error) {
+    if (error instanceof NamedError) return { ok: false, error: error.message };
+    throw error;
+  }
 
   revalidateMonthScreens(goalId, month);
   return { ok: true };

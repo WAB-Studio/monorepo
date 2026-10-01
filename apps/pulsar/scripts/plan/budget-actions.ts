@@ -130,6 +130,11 @@ before(async () => {
   archivedGoalId = await goal("RP-28 fixture: archivada", true);
   endedGoalId = await goal("RP-28 fixture: terminada", true);
 
+  for (const goalId of [archivedGoalId, endedGoalId]) {
+    const planted = await setMonthBudget({ goalId, month: monthFrom(today, 1), amount: 45 });
+    if (!planted.ok) throw new Error(`setMonthBudget: ${planted.error}`);
+  }
+
   const archived = await plan.archiveGoal({ goalId: archivedGoalId });
   if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
   // No action moves a horizon onto today (`horizonRefusal` refuses it).
@@ -197,7 +202,7 @@ test("setMonthBudget: an archived goal and an ended goal are refused with closed
   for (const goalId of [archivedGoalId, endedGoalId]) {
     const result = await settle({ goalId, month: thisMonth, amount: 60 });
     assert.deepEqual(result, { ok: false, error: "month.errors.closed" });
-    assert.deepEqual(await rowsOf(goalId), []);
+    assert.deepEqual(await rowsOf(goalId), [{ month: `${monthFrom(today, 1)}-01`, amount: 45 }]);
   }
 });
 
@@ -219,4 +224,15 @@ test("setMonthBudget: three writes to one month leave one row", async () => {
     assert.deepEqual(result, { ok: true });
   }
   assert.deepEqual(await rowsOf(measuredGoalId), [{ month: `${thisMonth}-01`, amount: 300 }]);
+});
+
+test("removeMonthBudget: an archived goal and an ended goal are refused with closed, their amount kept", async () => {
+  const month = monthFrom(today, 1);
+  // Planted while each goal was still open, so the refusal has a row to keep.
+  for (const goalId of [archivedGoalId, endedGoalId]) {
+    assert.deepEqual(await rowsOf(goalId), [{ month: `${month}-01`, amount: 45 }]);
+    const result = await removeMonthBudget({ goalId, month });
+    assert.deepEqual(result, { ok: false, error: "month.errors.closed" });
+    assert.deepEqual(await rowsOf(goalId), [{ month: `${month}-01`, amount: 45 }]);
+  }
 });
