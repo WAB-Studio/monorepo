@@ -111,6 +111,22 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-21** — A one-off with no day is not lost. It waits in a list of its own, off the day's screen, and is given a day whenever the person wants one. A one-off written for a later day waits in the same list, with its date, and can be moved, done or deleted there.
 - [x] **RP-27** — A goal past its end says the day it ended and is listed apart among the goals. Its commitments leave the day. Through the Sunday of the week it ended in, the day and the week still name it with the day it ended and a way to open it; after that it leaves both. It can be archived or have its end moved. Nothing is deleted. Decided by the user 2026-09-30, succeeding RP-26.
 
+#### The plan by month
+
+- [ ] **RP-28** — A goal that has a measure can carry a planned amount for any calendar month of its span, in its measure's unit — twelve hours of «IA aplicada» in October. It is set, changed and removed from the goal. The goal and Hoy say how much of this month's amount the measure has reached: «llevas X de Y». The amount is the plan's; what was reached is derived from the facts, the evidence and the tasks done (RP-36), never stored. A month with no amount says nothing, and a goal with no measure takes no amount. Asked for by the user 2026-09-30.
+- [ ] **RP-29** — From the 20th of a month, a goal whose reached amount is under 60 % of that month's planned amount says so, on Hoy and on the goal, in figures: what was reached, what was planned, the day. It never says it before the 20th, never for a month with no amount or an amount of zero, and never as a score, a reproach or a colour of alarm (RP-16). Asked for by the user 2026-09-30, from the roadmap's own rule.
+- [ ] **RP-30** — A one-off that belongs to a goal with a measure can carry an estimated amount in that measure's unit, and a one-off planned for a month can hold one-offs of its own, one level deep. One that holds others has no amount and no day of its own: its amount is the sum of theirs, and it is done when every one of them is done. Asked for by the user 2026-09-30.
+- [ ] **RP-31** — A one-off that belongs to a goal can be planned for a month instead of a day. The goal shows each month's list. Left undone when its month ends, it opens the next month's list, first, showing the month it came from and the amount it still owes, until it is done or deleted. Nothing is written when a month turns: the carry is read. Asked for by the user 2026-09-30, from the roadmap's «regla de arrastre».
+- [ ] **RP-32** — A goal is read month by month, from its first month to its last: the amount planned, the amount reached, and, for a month already over, the share carried out of it — the amount its list still owed when it ended over the amount its list held when it began. Asked for by the user 2026-09-30.
+- [ ] **RP-33** — A person exports how every goal is going **as a PDF**: a read-only page of the report, and «Descargar PDF», which hands that page to the browser's own print-to-PDF — on a phone, the share or print menu. For each goal not archived: its measure against this month's planned amount and against the planned amount to date, its phases, the one-offs it carries, its months (RP-32) and its weeks (RP-17). The export writes nothing, installs nothing and generates nothing on the server; a source that cannot be read is said so in it (RNP-04). Asked for by the user 2026-09-30; PDF decided by the user 2026-09-30.
+- [ ] **RP-34** — When a month of a goal ends having carried out more than half of what its list held (RP-32), that month's screen proposes, through the whole month after it, to move the goal's plan one month later. The person accepts in one sheet that says what moves: every month amount from the month after the closed one on, every one-off planned for those months and not yet done, and every phase not yet begun (a phase already begun stays); and the horizon, when something moved would pass it. The month after keeps no amount of its own until the person sets one. Nothing moves without that acceptance, nothing moves in another goal, and a proposal accepted is not made again for that month. Decided by the user 2026-09-30, from the roadmap's «el tema técnico del mes siguiente se corre un mes entero».
+- [ ] **RP-35** — A quantity in a unit of time reads in hours and minutes wherever it is drawn — «12 h 30 min», «45 min», «2 h» — on Hoy, in the quantity sheet, on the goal, in the review, the months, a month's list, the export and the import's review. The app knows a unit of time from a short catalogue of the words for a minute (minutos, minuto, min, mins, in any case); a unit named any other way reads as it does today. What is stored stays whole minutes. A field that asks for a new amount of time — a month's amount, a task's estimate — takes hours and minutes; the commitment's target and the quantity sheet's own field keep taking minutes. Decided by the user 2026-09-30.
+- [ ] **RP-36** — A one-off with an estimated amount (RP-30), once done, adds that amount to its goal's measure on the day it was done — to the total, the week, the month and the export — and undone, takes it back. A one-off that holds others adds nothing of its own; each of them adds its own. **The same hours can count twice:** a task done inside a day's block also counts in that block's quantity (RP-03), and the app does not tell the two apart. Decided by the user 2026-09-30, knowing it.
+
+#### Bringing a plan in
+
+- [ ] **RP-37** — A person brings a plan in by pasting its text or uploading a file — Markdown, text, PDF or any other. A plan written in the app's documented template is read with no model call. Anything else is sent to OpenAI, and the screen says so, in one line, before it is sent: the plan leaves for OpenAI. The model proposes goals, their phases, their month amounts, their commitments and their tasks with estimates and sub-tasks. **Nothing is written from the model's answer alone:** the person reviews the proposal, unmarks what they do not want, can change an amount, and confirms; what cannot be written — a month outside the goal's span — says why and is left out. An import creates new goals and never changes an existing one. Decided by the user 2026-09-30: «si se sube algo random también debería poder».
+
 #### The week and the review
 
 - [x] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
@@ -135,6 +151,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
   - What a second source costs today: one reader in `lib/evidence/registry.ts`, one entry in `lib/evidence/source-rows.ts`, two keys in `messages/es/sources.json` (`<name>` and `<name>Unit`), then `npm run source:add -w apps/pulsar`.
 - [x] **RNP-09** — Every `auth.users` row a script of this app creates is registered through `@repo/harness-registry`. No automated check ever submits the sign-in form with a typed address: it sends a real email from the user's own account and mints a real row.
 - [x] **RNP-11** — From 1024 px the app has a desktop face: a left rail in place of the bottom nav, Hoy and a goal in two columns, the week as a table of commitments by day, every sheet a centred dialog, every other screen one column in the same frame, with no horizontal overflow at 1280×800. Below 1024 the phone face holds unchanged (RNP-07). Asked for by the user 2026-09-28.
+- [ ] **RNP-12** — The goal's months, a month's list, the export, the shift and the import's confirmation each pay a bounded number of round trips to Postgres — never one per month, per task or per item imported — fanned out together with the evidence query where they read it, never a chain of awaits; the goal screen and Hoy keep the four statements RNP-03 already measures.
+- [ ] **RNP-13** — A call to a paid model is claimed in the person's own record before it is made and refused past ten a day per person; the record keeps the day, the model and, once answered, the tokens and the outcome. With no key the import says it is not available and offers the template — never an answer with nothing in it, never a 204. No automated check or spec reaches the paid model: they run with no key, or against a stub that a deployed build ignores. Decided by the user 2026-09-30.
 
 ---
 
@@ -153,6 +171,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 | **Commitment** | What counts, how often, and what satisfies it — a tap, a quantity, or evidence over a threshold. |
 | **Fact** | Something that happened: its day, the moment it was written, its source, an optional quantity, an optional line. |
 | **One-off** | Something to do once: a name, a day when it has one, and a goal when it belongs to one. |
+| **Month budget** | A planned amount for one goal in one calendar month, in the goal's measure unit. |
 | **Evidence** | Rows another app owns, read under the person's own identity and never copied. A source declares where they live and what one row is worth. |
 
 ### Invariants
@@ -167,6 +186,10 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - A quantity without a unit is not a quantity. The unit belongs to the commitment, never to the fact that repeats it.
 - Nothing in the schema, the types or the screens names a particular evidence source. A source is configuration.
 - A goal is optional. A fact with no goal is a whole fact.
+- A month's reached amount, a one-off's done state, what it still owes and whether it is carried are derived, never stored. The only stored plan numbers are a month's planned amount and a one-off's estimate.
+- A shift is an act the person took, written once; it is never re-derived and never undone by a later read.
+- A time is stored in whole minutes. Hours are only how it is printed.
+- Nothing a model proposes is written until the person confirms it.
 
 ---
 
@@ -212,6 +235,7 @@ Principles, not recipes:
 | Postgres | **postgres 3 + drizzle-orm 0.45** | The same client and ORM the other two apps use, over the same pooler. |
 | Migrations | **drizzle-kit 0.31** (dev) | The `goals` schema versioned in the repository, with a journal of its own. |
 | Auth | **@repo/supabase-auth** | The cookie session and the magic link, already written and already proved. |
+| Plan import | **OpenAI over fetch**, no SDK — the way apps/voyager/lib/word/model.ts calls it, with the answer validated by Zod | Reading a plan in any shape, PDF included, without a parser or a PDF library. |
 
 ### Do not install
 
@@ -223,3 +247,5 @@ Principles, not recipes:
 | A cron or scheduler package | A cadence is a rule read at draw time, never a job that writes rows. |
 | A charting library | The review is a table (RP-17), not a chart. |
 | A notification or push package | Out of scope, and it is what turns this app into one more thing to ignore. |
+| The OpenAI SDK | fetch to https://api.openai.com/v1/… |
+| A PDF library (pdfkit, react-pdf, pdf-lib, puppeteer) | The browser's print to PDF over a print-styled page (RP-33). |
