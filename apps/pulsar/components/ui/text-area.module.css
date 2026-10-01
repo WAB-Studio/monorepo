@@ -1,0 +1,50 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  inline-size: 100%;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-label-size);
+  font-weight: 500;
+  letter-spacing: var(--pulsar-text-label-tracking);
+  text-transform: uppercase;
+  color: var(--pulsar-muted);
+}
+
+.control {
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding: 12px 14px;
+  background: var(--pulsar-raised);
+  color: var(--pulsar-ink);
+  border: 1.5px solid var(--pulsar-border);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: var(--pulsar-text-measure-tracking);
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.control::placeholder {
+  color: var(--pulsar-muted);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 1px;
+}
+
+.control[aria-invalid="true"] {
+  border-color: var(--pulsar-ink);
+}
+
+/* Disabled reads as «this does not move»: muted ink, a line ring. */
+.control:disabled {
+  color: var(--pulsar-muted);
+  -webkit-text-fill-color: var(--pulsar-muted);
+  border-color: var(--pulsar-line);
+}

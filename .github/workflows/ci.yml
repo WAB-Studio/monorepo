@@ -377,6 +377,8 @@ jobs:
       - name: Start the app with an unreadable evidence source and wait for it to answer
         run: |
           PULSAR_FAULT_SEAM=reading_lookups \
+          PULSAR_MODEL_STUB=draft:${{ github.workspace }}/apps/pulsar/e2e/data/modelo-borrador.json \
+          OPENAI_API_KEY=sk-stub \
             npm run start -w apps/pulsar -- --port 3227 > /tmp/pulsar-fault.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3227/entrar; then
