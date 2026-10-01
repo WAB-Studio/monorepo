@@ -68,11 +68,12 @@ export const importDraftStrictSchema = strictify(importDraftJsonSchema);
 const TEXT_EXTENSIONS = [".txt", ".md", ".markdown", ".csv", ".json"];
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
-type Route = "text" | "pdf" | "image" | null;
+export type FileRoute = "text" | "pdf" | "image" | null;
+type Route = FileRoute;
 
 // Chat completions takes a PDF as a file part and nothing else of a document:
 // a .docx is refused here rather than sent to be rejected.
-function routeOf(name: string, type: string): Route {
+export function fileRoute(name: string, type: string): Route {
   const mime = type.toLowerCase().split(";")[0].trim();
   const lower = name.toLowerCase();
   if (mime === "application/pdf" || lower.endsWith(".pdf")) return "pdf";
@@ -136,7 +137,7 @@ export function modelAvailable(): boolean {
  * named status, so the screen's own notice is the only way one reaches a person.
  */
 export async function readPlan(input: PlanInput): Promise<PlanReading> {
-  const route: Route = input.kind === "text" ? "text" : routeOf(input.name, input.type);
+  const route: Route = input.kind === "text" ? "text" : fileRoute(input.name, input.type);
   if (route === null) return { status: "unreadableType" };
   if (input.kind === "text" && input.text.trim() === "") return { status: "empty" };
 
