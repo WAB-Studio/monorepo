@@ -31,7 +31,12 @@
     "notReached": "—",
     "hint": "Toca un mes para ver sus tareas o cambiar su monto.",
     "emptyBody": "Ningún mes tiene monto. Ponle uno a {month} y la meta dirá cuánto llevas de él.",
-    "emptyAction": "Planear {month}"
+    "emptyAction": "Planear {month}",
+    "columns": {
+      "month": "mes",
+      "reached": "alcanzado",
+      "planned": "planeado"
+    }
   },
   "list": {
     "tasks": "tareas",
