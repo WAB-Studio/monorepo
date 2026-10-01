@@ -222,8 +222,10 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     await expect(row).toContainText("30 minutos");
 
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText(/30\s*minutos/)).toBeVisible();
-    await expect(page.getByText(/55\s*minutos/)).toHaveCount(0);
+    // The goal's total, in hours and minutes (RP-35): the figure reads the
+    // one fact, never both summed into «55 min».
+    await expect(page.getByText("30 min", { exact: true })).toBeVisible();
+    await expect(page.getByText("55 min", { exact: true })).toHaveCount(0);
   } finally {
     await deleteGoal(db, personId, goalId);
   }
