@@ -126,7 +126,7 @@ function GoalPart({
                   <SectionLabel>{t("sections.phases")}</SectionLabel>
                   {goal.phases.map((phase) => (
                     <Text key={phase.startsOn} as="p">
-                      {phase.aim}
+                      <Text>{phase.aim}</Text>
                       <Text variant="meta" tone="muted">
                         {" · "}
                         {spanFormat.formatRange(
@@ -173,7 +173,7 @@ function GoalPart({
                           variant="meta"
                           tone="secondary"
                         >
-                          {child.name}
+                          <Text>{child.name}</Text>
                           {" · "}
                           {t("owes", { owes: "" })}
                           {unit === null ? (
