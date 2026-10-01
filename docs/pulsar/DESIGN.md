@@ -133,7 +133,7 @@ Two variants, and no third until a board draws one:
 
 ## The boards
 
-On the canvas, in three pages. A module that draws a screen cites its board by name.
+On the canvas, in four pages. A module that draws a screen cites its board by name.
 
 | board | what it holds |
 |---|---|
@@ -155,6 +155,35 @@ On the canvas, in three pages. A module that draws a screen cites its board by n
 | `CompromisoRetirar.dc.html` | the sheet that retires one, saying what it leaves intact (RP-13) |
 | `SueltaBorrar.dc.html` | deleting a one-off, and how it differs from finishing one (RP-22) |
 | `Entrar.dc.html` | the link sent to an address (RP-18) |
+
+### Page «El plan»
+
+Drawn 2026-09-30, approved by the user the same day in their own words: «Apruebo los 21». Example
+throughout: the 2026–2027 roadmap, goal «IA aplicada». Export (PDF) and import (IA) are drawn apart.
+
+| board | what it holds |
+|---|---|
+| `MetaMes.dc.html` | the goal's «este mes»: reached of planned, the month's name, «Ver por mes» (RP-28, RP-36) |
+| `MetaMesSinPlan.dc.html` | a measure and no amount this month: the reached figure and the way to plan it |
+| `MetaMesBajo.dc.html` | day ≥ 20 and under 60 %: figures, the day and «60 %», in ink, never alarm (RP-29) |
+| `MetaMesSinEvidencia.dc.html` | the source unreadable: the month line is the declared half, and says so (RNP-04) |
+| `HoyMes.dc.html` | Hoy on the phone: an «este mes» block, one line per goal with an amount this month |
+| `HoyMesBajo.dc.html` | the same, the 22nd, one goal under 60 % |
+| `HoyHoras.dc.html` | rows in a time unit read «1 h 30 min», «45 min de 1 h 30 min» (RP-35) |
+| `CantidadHoras.dc.html` | the quantity chips in hours and minutes, wrapped at 360; the own field still in minutes |
+| `RevisionHoras.dc.html` | the review table and the goal's figure in hours and minutes, no unit word per cell |
+| `Meses.dc.html` | a goal's months: closed with reached, planned and share carried; «en curso»; future amounts (RP-32) |
+| `MesesVacio.dc.html` | no amount in any month |
+| `MesPlan.dc.html` | the amount sheet: hours and minutes as two whole fields for a time unit, one field otherwise, its refusals |
+| `Mes.dc.html` | one month: tasks with their time, a parent as the sum of its sub-tasks, done ones (RP-30) |
+| `MesArrastre.dc.html` | carried tasks first, «de octubre · debe 3 h», then the month's own (RP-31) |
+| `MesVacio.dc.html` | a month with an amount and no task |
+| `MesCerrado.dc.html` | a closed month: the share carried; what is owed reads in the next month |
+| `MesCorrer.dc.html` | over half carried, during the month after: the proposal to shift the plan (RP-34) |
+| `MesCorrerHoja.dc.html` | the shift sheet: what moves, what stays, what the next month keeps, one confirm |
+| `TareaNueva.dc.html` | a new task: name, time in hours and minutes, month preset, «con sub-tareas» |
+| `SubtareaNueva.dc.html` | a sub-task under a named parent; one level only |
+| `TareaSinMedida.dc.html` | a goal that measures nothing: no time field, and why in one line |
 
 ## The boards that do not exist
 
@@ -209,6 +238,14 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   written, each goal's field naming its goal, «N esperan», the horizon sheet's label. They change words
   where the boards already draw them.
 - **`/sueltas` with one group only.** It is `SueltasProgramadas.dc.html` with a group fewer.
+- **`HoyEscritorioMes`.** At 1024 the aside card gains the month line under «esta semana» and keeps
+  its shape; `HoyMes.dc.html`'s note says so. Approved 2026-09-30 by the user.
+- **`MesesEscritorio`.** The months table sits in the 640 px column without widening; `Meses.dc.html`'s
+  note says so. Approved 2026-09-30 by the user.
+- **`MesCargando`.** The plan's routes sit under `app/(app)/`: `HoyCargando.dc.html` and `Fallo.dc.html`
+  cover loading and failure. Approved 2026-09-30 by the user.
+- **A month of an ended or archived goal.** It reads and takes no task and no amount, as
+  `MetaTerminada.dc.html` already does for commitments and phases; the layout does not change.
 
 ## Decisions taken here
 
@@ -550,3 +587,15 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   row met in its period says neither. Drawn on `HoyEscritorio.dc.html` and `HoyHechas.dc.html`
   since the first boards; decided 2026-09-30 by the user, module 100.
 - **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty; «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.
+- **The plan by month is built as the 21 boards of «El plan» draw it.** Approved by the user 2026-09-30.
+- **A time is written «12 h 30 min»** and stored in whole minutes (RP-35). Decided 2026-09-30 by the user.
+- **A done task adds its estimate to the measure** (RP-36), knowing the same hours may count twice if
+  the day's block was marked too. Decided 2026-09-30 by the user.
+- **The shift is proposed, never applied alone** (RP-34): over half carried, during the month after,
+  one confirm. Decided 2026-09-30 by the user.
+- **A phase already begun does not move when the plan shifts**; only phases not yet started move, both
+  ends. Decided 2026-09-30 by the user (question 6, option a).
+- **The month after a shifted one keeps no amount**; it shows the reached figure and the way to plan
+  it, as `MetaMesSinPlan.dc.html` draws. Decided 2026-09-30 by the user (question 7, option a).
+- **The export is a PDF through the browser's print**, a print page and `window.print()`, no library.
+  Decided 2026-09-30 by the user.
