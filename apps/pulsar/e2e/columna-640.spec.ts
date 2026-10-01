@@ -38,6 +38,34 @@ async function widest(page: Page): Promise<number> {
 
 const CAPPED = 640;
 
+// From 700 to 1023 px the phone face's column holds 600 px of content (640 less
+// 20 px of padding a side), centred in the viewport (DESIGN.md, 2026-09-30).
+const MID_COLUMN = 600;
+
+async function mainBox(page: Page): Promise<{ left: number; right: number }> {
+  return page.evaluate(() => {
+    const box = document.querySelector("main")!.getBoundingClientRect();
+    return { left: box.left, right: window.innerWidth - box.right };
+  });
+}
+
+async function expectMidColumn(page: Page, path: string): Promise<void> {
+  for (const width of [700, 800, 1023]) {
+    await page.setViewportSize({ width, height: 800 });
+    await open(page, path);
+    expect(await contentWidth(page), `${path} content at ${width}`).toBeCloseTo(MID_COLUMN, 0);
+    const { left, right } = await mainBox(page);
+    expect(Math.abs(left - right), `${path} centred at ${width}: ${left} left, ${right} right`).toBeLessThanOrEqual(1);
+  }
+}
+
+// The rail's own width, read from the page: the content beside it is whatever
+// it leaves, less the 56 px of padding a side (DESIGN.md, RNP-11).
+async function railWidth(page: Page): Promise<number> {
+  const box = await page.getByRole("navigation").boundingBox();
+  return box!.width;
+}
+
 type Db = Parameters<Parameters<typeof test>[2]>[0]["db"];
 
 // A route may need a goal; the test seeds it under the person and deletes it by id.
@@ -65,7 +93,7 @@ async function seedGoal(db: Db, userId: string): Promise<string> {
 }
 
 for (const route of one) {
-  test(`${route.path("<id>")} holds 640 px at 1280 and 1024, and 360 does not move (module 90)`, async ({ person, browser, db }) => {
+  test(`${route.path("<id>")} holds 640 px at 1280 and 1024, 600 from 700 to 1023, and 360 does not move (module 90)`, async ({ person, browser, db }) => {
     const goalId = route.needsGoal ? await seedGoal(db, person.id) : "";
     const context = await browser.newContext({ storageState: person.sessionFile });
     try {
@@ -77,9 +105,10 @@ for (const route of one) {
       for (const width of [1280, 1024]) {
         await page.setViewportSize({ width, height: 800 });
         await open(page, path);
-        expect(await contentWidth(page), `${path} at ${width}`).toBeLessThanOrEqual(CAPPED);
+        expect(await contentWidth(page), `${path} at ${width}`).toBeCloseTo(CAPPED, 0);
         expect(await widest(page), `${path} widest at ${width}`).toBeLessThanOrEqual(CAPPED);
       }
+      await expectMidColumn(page, path);
     } finally {
       await context.close();
       if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
@@ -88,7 +117,7 @@ for (const route of one) {
 }
 
 for (const route of two) {
-  test(`${route.path("<id>")} keeps the rail's room at 1280 and 1024, and 360 does not move (module 90)`, async ({ person, browser, db }) => {
+  test(`${route.path("<id>")} keeps the rail's room at 1280 and 1024, 600 from 700 to 1023, and 360 does not move (module 90)`, async ({ person, browser, db }) => {
     const goalId = route.needsGoal ? await seedGoal(db, person.id) : "";
     const context = await browser.newContext({ storageState: person.sessionFile });
     try {
@@ -100,8 +129,10 @@ for (const route of two) {
       for (const width of [1280, 1024]) {
         await page.setViewportSize({ width, height: 800 });
         await open(page, path);
-        expect(await contentWidth(page), `${path} at ${width}`).toBeGreaterThan(CAPPED);
+        const expected = width - (await railWidth(page)) - 112;
+        expect(await contentWidth(page), `${path} at ${width}`).toBeCloseTo(expected, 0);
       }
+      await expectMidColumn(page, path);
     } finally {
       await context.close();
       if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;

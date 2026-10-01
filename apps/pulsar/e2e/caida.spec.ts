@@ -55,6 +55,33 @@ test.describe("a database outage", () => {
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toHaveCount(0);
   });
 
+  // The pool's reconnect backoff decides how soon a retried page redraws: with
+  // the default (up to 20 s) the third or fourth press sits on the skeleton.
+  // Each press must have the failure heading back within this bound.
+  const REDRAW_MS = 3000;
+
+  test("pressing Intentar otra vez five times in a row redraws the failure each time, fast", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
+    const again = page.getByRole("button", { name: "Intentar otra vez" });
+
+    for (let press = 1; press <= 5; press += 1) {
+      const refetched = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).origin === new URL(DOWN ?? "").origin &&
+          response.request().headers()["rsc"] === "1" &&
+          response.request().headers()["next-router-prefetch"] === undefined,
+      );
+      const started = Date.now();
+      await again.click();
+      await refetched;
+      await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible({ timeout: REDRAW_MS });
+      await expect(again).toBeVisible({ timeout: REDRAW_MS });
+      expect(Date.now() - started, `press ${press} took too long to redraw`).toBeLessThan(REDRAW_MS);
+    }
+    await expect(page.getByRole("heading", { name: "Esta página no existe" })).toHaveCount(0);
+  });
+
   test("the live server draws the not-found for a goal nobody owns", async ({ page }) => {
     await page.goto(`${LIVE}/metas/${GHOST}`);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();

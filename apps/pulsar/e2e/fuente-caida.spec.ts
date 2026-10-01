@@ -126,25 +126,39 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
   test("the ordinary server draws none of the three notices over the same seed", async ({
     person,
     browser,
+    baseURL,
     db,
   }) => {
+    // A control is worth something only against a server without the seam. The
+    // seam server is `baseURL`: the same seed, session and paths must draw the
+    // note there and not here, so this one is a different server and the only
+    // difference between the two is the seam.
+    expect(new URL(LIVE).origin, "PULSAR_BASE_URL is the seam server").not.toBe(new URL(baseURL!).origin);
+
     const seeded = await seed(db, person);
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: LIVE });
+    const seamContext = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
     try {
       const page = await context.newPage();
-      for (const [path, content] of [
-        ["/", seeded.tapName],
-        ["/semana", seeded.goalName],
-        [`/metas/${seeded.goalId}`, seeded.goalName],
+      const seamPage = await seamContext.newPage();
+      for (const [path, content, note] of [
+        ["/", seeded.tapName, DAY_NOTE],
+        ["/semana", seeded.goalName, WEEK_NOTE],
+        [`/metas/${seeded.goalId}`, seeded.goalName, GOAL_NOTE],
       ]) {
+        await seamPage.goto(path);
+        await settle(seamPage, content);
+        await expect(seamPage.getByText(note, { exact: true }), `${path} on the seam server`).toBeVisible();
+
         await page.goto(path);
         await settle(page, content);
-        for (const note of [DAY_NOTE, WEEK_NOTE, GOAL_NOTE]) {
-          await expect(page.getByText(note)).toHaveCount(0);
+        for (const other of [DAY_NOTE, WEEK_NOTE, GOAL_NOTE]) {
+          await expect(page.getByText(other)).toHaveCount(0);
         }
         await expect(page.getByText(FAILURE)).toHaveCount(0);
       }
     } finally {
+      await seamContext.close();
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
     }
