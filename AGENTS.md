@@ -58,7 +58,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.
 - `node_modules` hoists to the root. A script that names a binary by path reaches it as `../../node_modules/...`.
 - Promote nothing to `packages/` until a second app asks for it.
-- `apps/portal` is «Universo», one static page linking the three apps, live at https://universo-apps.vercel.app.
+- `apps/portal` is «Universo», one static home-screen page linking the three apps, live at https://universo-apps.vercel.app.
   It has no `package.json` and no build. Git deploys are off; deploy it by hand from `apps/portal` with
   `npx vercel deploy --prod --yes`. Update its links when an app's URL changes. Design: `docs/portal/DESIGN.md`.
 - `apps/voyager` is the reading dictionary. Its contract is `docs/voyager/SPEC.md`; its `RL` and `RNL` codes share no number with the finances `RF`/`RNF` series.

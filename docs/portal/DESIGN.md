@@ -4,19 +4,22 @@
 
 ## Decisiones
 
-- **Bento oscuro.** Aprobado por el usuario el 2026-10-01, tras rechazar una lista simple, un cielo con brillos, una
-  placa grabada y una escena three.js. Tablero: «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
-- Una tarjeta por app, con una miniatura de la app en sus propios colores, tomados de su `DESIGN.md`. Pulsar muestra
-  Hoy, Voyager una palabra buscada y Orbit el saldo del fondo. Los datos de las miniaturas son de ejemplo.
-- Tema único: oscuro.
-- La fecha de la tarjeta de presentación es la del navegador de quien abre la página. No nombra ninguna ciudad.
-- Sin degradados de color, sin vidrio, sin brillos. Al pasar el mouse la tarjeta se aclara, la miniatura sube 3 px y la
-  flecha se llena.
+- **Pantalla de inicio con tarjetas.** Aprobada por el usuario el 2026-10-01: la mezcla 1 de los estilos B (claro, tipo
+  Apple) y D (pantalla de inicio). Reemplaza al bento oscuro que se aprobó y publicó antes ese mismo día. Tablero:
+  «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
+  - Antes se rechazaron una lista simple, un cielo con brillos, una placa grabada, una escena three.js y el bento.
+  - Los seis estilos comparados: https://claude.ai/artifact/KcCwGomy7k8BJBAjCjgdc3
+  - Las tres mezclas de B con D: https://claude.ai/artifact/WypMF9ctwerNpwJFpt7mRE
+- El fondo es de colores suaves y lleva la hora grande del navegador de quien abre la página, sin nombrar ciudad.
+- Hay tres tarjetas blancas, una por app. Cada una lleva un ícono en el color de su app, el nombre, una línea que dice
+  para qué sirve y «Abrir ›».
+- Un solo aspecto para claro y oscuro: el fondo ya define la página.
+- Al pasar el mouse, la tarjeta sube 4 px y su sombra crece.
 
 ## Tableros que no existen
 
 - Un estado de error: la página no carga datos, así que no tiene.
-- Una cara clara: el usuario aprobó solo la oscura.
+- Una cara oscura: la página tiene un solo aspecto.
 
 ## Despliegue
 

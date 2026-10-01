@@ -3,201 +3,111 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0B0B0D">
+<meta name="theme-color" content="#C9A8D8">
 <title>Universo</title>
-<meta name="description" content="Las tres apps, en un solo lugar.">
+<meta name="description" content="Orbit, Voyager y Pulsar, en un solo lugar.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Archivo:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* Layout: a dark bento — an intro tile, then one tile per app, each holding a small true-to-life glimpse of the app in its own colours. Committed dark. */
+/* Layout: a phone's home screen — soft colour wallpaper, the time large, three white app cards under it. One look for both themes. */
 :root {
-  --ground: #0B0B0D;
-  --tile: #141417;
-  --tile-2: #1B1B1F;
-  --line: rgba(255, 255, 255, .07);
-  --ink: #F2F2F4;
-  --ink-2: #8E8E96;
-  --sans: "Geist", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  /* each app's own palette, from its DESIGN.md */
-  --p-ground: #EDEFF2; --p-raised: #FFFFFF; --p-ink: #12171C; --p-muted: #5E6874; --p-line: #DCE1E7; --p-accent: #1C6E5A;
-  --v-ground: #14130F; --v-raised: #1C1B16; --v-ink: #F0EBDD; --v-muted: #A39C8A; --v-line: #2A2820; --v-accent: #D9805F;
-  --o-ground: #F6F5F1; --o-ink: #17181C; --o-muted: #6B6E78; --o-line: #E4E2DC; --o-accent: #2F5BEA;
-  color-scheme: dark;
+  --card: rgba(255, 255, 255, .92);
+  --card-ink: #1D1D1F;
+  --card-muted: #6E6E73;
+  --link: #0066CC;
+  --sans: -apple-system, "SF Pro Display", "Inter Tight", "Segoe UI", system-ui, sans-serif;
+  --wall:
+    radial-gradient(120% 90% at 10% 0%, #F7B98B 0%, transparent 55%),
+    radial-gradient(120% 90% at 100% 100%, #7E9BF0 0%, transparent 55%),
+    radial-gradient(90% 80% at 80% 10%, #74D8BD 0%, transparent 50%),
+    #C9A8D8;
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--sans); padding-inline: 16px; padding-block: 24px 32px; }
-
-.bento {
-  max-width: 1120px; margin: 0 auto;
-  display: grid; gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas:
-    "intro pulsar pulsar"
-    "voyager pulsar pulsar"
-    "voyager orbit orbit";
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: #C9A8D8;
+  background-image: var(--wall);
+  background-attachment: fixed;
+  color: #fff;
+  font-family: var(--sans);
+  padding-inline: 20px;
+  padding-block: 56px 40px;
+  display: flex; flex-direction: column; align-items: center; gap: 40px;
 }
-@media (max-width: 900px) {
-  .bento { grid-template-columns: 1fr; grid-template-areas: "intro" "pulsar" "voyager" "orbit"; }
+.clock { text-align: center; text-shadow: 0 1px 12px rgba(0, 0, 0, .12); }
+.clock b { display: block; font-size: clamp(64px, 14vw, 88px); font-weight: 600; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.clock span { font-size: 17px; font-weight: 500; }
+h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; width: 100%; max-width: 920px; }
+@media (max-width: 760px) { .row { grid-template-columns: 1fr; max-width: 420px; } }
+
+.card {
+  height: 100%;
+  background: var(--card); color: var(--card-ink);
+  border-radius: 22px; padding: 22px;
+  display: flex; flex-direction: column; gap: 12px;
+  text-decoration: none;
+  box-shadow: 0 10px 30px rgba(40, 20, 60, .12);
+  transition: transform .25s ease, box-shadow .25s ease;
 }
+.card:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(40, 20, 60, .18); }
+.card:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.ico { width: 56px; height: 56px; border-radius: 13px; display: grid; place-items: center; }
+.ico svg { width: 30px; height: 30px; }
+.card h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.card p { margin: 0; color: var(--card-muted); font-size: 15px; line-height: 1.4; }
+.more { margin-top: auto; padding-top: 4px; color: var(--link); font-size: 15px; }
 
-.tile { background: var(--tile); border: 1px solid var(--line); border-radius: 24px; padding: 24px; min-width: 0; }
-.intro { grid-area: intro; display: flex; flex-direction: column; justify-content: space-between; gap: 40px; }
-.intro .day { font-family: var(--mono); font-size: 12px; color: var(--ink-2); letter-spacing: .02em; }
-.intro h1 { margin: 0; font-size: clamp(40px, 5vw, 56px); font-weight: 600; letter-spacing: -.035em; line-height: 1; }
-.intro p { margin: 10px 0 0; color: var(--ink-2); font-size: 15px; line-height: 1.5; max-width: 30ch; }
-.dots { display: flex; gap: 6px; }
-.dots i { width: 8px; height: 8px; border-radius: 50%; display: block; }
-
-a.app { display: flex; flex-direction: column; gap: 22px; color: inherit; text-decoration: none; transition: border-color .2s ease, background .2s ease; }
-a.app:hover, a.app:focus-visible { border-color: rgba(255, 255, 255, .16); background: var(--tile-2); outline: none; }
-a.app:focus-visible { box-shadow: 0 0 0 2px var(--ink); }
-.pulsar { grid-area: pulsar; } .voyager { grid-area: voyager; } .orbit { grid-area: orbit; }
-
-.glimpse { flex: 1; border-radius: 16px; overflow: hidden; position: relative; min-height: 220px; transition: transform .25s ease; }
-a.app:hover .glimpse { transform: translateY(-3px); }
-
-.foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.foot .name { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
-.foot .what { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
-.arrow { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; transition: background .2s ease, color .2s ease, border-color .2s ease; }
-.arrow svg { width: 16px; height: 16px; }
-a.app:hover .arrow { background: var(--ink); color: var(--ground); border-color: var(--ink); }
-
-/* Pulsar: the Hoy sheet. */
-.g-pulsar { background: var(--p-ground); color: var(--p-ink); font-family: "Archivo", var(--sans); padding: 26px 26px 0; display: flex; justify-content: center; }
-.g-pulsar .phone { width: 100%; max-width: 380px; display: flex; flex-direction: column; }
-.g-pulsar .eyebrow { font-family: var(--mono); font-size: 11px; color: var(--p-muted); }
-.g-pulsar h3 { margin: 4px 0 14px; font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
-.g-pulsar .label { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--p-muted); margin-bottom: 6px; }
-.g-pulsar .row { display: flex; align-items: center; gap: 12px; background: var(--p-raised); border: 1.5px solid #C7CED7; border-radius: 10px; padding: 11px 14px; margin-bottom: 8px; }
-.g-pulsar .row.done { border-color: var(--p-line); }
-.g-pulsar .tick { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #C7CED7; flex: none; display: grid; place-items: center; }
-.g-pulsar .done .tick { background: var(--p-accent); border-color: var(--p-accent); }
-.g-pulsar .done .tick::after { content: ""; width: 8px; height: 4px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
-.g-pulsar .t { font-size: 15px; font-weight: 500; }
-.g-pulsar .done .t { color: var(--p-muted); text-decoration: line-through; text-decoration-color: #C7CED7; }
-.g-pulsar .s { font-family: var(--mono); font-size: 11px; color: var(--p-muted); margin-left: auto; white-space: nowrap; }
-.g-pulsar .month { margin-top: 8px; background: var(--p-raised); border-radius: 12px 12px 0 0; padding: 14px 16px 18px; border: 1px solid var(--p-line); border-bottom: 0; }
-.g-pulsar .month .fig { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: 12px; color: var(--p-muted); }
-.g-pulsar .month .fig b { font-family: "Archivo", var(--sans); font-size: 20px; color: var(--p-ink); font-weight: 600; }
-.g-pulsar .bar { height: 6px; border-radius: 3px; background: var(--p-line); margin-top: 10px; overflow: hidden; }
-.g-pulsar .bar i { display: block; height: 100%; width: 38%; background: var(--p-accent); border-radius: 3px; }
-
-/* Voyager: a word looked up while reading. */
-.g-voyager { background: var(--v-ground); color: var(--v-ink); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
-.g-voyager .field { display: flex; align-items: center; gap: 10px; background: var(--v-raised); border: 1px solid var(--v-line); border-radius: 12px; padding: 12px 14px; font-size: 16px; }
-.g-voyager .field svg { width: 16px; height: 16px; color: var(--v-muted); flex: none; }
-.g-voyager .caret { width: 1.5px; height: 18px; background: var(--v-accent); animation: blink 1.1s steps(1) infinite; }
-@keyframes blink { 50% { opacity: 0; } }
-.g-voyager .word { font-family: "Newsreader", Georgia, serif; font-size: 38px; line-height: 1; letter-spacing: -.01em; }
-.g-voyager .ipa { font-family: var(--mono); font-size: 12px; color: var(--v-muted); margin-top: 6px; }
-.g-voyager .pos { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--v-accent); }
-.g-voyager .def { font-family: "Newsreader", Georgia, serif; font-size: 18px; line-height: 1.45; margin: 4px 0 0; }
-.g-voyager .quote { margin-top: auto; border-left: 2px solid var(--v-accent); padding-left: 12px; font-family: "Newsreader", Georgia, serif; font-style: italic; font-size: 15px; line-height: 1.5; color: var(--v-muted); }
-.g-voyager .quote mark { background: none; color: var(--v-ink); }
-
-/* Orbit: the shared fund's balance and its months. */
-.g-orbit { background: var(--o-ground); color: var(--o-ink); padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; align-items: end; min-height: 200px; }
-@media (max-width: 560px) { .g-orbit { grid-template-columns: 1fr; } }
-.g-orbit .k { font-family: var(--mono); font-size: 11px; color: var(--o-muted); }
-.g-orbit .bal { font-size: 34px; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.g-orbit .bal small { font-size: 14px; color: var(--o-muted); font-weight: 500; margin-left: 4px; }
-.g-orbit .who { display: flex; margin-top: 14px; }
-.g-orbit .who span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #fff; border: 2px solid var(--o-ground); margin-left: -6px; }
-.g-orbit .who span:first-child { margin-left: 0; }
-.g-orbit .chart { display: flex; align-items: flex-end; gap: 8px; height: 110px; }
-.g-orbit .chart div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
-.g-orbit .chart i { width: 100%; border-radius: 6px 6px 2px 2px; background: #D3D9EC; display: block; }
-.g-orbit .chart div:last-child i { background: var(--o-accent); }
-.g-orbit .chart span { font-family: var(--mono); font-size: 10px; color: var(--o-muted); }
-
-@media (prefers-reduced-motion: reduce) { .glimpse, a.app, .arrow { transition: none; } a.app:hover .glimpse { transform: none; } .g-voyager .caret { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } .card:hover { transform: none; } }
 </style>
 </head>
 <body>
-<main class="bento">
-  <section class="tile intro">
-    <span class="day" id="day">hoy</span>
-    <div>
-      <h1>Universo</h1>
-      <p>Tu dinero en común, tus lecturas y tus metas, a un toque.</p>
-    </div>
-    <div class="dots" aria-hidden="true"><i style="background:#2F5BEA"></i><i style="background:#D9805F"></i><i style="background:#1C6E5A"></i></div>
-  </section>
+<h1>Universo</h1>
+<div class="clock" aria-hidden="true"><b id="time">9:41</b><span id="date">hoy</span></div>
 
-  <a class="tile app pulsar" href="https://pulsar-psi-six.vercel.app">
-    <div class="glimpse g-pulsar" aria-hidden="true">
-      <div class="phone">
-        <span class="eyebrow" id="pday">miércoles 1 de octubre</span>
-        <h3>Hoy</h3>
-        <div class="label">ia aplicada</div>
-        <div class="row done"><span class="tick"></span><span class="t">Inglés pasivo</span><span class="s">toque</span></div>
-        <div class="row"><span class="tick"></span><span class="t">Tema técnico</span><span class="s">2 h</span></div>
-        <div class="row"><span class="tick"></span><span class="t">Leer AI Engineering, cap. 1</span><span class="s">1 h</span></div>
-        <div class="month">
-          <div class="fig"><span>este mes</span><span><b>4 h 30 min</b> de 12 h</span></div>
-          <div class="bar"><i></i></div>
-        </div>
-      </div>
-    </div>
-    <div class="foot">
-      <div><div class="name">Pulsar</div><div class="what">Bitácora de metas: lo de hoy, la semana y el plan de cada mes.</div></div>
-      <span class="arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12 12 4M5.5 4H12v6.5"/></svg></span>
-    </div>
-  </a>
-
-  <a class="tile app voyager" href="https://reading-neon.vercel.app">
-    <div class="glimpse g-voyager" aria-hidden="true">
-      <div class="field"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg><span>thraldom</span><span class="caret"></span></div>
-      <div>
-        <div class="word">thraldom</div>
-        <div class="ipa">/ˈθrɔːldəm/</div>
-      </div>
-      <div>
-        <div class="pos">sustantivo</div>
-        <p class="def">Servidumbre; el estado de quien está bajo el poder de otro.</p>
-      </div>
-      <div class="quote">“…held in a <mark>thraldom</mark> of which he was hardly conscious.”</div>
-    </div>
-    <div class="foot">
-      <div><div class="name">Voyager</div><div class="what">Diccionario de lectura: una palabra sin soltar el libro.</div></div>
-      <span class="arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12 12 4M5.5 4H12v6.5"/></svg></span>
-    </div>
-  </a>
-
-  <a class="tile app orbit" href="https://our-piggy-bank.vercel.app">
-    <div class="glimpse g-orbit" aria-hidden="true">
-      <div>
-        <div class="k">fondo compartido · saldo</div>
-        <div class="bal">$ 2.450.000<small>COP</small></div>
-        <div class="who"><span style="background:#2F5BEA">W</span><span style="background:#D9805F">N</span><span style="background:#1C6E5A">+1</span></div>
-      </div>
-      <div class="chart">
-        <div><i style="height:46%"></i><span>may</span></div>
-        <div><i style="height:62%"></i><span>jun</span></div>
-        <div><i style="height:40%"></i><span>jul</span></div>
-        <div><i style="height:74%"></i><span>ago</span></div>
-        <div><i style="height:58%"></i><span>sep</span></div>
-        <div><i style="height:86%"></i><span>oct</span></div>
-      </div>
-    </div>
-    <div class="foot">
-      <div><div class="name">Orbit</div><div class="what">Fondo compartido: cuentas, movimientos y saldos entre varias personas.</div></div>
-      <span class="arrow" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12 12 4M5.5 4H12v6.5"/></svg></span>
-    </div>
-  </a>
-</main>
+<ul class="row">
+  <li>
+    <a class="card" href="https://our-piggy-bank.vercel.app">
+      <span class="ico" style="background:#2F5BEA" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="17" cy="17" r="5" fill="#fff"/><ellipse cx="17" cy="17" rx="14" ry="6" transform="rotate(-25 17 17)"/></svg></span>
+      <h2>Orbit</h2>
+      <p>El fondo compartido: cuentas y saldos entre varias personas.</p>
+      <span class="more" aria-hidden="true">Abrir ›</span>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="https://reading-neon.vercel.app">
+      <span class="ico" style="background:#1C1B16" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#D9805F" stroke-width="2.2"><path d="M6 8h9a3 3 0 0 1 3 3v15a2 2 0 0 0-2-2H6zM28 8h-9a3 3 0 0 0-3 3v15a2 2 0 0 1 2-2h10z"/></svg></span>
+      <h2>Voyager</h2>
+      <p>El diccionario de lectura: una palabra sin soltar el libro.</p>
+      <span class="more" aria-hidden="true">Abrir ›</span>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="https://pulsar-psi-six.vercel.app">
+      <span class="ico" style="background:#1C6E5A" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="17" cy="17" r="3" fill="#fff"/><circle cx="17" cy="17" r="8" opacity=".7"/><circle cx="17" cy="17" r="13" opacity=".4"/></svg></span>
+      <h2>Pulsar</h2>
+      <p>La bitácora de metas: hoy, la semana y el plan del mes.</p>
+      <span class="more" aria-hidden="true">Abrir ›</span>
+    </a>
+  </li>
+</ul>
 
 <script>
 (() => {
-  try {
-    const now = new Date();
-    const long = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long"}).format(now).replace(",", "");
-    document.getElementById("pday").textContent = long;
-    document.getElementById("day").textContent = long;
-  } catch (e) {}
+  const time = document.getElementById("time"), date = document.getElementById("date");
+  const tick = () => {
+    try {
+      const now = new Date();
+      time.textContent = new Intl.DateTimeFormat("es-CO", { hour: "numeric", minute: "2-digit" }).format(now);
+      date.textContent = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" }).format(now).replace(",", "");
+    } catch (e) {}
+  };
+  tick();
+  setInterval(tick, 15000);
 })();
 </script>
 </body>
