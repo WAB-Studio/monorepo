@@ -41,6 +41,14 @@
   min-block-size: 44px;
 }
 
+/* The commit and cancel buttons of a form drawn at 52px (`TareaNueva`). */
+.tap52.tap52 {
+  box-sizing: border-box;
+  --base-button-height: 52px;
+  min-inline-size: 48px;
+  min-block-size: 52px;
+}
+
 .block.block {
   inline-size: 100%;
 }
