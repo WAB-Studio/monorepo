@@ -288,6 +288,24 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 
 ## Decisions taken here
 
+- **The boards of «Lo que el critic encontró» are approved.** Drawn 2026-10-01, approved by the user the same day:
+  «Apruebo todos». `MesVolver`, `MetaSinMedida`, `MesesSinMedida`, `MetaMesCorrer`, `MesesCorrer`, `HoyTareaMes`
+  (page «El plan»); `ImportarRevisarSinTiempo`, `ImportarRevisarRepetida`, and `ImportarPlantillaError` redrawn with
+  «ver la plantilla» (page «Importar»); `MetasVacio` (page «Exportar»); `HoyVacioImportar` (page «Hoy»).
+- **A new person reaches the import from `/metas` and from the empty Hoy.** `/metas` with no goal ever stops
+  redirecting to `/metas/nueva` and draws `MetasVacio`; the empty Hoy draws `HoyVacioImportar`. Taken by the user
+  2026-10-01; it reverses the 2026-09-27 redirect below.
+- **A goal that measures nothing offers sub-tasks.** «con sub-tareas» shows there too, without hours, and «Otra
+  sub-tarea» closes a parent's children as in a measured goal. Taken by the user 2026-10-01.
+- **The AI read runs in production with the key reading uses.** Taken by the user 2026-10-01: «la misma de los toros»,
+  the reading app's key. Set as `OPENAI_API_KEY` on Vercel `pulsar`, production, the same day.
+- **The proposal to shift the plan shows on the goal and on the months list too** — one line on the goal's month block
+  and on that month's row in `/meses`, opening the same sheet. Not on Hoy. Taken by the user 2026-10-01 (critic's
+  option b). Needs a board.
+- **Hoy shows, under «este mes», the next undone task of each goal, with its mark.** Taken by the user 2026-10-01
+  (critic's option b); RNP-03's round-trip budget holds. Needs a board.
+- **The import review warns when an open goal has the same name, and leaves it unmarked.** Taken by the user
+  2026-10-01 (critic's option b); importing it on purpose stays possible. Needs a board.
 - **The light/dark control sits in the day's header** (RNP-08), a 44 px icon button at the top
   right. No `/cuenta` screen exists in this app. Taken by the user 2026-09-22; drawn on
   `Hoy.dc.html`, `HoyOscuro.dc.html` and every other day board the same day.
