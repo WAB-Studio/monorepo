@@ -58,6 +58,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.
 - `node_modules` hoists to the root. A script that names a binary by path reaches it as `../../node_modules/...`.
 - Promote nothing to `packages/` until a second app asks for it.
+- `apps/portal` is «Universo», one static home-screen page linking the three apps, live at https://universo-apps.vercel.app.
+  It has no `package.json` and no build. Git deploys are off; deploy it by hand from `apps/portal` with
+  `npx vercel deploy --prod --yes`. Update its links when an app's URL changes. Design: `docs/portal/DESIGN.md`.
 - `apps/voyager` is the reading dictionary. Its contract is `docs/voyager/SPEC.md`; its `RL` and `RNL` codes share no number with the finances `RF`/`RNF` series.
 - Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in
   by email first deploys. Without it the link lands on orbit's Site URL.
@@ -91,6 +94,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 - `apps/voyager` — «Diccionario de lectura», https://claude.ai/code/artifact/92f7291c-d0f3-4134-b652-be4affe98521
 - `apps/pulsar` — «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
+- `apps/portal` — «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
 - `apps/orbit` — **none yet.** Its screens were built before this rule. The next orbit screen opens
   one and names it here.
 - Add the URL here the day a canvas is created. A canvas nobody can find is a canvas nobody uses.
