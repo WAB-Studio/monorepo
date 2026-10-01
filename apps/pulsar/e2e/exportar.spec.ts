@@ -242,3 +242,61 @@ test.describe("the report page (RP-33, RP-35)", () => {
     }
   });
 });
+
+// `Exportar.dc.html` (module 137, RP-33, RP-37): `/metas` offers the export
+// beside the import under «el plan».
+test.describe("the way in from /metas (RP-33, RP-37)", () => {
+  test("«Exportar» opens the report; «Importar un plan» points at its page", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seed(db, person);
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas");
+      await expect(page.getByText("el plan", { exact: true })).toBeVisible();
+      const exportLink = page.getByRole("link", { name: /^Exportar/ });
+      await expect(exportLink).toContainText("un PDF con cada meta, su mes y lo que se arrastró");
+      const importLink = page.getByRole("link", { name: /^Importar un plan/ });
+      await expect(importLink).toContainText("pégalo o súbelo y revisa antes de crear");
+      await expect(importLink).toHaveAttribute("href", "/metas/importar");
+
+      // Below «Nueva meta», in the order the board draws.
+      const order = await page.locator("main a").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href")));
+      expect(order.indexOf("/metas/nueva")).toBeLessThan(order.indexOf("/exportar"));
+      expect(order.indexOf("/exportar")).toBeLessThan(order.indexOf("/metas/importar"));
+
+      await exportLink.click();
+      await page.waitForURL(/\/exportar$/);
+      await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByText(seeded.taskName, { exact: true })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("with every goal archived there is no «Exportar», and «Importar un plan» stays", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    await db`
+      insert into goals.goals (user_id, name, horizon, archived_at, created_at)
+      values (${person.id}, ${`Archivada ${Date.now()}`}, ${plusDays(60)}, now(), now() - interval '20 days')
+    `;
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas");
+      await expect(page).toHaveURL(/\/metas$/);
+      await expect(page.getByRole("link", { name: /^Importar un plan/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Exportar/ })).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+});

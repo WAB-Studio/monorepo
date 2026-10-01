@@ -47,6 +47,28 @@ export default async function GoalsIndexPage() {
         <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
       </Button>
 
+      <section>
+        <SectionLabel>{t("export.entry.section")}</SectionLabel>
+        {open.length + ended.length > 0 ? (
+          <Button asChild variant="outline" block>
+            <Link href="/exportar">
+              {t("export.entry.title")}
+              <Text variant="meta" end>
+                {t("export.entry.hint")}
+              </Text>
+            </Link>
+          </Button>
+        ) : null}
+        <Button asChild variant="outline" block>
+          <Link href="/metas/importar">
+            {t("import.entry.title")}
+            <Text variant="meta" end>
+              {t("import.entry.hint")}
+            </Text>
+          </Link>
+        </Button>
+      </section>
+
       {ended.length > 0 ? (
         <section>
           <SectionLabel>{t("goal.list.endedTitle")}</SectionLabel>
