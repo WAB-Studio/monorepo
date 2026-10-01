@@ -1,0 +1,75 @@
+{
+  "goals": [
+    {
+      "name": "IA aplicada",
+      "horizon": "2027-10-01",
+      "measure": {
+        "name": "horas de estudio",
+        "unit": "minutos"
+      },
+      "phases": [
+        {
+          "aim": "Evals y harness",
+          "startsOn": "2026-10-01",
+          "endsOn": "2026-12-31"
+        }
+      ],
+      "months": [
+        {
+          "month": "2026-10",
+          "amount": 720
+        },
+        {
+          "month": "2026-11",
+          "amount": 1200
+        }
+      ],
+      "commitments": [
+        {
+          "name": "Tema técnico",
+          "cadenceKind": "weekdays",
+          "cadenceWeekdays": [
+            2,
+            4
+          ],
+          "cadenceN": null,
+          "satisfaction": "quantity",
+          "targetQuantity": 120,
+          "unit": "minutos"
+        },
+        {
+          "name": "Inglés pasivo",
+          "cadenceKind": "daily",
+          "cadenceWeekdays": null,
+          "cadenceN": null,
+          "satisfaction": "tap",
+          "targetQuantity": null,
+          "unit": null
+        }
+      ],
+      "tasks": [
+        {
+          "name": "Leer AI Engineering cap. 1–4",
+          "month": "2026-10",
+          "estimate": 240,
+          "children": []
+        },
+        {
+          "name": "Tutor",
+          "month": "2026-10",
+          "estimate": null,
+          "children": [
+            {
+              "name": "Elegir tutor",
+              "estimate": 60
+            },
+            {
+              "name": "Sesiones 1–4",
+              "estimate": 360
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

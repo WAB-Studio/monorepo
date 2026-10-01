@@ -37,6 +37,14 @@ export { Sheet } from "./sheet";
 
 export { Field } from "./field";
 
+export { TextArea } from "./text-area";
+
+export { FilePick } from "./file-pick";
+
+export { Notice } from "./notice";
+
+export { CodeBlock } from "./code-block";
+
 export { Chip } from "./chip";
 
 export { Skeleton } from "./skeleton";

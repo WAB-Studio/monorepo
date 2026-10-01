@@ -214,6 +214,10 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 10».
 | `ImportarTope.dc.html` | ten AI reads today: tomorrow again; the template still reads |
 | `ImportarFormato.dc.html` | a file over 4 MB or of a kind not read: paste its text |
 
+- **The upload hint reads «PDF, texto o imagen · hasta 4 MB», without «Word».** The boards say «PDF, Word, texto o
+  imagen»; the model's file part takes PDF alone and a `.docx` answers `unreadableType` (module 151). Decided by the
+  coordinator 2026-10-01: the hint never promises a kind the route refuses.
+
 ## The boards that do not exist
 
 Say what is missing, so a gap nobody drew reads as a gap nobody needed.

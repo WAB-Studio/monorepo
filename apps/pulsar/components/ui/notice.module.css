@@ -1,0 +1,10 @@
+.notice {
+  box-sizing: border-box;
+  padding: 14px 16px;
+  background: var(--pulsar-raised);
+  border: 1.5px solid var(--pulsar-ink);
+  border-radius: 12px;
+  font-size: var(--pulsar-text-line-size);
+  line-height: 1.5;
+  color: var(--pulsar-ink);
+}
