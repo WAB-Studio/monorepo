@@ -6,7 +6,8 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 // RP-06 from the week (`Semana.dc.html`): a past day's label is the way into
 // that day's own screen; today's is plain text, a future day's is too. Each
 // test seeds its own goal, backdated so its commitment exists on every day
-// of the week, and drops it by the id it got back.
+// of the week, and drops it by the id it got back. A Monday's week holds no
+// past day: its run asserts no label is a link, every other run taps one.
 
 function shift(day: string, by: number): string {
   const date = civilDateToDate(day);
@@ -87,28 +88,33 @@ test("a past day of the week is a link to its own screen, today and a future day
 
 test("a tap on a past day from the week fills that day's dot on return (RP-06)", async ({ page, db, personId }) => {
   // The rule itself, every day of the week, is proven in
-  // `lib/day/week-href.test.ts`; only the tap needs a past day to exist.
-  test.skip(pastDays.length === 0, "a Monday's week holds no past day");
+  // `lib/day/week-href.test.ts`; only the tap needs a past day to exist. A
+  // Monday's week holds none: that run asserts no label is a way in.
   const name = `Compromiso semana ${Date.now()}`;
   const goalId = await seedGoal(db, personId, name);
-  const day = pastDays[pastDays.length - 1];
+  const day = pastDays.at(-1);
 
   try {
     await page.goto("/semana");
     const section = page.locator("section", { hasText: "Meta semana pasada" }).first();
     const dot = section.getByRole("img", { name: `${name}: pendiente` });
     await expect(dot).toHaveCount(weekDays.length);
-    const row = section.locator("div").filter({ has: page.getByRole("link", { name: openName(day) }) });
-    await expect(row.getByRole("img")).toHaveAttribute("data-state", "empty");
+    await expect(section.getByRole("link")).toHaveCount(pastDays.length);
+    await expect(section.getByRole("link", { name: openName(today) })).toHaveCount(0);
 
-    await section.getByRole("link", { name: openName(day) }).click();
-    await page.waitForURL(`**/dia/${day}`);
-    await page.locator("button", { hasText: name }).click();
-    await expect(page.locator("button", { hasText: name }).locator("svg")).toBeVisible();
+    if (day !== undefined) {
+      const row = section.locator("div").filter({ has: page.getByRole("link", { name: openName(day) }) });
+      await expect(row.getByRole("img")).toHaveAttribute("data-state", "empty");
 
-    await page.goto("/semana");
-    await expect(row.getByRole("img")).toHaveAttribute("data-state", "declared");
-    await expect(row.getByRole("img")).toHaveAccessibleName(`${name}: hecho`);
+      await section.getByRole("link", { name: openName(day) }).click();
+      await page.waitForURL(`**/dia/${day}`);
+      await page.locator("button", { hasText: name }).click();
+      await expect(page.locator("button", { hasText: name }).locator("svg")).toBeVisible();
+
+      await page.goto("/semana");
+      await expect(row.getByRole("img")).toHaveAttribute("data-state", "declared");
+      await expect(row.getByRole("img")).toHaveAccessibleName(`${name}: hecho`);
+    }
   } finally {
     await deleteGoal(db, personId, goalId);
   }

@@ -77,10 +77,11 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
     await expect(page.getByRole("img", { name: new RegExp(`^${weekly}`) })).toHaveCount(0);
     await expect(page.getByRole("img", { name: new RegExp(`^${monthly}`) })).toHaveCount(0);
     await expect(page.getByRole("img", { name: `${daily}: hecho` })).toHaveCount(inWeek.length);
-    if (monday !== today) {
-      await expect(page.getByText("1 de 1", { exact: true }).locator("visible=true").first()).toBeVisible();
-      await expect(page.getByText("3 de 3", { exact: true }).locator("visible=true")).toHaveCount(0);
-    }
+    // Only a lived day reads «1 de 1» (the daily, done): a Monday has none, so none reads it.
+    await expect(page.getByText("1 de 1", { exact: true }).locator("visible=true")).toHaveCount(
+      inWeek.filter((day) => day < today).length,
+    );
+    await expect(page.getByText("3 de 3", { exact: true }).locator("visible=true")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     await page.screenshot({ path: "private/screenshots/semana-flexible-360.png", fullPage: true });
 
@@ -94,11 +95,9 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
       table.locator("tr", { has: page.getByRole("rowheader", { name: new RegExp(`^${name}`) }) });
     await expect(rowOf(weekly).getByRole("rowheader")).toContainText(`3 veces por semana · ${weekProgress}`);
     await expect(rowOf(monthly).getByRole("rowheader")).toContainText(`4 al mes · ${monthProgress}`);
-    for (const [index, day] of week.entries()) {
-      const cells = rowOf(weekly).locator("td").nth(index).getByRole("img");
-      if (inWeek.includes(day)) await expect(cells).toHaveAttribute("data-state", "declared");
-      else await expect(cells).toHaveCount(0);
-    }
+    const cellsOf = (day: string) => rowOf(weekly).locator("td").nth(week.indexOf(day)).getByRole("img");
+    for (const day of inWeek) await expect(cellsOf(day)).toHaveAttribute("data-state", "declared");
+    for (const day of week.filter((other) => !inWeek.includes(other))) await expect(cellsOf(day)).toHaveCount(0);
     // Only the daily commitment's slots are in «hechos»: today it is 1 of 1.
     const todayIndex = week.indexOf(today);
     await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("1 de 1");
@@ -165,9 +164,11 @@ test("Hoy carries a flexible commitment's period count on its row and asks it on
   }
   await seed(weekly, "times_per_week", 3, inWeek);
   await seed(monthly, "times_per_month", 4, inMonth);
-  // Met in an earlier week of the month: not asked today, drawn quiet.
-  const earlier = `${month}-01`;
-  if (earlier < week[0]) await seed(met, "times_per_month", 1, [earlier]);
+  // Met on the month's first, quota 1. Any day after the 1st does not ask it
+  // again and draws it quiet; the 1st itself still asks, so it reads its count.
+  const first = `${month}-01`;
+  const quiet = first < today;
+  await seed(met, "times_per_month", 1, [first]);
 
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
@@ -178,7 +179,8 @@ test("Hoy carries a flexible commitment's period count on its row and asks it on
     const row = (name: string) => page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row(weekly)).toContainText(`${inWeek.length} de 3 esta semana`);
     await expect(row(monthly)).toContainText(`${inMonth.length} de 4 este mes`);
-    if (earlier < week[0]) await expect(row(met)).toContainText("cumplida este mes · 1 de 1");
+    await expect(row(met)).toContainText(quiet ? "cumplida este mes · 1 de 1" : "1 de 1 este mes");
+    await expect(row(met).filter({ hasText: /cumplida/ })).toHaveCount(quiet ? 1 : 0);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;

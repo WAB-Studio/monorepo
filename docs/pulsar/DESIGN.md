@@ -533,6 +533,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `SemanaFlexible.dc.html` and `SemanaEscritorioFlexible.dc.html`, approved by the user 2026-09-29.
   Decided 2026-09-29 by the user.
 - **A one-column screen caps at 640 px from 1024.** Decided 2026-09-29 by the user.
+- **From 700 to 1023 px the phone face's column holds 600 px of content** (640 minus 20 px of padding a side); from 1024 it is 640. Kept as built, not widened. Decided 2026-09-30 by the user, after the suite review found no test measured the range.
 - **«N al mes» is the fifth cadence chip** and swaps the row for «veces al mes». Board
   `CompromisoNuevoMes.dc.html`. Decided 2026-09-29 by the user.
 - **Hoy builds what `HoyEscritorio.dc.html` draws**: each row's cadence, a flexible

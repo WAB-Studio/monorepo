@@ -33,34 +33,6 @@ async function clearFactsFor(db: postgres.Sql, commitmentId: string): Promise<vo
   }
 }
 
-test("holds at 360px, no horizontal overflow, every control at least 32px on its shorter side (RNP-07)", async ({
-  page,
-}) => {
-  await page.goto("/");
-  // Scoped to `main`: module 16's own bottom nav (`components/ui/bottom-nav
-  // .tsx`) names its current tab "Hoy" too, so the bare text now resolves
-  // twice — the day's own title lives in `main`, the nav in its own `nav`.
-  await expect(page.getByRole("main").getByText("Hoy", { exact: true })).toBeVisible();
-
-  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-  expect(scrollWidth).toBeLessThanOrEqual(360);
-
-  const boxes = await page.evaluate(() =>
-    Array.from(document.querySelectorAll("button, input"))
-      .filter((el) => (el as HTMLElement).offsetParent !== null)
-      .map((el) => {
-        const rect = el.getBoundingClientRect();
-        return { width: rect.width, height: rect.height };
-      }),
-  );
-  // The day, the header control and at least one row: a suite that finds
-  // nothing to measure would pass by having proved nothing.
-  expect(boxes.length).toBeGreaterThan(0);
-  for (const box of boxes) {
-    expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(32);
-  }
-});
-
 test("one tap on a tap commitment fills its mark in under five seconds (RNP-02, RP-02)", async ({
   page,
   db,

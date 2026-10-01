@@ -356,11 +356,44 @@ jobs:
           done
           echo "the server never answered"; tail -50 /tmp/pulsar.log; exit 1
 
+      # Same build, a Postgres nothing listens on: the process env wins over
+      # `.env.local`. `/entrar` is static, so it answers without the database.
+      - name: Start the app with an unreachable database and wait for it to answer
+        run: |
+          DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:1/postgres \
+            npm run start -w apps/pulsar -- --port 3217 > /tmp/pulsar-down.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3217/entrar; then
+              echo "up after ${SECONDS}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "the down server never answered"; tail -50 /tmp/pulsar-down.log; exit 1
+
+      # Same build, every `reading_lookups` read rejecting
+      # (`apps/pulsar/lib/evidence/fault-seam.ts`), for `fuente-caida.spec.ts`.
+      # Never set in `build-pulsar`, `pulsar-checks` or on Vercel.
+      - name: Start the app with an unreadable evidence source and wait for it to answer
+        run: |
+          PULSAR_FAULT_SEAM=reading_lookups \
+            npm run start -w apps/pulsar -- --port 3227 > /tmp/pulsar-fault.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3227/entrar; then
+              echo "up after ${SECONDS}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "the fault server never answered"; tail -50 /tmp/pulsar-fault.log; exit 1
+
       # Its global setup (`scripts/harness/e2e-run.ts`) opens the one harness
       # run, mints and seeds lane 8's person under it — no typed address, no
       # email sent (RNP-09) — and its teardown drops every identity and closes
       # the run, so the reap below is never blocked by this job's own run.
-      - run: npm run check:e2e -w apps/pulsar
+      - name: Run the e2e suite, caida and fuente projects included
+        env:
+          PULSAR_DOWN_BASE_URL: http://localhost:3217
+          PULSAR_FAULT_BASE_URL: http://localhost:3227
+        run: npm run check:e2e -w apps/pulsar
 
       # The reaper lives in `apps/orbit` — `harness.identities` and
       # `harness.runs` carry no app column, so the one script that owns
@@ -402,12 +435,108 @@ jobs:
           name: pulsar-log
           path: /tmp/pulsar.log
 
+      - name: Upload the down server log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-down-log
+          path: /tmp/pulsar-down.log
+
+      - name: Upload the fault server log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-fault-log
+          path: /tmp/pulsar-fault.log
+
       - name: Upload the Playwright artefacts
         if: failure()
         uses: actions/upload-artifact@v5
         with:
           name: pulsar-playwright-results
           path: apps/pulsar/private/playwright-results
+
+  # `check:day`, `check:goal` and `check:goal-actions` under one harness run of
+  # their own (`scripts/harness/checks-run.ts`), never `pulsar-e2e`'s person:
+  # its teardown drops it. A job of its own so the two run side by side. Lane
+  # 7: local lanes are 1-5, `pulsar-e2e` is 8, orbit's `e2e` is 9, so the
+  # shared `harness-member-7` never meets another job's seeds.
+  pulsar-checks:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       needs.changes.outputs.pulsar == 'true')
+    timeout-minutes: 15
+    concurrency:
+      group: pulsar-checks
+      cancel-in-progress: false
+    env:
+      HARNESS_LANE: 7
+      PULSAR_BASE_URL: http://localhost:3206
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Write .env.local from the secrets
+        working-directory: apps/pulsar
+        run: |
+          missing=""
+          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
+                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+            printf '%s=%s\n' "$name" "${!name}" >> .env.local
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing repository secrets:$missing"
+            exit 1
+          fi
+
+      # The three variables `harness:token`'s import chain reads
+      # (`fixtures.ts`: DATABASE_URL; `session.ts`: the Supabase URL and key).
+      - name: Write apps/orbit/.env.local for harness:token
+        working-directory: apps/orbit
+        run: |
+          printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env.local
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_URL" >> .env.local
+          printf 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" >> .env.local
+
+      # Creates or refreshes lane 7's shared pair; idempotent.
+      - run: npm run harness:token -w apps/orbit
+
+      - run: npm run build -w apps/pulsar
+
+      - name: Start the app and wait for it to answer
+        run: |
+          npm run start -w apps/pulsar -- --port 3206 > /tmp/pulsar-checks.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3206/; then
+              echo "up after ${SECONDS}s"; exit 0
+            fi
+            sleep 2
+          done
+          echo "the server never answered"; tail -50 /tmp/pulsar-checks.log; exit 1
+
+      - name: Run the three checks under one harness run
+        working-directory: apps/pulsar
+        run: node --import tsx --env-file=.env.local scripts/harness/checks-run.ts
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-checks-log
+          path: /tmp/pulsar-checks.log
 
   e2e:
     runs-on: ubuntu-latest

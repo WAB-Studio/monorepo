@@ -7,6 +7,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 // step back from Hoy. Each test seeds its own goal and commitment straight
 // into the database — backdated, since `declareFact` refuses a day before a
 // commitment existed — and drops the goal by the id it got back.
+// Paths by day: none; «empezó el» names a day inside the seven back, in any week.
 
 // Seven, as `PAST_DAY_LIMIT` (`lib/validation/fact.ts`) says: typed again
 // here on purpose, so a limit changed there is a limit this spec notices.
@@ -217,26 +218,34 @@ test("a commitment created today and a goal opened today are absent from yesterd
 });
 
 test("a day before every goal this person holds says it asked for nothing, with no way to create one (RNP-07)", async ({
-  page,
+  person,
+  browser,
   db,
-  personId,
 }) => {
   const day = pastDay(LIMIT);
-  const [{ earliest }] = await db<{ earliest: string | null }[]>`
-    select min((created_at at time zone 'America/Bogota')::date)::text as earliest
-    from goals.goals where user_id = ${personId} and archived_at is null
-  `;
-  // Another spec's backdated goal running beside this one would draw here.
-  test.skip(earliest !== null && earliest <= day, "a goal already open that day");
+  const opened = pastDay(LIMIT - 2);
+  const stamp = Date.now();
+  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(civilDateToDate(opened));
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  try {
+    // Opened after `day`, so the day before it draws the line naming it.
+    await db`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${`Tardía ${stamp}`}, ${pastDay(-60)}, ${new Date(`${opened}T17:00:00Z`)})
+    `;
+    const page = await context.newPage();
+    await page.goto(`/dia/${day}`);
+    await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
+    await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
+    await expect(page.getByText(`tardía ${stamp} empezó el ${weekday} ${civilDateToDate(opened).getUTCDate()}`)).toBeVisible();
 
-  await page.goto(`/dia/${day}`);
-  await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
-  await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
-  if (earliest !== null) await expect(page.getByText(/empezó el/)).toBeVisible();
-
-  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-  expect(scrollWidth).toBeLessThanOrEqual(360);
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(360);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
 });
 
 test("the seventh day back draws why there is no step further, the sixth draws the step (RP-06)", async ({

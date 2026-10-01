@@ -1,4 +1,3 @@
-
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
@@ -7,6 +6,8 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 // `/sueltas` holds the one-offs dated after today under «programadas»: each
 // is moved, done or deleted from there, and a done one says where it went
 // (`SueltasProgramadas.dc.html`, `SueltaMover.dc.html`; RP-21, RP-22, RNP-07).
+// Paths by day: tomorrow reads weekday and day with no month Monday to Saturday;
+// on a Sunday it falls in next week and reads its month.
 
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
@@ -284,7 +285,7 @@ test("a scheduled day names its month only when it falls outside this week: «ma
   ids.push(await seed(db, person.id, `Lejana ${stamp}`, far));
   // Monday to Sunday is one week: tomorrow is in it unless today is Sunday.
   const sunday = civilDateToDate(todayInZone()).getUTCDay() === 0;
-  if (!sunday) ids.push(await seed(db, person.id, `Cercana ${stamp}`, plusDays(1)));
+  ids.push(await seed(db, person.id, `Cercana ${stamp}`, plusDays(1)));
 
   try {
     const page = await context.newPage();
@@ -294,14 +295,14 @@ test("a scheduled day names its month only when it falls outside this week: «ma
     await expect(farRow).toBeVisible();
     expect(await farRow.innerText()).toContain(farWords);
 
-    if (!sunday) {
-      const nearRow = page.getByRole("button", { name: new RegExp(`^Cercana ${stamp}`) });
-      await expect(nearRow).toBeVisible();
-      const near = await nearRow.innerText();
-      expect(near).toContain(words(plusDays(1)));
-      expect(near).not.toMatch(new RegExp(`${words(plusDays(1))} de`));
-      for (const month of MONTHS) expect(near).not.toContain(month);
-    }
+    const tomorrow = plusDays(1);
+    const nearRow = page.getByRole("button", { name: new RegExp(`^Cercana ${stamp}`) });
+    await expect(nearRow).toBeVisible();
+    const near = await nearRow.innerText();
+    expect(near).toContain(words(tomorrow));
+    const month = MONTHS[civilDateToDate(tomorrow).getUTCMonth()];
+    expect(near.includes(`${words(tomorrow)} de ${month}`)).toBe(sunday);
+    expect(MONTHS.filter((name) => near.includes(name))).toEqual(sunday ? [month] : []);
   } finally {
     await context.close();
     await db`delete from goals.one_offs where id in ${db(ids)}`;

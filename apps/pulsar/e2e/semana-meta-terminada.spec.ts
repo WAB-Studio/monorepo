@@ -2,11 +2,14 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // Semana says when a goal ended (`SemanaMetaTerminada.dc.html`): «terminó el
 // <día> · ver» under its name, never «ayer». Each test seeds a person of its
-// own and horizons relative to today.
+// own and horizons relative to today. A goal whose horizon is today ended
+// yesterday: on a Monday that is last week and the line is absent (RP-27), so
+// every test asserts the line's count for the day it runs. Runs on a
+// Tuesday to Sunday draw the line; a Monday run asserts its absence.
 
 function shift(day: string, by: number): string {
   const date = civilDateToDate(day);
@@ -17,6 +20,10 @@ function shift(day: string, by: number): string {
 const today = todayInZone();
 // 0 is Monday.
 const todayIndex = (civilDateToDate(today).getUTCDay() + 6) % 7;
+// Yesterday belongs to this week only after a Monday.
+const endedDrawn = todayIndex !== 0;
+// Times an ended goal's name is visible on Semana when it is drawn.
+const NAME_DRAWS = 1;
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function dayWords(day: string): string {
@@ -73,19 +80,28 @@ for (const width of [360, 1280]) {
     person,
     db,
   }) => {
-    // Yesterday was Sunday: its goal ended before this week and is not drawn.
-    test.skip(todayIndex === 0, "no day of this week is over on a Monday");
     await withPerson(browser, baseURL, person, db, width, async (page, personId) => {
-      const name = `Meta terminada ${Date.now()}`;
+      const stamp = Date.now();
+      const name = `Meta terminada ${stamp}`;
+      const openName = `Meta viva ${stamp}`;
       const lastDay = shift(today, -1);
+      await seedGoal(db, personId, openName, shift(today, 30));
       const id = await seedGoal(db, personId, name, today);
       await open(page);
-      await expect(page.getByText(`terminó el ${dayWords(lastDay)} ·`).filter({ visible: true })).toHaveCount(1);
+      // Beside it, the open goal always draws: an absent line is not an empty page.
+      await expect(page.getByText(openName).filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByText(`terminó el ${dayWords(lastDay)} ·`).filter({ visible: true })).toHaveCount(
+        endedDrawn ? 1 : 0,
+      );
       await expect(page.getByText(/terminó ayer/)).toHaveCount(0);
       const link = page.getByRole("link", { name: `Abrir ${name}` }).filter({ visible: true });
-      await expect(link).toHaveText("ver");
-      await link.click();
-      await expect(page).toHaveURL(new RegExp(`/metas/${id}$`));
+      await expect(link).toHaveCount(endedDrawn ? 1 : 0);
+      await expect(page.getByText(name).filter({ visible: true })).toHaveCount(endedDrawn ? NAME_DRAWS : 0);
+      if (endedDrawn) {
+        await expect(link).toHaveText("ver");
+        await link.click();
+        await expect(page).toHaveURL(new RegExp(`/metas/${id}$`));
+      }
     });
   });
 
@@ -95,9 +111,11 @@ for (const width of [360, 1280]) {
     person,
     db,
   }) => {
-    test.skip(todayIndex === 0, "no day of this week is over on a Monday");
     await withPerson(browser, baseURL, person, db, width, async (page, personId) => {
-      const name = `Meta flexible ${Date.now()}`;
+      const stamp = Date.now();
+      const name = `Meta flexible ${stamp}`;
+      const openName = `Meta viva ${stamp}`;
+      await seedGoal(db, personId, openName, shift(today, 30));
       const id = await seedGoal(db, personId, name, today);
       await db`delete from goals.commitments where goal_id = ${id}`;
       await db`
@@ -105,10 +123,36 @@ for (const width of [360, 1280]) {
         values (${personId}, ${id}, 'Empuje', 'times_per_week', 3, 'tap', ${new Date(Date.now() - 60 * 86_400_000)})
       `;
       await open(page);
+      await expect(page.getByText(openName).filter({ visible: true }).first()).toBeVisible();
       await expect(
         page.getByText(`terminó el ${dayWords(shift(today, -1))} ·`).filter({ visible: true }),
-      ).toHaveCount(1);
-      await expect(page.getByRole("link", { name: `Abrir ${name}` }).filter({ visible: true })).toHaveText("ver");
+      ).toHaveCount(endedDrawn ? 1 : 0);
+      const link = page.getByRole("link", { name: `Abrir ${name}` }).filter({ visible: true });
+      await expect(link.filter({ hasText: "ver" })).toHaveCount(endedDrawn ? 1 : 0);
+      await expect(link).toHaveCount(endedDrawn ? 1 : 0);
+      await expect(page.getByText(name).filter({ visible: true })).toHaveCount(endedDrawn ? NAME_DRAWS : 0);
+    });
+  });
+
+  test(`at ${width} a goal whose last day was last Sunday leaves the week: no name, no line`, async ({
+    browser,
+    baseURL,
+    person,
+    db,
+  }) => {
+    await withPerson(browser, baseURL, person, db, width, async (page, personId) => {
+      const stamp = Date.now();
+      const name = `Meta semana pasada ${stamp}`;
+      const openName = `Meta viva ${stamp}`;
+      // The horizon is the week's own Monday: the goal's last day is Sunday.
+      const [monday] = weekOf(today);
+      await seedGoal(db, personId, openName, shift(today, 30));
+      await seedGoal(db, personId, name, monday);
+      await open(page);
+      await expect(page.getByText(openName).filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByText(name).filter({ visible: true })).toHaveCount(0);
+      await expect(page.getByText(/terminó/).filter({ visible: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: `Abrir ${name}` })).toHaveCount(0);
     });
   });
 
