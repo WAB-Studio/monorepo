@@ -34,7 +34,7 @@ import {
 // is only known once the goals query resolves, and waiting on that would
 // turn this file's own `Promise.all` into the chain RNP-03 forbids.
 
-type GoalRow = {
+export type GoalRow = {
   id: string;
   name: string;
   horizon: string;
@@ -53,11 +53,11 @@ type GoalRow = {
 // mapping; `source_label_key` widens `rows.ts`'s own `CommitmentRow` and is
 // what lets the screen say which source an evidence commitment names (RP-09)
 // — a catalogue key, never a sentence (RNP-01).
-type CommitmentRow = BaseCommitmentRow & { source_label_key: string | null };
+export type CommitmentRow = BaseCommitmentRow & { source_label_key: string | null };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
 // bare quantity, never its own unit.
-type FactRow = {
+export type FactRow = {
   commitment_id: string | null;
   day: string;
   written_at: string;
@@ -83,7 +83,7 @@ type GoalQueryRow = {
 
 // A one-off of the goal; `done_on` is the day of its own fact, null while
 // undone.
-type TaskRow = {
+export type TaskRow = {
   id: string;
   parent_id: string | null;
   name: string;
@@ -335,7 +335,7 @@ function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<st
  * list for `measureTotal` and hands it whole to `measureByWeek` for `weeks`,
  * so the two never read `bySourceKey` under two different dedupes.
  */
-function evidenceDaysForMeasure(
+export function evidenceDaysForMeasure(
   goal: GoalRow,
   commitments: CommitmentRow[],
   bySourceKey: Record<string, EvidenceDay[]>,
@@ -345,6 +345,95 @@ function evidenceDaysForMeasure(
     for (const day of bySourceKey[key] ?? []) days.push(day);
   }
   return days;
+}
+
+/**
+ * Everything derived from one goal's rows and its evidence: the total, the
+ * months, the current month's line and the weeks. `loadGoal` and
+ * `lib/queries/report.ts` both call it, so a figure the report prints is the
+ * one the goal's own screen reads. `evidence: null` is a source that could not
+ * be read: the declared half alone (RNP-04).
+ */
+export function goalFigures(input: {
+  goal: GoalRow;
+  phases: Phase[];
+  commitments: CommitmentRow[];
+  facts: FactRow[];
+  budgets: MonthBudget[];
+  tasks: TaskRow[];
+  evidence: Record<string, EvidenceDay[]> | null;
+  today: string;
+}): {
+  tasks: Task[];
+  measureTotal: number;
+  months: MonthRow[];
+  month: GoalView["month"];
+  weeks: ReviewWeek[];
+} {
+  const { goal, phases, commitments, budgets, evidence, today } = input;
+  // A one-off's fact carries no `commitment_id`, and no unit to feed the
+  // measure with; only a commitment's own quantity ever can (RP-14).
+  const facts = input.facts
+    .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+    .map(toDeclaredFact);
+
+  // The same civil-day conversion `goalSpan`'s own SQL runs
+  // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
+  // one row this statement already carries: week 1 opens the day the goal
+  // was created (decided by the user 2026-09-28), never a second query.
+  const openedOn = civilDateInZone(new Date(goal.created_at));
+  const tasks: Task[] = input.tasks.map((task) => ({
+    id: task.id,
+    parentId: task.parent_id,
+    name: task.name,
+    plannedMonth: task.planned_month,
+    day: task.day,
+    estimate: task.estimate,
+    doneOn: task.done_on,
+  }));
+  // A done task's estimate counts as declared quantity (RP-36): feeds the
+  // measure alone, never a commitment's slot.
+  const measureFacts = [...facts, ...estimateFacts(tasks, goal.measure_unit)];
+
+  // Null until the first quantity commitment names it (§0.3, 3): nothing to
+  // sum into yet, so the total stays zero rather than matching facts with no
+  // unit of their own against a measure the goal does not have.
+  const declaredTotal = goal.measure_unit ? measureOf(goal.measure_unit, measureFacts) : 0;
+  const evidenceDays = evidence ? evidenceDaysForMeasure(goal, commitments, evidence) : [];
+  const evidenceTotal = evidenceDays.reduce((total, day) => total + day.quantity, 0);
+
+  const months = monthRows({
+    openedOn,
+    horizon: goal.horizon,
+    today,
+    budgets,
+    reached: reachedByMonth({ unit: goal.measure_unit, facts: measureFacts, evidence: evidenceDays }),
+  });
+  const thisMonth = months.find((entry) => entry.current);
+  const month =
+    goal.measure_unit === null || !thisMonth
+      ? null
+      : {
+          month: thisMonth.month,
+          ...monthLine({
+            month: thisMonth.month,
+            today,
+            budget: budgets.find((budget) => budget.month === monthOf(today)) ?? null,
+            reached: thisMonth.reached,
+          }),
+        };
+
+  const weeks = measureByWeek({
+    openedOn,
+    horizon: goal.horizon,
+    today,
+    unit: goal.measure_unit,
+    facts: measureFacts,
+    evidence: evidenceDays,
+    phases,
+  });
+
+  return { tasks, measureTotal: declaredTotal + evidenceTotal, months, month, weeks };
 }
 
 /**
@@ -388,69 +477,15 @@ export async function loadGoal(
   const commitments = row.commitments.map((commitment) =>
     toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
   );
-  // A one-off's fact carries no `commitment_id`, and no unit to feed the
-  // measure with; only a commitment's own quantity ever can (RP-14).
-  const facts = row.facts
-    .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
-    .map(toDeclaredFact);
-
-  // The same civil-day conversion `goalSpan`'s own SQL runs
-  // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
-  // one row this statement already carries: week 1 opens the day the goal
-  // was created (decided by the user 2026-09-28), never a second query.
-  const openedOn = civilDateInZone(new Date(row.goal.created_at));
-  const tasks: Task[] = row.tasks.map((task) => ({
-    id: task.id,
-    parentId: task.parent_id,
-    name: task.name,
-    plannedMonth: task.planned_month,
-    day: task.day,
-    estimate: task.estimate,
-    doneOn: task.done_on,
-  }));
-  // A done task's estimate counts as declared quantity (RP-36): feeds the
-  // measure alone, never a commitment's slot.
-  const measureFacts = [...facts, ...estimateFacts(tasks, row.goal.measure_unit)];
-
-  // Null until the first quantity commitment names it (§0.3, 3): nothing to
-  // sum into yet, so the total stays zero rather than matching facts with no
-  // unit of their own against a measure the goal does not have.
-  const declaredTotal = row.goal.measure_unit ? measureOf(row.goal.measure_unit, measureFacts) : 0;
-  const evidenceDays =
-    evidenceOutcome.status === "read"
-      ? evidenceDaysForMeasure(row.goal, row.commitments, evidenceOutcome.bySourceKey)
-      : [];
-  const evidenceTotal = evidenceDays.reduce((total, day) => total + day.quantity, 0);
-
-  const months = monthRows({
-    openedOn,
-    horizon: row.goal.horizon,
-    today,
-    budgets: row.budgets,
-    reached: reachedByMonth({ unit: row.goal.measure_unit, facts: measureFacts, evidence: evidenceDays }),
-  });
-  const thisMonth = months.find((entry) => entry.current);
-  const currentMonth =
-    row.goal.measure_unit === null || !thisMonth
-      ? null
-      : {
-          month: thisMonth.month,
-          ...monthLine({
-            month: thisMonth.month,
-            today,
-            budget: row.budgets.find((budget) => budget.month === monthOf(today)) ?? null,
-            reached: thisMonth.reached,
-          }),
-        };
-
-  const weeks = measureByWeek({
-    openedOn,
-    horizon: row.goal.horizon,
-    today,
-    unit: row.goal.measure_unit,
-    facts: measureFacts,
-    evidence: evidenceDays,
+  const { tasks, measureTotal, months, month: currentMonth, weeks } = goalFigures({
+    goal: row.goal,
     phases,
+    commitments: row.commitments,
+    facts: row.facts,
+    budgets: row.budgets,
+    tasks: row.tasks,
+    evidence: evidenceOutcome.status === "read" ? evidenceOutcome.bySourceKey : null,
+    today,
   });
 
   return {
@@ -462,7 +497,7 @@ export async function loadGoal(
     measureName: row.goal.measure_name,
     measureUnit: row.goal.measure_unit,
     archivedAt: row.goal.archived_at,
-    measureTotal: declaredTotal + evidenceTotal,
+    measureTotal,
     phases,
     commitments,
     weeks,
