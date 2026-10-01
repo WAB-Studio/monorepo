@@ -133,6 +133,24 @@ test("monthList: hasAmount reads the estimate, a parent's through its children",
   assert.deepEqual(by, { bare: false, empty: false, p: true, est: true });
 });
 
+test("monthList: hasAmount on a month's own items reads the same way", () => {
+  const own = { plannedMonth: NOV };
+  const tasks = [
+    task("p1", own),
+    task("p1c", { parentId: "p1", estimate: 30 }),
+    task("p2", own),
+    task("p2c", { parentId: "p2" }),
+    task("leaf", { ...own, estimate: 10 }),
+    task("bare", own),
+    task("pe", { ...own, estimate: 50 }),
+    task("pec", { parentId: "pe" }),
+  ];
+  const list = monthList(tasks, NOV, "2026-11-15");
+  assert.ok(list.every((i) => i.carriedFrom === null));
+  const by = Object.fromEntries(list.map((i) => [i.task.id, i.hasAmount]));
+  assert.deepEqual(by, { p1: true, p2: false, leaf: true, bare: false, pe: false });
+});
+
 test("carryShare: October with 44 h planned and 12 h undone reads 12 of 44", () => {
   assert.deepEqual(carryShare(october(), OCT), { carried: 12, planned: 44 });
 });
