@@ -85,14 +85,15 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     const goalLeft = await box(page.getByText(`Meta con cifra ${stamp}`, { exact: true }));
     const goalPlain = await box(page.getByText(`Meta sin cifra ${stamp}`, { exact: true }));
     // The figure is named by its unit, never by the goal's `measure_name`.
-    const label = page.getByText("min", { exact: true });
+    // The week figure now prints «12 min» itself (RP-35): the label is the first «min».
+    const label = page.getByText("min", { exact: true }).first();
     const figure = await box(label);
     const sueltas = await box(page.getByText("Sueltas", { exact: true }));
     const waiting = await box(page.getByRole("link", { name: "2 esperan" }));
     const doneLabel = await box(page.getByText("Hechas hoy", { exact: true }));
 
     // The figure card carries the number the review's current week reads.
-    const card = page.locator("section, div").filter({ has: label }).last();
+    const card = page.getByText("esta semana", { exact: true }).locator("xpath=ancestor::div[.//a][1]");
     await expect(card).toContainText(`${revisionNumber}`);
     await expect(card).toContainText("esta semana");
     await expect(card.getByRole("link", { name: "Ver por semana" })).toHaveAttribute(

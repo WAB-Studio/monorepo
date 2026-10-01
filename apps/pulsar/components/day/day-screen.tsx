@@ -5,6 +5,7 @@ import { Button, Face, Figure, Flex, Page, Panel, SectionLabel, Split, Text } fr
 import { dayPhrase as dayPhraseOf, endedPhrase } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
 import { tallyDay } from "@/lib/day/tally";
+import { formatQuantity } from "@/lib/units/time";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -312,6 +313,46 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // One card per open goal that has a measure; a goal without one draws none.
   const figures = goals.filter((goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined);
 
+  // Drawn inside `goalless`, so only on today (RP-28), never on a past day.
+  // A goal with no amount this month draws nothing.
+  const monthGoals = goals.filter(
+    (goal) => goal.measureUnit !== null && loaded.monthLine[goal.id]?.planned != null,
+  );
+
+  // The same two lines on the phone block and in the desktop card: reached
+  // «de» planned, and from the 20th the pace in ink, never an alarm.
+  const units = await getTranslations("units");
+  const timeWords = {
+    h: (h: string) => units("h", { h }),
+    min: (min: string) => units("min", { min }),
+    join: (h: string, min: string) => units("join", { h, min }),
+  };
+  const monthLines = (goal: (typeof goals)[number]) => {
+    const line = loaded.monthLine[goal.id];
+    const planned = line.planned as number;
+    return (
+      <>
+        <Flex align="baseline" gap="2" wrap="wrap">
+          <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
+          <Text variant="meta" tone="muted">
+            {t("day.monthLine.of", {
+              planned: formatQuantity(planned, goal.measureUnit ?? "", timeWords),
+            })}
+          </Text>
+        </Flex>
+        {line.underPace ? (
+          <Text as="p" variant="meta">
+            {t("day.monthLine.pace", {
+              day: Number(day.slice(8, 10)),
+              percent: Math.floor((line.reached * 100) / planned),
+              threshold: 60,
+            })}
+          </Text>
+        ) : null}
+      </>
+    );
+  };
+
   // A one-off belonging to nothing (RP-20) has no goal section to draw
   // under, so it gets a group of its own — always on screen, even with
   // no goal open yet, because RP-19 asks for no goal behind it either.
@@ -322,11 +363,17 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           <Face on="desktop">
             <SectionLabel>{goal.measureUnit}</SectionLabel>
             <Flex align="baseline" gap="2">
-              <Figure value={weekMeasure[goal.id]} />
+              <Figure value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
               <Text variant="meta" tone="muted">
                 {t("day.weekFigure.caption")}
               </Text>
             </Flex>
+            {monthGoals.includes(goal) ? (
+              <>
+                <SectionLabel>{t("day.monthLine.title")}</SectionLabel>
+                {monthLines(goal)}
+              </>
+            ) : null}
             <Button asChild tap={44} variant="ghost">
               <Link href={`/metas/${goal.id}/revision`}>
                 <Text variant="meta" tone="accent">
@@ -337,6 +384,23 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           </Face>
         </Panel>
       ))}
+      {monthGoals.length > 0 ? (
+        <Face on="phone">
+          <Panel as="div">
+            <section>
+              <SectionLabel>{t("day.monthLine.title")}</SectionLabel>
+              {monthGoals.map((goal) => (
+                <div key={goal.id}>
+                  <Text as="p" variant="name">
+                    {goal.name}
+                  </Text>
+                  {monthLines(goal)}
+                </div>
+              ))}
+            </section>
+          </Panel>
+        </Face>
+      ) : null}
       <Panel as="div">
         <section>
           <Flex justify="between" align="center" gap="2" mb={{ initial: "0", lg: "1" }}>
