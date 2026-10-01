@@ -50,6 +50,13 @@
       "when": 1790690364712,
       "tag": "0006_noisy_green_goblin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790817990850,
+      "tag": "0007_plan_by_month",
+      "breakpoints": true
     }
   ]
 }

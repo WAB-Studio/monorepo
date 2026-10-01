@@ -628,6 +628,24 @@ async function checkRealDoor(): Promise<void> {
   assert("P34", threw, `real withGoalsDb with no session, threw = ${threw}`);
 }
 
+// Read the grant back from the catalogue, never from the migration file:
+// `facts` carried DELETE from 0000 ("undoing a tap is a delete of the whole
+// row"), `one_offs` from module 25 and `month_budgets` from 0007 (a month
+// amount is removed, and moved by delete and insert). `goals`, `phases`,
+// `commitments`, `month_shifts` and `model_calls` carry none. Takes any
+// executor so a mutant run can read it inside its own rollback.
+async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
+  const grants = await q<{ table_name: string }[]>`
+    select table_name from information_schema.role_table_grants
+    where table_schema = 'goals' and grantee = 'authenticated' and privilege_type = 'DELETE'`;
+  const tablesWithDelete = grants.map((row) => row.table_name).sort();
+  assert(
+    "P38",
+    tablesWithDelete.join(",") === "facts,month_budgets,one_offs",
+    `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
+  );
+}
+
 // Module 25's own grant (RP-22): `one_offs_delete_self` (0000) stood inert
 // until this migration's `GRANT DELETE`. Own connection, own transaction,
 // own forced rollback — nothing this seeds survives it, the same shape as
@@ -682,21 +700,7 @@ async function checkOneOffDeleteGrant(): Promise<void> {
       if (error !== forcedRollback) throw error;
     });
 
-  // Read the grant back from the catalogue, never from the migration file:
-  // `facts` already carried DELETE (0000, "undoing a tap is a delete of the
-  // whole row"); this migration adds `one_offs` beside it and nothing else —
-  // `goals`, `phases` and `commitments` still carry none.
-  const grants = await sql<{ table_name: string }[]>`
-    select table_name from information_schema.role_table_grants
-    where table_schema = 'goals' and grantee = 'authenticated' and privilege_type = 'DELETE'`;
-  const tablesWithDelete = grants.map((row) => row.table_name).sort();
-  assert(
-    "P38",
-    tablesWithDelete.length === 2 &&
-      tablesWithDelete[0] === "facts" &&
-      tablesWithDelete[1] === "one_offs",
-    `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
-  );
+  await assertDeleteGrants(sql);
 
   await sql.end();
 }
@@ -1003,16 +1007,18 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
       if (error !== forcedRollback) throw error;
     });
 
-  // Read from the catalogue: `one_offs` gains `day` alone; `goals` gains
-  // `horizon` beside the four it already had.
+  // Read from the catalogue: `one_offs` takes `day` (0005) and
+  // `planned_month` (0007, the shift's one write on this table) and nothing
+  // else.
   const oneOffCols = await sql<{ column_name: string }[]>`
     select column_name from information_schema.column_privileges
     where table_schema = 'goals' and table_name = 'one_offs'
       and grantee = 'authenticated' and privilege_type = 'UPDATE'`;
+  const oneOffUpdatable = oneOffCols.map((r) => r.column_name).sort();
   assert(
     "P58",
-    oneOffCols.length === 1 && oneOffCols[0].column_name === "day",
-    `columns of goals.one_offs updatable by authenticated = ${oneOffCols.map((r) => r.column_name).join(", ") || "none"}`,
+    oneOffUpdatable.join(",") === "day,planned_month",
+    `columns of goals.one_offs updatable by authenticated = ${oneOffUpdatable.join(", ") || "none"}`,
   );
 
   await sql.end();
@@ -1127,6 +1133,395 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
   await sql.end();
 }
 
+// The privileges one role holds on one `goals` table, table-level and
+// column-level apart, as `PRIV` and `PRIV(col, …)`, sorted.
+async function privilegesOf(
+  q: postgres.Sql | postgres.TransactionSql,
+  table: string,
+  grantee: string,
+): Promise<string> {
+  const tableLevel = await q<{ privilege_type: string }[]>`
+    select privilege_type from information_schema.role_table_grants
+    where table_schema = 'goals' and table_name = ${table} and grantee = ${grantee}`;
+  const columnLevel = await q<{ privilege_type: string; column_name: string }[]>`
+    select privilege_type, column_name from information_schema.column_privileges
+    where table_schema = 'goals' and table_name = ${table} and grantee = ${grantee}`;
+  const whole = new Set(tableLevel.map((r) => r.privilege_type));
+  const byColumn = new Map<string, string[]>();
+  for (const { privilege_type, column_name } of columnLevel) {
+    // A table-level grant shows up on every column too; keep the narrow ones.
+    if (whole.has(privilege_type)) continue;
+    byColumn.set(privilege_type, [...(byColumn.get(privilege_type) ?? []), column_name]);
+  }
+  return [
+    ...[...whole],
+    ...[...byColumn].map(([privilege, columns]) => `${privilege}(${columns.sort().join(",")})`),
+  ]
+    .sort()
+    .join(" ");
+}
+
+// Module 124: what 0007 grants on the three plan tables and on `one_offs`,
+// read from the catalogue. Takes any executor so a mutant run can read it
+// inside its own rollback.
+async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
+  const expected: [string, string, string][] = [
+    ["P108", "month_budgets", "DELETE INSERT(amount,goal_id,month,user_id) SELECT UPDATE(amount)"],
+    ["P109", "month_shifts", "INSERT(goal_id,month,user_id) SELECT"],
+    ["P110", "model_calls", "INSERT(model,source,user_id) SELECT UPDATE(input_tokens,outcome,output_tokens)"],
+  ];
+  for (const [label, table, wanted] of expected) {
+    const authenticated = await privilegesOf(q, table, "authenticated");
+    const anon = await privilegesOf(q, table, "anon");
+    const service = await privilegesOf(q, table, "service_role");
+    assert(
+      label,
+      authenticated === wanted && anon === "" && service === "",
+      `${table}: authenticated = ${authenticated || "none"}; anon = ${anon || "none"}; service_role = ${service || "none"}`,
+    );
+  }
+
+  const oneOffs = await privilegesOf(q, "one_offs", "authenticated");
+  assert(
+    "P111",
+    oneOffs ===
+      "DELETE INSERT(day,estimate,goal_id,id,name,parent_id,planned_month,user_id) SELECT UPDATE(day,planned_month)",
+    `one_offs: authenticated = ${oneOffs || "none"}`,
+  );
+
+  const policies = await q<{ tablename: string; count: number }[]>`
+    select tablename, count(*)::int as count from pg_policies
+    where schemaname = 'goals' and tablename in ('month_budgets', 'month_shifts', 'model_calls', 'one_offs')
+    group by tablename order by tablename`;
+  const counts = policies.map((r) => `${r.tablename}=${r.count}`).join(",");
+  assert(
+    "P112",
+    counts === "model_calls=3,month_budgets=4,month_shifts=2,one_offs=4",
+    `policies per table = ${counts || "none"}`,
+  );
+}
+
+// Module 124 (RP-28, RP-30, RP-31, RP-34, RNP-13): every rule 0007 writes,
+// driven bare under a settled session, own transaction, forced rollback. The
+// row-to-row rules on `one_offs` and `facts` live in policies alone, so each
+// refusal below isolates one clause: the parent differs from a good one in
+// one column only.
+async function checkPlanByMonth(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const today = todayInZone();
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta', '2027-06-30') returning id`;
+      const [otherGoal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'otra meta', '2027-06-30') returning id`;
+
+      // -- month_budgets --
+      const [budget] = await tx<{ id: string }[]>`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${subject}, ${goal.id}, '2026-10-01', 720) returning id`;
+      const ownBudget = await tx<{ id: string }[]>`select id from goals.month_budgets where id = ${budget.id}`;
+      assert("P67", ownBudget.length === 1, `own month amount, rows visible = ${ownBudget.length}`);
+
+      const changesAmount = await attemptRows<{ amount: number }>(
+        tx,
+        (sp) => sp`update goals.month_budgets set amount = 600 where id = ${budget.id} returning amount`,
+      );
+      assert(
+        "P68",
+        changesAmount.code === undefined && changesAmount.rows.length === 1 && changesAmount.rows[0].amount === 600,
+        `own month amount changes, sqlstate = ${changesAmount.code ?? "none"}, rows = ${changesAmount.rows.length}`,
+      );
+
+      const budgetAsOther = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${intruder}, ${goal.id}, '2026-11-01', 60)`,
+      );
+      assert(
+        "P69",
+        budgetAsOther.code === "42501",
+        `insert month amount as another user, sqlstate = ${budgetAsOther.code ?? "none"}`,
+      );
+
+      const movesMonth = await attempt(
+        tx,
+        (sp) => sp`update goals.month_budgets set month = '2026-11-01' where id = ${budget.id}`,
+      );
+      assert("P70", movesMonth.code === "42501", `update month_budgets.month, sqlstate = ${movesMonth.code ?? "none"}`);
+
+      const midMonth = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${subject}, ${goal.id}, '2026-11-15', 60)`,
+      );
+      assert("P71", midMonth.code === "23514", `month amount on the 15th, sqlstate = ${midMonth.code ?? "none"}`);
+
+      const negative = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${subject}, ${goal.id}, '2026-11-01', -1)`,
+      );
+      assert("P72", negative.code === "23514", `month amount of -1, sqlstate = ${negative.code ?? "none"}`);
+
+      const twice = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${subject}, ${goal.id}, '2026-10-01', 60)`,
+      );
+      assert("P73", twice.code === "23505", `second amount for one goal's month, sqlstate = ${twice.code ?? "none"}`);
+
+      await enterUserContext(tx, intruder);
+      const foreignBudget = await tx<{ id: string }[]>`select id from goals.month_budgets where id = ${budget.id}`;
+      assert("P74", foreignBudget.length === 0, `another person's month amount, rows visible = ${foreignBudget.length}`);
+      const foreignAmount = await attemptCount(
+        tx,
+        (sp) => sp`update goals.month_budgets set amount = 1 where id = ${budget.id}`,
+      );
+      assert(
+        "P75",
+        foreignAmount.code === undefined && foreignAmount.count === 0,
+        `another person's month amount changes, sqlstate = ${foreignAmount.code ?? "none"}, rows = ${foreignAmount.count}`,
+      );
+      const foreignDelete = await attemptCount(tx, (sp) => sp`delete from goals.month_budgets where id = ${budget.id}`);
+      assert(
+        "P76",
+        foreignDelete.code === undefined && foreignDelete.count === 0,
+        `another person's month amount deleted, sqlstate = ${foreignDelete.code ?? "none"}, rows = ${foreignDelete.count}`,
+      );
+
+      await enterUserContext(tx, subject);
+      const ownDelete = await attemptCount(tx, (sp) => sp`delete from goals.month_budgets where id = ${budget.id}`);
+      assert(
+        "P77",
+        ownDelete.code === undefined && ownDelete.count === 1,
+        `own month amount deleted, sqlstate = ${ownDelete.code ?? "none"}, rows = ${ownDelete.count}`,
+      );
+
+      // -- one_offs: sub-tasks, one level deep, under a month task only --
+      const monthTask = async (name: string, goalId: string): Promise<string> => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into goals.one_offs (user_id, goal_id, name, planned_month)
+          values (${subject}, ${goalId}, ${name}, '2026-10-01') returning id`;
+        return row.id;
+      };
+      const parent = await monthTask("padre", goal.id);
+      const [datedParent] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month, day)
+        values (${subject}, ${goal.id}, 'padre con dia', '2026-10-01', '2026-10-05') returning id`;
+      const [estimatedParent] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+        values (${subject}, ${goal.id}, 'padre con estimado', '2026-10-01', 60) returning id`;
+      const doneParent = await monthTask("padre hecho", goal.id);
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${doneParent}, ${today})`;
+      const otherGoalParent = await monthTask("padre de otra meta", otherGoal.id);
+
+      const childUnder = (parentId: string, goalId = goal.id) =>
+        attemptRows<{ id: string }>(
+          tx,
+          (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
+            values (${subject}, ${goalId}, 'hija', ${parentId}, 30) returning id`,
+        );
+
+      const child = await childUnder(parent);
+      assert(
+        "P78",
+        child.code === undefined && child.rows.length === 1,
+        `sub-task under a month task, sqlstate = ${child.code ?? "none"}`,
+      );
+      const childId = child.rows[0]?.id ?? randomUUID();
+
+      // One savepoint at a time: never start them together in one transaction.
+      const refusals: [string, string, string][] = [
+        ["P79", "under a sub-task", childId],
+        ["P80", "under a month task with a day", datedParent.id],
+        ["P81", "under a month task with an estimate", estimatedParent.id],
+        ["P82", "under a month task with a fact", doneParent],
+        ["P83", "under a month task of another goal", otherGoalParent],
+      ];
+      for (const [label, what, parentId] of refusals) {
+        const result = await childUnder(parentId);
+        assert(label, result.code === "42501", `sub-task ${what}, sqlstate = ${result.code ?? "none (inserted)"}`);
+      }
+
+      const childWithMonth = await attempt(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id, planned_month)
+          values (${subject}, ${goal.id}, 'hija con mes', ${parent}, '2026-10-01')`,
+      );
+      assert(
+        "P84",
+        childWithMonth.code === "23514",
+        `sub-task with a month of its own, sqlstate = ${childWithMonth.code ?? "none"}`,
+      );
+
+      const parentTakesDay = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set day = '2026-10-20' where id = ${parent} returning id`,
+      );
+      assert(
+        "P85",
+        parentTakesDay.code === "42501",
+        `a parent takes a day, sqlstate = ${parentTakesDay.code ?? "none"}, rows = ${parentTakesDay.rows.length}`,
+      );
+
+      const parentMoves = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set planned_month = '2026-11-01' where id = ${parent} returning id`,
+      );
+      assert(
+        "P86",
+        parentMoves.code === undefined && parentMoves.rows.length === 1,
+        `an undone parent moves a month, sqlstate = ${parentMoves.code ?? "none"}, rows = ${parentMoves.rows.length}`,
+      );
+
+      const doneLeaf = await monthTask("hecha", goal.id);
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${doneLeaf}, ${today})`;
+      const doneMoves = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set planned_month = '2026-11-01' where id = ${doneLeaf} returning id`,
+      );
+      assert(
+        "P87",
+        doneMoves.code === undefined && doneMoves.rows.length === 0,
+        `a done month task moves a month, sqlstate = ${doneMoves.code ?? "none"}, rows = ${doneMoves.rows.length}`,
+      );
+
+      const setsEstimate = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 90 where id = ${childId}`,
+      );
+      assert("P88", setsEstimate.code === "42501", `update one_offs.estimate, sqlstate = ${setsEstimate.code ?? "none"}`);
+      const setsParent = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set parent_id = null where id = ${childId}`,
+      );
+      assert("P89", setsParent.code === "42501", `update one_offs.parent_id, sqlstate = ${setsParent.code ?? "none"}`);
+
+      // -- facts: a parent is done by its children alone --
+      const parentFact = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${parent}, ${today})`,
+      );
+      assert("P90", parentFact.code === "42501", `a fact for a parent, sqlstate = ${parentFact.code ?? "none (inserted)"}`);
+      const childFact = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${childId}, ${today})`,
+      );
+      assert("P91", childFact.code === undefined, `a fact for its sub-task, sqlstate = ${childFact.code ?? "none"}`);
+
+      // -- delete: the FK cascade to the children bypasses RLS --
+      const parentGoes = await attemptCount(tx, (sp) => sp`delete from goals.one_offs where id = ${parent}`);
+      assert(
+        "P92",
+        parentGoes.code === undefined && parentGoes.count === 0,
+        `delete a parent whose sub-task has a fact, sqlstate = ${parentGoes.code ?? "none"}, rows = ${parentGoes.count}`,
+      );
+      const childFactLeft = await tx<{ id: string }[]>`select id from goals.facts where one_off_id = ${childId}`;
+      assert("P93", childFactLeft.length === 1, `the sub-task's fact after it, rows visible = ${childFactLeft.length}`);
+
+      const emptyParent = await monthTask("padre sin hechos", goal.id);
+      await childUnder(emptyParent);
+      await childUnder(emptyParent);
+      const emptyGoes = await attemptCount(tx, (sp) => sp`delete from goals.one_offs where id = ${emptyParent}`);
+      const orphans = await tx<{ id: string }[]>`select id from goals.one_offs where parent_id = ${emptyParent}`;
+      assert(
+        "P94",
+        emptyGoes.code === undefined && emptyGoes.count === 1 && orphans.length === 0,
+        `delete a parent with undone sub-tasks, rows = ${emptyGoes.count}, sub-tasks left = ${orphans.length}`,
+      );
+
+      // -- month_shifts: an act, written once --
+      const [shift] = await tx<{ id: string }[]>`
+        insert into goals.month_shifts (user_id, goal_id, month)
+        values (${subject}, ${goal.id}, '2026-09-01') returning id`;
+      const ownShift = await tx<{ id: string }[]>`select id from goals.month_shifts where id = ${shift.id}`;
+      assert("P95", ownShift.length === 1, `own shift, rows visible = ${ownShift.length}`);
+
+      const shiftTwice = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_shifts (user_id, goal_id, month) values (${subject}, ${goal.id}, '2026-09-01')`,
+      );
+      assert("P96", shiftTwice.code === "23505", `second shift for one month, sqlstate = ${shiftTwice.code ?? "none"}`);
+      const shiftMidMonth = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_shifts (user_id, goal_id, month) values (${subject}, ${goal.id}, '2026-08-15')`,
+      );
+      assert("P97", shiftMidMonth.code === "23514", `shift on the 15th, sqlstate = ${shiftMidMonth.code ?? "none"}`);
+      const shiftUpdate = await attempt(
+        tx,
+        (sp) => sp`update goals.month_shifts set month = '2026-08-01' where id = ${shift.id}`,
+      );
+      assert("P98", shiftUpdate.code === "42501", `update a shift, sqlstate = ${shiftUpdate.code ?? "none"}`);
+      const shiftDelete = await attempt(tx, (sp) => sp`delete from goals.month_shifts where id = ${shift.id}`);
+      assert("P99", shiftDelete.code === "42501", `delete a shift, sqlstate = ${shiftDelete.code ?? "none"}`);
+
+      // -- model_calls: the day is the zone's, and the count never drops --
+      const [call] = await tx<{ id: string; day: string }[]>`
+        insert into goals.model_calls (user_id, model, source)
+        values (${subject}, 'modelo', 'paste') returning id, day::text as day`;
+      assert("P100", call.day === today, `a call's day = ${call.day}, Bogota today = ${today}`);
+
+      const answered = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.model_calls set input_tokens = 900, output_tokens = 300, outcome = 'ok'
+          where id = ${call.id} returning id`,
+      );
+      assert(
+        "P101",
+        answered.code === undefined && answered.rows.length === 1,
+        `own call takes its tokens and outcome, sqlstate = ${answered.code ?? "none"}, rows = ${answered.rows.length}`,
+      );
+
+      const forgedDay = await attempt(
+        tx,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source, day)
+          values (${subject}, 'modelo', 'paste', '2026-01-01')`,
+      );
+      assert("P102", forgedDay.code === "42501", `insert a call naming its day, sqlstate = ${forgedDay.code ?? "none"}`);
+      const callDelete = await attempt(tx, (sp) => sp`delete from goals.model_calls where id = ${call.id}`);
+      assert("P103", callDelete.code === "42501", `delete a call, sqlstate = ${callDelete.code ?? "none"}`);
+      const badSource = await attempt(
+        tx,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source) values (${subject}, 'modelo', 'x')`,
+      );
+      assert("P104", badSource.code === "23514", `a call from source 'x', sqlstate = ${badSource.code ?? "none"}`);
+
+      await enterUserContext(tx, intruder);
+      const foreignShift = await tx<{ id: string }[]>`select id from goals.month_shifts where id = ${shift.id}`;
+      assert("P105", foreignShift.length === 0, `another person's shift, rows visible = ${foreignShift.length}`);
+      const foreignCall = await tx<{ id: string }[]>`select id from goals.model_calls where id = ${call.id}`;
+      assert("P106", foreignCall.length === 0, `another person's call, rows visible = ${foreignCall.length}`);
+      const foreignAnswer = await attemptCount(
+        tx,
+        (sp) => sp`update goals.model_calls set outcome = 'failed' where id = ${call.id}`,
+      );
+      assert(
+        "P107",
+        foreignAnswer.code === undefined && foreignAnswer.count === 0,
+        `another person's call takes an outcome, sqlstate = ${foreignAnswer.code ?? "none"}, rows = ${foreignAnswer.count}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await assertPlanByMonthCatalogue(sql);
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   const sql = postgres(DATABASE_URL!, {
     prepare: false,
@@ -1146,6 +1541,7 @@ async function main(): Promise<void> {
   await checkGoalRenameArchiveGrant();
   await checkOneOffScheduleAndHorizonGrants();
   await checkScheduledOneOffMoveByZone();
+  await checkPlanByMonth();
 
   if (failed) process.exit(1);
 }
