@@ -86,6 +86,13 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   canvas shows what was drawn; only `DESIGN.md` says what was chosen.
 - When a board and its `DESIGN.md` disagree, the file wins.
 - Update the canvas in place, at its own URL. Never publish a second canvas for the same app.
+- Keep each canvas current, like a Figma file a team works from. Decided by the user 2026-10-05: «tenemos como 8 tabs
+  y nunca vamos limpiando y agrupando… siempre queda el artifact con cosas antiguas y sin resultados reales».
+  - Group pages by area of the app, one page per area. Open no page for a single module.
+  - Give every canvas an index page: each board with its state — proposed, approved, built, superseded.
+  - Replace a board's drawing with a capture of the real screen the day its module lands. Mark it built, with the PR.
+  - Move a superseded board to one «Archivo» page the same day. Never leave it beside the live one.
+  - Do it at every slice close, before the handoff. A canvas behind `integracion` is a defect.
 - Say in `DESIGN.md` which boards do not exist. A gap nobody wrote down reads as a gap nobody noticed.
 - This applies to a new screen, a new state of one, and a change a person can see. It does not apply
   to work behind the screen.
