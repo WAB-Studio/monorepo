@@ -13,11 +13,13 @@ import {
   createOneOffSchema,
   completeOneOffSchema,
   deleteOneOffSchema,
+  moveTaskSchema,
   scheduleOneOffSchema,
   type ScheduleOneOffInput,
   type CreateOneOffInput,
   type CompleteOneOffInput,
   type DeleteOneOffInput,
+  type MoveTaskInput,
 } from "@/lib/validation/one-off";
 
 import { declareFact, type DeclareFactResult } from "./facts";
@@ -26,6 +28,7 @@ export type CreateOneOffResult = { ok: true; oneOffId: string } | { ok: false; e
 export type CompleteOneOffResult = DeclareFactResult;
 export type ScheduleOneOffResult = { ok: true } | { ok: false; error: string };
 export type DeleteOneOffResult = { ok: true } | { ok: false; error: string };
+export type MoveTaskResult = { ok: true } | { ok: false; error: string };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -297,6 +300,86 @@ export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneO
     if (deleted.length === 0) return { ok: false, error: "day.errors.oneOffHasFact" };
 
     revalidatePath("/");
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof NamedError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+/**
+ * Moves an undone month task, with its sub-tasks, to another open month of
+ * its goal's span (RP-42). Sub-tasks carry no month and follow the parent's
+ * row. The row is read first only to name the refusal; the UPDATE repeats
+ * `day is null` and writes 0 rows if a day landed in between, reported as
+ * `oneOffHasFact`.
+ */
+export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskResult> {
+  const parsed = moveTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "day.errors.signedOut" };
+
+  const { oneOffId, month } = parsed.data;
+
+  try {
+    const moved = await withGoalsDb(async (tx) => {
+      const [row] = await tx
+        .select({
+          goalId: oneOffs.goalId,
+          parentId: oneOffs.parentId,
+          day: oneOffs.day,
+          plannedMonth: oneOffs.plannedMonth,
+          // Itself or any child; `${oneOffs}.id`, never `${oneOffs.id}` (see scheduleOneOff).
+          hasFact: sql<boolean>`exists (
+            select 1 from ${facts} f
+            where f.one_off_id = ${oneOffs}.id
+              or f.one_off_id in (select c.id from ${oneOffs} c where c.parent_id = ${oneOffs}.id)
+          )`,
+          horizon: goals.horizon,
+          archivedAt: goals.archivedAt,
+          createdAt: goals.createdAt,
+        })
+        .from(oneOffs)
+        .leftJoin(goals, eq(goals.id, oneOffs.goalId))
+        .where(eq(oneOffs.id, oneOffId));
+      if (!row) throw new NamedError("plan.errors.notFound");
+      if (
+        row.parentId !== null ||
+        row.plannedMonth === null ||
+        row.goalId === null ||
+        row.horizon === null ||
+        row.createdAt === null
+      ) {
+        throw new NamedError("month.errors.invalid");
+      }
+      if (row.day !== null || row.hasFact) throw new NamedError("day.errors.oneOffHasFact");
+      if (isClosed({ horizon: row.horizon, archivedAt: row.archivedAt })) {
+        throw new NamedError("month.errors.closed");
+      }
+      if (
+        monthOutsideSpan({
+          month,
+          openedOn: civilDateInZone(row.createdAt),
+          horizon: row.horizon,
+        })
+      ) {
+        throw new NamedError("month.errors.outsideSpan");
+      }
+      if (month < todayInZone().slice(0, 7)) throw new NamedError("month.errors.monthClosed");
+
+      const updated = await tx
+        .update(oneOffs)
+        .set({ plannedMonth: monthStart(month) })
+        .where(and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id), isNull(oneOffs.day)))
+        .returning({ id: oneOffs.id });
+      if (updated.length === 0) throw new NamedError("day.errors.oneOffHasFact");
+      return { goalId: row.goalId, from: row.plannedMonth.slice(0, 7) };
+    });
+
+    revalidatePath(`/metas/${moved.goalId}/meses/${moved.from}`);
+    revalidatePath(`/metas/${moved.goalId}/meses/${month}`);
     return { ok: true };
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: error.message };
