@@ -46,14 +46,16 @@ function FailureNotice({ title, body }: { title: string; body?: string }) {
 
 function EntrarForm() {
   const t = useTranslations("account");
-  const linkError = readLinkError(useSearchParams().get("error"));
+  const params = useSearchParams();
+  const linkError = readLinkError(params.get("error"));
+  const next = params.get("next") ?? undefined;
 
   const [email, setEmail] = useState("");
   const [state, setState] = useState<FormState>({ kind: "idle" });
 
   async function handleSend(): Promise<void> {
     setState({ kind: "sending" });
-    const result = await sendSignInLink(email);
+    const result = await sendSignInLink(email, next);
     setState(result.ok ? { kind: "sent" } : { kind: "failed", error: result.error });
   }
 

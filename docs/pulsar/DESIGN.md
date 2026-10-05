@@ -666,6 +666,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   screen lives at `/conexiones`, reached from `/metas`'s «el plan» («Conectar una IA»). Phone and light face only; the dark
   face is the token table's, and 1280 follows the desktop layout. Approved by the user 2026-10-05, «por mientras», with the
   desktop layout as a whole under review.
+- **Signed out, the consent screen names no client.** Before sign-in the name is only what the client declares, so anyone
+  could call itself «Claude»: it reads «Una aplicación pidió entrar…». `AutorizarSinSesion`'s «Claude» is the signed-in
+  name. No grant to `anon`. Decided 2026-10-05 by the coordinator.
+- **The consent screen has no rail: its column is 640 px, centred, at every width from 700.** The shell's rail and left
+  alignment belong to the screens inside `(app)`; `/oauth/autorizar` stands outside it with no nav, and the boards draw one
+  column at 1280. `AutorizarInvalida` centres its content vertically. Decided 2026-10-05 by the coordinator; the design
+  said nothing for a screen outside the shell, so it is centred.
 - **The shell is redrawn before any screen rides on it.** The critic of 2026-10-05 measured the desktop as the phone column
   (640 px pinned left, 456 px empty at 1440) and the phone's tabs off screen on every long page (Hoy's start at y=1490 of
   844). Decided by the user 2026-10-05, four answers:
@@ -711,3 +718,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   - The amount sheet still has no «Cancelar»: `HoyCantidad` does not draw one.
   - A goal's full name in the rail also shows on keyboard focus, not only on hover, as `ArmazonRielMuchas` draws it.
   - Moving the blocks of `escritorio.spec.ts` waits for module 218.
+- **The failure and the 404 have no back link: their actions are the way out** (`ArmazonFallo`, `ArmazonNoEncontrada`).
+  The header is the title under its eyebrow; «Ir a hoy» leaves. Decided 2026-10-05 by the coordinator.
+- **`/metas`, plan rows.** «Importar un plan» first, then «Exportar» with the hint «cómo va cada meta, en PDF». Decided by the coordinator 2026-10-05 against the approved board `MetasCentro`.
+- **`/metas` on the phone.** The plan sits between «Abrir otra meta» and «Archivadas» (`Split`'s `tail`, which follows `after` on a phone and stays under `main` from 1024). Decided by the coordinator 2026-10-05 against the approved board `MetasCentro`.
+- **`/metas` at 1440, rows.** Each open goal's row shows its current month and figure («octubre · 2 h 41 min de 12 h»; «octubre · 86 páginas» with no plan; «octubre · 2 de 5 tareas» with no measure) and its last day at the end. The figure counts declared facts, done tasks and evidence readings, read in parallel with the goals statement as Hoy's month line does. A goal with nothing this month shows its last day alone. Decided by the coordinator 2026-10-05 against the approved board `MetasCentroEscritorio`.
+- **`/metas` at 1440, proportions.** The plan column is two parts of five at every width from 1024 (`Split`'s `twoFifths`), and «Abrir otra meta» sits inline under the open goals. Decided by the coordinator 2026-10-05 against the approved board `MetasCentroEscritorio`.
+- **`/metas` at 1440, the figure.** 2026-10-05: la cifra de cada meta en /metas incluye la evidencia, como Hoy. Decided by the coordinator against the approved board `MetasCentroEscritorio`.

@@ -3,7 +3,7 @@
 // leaves for an address the client did not register. Stubs as `token-actions.ts`.
 import assert from "node:assert/strict";
 import Module from "node:module";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
 import postgres from "postgres";
@@ -16,6 +16,8 @@ const door = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
 (globalThis as unknown as { sql: unknown }).sql = door;
 
 const REDIRECT = "https://claude.example/api/mcp/auth_callback";
+// The caller the consent act sees: a /64 of the documentation prefix, new each run.
+const FROM = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::1`;
 const CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
 let session: typeof import("@/lib/session");
@@ -46,7 +48,12 @@ function installStubs(): void {
   };
   const originalLoad = untyped._load;
   untyped._load = (name, parent, isMain) => {
-    if (name === "next/headers") return { cookies: async () => ({ getAll: () => [], set() {} }) };
+    if (name === "next/headers") {
+      return {
+        cookies: async () => ({ getAll: () => [], set() {} }),
+        headers: async () => new Headers({ "x-forwarded-for": FROM }),
+      };
+    }
     if (name === "next/cache") return { revalidatePath() {} };
     return originalLoad(name, parent, isMain);
   };
@@ -77,11 +84,19 @@ before(async () => {
 
 let closed = false;
 
+async function callerSource(): Promise<Buffer> {
+  const { callerAddress } = await import("@/lib/oauth/throttle");
+  const { fingerprint } = await import("@/lib/mcp/tokens");
+
+  return fingerprint(callerAddress({ headers: new Headers({ "x-forwarded-for": FROM }) }));
+}
+
 async function cleanup(): Promise<void> {
   if (closed) return;
   closed = true;
   try {
     if (clientId) await admin`delete from goals.oauth_clients where id = ${clientId}`;
+    await admin`delete from goals.oauth_calls where source = ${await callerSource()}`;
     await dropPeople(admin);
   } finally {
     await door.end();
@@ -90,6 +105,22 @@ async function cleanup(): Promise<void> {
 }
 
 after(cleanup);
+
+async function registerCalls(): Promise<number> {
+  const [row] = await admin`
+    select coalesce(sum(calls), 0)::int as n from goals.oauth_calls
+    where bucket = 'register' and source = ${await callerSource()}`;
+
+  return row.n;
+}
+
+test("a client named by a metadata URL spends the caller's registration limit before it is read", async () => {
+  const before = await registerCalls();
+  // A public literal that answers nothing: the read ends as an unknown client.
+  const result = await as(subject, () => actions.approveAuthorization(request({ client_id: "https://192.0.2.1/client.json" })));
+  assert.deepEqual(result, { ok: false, error: "oauth.errors.clientUnknown" });
+  assert.equal(await registerCalls(), before + 1, "the read did not claim the caller's register bucket");
+});
 
 test("an approval writes one code for the person and returns the redirect with code, state unchanged and iss", async () => {
   const before = await codeRows();

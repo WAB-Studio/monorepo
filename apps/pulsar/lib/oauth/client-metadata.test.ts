@@ -5,6 +5,19 @@ import { Readable } from "node:stream";
 
 import { clientFromMetadataUrl, privateAddress, type MetadataDeps } from "./client-metadata";
 
+// What the default claim reads from the database: `wait` 0 admits, any other value refuses.
+const claimed = { wait: 0, statements: 0 };
+mock.module("@/db/client", {
+  namedExports: {
+    db: {
+      execute: async () => {
+        claimed.statements += 1;
+        return [{ wait: claimed.wait }];
+      },
+    },
+  },
+});
+
 const URL_OK = "https://app.example/client.json";
 const doc = (over: Record<string, unknown> = {}) => ({
   client_id: URL_OK,
@@ -19,13 +32,13 @@ const json = (body: unknown, over: Res = {}): Res => ({
   headers: { "content-type": "application/json", ...over.headers },
 });
 
-type Calls = { request: number; register: number; resolve: number; options?: Record<string, unknown> };
+type Calls = { request: number; register: number; resolve: number; claim: number; options?: Record<string, unknown> };
 
 function run(
   url: string,
-  over: { response?: () => Promise<Res> | Res; resolve?: () => string[]; address?: string; timeoutMs?: number } = {},
+  over: { admit?: boolean; defaultClaim?: boolean; response?: () => Promise<Res> | Res; resolve?: () => string[]; address?: string; timeoutMs?: number } = {},
 ) {
-  const calls: Calls = { request: 0, register: 0, resolve: 0 };
+  const calls: Calls = { request: 0, register: 0, resolve: 0, claim: 0 };
   const deps: MetadataDeps = {
     request: ((_url: string, options: Record<string, unknown>, cb: (res: unknown) => void) => {
       const req = new EventEmitter() as EventEmitter & { end: () => void; destroy: () => void };
@@ -50,8 +63,14 @@ function run(
       return "client-1";
     },
     timeoutMs: over.timeoutMs,
+    claim: over.defaultClaim
+      ? undefined
+      : async () => {
+          calls.claim++;
+          return over.admit ?? true;
+        },
   };
-  return clientFromMetadataUrl(url, deps).then((client) => ({ client, calls }));
+  return clientFromMetadataUrl(url, new Headers(), deps).then((client) => ({ client, calls }));
 }
 
 test("a valid document yields the registered client", async () => {
@@ -254,7 +273,8 @@ test("malformed JSON and non-object bodies are refused", async () => {
 });
 
 test("a DNS failure is refused", async () => {
-  const client = await clientFromMetadataUrl(URL_OK, {
+  const client = await clientFromMetadataUrl(URL_OK, new Headers(), {
+    claim: async () => true,
     resolve: async () => {
       throw new Error("ENOTFOUND");
     },
@@ -268,4 +288,41 @@ test("a body that stalls after the headers is aborted", async () => {
     response: () => json("", { stream: new Readable({ read() {} }) }),
   });
   assert.equal(client, null);
+});
+
+test("a refused registration claim stops the fetch and the row", async () => {
+  const { client, calls } = await run(URL_OK, { admit: false });
+  assert.equal(client, null);
+  assert.deepEqual([calls.claim, calls.request, calls.register], [1, 0, 0]);
+});
+
+test("a URL refused before the fetch spends no claim", async () => {
+  const { calls } = await run(URL_OK, { address: "10.0.0.1" });
+  assert.equal(calls.claim, 0);
+});
+
+test("the default claim admits a caller the counter admits and refuses one it refuses", async () => {
+  claimed.wait = 0;
+  claimed.statements = 0;
+  const admitted = await run(URL_OK, { defaultClaim: true });
+  assert.equal(admitted.client?.id, "client-1");
+  assert.deepEqual([claimed.statements, admitted.calls.request, admitted.calls.register], [1, 1, 1]);
+
+  claimed.wait = 5;
+  claimed.statements = 0;
+  const refused = await run(URL_OK, { defaultClaim: true });
+  assert.equal(refused.client, null);
+  assert.deepEqual([claimed.statements, refused.calls.request, refused.calls.register], [1, 0, 0]);
+});
+
+test("a host that resolves to no address is refused before any fetch", async () => {
+  const { client, calls } = await run(URL_OK, { resolve: () => [] });
+  assert.equal(client, null);
+  assert.deepEqual([calls.claim, calls.request], [0, 0]);
+});
+
+test("the end of 172.16.0.0/12 is private and so is anything that is no address", () => {
+  assert.equal(privateAddress("172.31.255.255"), true);
+  assert.equal(privateAddress("172.32.0.1"), false);
+  assert.equal(privateAddress("not-an-ip"), true);
 });

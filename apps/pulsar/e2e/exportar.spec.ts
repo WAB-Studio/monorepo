@@ -331,7 +331,7 @@ test.describe("the way in from /metas (RP-33, RP-37)", () => {
       await expect(page.getByText("el plan", { exact: true })).toBeVisible();
       const exportLink = page.getByRole("link", { name: /^Exportar/ });
       await expect(exportLink).toContainText(
-        "un PDF con cada meta, su mes y lo que se arrastró",
+        "cómo va cada meta, en PDF",
       );
       const importLink = page.getByRole("link", { name: /^Importar un plan/ });
       await expect(importLink).toContainText(
@@ -339,15 +339,15 @@ test.describe("the way in from /metas (RP-33, RP-37)", () => {
       );
       await expect(importLink).toHaveAttribute("href", "/metas/importar");
 
-      // Below «Nueva meta», in the order the board draws.
+      // Below «Abrir otra meta», «Importar un plan» before «Exportar»: the board's order.
       const order = await page
         .locator("main a")
         .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href")));
       expect(order.indexOf("/metas/nueva")).toBeLessThan(
         order.indexOf("/exportar"),
       );
-      expect(order.indexOf("/exportar")).toBeLessThan(
-        order.indexOf("/metas/importar"),
+      expect(order.indexOf("/metas/importar")).toBeLessThan(
+        order.indexOf("/exportar"),
       );
 
       await exportLink.click();

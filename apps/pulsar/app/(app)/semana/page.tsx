@@ -1,14 +1,24 @@
 import { redirect } from "next/navigation";
 
 import { WeekScreen } from "@/components/week/week-screen";
+import { parseWeekParam } from "@/lib/day/week-param";
 import { getPerson } from "@/lib/session";
+import { todayInZone } from "@/lib/zone";
 
 // Same gate `app/page.tsx` runs: `app/layout.tsx` enforces no session of its
 // own, so every screen redirects for itself. `getPerson` is the verified JWT
 // alone, zero round trips.
-export default async function WeekPage() {
+export default async function WeekPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ semana?: string | string[] }>;
+}) {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
-  return <WeekScreen />;
+  const today = todayInZone();
+  const week = parseWeekParam((await searchParams).semana, today);
+  if (week.kind === "redirect") redirect("/semana");
+
+  return <WeekScreen day={week.kind === "past" ? week.monday : today} today={today} />;
 }

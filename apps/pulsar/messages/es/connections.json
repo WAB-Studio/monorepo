@@ -26,6 +26,7 @@
   "row": {
     "meta": "creada el {created} · usada {used}",
     "neverUsed": "sin usar",
+    "today": "hoy",
     "revokedMeta": "revocada el {date} · ya no entra",
     "revoke": "Revocar",
     "revoking": "Revocando…"

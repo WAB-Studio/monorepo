@@ -2,7 +2,7 @@
   "entry": {
     "section": "el plan",
     "title": "Exportar",
-    "hint": "un PDF con cada meta, su mes y lo que se arrastró"
+    "hint": "cómo va cada meta, en PDF"
   },
   "eyebrow": "exportar · {date}",
   "eyebrowEmpty": "exportar",
