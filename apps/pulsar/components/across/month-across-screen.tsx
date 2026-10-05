@@ -51,11 +51,19 @@ export async function MonthAcrossScreen() {
     );
     const ownPlanned = sum(own.map((entry) => owedAt(entry.task, entry.children, "0000-01-01")));
 
+    // With the dictionary unreadable, a goal with no amount to measure draws
+    // its header and meta alone (`MesTodasSinEvidencia`).
+    const collapsed = across.evidence === "unreadable" && (!goal.line || goal.line.planned === null);
+    const doneTasks = leaves.filter((task) => task.doneOn !== null).length;
+
     let meta: string | null = null;
     if (!goal.line) {
-      meta = t(goal.items.length === 0 ? "month.across.noTasks" : "month.across.measuresNothing", {
-        month: thisName,
-      });
+      meta =
+        goal.items.length === 0
+          ? t("month.across.noTasks", { month: thisName })
+          : collapsed
+            ? t("month.across.measuresNothingCount", { done: doneTasks, total: leaves.length })
+            : t("month.across.measuresNothing");
     } else if (goal.line.planned === null) {
       meta = t(goal.items.length === 0 ? "month.across.nothingPlanned" : "month.across.noAmount", {
         month: thisName,
@@ -66,8 +74,9 @@ export async function MonthAcrossScreen() {
       meta = t("month.list.includesDone", { done: say(doneInMonth) });
     }
 
-    const planLink =
-      goal.line && goal.line.planned === null
+    const planLink = collapsed
+      ? null
+      : goal.line && goal.line.planned === null
         ? { href: `/metas/${goal.id}/meses?planear=${seg}`, label: t("month.planMonth", { month: thisName }) }
         : goal.items.length === 0
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
@@ -126,7 +135,7 @@ export async function MonthAcrossScreen() {
     return (
       <Panel key={goal.id}>
         <Face on="phone">
-          <Separator />
+          <Separator weight="strong" />
         </Face>
         <Flex direction="column" gap="1">
           <Text asChild variant="heading">
@@ -160,13 +169,13 @@ export async function MonthAcrossScreen() {
             </Button>
           ) : null}
         </Flex>
-        {carriedMonths.map((from) => (
+        {collapsed ? null : carriedMonths.map((from) => (
           <Flex key={from} direction="column">
             <SectionLabel>{t("month.list.fromMonth", { month: monthName(from) })}</SectionLabel>
             {carried.filter((entry) => entry.carriedFrom === from).map(item)}
           </Flex>
         ))}
-        {own.length > 0 ? (
+        {!collapsed && own.length > 0 ? (
           <Flex direction="column">
             <SectionLabel>
               {unit && isTimeUnit(unit) && ownPlanned > 0
