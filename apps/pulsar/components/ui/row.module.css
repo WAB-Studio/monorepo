@@ -14,6 +14,7 @@
   border-block-end: 1px solid var(--pulsar-line);
   color: var(--pulsar-ink);
   font: inherit;
+  text-decoration: none;
   text-align: start;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -157,4 +158,24 @@
   outline: 2px solid var(--pulsar-accent);
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* The two halves of a row that reads differently on a phone and a desktop.
+   Tripled where `Text`'s own doubled classes would otherwise win. */
+.wideOnly.wideOnly {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .narrowOnly.narrowOnly.narrowOnly {
+    display: none;
+  }
+
+  .wideOnly.wideOnly.wideOnly {
+    display: block;
+  }
+
+  .trailing.wideOnly.wideOnly.wideOnly {
+    display: flex;
+  }
 }
