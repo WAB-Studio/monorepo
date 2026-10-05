@@ -8,8 +8,9 @@
 # database at all, so the environment file and the pair of harness identities are
 # facts in the table below and not steps every lane runs: an app without a
 # database opens a lane with the remote Postgres unreachable. The apps that do
-# have one share that single Postgres, so run at most three of their suites at a
-# time.
+# have one share one local Supabase stack (scripts/supabase-local.sh), so run at
+# most three of their suites at a time. The remote project is reached only for
+# the RNF-09 timing; every printed command goes through the wrapper.
 set -euo pipefail
 
 # app       port base  .env.local  harness identities
@@ -79,41 +80,57 @@ cp -al node_modules "$DIR/node_modules"
 if [[ $COPIES_ENV == yes ]]; then
   cp "apps/$APP_NAME/.env.local" "$APP/.env.local"
 fi
+# Gitignored and per checkout: the CLI's `status` fails without it, and the stack
+# in Docker was started with this file's keys.
+if [[ -f supabase/signing_keys.json ]]; then
+  cp supabase/signing_keys.json "$DIR/supabase/signing_keys.json"
+fi
 # `private/` is gitignored, so the worktree is born without the plans a dispatch
 # names. Reports stay behind: the lane writes its own and it is copied out.
 mkdir -p "$DIR/private/planes" "$DIR/private/reportes"
 cp private/planes/*.md "$DIR/private/planes/"
 
-# Once per worktree, and never with that worktree's dev server up: typegen and
-# `next dev` race over .next/dev/types.
-(cd "$APP" && npx next typegen >/dev/null)
+# Idempotent: a stack already up is left running.
+"$DIR/scripts/supabase-local.sh" start
 
-# The lane's two identities and their token rows. Idempotent: a lane already
-# bootstrapped just lands a fresh session.
+# Once per worktree, and never with that worktree's dev server up: typegen and
+# `next dev` race over .next/dev/types. `.next/types` is gitignored, so the root
+# typecheck of every Next app needs it, not only the lane's own.
+for row in "${APPS[@]}"; do
+  read -r name _ <<<"$row"
+  [[ -d $DIR/apps/$name ]] && (cd "$DIR/apps/$name" && npx next typegen >/dev/null)
+done
+
+# The lane's two identities and their token rows, on the local stack. Idempotent:
+# a lane already bootstrapped just lands a fresh session.
 if [[ $HAS_HARNESS == yes ]]; then
-  (cd "$APP" && HARNESS_LANE="$LANE" npm run harness:token)
+  (cd "$APP" && HARNESS_LANE="$LANE" "$DIR/scripts/supabase-local.sh" exec npm run harness:token)
 fi
+
+W=$DIR/scripts/supabase-local.sh
 
 case $APP_NAME in
   orbit)
     COMMANDS="  cd $APP
-  PORT=$PORT npm run dev
-  HARNESS_LANE=$LANE HARNESS_BASE_URL=http://localhost:$PORT npm run check:e2e" ;;
+  PORT=$PORT $W exec npm run dev
+  HARNESS_LANE=$LANE HARNESS_BASE_URL=http://localhost:$PORT $W exec npm run check:e2e" ;;
   # Voyager's suite counts effects, and `next dev` runs them twice under
   # StrictMode, so `dev` hands back 13 red specs that a build passes. Its
   # config says so at the top; printing `dev` here next to the suite line is
   # what made two lanes believe it. Build, serve, and rebuild after every edit
-  # — `start` serves the build, not the tree.
+  # — `start` serves the build, not the tree. The build is local-only: it
+  # inlines the stack's public values, so it never serves the remote project.
   voyager)
     COMMANDS="  cd $DIR
-  npm run build -w apps/$APP_NAME
-  PORT=$PORT npm run start -w apps/$APP_NAME
-  ${APP_NAME^^}_BASE_URL=http://localhost:$PORT npm run check:e2e -w apps/$APP_NAME" ;;
+  $W exec npm run build -w apps/$APP_NAME   # local-only build
+  PORT=$PORT $W exec npm run start -w apps/$APP_NAME
+  ${APP_NAME^^}_BASE_URL=http://localhost:$PORT $W exec npm run check:e2e -w apps/$APP_NAME" ;;
   # An app with no harness has no lane to name, so its suite takes the port alone.
   *)
     COMMANDS="  cd $DIR
-  PORT=$PORT npm run dev -w apps/$APP_NAME
-  ${APP_NAME^^}_BASE_URL=http://localhost:$PORT npm run check:e2e -w apps/$APP_NAME" ;;
+  $W exec npm run build -w apps/$APP_NAME   # local-only build
+  PORT=$PORT $W exec npm run start -w apps/$APP_NAME
+  ${APP_NAME^^}_BASE_URL=http://localhost:$PORT $W exec npm run check:e2e -w apps/$APP_NAME" ;;
 esac
 
 cat <<EOF

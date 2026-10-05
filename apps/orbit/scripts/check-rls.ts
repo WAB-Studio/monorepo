@@ -5252,12 +5252,17 @@ async function tableGrantList(
   privilege: "DELETE" | "TRUNCATE",
   on: postgres.Sql | postgres.TransactionSql = sql,
 ): Promise<string[]> {
+  // Materialised so the planner cannot cast another schema's view name (vault's
+  // `decrypted_secrets`) to a regclass before the schema filter drops it.
   const rows = await on<{ table_name: string }[]>`
+    with base as materialized (
+      select t.table_name
+      from information_schema.tables t
+      where t.table_schema = 'finances'
+        and t.table_type = 'BASE TABLE')
     select t.table_name
-    from information_schema.tables t
-    where t.table_schema = 'finances'
-      and t.table_type = 'BASE TABLE'
-      and has_table_privilege(
+    from base t
+    where has_table_privilege(
         'authenticated',
         ('finances.' || quote_ident(t.table_name))::regclass,
         ${privilege})
