@@ -3,7 +3,7 @@ import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import postgres from "postgres";
 
 import { test, expect, mintDisposablePerson } from "./fixtures";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // RNP-11 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
 // `RevisionEscritorio`, `HojaEscritorio`): at 1280 × 800 every route is the
@@ -24,6 +24,8 @@ function shift(day: string, by: number): string {
 
 const today = todayInZone();
 const yesterday = shift(today, -1);
+// Days of the Monday-to-Sunday week already behind today: 0 on a Monday, 6 on a Sunday.
+const daysBehind = weekOf(today).indexOf(today);
 const stamp = Date.now();
 const LONG_GOAL = `Meta de medición a 1280 con un nombre bastante largo para forzar el ajuste ${stamp}`;
 const QUANTITY = `Leer páginas del libro con un nombre largo ${stamp}`;
@@ -187,7 +189,9 @@ const ROUTES: Route[] = [
     ready: (p) => expect(p.getByText(TAP).first()).toBeVisible(),
     min: 4,
   },
-  { name: "/semana", path: () => "/semana", ready: (p) => expect(p.getByRole("table")).toBeVisible(), min: 5 },
+  // Four fixed controls plus one link per past day of the week (RP-06):
+  // a Monday draws none, today is never a link.
+  { name: "/semana", path: () => "/semana", ready: (p) => expect(p.getByRole("table")).toBeVisible(), min: 4 + daysBehind },
   { name: "/sueltas", path: () => "/sueltas", ready: (p) => expect(p.getByText(SCHEDULED).first()).toBeVisible(), min: 5 },
   { name: "/metas", path: () => "/metas", ready: (p) => expect(p.getByText(ENDED).first()).toBeVisible(), min: 5 },
   { name: "/metas/nueva", path: () => "/metas/nueva", ready: (p) => expect(p.getByLabel("nombre")).toBeVisible(), min: 5 },
@@ -521,8 +525,8 @@ deskTest("at 1024 no day header and no tally on Semana wraps (module 88)", async
           return { text: (el.textContent ?? "").trim(), lines: tops.size };
         }),
     );
-    // Seven day headers and the tallies of the days up to today.
-    expect(lines.length).toBeGreaterThanOrEqual(9);
+    // Seven day headers and the tallies of the days up to and including today.
+    expect(lines.length).toBeGreaterThanOrEqual(7 + daysBehind + 1);
     expect(lines.filter((entry) => entry.lines > 1)).toEqual([]);
   } finally {
     await context.close();
