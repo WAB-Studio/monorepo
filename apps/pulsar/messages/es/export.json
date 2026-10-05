@@ -22,6 +22,7 @@
     "weeks": "por semana"
   },
   "monthsCaption": "{count, plural, one {# mes} other {# meses}}",
+  "monthsCaptionDeclared": "{count, plural, one {# mes} other {# meses}} · solo lo dicho",
   "weeksCaption": "{count, plural, one {# semana} other {# semanas}}",
   "columns": {
     "month": "mes",

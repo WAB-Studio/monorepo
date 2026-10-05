@@ -238,7 +238,12 @@ function GoalPart({
           <Flex direction="column" gap="1">
             <SectionLabel>{t("sections.months")}</SectionLabel>
             <Table
-              caption={t("monthsCaption", { count: goal.months.length })}
+              caption={t(
+                declaredOnly ? "monthsCaptionDeclared" : "monthsCaption",
+                {
+                  count: goal.months.length,
+                },
+              )}
               columns={[
                 t("columns.month"),
                 declaredOnly ? t("declaredShort") : t("columns.reached"),
