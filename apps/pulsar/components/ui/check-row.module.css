@@ -5,17 +5,27 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  min-block-size: 44px;
-  padding: 10px 4px;
+  padding-inline: 4px;
   border-block-start: 1px solid var(--pulsar-line);
-  cursor: pointer;
 }
 
 .indent {
   padding-inline-start: 32px;
 }
 
-.row:has(input:disabled) {
+.label {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+}
+
+.label:has(input:disabled) {
   cursor: default;
 }
 
