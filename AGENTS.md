@@ -106,6 +106,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   Never into a second canvas.
 - Grep the saved file for `\.dc\.html` to get the board names. Never read the page in twice.
 - Name the boards a module cites from that list, in the dispatch. The worker never opens the canvas.
+- Paste the board's words and its structure (card or bare section, which line sits where) into the
+  dispatch. A board's name alone is not enough: on 2026-10-05 module 191 invented half its copy and
+  module 169 drew a card the board does not have, both because the worker could not see the board.
 
 ## Parallel tracks
 
@@ -241,6 +244,12 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   shared pool (`EMAXCONNSESSION`, 15 clients).
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
   boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
+- **Pulsar's `pulsar-e2e` is informative on a pull request to `integracion`, not blocking.** Decided by
+  the user 2026-10-05: each PR waited ~14 minutes of e2e in series before the next could merge. Merge on
+  `typecheck`, `lint`, `pulsar-unit`, `pulsar-policies` and `pulsar-checks`; read the e2e after and fix a
+  red on `integracion` before anything else. **`integracion` → `main` only with the whole suite green.**
+- Ship modules that share no file as one train: one branch merging them, one PR, one CI run. A red spec
+  names its module.
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
   2026-09-08. It runs on a pull request only when the change reaches `apps/orbit`, `packages/` or the
   lockfile, and always on the push to `main`. Merge on `typecheck`, `lint` and `voyager-e2e`; read a
@@ -281,6 +290,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `npm run harness:reap` refuses to start while any run's heartbeat is fresh (measured
   2026-09-29: `BLOCKED a live run holds harness.runs`). Run it when every lane is quiet. It never
   touches a lane identity.
+- **Suites run against a local Supabase in Docker (`supabase start`), not the remote project.** Decided by
+  the user 2026-10-05, after PR #390 and #391 went red on 30 s timeouts and `linkTimeout` while lanes and
+  CI shared one remote Postgres and Auth. Every lane and every CI run gets that one local stack; the remote
+  project serves the apps and the RNF-09 timing alone. This is not the cloud project refused below.
 - **A separate Supabase project for e2e was measured and refused, 2026-09-09.** Do not propose it
   again without one of the two triggers below. What the numbers said: `sync.spec.ts` mints **3
   sign-ins per run** — 15 across five lanes, far under any plausible Auth rate limit; the flake that
