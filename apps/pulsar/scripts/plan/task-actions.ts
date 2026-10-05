@@ -385,3 +385,95 @@ test("createOneOff: a plain one-off of an archived goal still lands, as RP-20 wr
     [archivedGoalId, null, null, null, null],
   );
 });
+
+test("a goal that measures nothing: a month task with no estimate lands, and two sub-tasks under it take its goal", async () => {
+  const parentId = await created({ name: "RP-30 sin medida padre", day: null, goalId: unmeasuredGoalId, plannedMonth: thisMonth });
+  const firstId = await created({ name: "RP-30 sin medida uno", day: null, parentId });
+  const secondId = await created({ name: "RP-30 sin medida dos", day: null, parentId });
+
+  const byId = new Map((await rowsOf(unmeasuredGoalId)).map((row) => [row.id, row]));
+  assert.deepEqual(
+    [parentId, firstId, secondId].map((id) => {
+      const row = byId.get(id)!;
+      return [row.goal_id, row.parent_id, row.planned_month, row.estimate, row.day];
+    }),
+    [
+      [unmeasuredGoalId, null, `${thisMonth}-01`, null, null],
+      [unmeasuredGoalId, parentId, null, null, null],
+      [unmeasuredGoalId, parentId, null, null, null],
+    ],
+  );
+});
+
+test("a goal that measures nothing: a sub-task with an estimate is refused as noMeasure and writes nothing", async () => {
+  const parentId = await created({ name: "RP-30 sin medida estimada", day: null, goalId: unmeasuredGoalId, plannedMonth: thisMonth });
+  const before = (await rowsOf(unmeasuredGoalId)).length;
+  const child = await call("createOneOff", { name: "RP-30 sin medida con tiempo", day: null, parentId, estimate: 15 });
+  assert.deepEqual(child, { ok: false, error: "month.errors.noMeasure" });
+  assert.equal((await rowsOf(unmeasuredGoalId)).length, before);
+});
+
+test("a goal that measures nothing: the parent is refused completion; both children done leave it done in its month", async () => {
+  const parentId = await created({ name: "RP-30 sin medida hecha", day: null, goalId: unmeasuredGoalId, plannedMonth: thisMonth });
+  const firstId = await created({ name: "RP-30 sin medida hecha uno", day: null, parentId });
+  const secondId = await created({ name: "RP-30 sin medida hecha dos", day: null, parentId });
+
+  const refused = await call("completeOneOff", { oneOffId: parentId });
+  assert.deepEqual(refused, { ok: false, error: "month.errors.parentIsDoneByChildren" });
+  assert.equal(await factsOf(parentId), 0);
+
+  const view = await loadGoal(unmeasuredGoalId, today);
+  assert.ok(view, "loadGoal reads the goal");
+  const listed = () => monthList(view.tasks, `${thisMonth}-01`, today).find((entry) => entry.task.id === parentId);
+  assert.equal(listed()?.done, false);
+
+  for (const id of [firstId, secondId]) {
+    const done = await call("completeOneOff", { oneOffId: id });
+    assert.equal(done.ok, true, JSON.stringify(done));
+  }
+  const after = await loadGoal(unmeasuredGoalId, today);
+  assert.ok(after, "loadGoal reads the goal again");
+  const item = monthList(after.tasks, `${thisMonth}-01`, today).find((entry) => entry.task.id === parentId);
+  assert.ok(item, "the parent is in its month's list");
+  assert.equal(item.done, true);
+  assert.equal(item.task.doneOn, null);
+});
+
+test("a goal that measures nothing: a sub-task under another person's parent is refused by the action and by the policy", async () => {
+  const lane = laneNumber();
+  const memberEmail = `harness-member${lane === 1 ? "" : `-${lane}`}@example.invalid`;
+  const ownEmail = `harness${lane === 1 ? "" : `-${lane}`}@example.invalid`;
+  const [member] = await sql<{ id: string }[]>`select id from auth.users where email = ${memberEmail}`;
+  const [own] = await sql<{ id: string }[]>`select id from auth.users where email = ${ownEmail}`;
+  if (!member || !own) throw new Error("no lane identities — run harness:token for this lane");
+
+  const [foreignGoal] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon)
+    values (${member.id}, 'RP-30 ajena sin medida', ${`${monthFrom(today, 2)}-01`}) returning id`;
+  try {
+    const [foreignParent] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${member.id}, ${foreignGoal.id}, 'RP-30 padre ajeno', ${`${thisMonth}-01`}) returning id`;
+
+    // The action reads the parent under the person's policies: it is not there.
+    const viaAction = await call("createOneOff", { name: "RP-30 hija ajena", day: null, parentId: foreignParent.id });
+    assert.deepEqual(viaAction, { ok: false, error: "month.errors.notFound" });
+
+    // Past the action, the insert policy alone must refuse: the parent is invisible to this person.
+    await assert.rejects(
+      sql.begin(async (tx) => {
+        await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: own.id, role: "authenticated" })}, true)`;
+        await tx`set local role authenticated`;
+        await tx`
+          insert into goals.one_offs (user_id, goal_id, name, parent_id)
+          values (${own.id}, ${foreignGoal.id}, 'RP-30 hija ajena directa', ${foreignParent.id})`;
+      }),
+      (error: unknown) => (error as { code?: string }).code === "42501",
+    );
+
+    const children = await sql`select id from goals.one_offs where parent_id = ${foreignParent.id}`;
+    assert.equal(children.length, 0);
+  } finally {
+    await sql`delete from goals.goals where id = ${foreignGoal.id} and user_id = ${member.id}`;
+  }
+});
