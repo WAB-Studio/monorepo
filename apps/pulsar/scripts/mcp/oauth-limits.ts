@@ -53,11 +53,17 @@ const callsOf = async (address: string, bucket?: string) => {
   return rows[0].calls as number;
 };
 
+// The wait is what is left of the window the counter binned the call into.
 function assertRefused(response: Response, ceiling: number): void {
   assert.equal(response.status, 429);
   const wait = response.headers.get("retry-after") ?? "";
   assert.match(wait, /^\d+$/, "Retry-After is not whole seconds");
   assert.ok(Number(wait) >= 1 && Number(wait) <= ceiling, `Retry-After ${wait} outside 1..${ceiling}`);
+  const left = ceiling - ((Date.now() / 1000) % ceiling);
+  assert.ok(
+    Number(wait) >= Math.floor(left) && Number(wait) <= Math.ceil(left) + 1,
+    `Retry-After ${wait} is not the ${left.toFixed(1)} s left in the window`,
+  );
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
   assert.equal(response.headers.get("access-control-expose-headers"), "Retry-After");
   assert.equal(response.headers.get("cache-control"), "no-store");
@@ -108,6 +114,18 @@ test("ten registrations from one address answer 201, the eleventh 429 and leaves
   await other.text();
 });
 
+test("registration bodies that are invalid count too: the eleventh is 429", async () => {
+  await outwait(3600, 60);
+  const f = `${prefix()}::1`;
+  remember(f);
+  for (let n = 0; n < 10; n += 1) {
+    const response = await fetch(`${base}/oauth/registro`, { method: "POST", headers: { "x-forwarded-for": f }, body: "{not json" });
+    assert.equal(response.status, 400, `invalid registration ${n + 1}`);
+    await response.text();
+  }
+  assertRefused(await fetch(`${base}/oauth/registro`, { method: "POST", headers: { "x-forwarded-for": f }, body: "{not json" }), 3600);
+});
+
 test("thirty garbage token requests answer 400, the thirty-first 429", async () => {
   await outwait(300, 30);
   const c = `${prefix()}::1`;
@@ -136,24 +154,52 @@ test("a preflight is never counted", async () => {
   assert.equal(await callsOf(d), 1);
 });
 
-test("a token request naming a metadata URL spends the registration limit before it fetches", async () => {
-  await outwait(3600, 60);
-  const e = `${prefix()}::1`;
-  remember(e);
-  // A public literal that answers nothing: the claim is all that is observed.
-  const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: "plr_x", client_id: "https://192.0.2.1/client.json" });
-  const answers = await Promise.all(
-    Array.from({ length: 12 }, () =>
-      fetch(`${base}/oauth/token`, { method: "POST", headers: { "x-forwarded-for": e }, body }).then(async (response) => {
-        await response.text();
-        return response.status;
-      }),
-    ),
-  );
-  assert.ok(answers.every((status) => status === 400), `answers ${answers}`);
-  assert.equal(await callsOf(e, "register"), 12, "the metadata read did not claim the register bucket");
-  assert.equal(await callsOf(e, "token"), 12);
-});
+// A public literal that answers nothing: an admitted read waits out the 5 s fetch
+// timeout, a refused one never starts it, so the time tells which happened.
+const SILENT = "https://192.0.2.1/client.json";
+const READ_STARTED_MS = 3500;
+const READ_REFUSED_MS = 2500;
+
+const grants: Record<string, Record<string, string>> = {
+  refresh_token: { grant_type: "refresh_token", refresh_token: "plr_x" },
+  authorization_code: {
+    grant_type: "authorization_code",
+    code: "plc_x",
+    code_verifier: "v".repeat(43),
+    redirect_uri: REDIRECT,
+  },
+};
+
+for (const grant of Object.keys(grants)) {
+  test(`a ${grant} request naming a metadata URL spends the registration limit and reads only while it admits`, async () => {
+    await outwait(3600, 60);
+    const e = `${prefix()}::1`;
+    remember(e);
+    const timed = async () => {
+      const started = Date.now();
+      const response = await fetch(`${base}/oauth/token`, {
+        method: "POST",
+        headers: { "x-forwarded-for": e },
+        body: new URLSearchParams({ ...grants[grant], client_id: SILENT }),
+      });
+      await response.text();
+
+      return { status: response.status, ms: Date.now() - started };
+    };
+    const admitted = await Promise.all(Array.from({ length: 10 }, timed));
+    for (const [n, call] of admitted.entries()) {
+      assert.equal(call.status, 400);
+      assert.ok(call.ms >= READ_STARTED_MS, `read ${n + 1} took ${call.ms} ms: it was refused, not read`);
+    }
+    for (const n of [11, 12]) {
+      const call = await timed();
+      assert.equal(call.status, 400);
+      assert.ok(call.ms < READ_REFUSED_MS, `read ${n} took ${call.ms} ms: it was read past the cap`);
+    }
+    assert.equal(await callsOf(e, "register"), 12, "the metadata read did not claim the register bucket");
+    assert.equal(await callsOf(e, "token"), 12);
+  });
+}
 
 test("the counter table grants nothing to the API roles", async () => {
   const grants = await admin`
@@ -163,42 +209,131 @@ test("the counter table grants nothing to the API roles", async () => {
   assert.deepEqual(grants.map((row) => `${row.grantee}:${row.privilege_type}`), []);
 });
 
-test("registering keeps at most one hundred unused clients, dropping the oldest, and spares one with a code", async () => {
+type Tx = postgres.TransactionSql;
+
+// Each scenario runs inside one transaction that always rolls back. It first
+// clears the unused clients other runs left, so the ceiling counts this run's alone.
+async function rolledBack(body: (tx: Tx) => Promise<void>): Promise<void> {
   const rollback = new Error("rollback");
-  const name = `limits-${run}-evict`;
   try {
     await admin.begin(async (tx) => {
-      for (let n = 0; n < 100; n += 1) {
-        await tx`
-          insert into goals.oauth_clients (client_name, redirect_uris, created_at)
-          values (${`limits-${run}-old${n}`}, ${[REDIRECT]}, now() - interval '23 hours' - ${n} * interval '1 second')`;
-      }
-      const person = randomUUID();
       await tx`
-        insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
-        values (${person}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-                ${`harness-limits-${person}@example.invalid`}, now(), now())`;
-      const [held] = await tx`
-        insert into goals.oauth_clients (client_name, redirect_uris, created_at)
-        values (${`limits-${run}-held`}, ${[REDIRECT]}, now() - interval '23 hours' - interval '1000 seconds')
-        returning id`;
-      await tx`
-        insert into goals.oauth_codes (user_id, client_id, code_hash, code_challenge, redirect_uri, resource)
-        values (${person}, ${held.id}, ${randomBytes(32)}, 'c', ${REDIRECT}, 'r')`;
-
-      const [made] = await tx`select goals.oauth_register_client(${name}, ${[REDIRECT]}::text[], null) as id`;
-      const unused = await tx`
-        select c.id, c.client_name from goals.oauth_clients c
+        delete from goals.oauth_clients c
         where not exists (select 1 from goals.oauth_codes k where k.client_id = c.id)
           and not exists (select 1 from goals.oauth_refresh r where r.client_id = c.id)`;
-      assert.equal(unused.length, 100, "the ceiling is not exactly one hundred");
-      assert.ok(unused.some((row) => row.id === made.id), "the new client was dropped");
-      assert.ok(!unused.some((row) => row.client_name === `limits-${run}-old99`), "the oldest unused client survived");
-      const kept = await tx`select 1 from goals.oauth_clients where id = ${held.id}`;
-      assert.equal(kept.length, 1, "the client with a code was evicted");
+      await body(tx);
       throw rollback;
     });
   } catch (error) {
     if (error !== rollback) throw error;
   }
+}
+
+async function addClient(tx: Tx, name: string, ageSeconds: number, metadataUrl: string | null = null): Promise<string> {
+  const [row] = await tx`
+    insert into goals.oauth_clients (client_name, redirect_uris, metadata_url, created_at)
+    values (${`limits-${run}-${name}`}, ${[REDIRECT]}, ${metadataUrl}, now() - ${ageSeconds} * interval '1 second')
+    returning id`;
+
+  return row.id as string;
+}
+
+async function addPerson(tx: Tx): Promise<string> {
+  const person = randomUUID();
+  await tx`
+    insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
+    values (${person}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+            ${`harness-limits-${person}@example.invalid`}, now(), now())`;
+
+  return person;
+}
+
+async function holdWithCode(tx: Tx, person: string, client: string): Promise<void> {
+  await tx`
+    insert into goals.oauth_codes (user_id, client_id, code_hash, code_challenge, redirect_uri, resource)
+    values (${person}, ${client}, ${randomBytes(32)}, 'c', ${REDIRECT}, 'r')`;
+}
+
+async function holdWithRefresh(tx: Tx, person: string, client: string): Promise<void> {
+  const [token] = await tx`
+    insert into goals.access_tokens (user_id, kind, name, token_hash, expires_at)
+    values (${person}, 'oauth', 'limits', ${randomBytes(32)}, now() + interval '1 hour') returning id`;
+  await tx`
+    insert into goals.oauth_refresh (access_token_id, client_id, refresh_hash)
+    values (${token.id}, ${client}, ${randomBytes(32)})`;
+}
+
+const registerIn = async (tx: Tx, name: string, metadataUrl: string | null = null) => {
+  const [row] = await tx`select goals.oauth_register_client(${`limits-${run}-${name}`}, ${[REDIRECT]}::text[], ${metadataUrl}) as id`;
+
+  return row.id as string;
+};
+
+const exists = async (tx: Tx, name: string) =>
+  (await tx`select 1 from goals.oauth_clients where client_name = ${`limits-${run}-${name}`}`).length === 1;
+
+const unusedCount = async (tx: Tx) =>
+  (
+    await tx`
+      select 1 from goals.oauth_clients c
+      where not exists (select 1 from goals.oauth_codes k where k.client_id = c.id)
+        and not exists (select 1 from goals.oauth_refresh r where r.client_id = c.id)`
+  ).length;
+
+// 100 unused clients dated 23 h and a few seconds ago, so the 24 h sweep leaves them be.
+async function fillCeiling(tx: Tx): Promise<void> {
+  for (let n = 0; n < 100; n += 1) await addClient(tx, `old${n}`, 23 * 3600 + n);
+}
+
+test("registering keeps at most one hundred unused clients and drops the oldest", async () => {
+  await rolledBack(async (tx) => {
+    await fillCeiling(tx);
+    const made = await registerIn(tx, "evict");
+    assert.equal(await unusedCount(tx), 100, "the ceiling is not exactly one hundred");
+    assert.ok(await exists(tx, "evict"), "the new client was dropped");
+    assert.equal((await tx`select 1 from goals.oauth_clients where id = ${made}`).length, 1);
+    assert.ok(!(await exists(tx, "old99")), "the oldest unused client survived");
+    assert.ok(await exists(tx, "old98"), "the second oldest was dropped too");
+  });
+});
+
+test("the ceiling spares a client holding a code or a refresh row, however old", async () => {
+  await rolledBack(async (tx) => {
+    await fillCeiling(tx);
+    const person = await addPerson(tx);
+    await holdWithCode(tx, person, await addClient(tx, "held-code", 23 * 3600 + 2000));
+    await holdWithRefresh(tx, person, await addClient(tx, "held-refresh", 23 * 3600 + 2100));
+    await registerIn(tx, "evict");
+    assert.equal(await unusedCount(tx), 100);
+    assert.ok(await exists(tx, "held-code"), "the client with a code was evicted");
+    assert.ok(await exists(tx, "held-refresh"), "the client with a refresh row was evicted");
+    assert.ok(!(await exists(tx, "old99")), "the oldest unused client survived");
+  });
+});
+
+test("registering a known metadata URL at the ceiling refreshes its client instead of evicting it", async () => {
+  await rolledBack(async (tx) => {
+    const url = `https://limits-${run}.example/client.json`;
+    const known = await addClient(tx, "known", 23 * 3600 + 2000, url);
+    await fillCeiling(tx);
+    const made = await registerIn(tx, "renamed", url);
+    assert.equal(made, known, "the known client was evicted and registered anew");
+    assert.ok(await exists(tx, "renamed"), "the refresh did not rename the client");
+    assert.equal((await tx`select 1 from goals.oauth_clients where metadata_url = ${url}`).length, 1);
+  });
+});
+
+test("registering sweeps unused clients past 24 h and no others", async () => {
+  await rolledBack(async (tx) => {
+    const person = await addPerson(tx);
+    await addClient(tx, "stale", 25 * 3600);
+    await addClient(tx, "fresh", 23 * 3600);
+    await holdWithCode(tx, person, await addClient(tx, "stale-code", 25 * 3600));
+    await holdWithRefresh(tx, person, await addClient(tx, "stale-refresh", 25 * 3600));
+    await registerIn(tx, "sweep");
+    assert.ok(!(await exists(tx, "stale")), "a 25 h old unused client survived the sweep");
+    assert.ok(await exists(tx, "fresh"), "a 23 h old client was swept");
+    assert.ok(await exists(tx, "stale-code"), "the sweep took a client with a code");
+    assert.ok(await exists(tx, "stale-refresh"), "the sweep took a client with a refresh row");
+  });
 });

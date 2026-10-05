@@ -5,10 +5,11 @@ import test, { before, mock } from "node:test";
 mock.module("@/db/client", { namedExports: { db: {} } });
 
 let callerAddress: typeof import("./throttle").callerAddress;
+let LIMITS: typeof import("./throttle").LIMITS;
 let tooMany: typeof import("./throttle").tooMany;
 
 before(async () => {
-  ({ callerAddress, tooMany } = await import("./throttle"));
+  ({ callerAddress, tooMany, LIMITS } = await import("./throttle"));
 });
 
 const from = (forwarded?: string) =>
@@ -39,4 +40,30 @@ test("the refusal is a 429 with the wait, the route's CORS and no caching", asyn
   assert.equal(response.headers.get("access-control-expose-headers"), "Retry-After");
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.deepEqual(await response.json(), { error: "too_many_requests" });
+});
+
+test("the whitespace around the first value is trimmed", () => {
+  assert.equal(callerAddress(from("203.0.113.7 , 10.0.0.1")), "203.0.113.7");
+  assert.equal(callerAddress(from("  203.0.113.7")), "203.0.113.7");
+});
+
+test("an IPv4 octet above 255 is no address", () => {
+  assert.equal(callerAddress(from("1.1.1.256")), "unknown");
+  assert.equal(callerAddress(from("1.1.1.255")), "1.1.1.255");
+});
+
+test("a malformed IPv6 literal is unknown and a zone id is dropped before the /64", () => {
+  for (const bad of ["1::2::3", "1:2:3:4:5:6:7::8", "2001:db8::fffff", "1:2:3:4:5:6:7"]) {
+    assert.equal(callerAddress(from(bad)), "unknown", bad);
+  }
+  assert.equal(callerAddress(from("fe80::1%eth0")), callerAddress(from("fe80::2")));
+  assert.equal(callerAddress(from("fe80::1%eth0")), "fe80:0:0:0::/64");
+  assert.equal(callerAddress(from("2001:db8:1:2:3:4:5:6")), "2001:db8:1:2::/64");
+});
+
+test("the limits are ten registrations an hour and thirty token requests in five minutes", () => {
+  assert.deepEqual(LIMITS, {
+    register: { cap: 10, windowSeconds: 3600 },
+    token: { cap: 30, windowSeconds: 300 },
+  });
 });
