@@ -36,16 +36,13 @@ test("the server's own keys read their sentences", () => {
   assert.equal(errorOf("mcp.errors.unauthorized").message, "La llave no es válida o ya se revocó. Crea otra en Pulsar.");
 });
 
-test("an unknown key reads mcp.errors.unknown and keeps its own name beside it", () => {
-  assert.deepEqual(errorOf("month.errors.nothingLikeThis"), {
-    key: "month.errors.nothingLikeThis",
-    message: UNKNOWN,
-  });
+test("an unknown key is mcp.errors.unknown, key and sentence, never its own echo", () => {
+  assert.deepEqual(errorOf("month.errors.nothingLikeThis"), { key: "mcp.errors.unknown", message: UNKNOWN });
 });
 
 test("a string that is no key, or names a branch or another namespace, reads unknown", () => {
   for (const key of ["", "boom", "month.errors", "month", "units.h", "month.title.x", "Error: connection refused"]) {
-    assert.equal(errorOf(key).message, UNKNOWN, key);
+    assert.deepEqual(errorOf(key), { key: "mcp.errors.unknown", message: UNKNOWN }, key);
   }
 });
 
