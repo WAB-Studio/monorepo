@@ -1,5 +1,7 @@
 import "server-only";
 
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   createSupabaseServerClient,
   verifiedClaims,
@@ -7,6 +9,7 @@ import {
 
 import { db } from "@/db/client";
 import { env } from "@/lib/env";
+import type { ResolvedPerson } from "@/lib/mcp/tokens";
 import { withSettledTransaction } from "@/lib/settled-transaction";
 
 export type Person = { id: string; email: string };
@@ -25,8 +28,33 @@ function createClient() {
   return createSupabaseServerClient(supabaseConfig);
 }
 
+type ActingStore = { user: Person; claims: Record<string, unknown> };
+
+const acting = new AsyncLocalStorage<ActingStore>();
+
+/**
+ * Runs `fn` as a person a bearer key already resolved, with no cookie: inside
+ * it `getPerson()` and every door below take this person instead of the
+ * request's. `run`, not `enterWith`, so the store ends with `fn` and never
+ * leaks into the caller's continuation.
+ */
+export function actAs<T>(person: ResolvedPerson, fn: () => Promise<T>): Promise<T> {
+  const user = { id: person.id, email: person.email };
+
+  return acting.run(
+    {
+      user,
+      claims: { sub: user.id, email: user.email, role: "authenticated", aud: "authenticated" },
+    },
+    fn,
+  );
+}
+
 // No Postgres round trip: the person comes straight out of the verified JWT.
 export async function getPerson(): Promise<Person | null> {
+  const store = acting.getStore();
+  if (store) return store.user;
+
   const session = await verifiedClaims(createClient);
 
   return session?.user ?? null;
@@ -49,7 +77,7 @@ async function withSettledDb<T>(
   searchPath: string,
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
-  const session = await verifiedClaims(createClient);
+  const session = acting.getStore() ?? (await verifiedClaims(createClient));
 
   return withSettledTransaction<Transaction, T>(
     session,
