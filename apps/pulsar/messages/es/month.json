@@ -37,7 +37,8 @@
       "tasks": "{count, plural, one {# tarea} other {# tareas}}",
       "none": "sin tareas",
       "hint": "Toca un mes para ver sus tareas.",
-      "goalTasks": "{count, plural, one {# tarea} other {# tareas}} · {done, plural, one {# hecha} other {# hechas}}"
+      "goalTasks": "{count, plural, one {# tarea} other {# tareas}} · {done, plural, one {# hecha} other {# hechas}}",
+      "columnTasks": "tareas"
     },
     "columns": {
       "month": "mes",
