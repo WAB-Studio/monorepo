@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { Button, NoTabMarked, Page, Text } from "@/components/ui";
+import { Button, NoTabMarked, Page, ScreenExit, ScreenHeader, Text } from "@/components/ui";
 
 /**
- * `NoEncontrada.dc.html` (RNP-01). Reached from inside the app — `/dia/zzz`,
+ * `ArmazonNoEncontrada.dc.html` (RNP-01, RNP-16). Reached from inside the app — `/dia/zzz`,
  * an unknown goal — where `app/(app)/layout.tsx` already draws the nav, so
- * this draws none. The one line under the title names no route: it serves a
+ * this draws none. No sentence under the title names a route: it serves a
  * date and a goal alike. `app/not-found.tsx` adds the nav for what the app
  * does not route at all.
  */
@@ -14,20 +14,24 @@ export default async function NotFound() {
   const t = await getTranslations("common.notFound");
 
   return (
-    <Page>
+    <Page width="full">
       <NoTabMarked />
-      <Text as="p" variant="meta" tone="muted">
-        {t("kicker")}
-      </Text>
-      <Text asChild variant="title">
-        <h1>{t("title")}</h1>
-      </Text>
-      <Button asChild block>
-        <Link href="/">{t("primaryAction")}</Link>
-      </Button>
-      <Button asChild variant="ghost" tone="accent" block>
-        <Link href="/metas">{t("secondaryAction")}</Link>
-      </Button>
+      <ScreenHeader
+        title={t("title")}
+        eyebrow={
+          <Text as="p" variant="meta" tone="muted">
+            {t("kicker")}
+          </Text>
+        }
+      />
+      <ScreenExit message={t("body")}>
+        <Button asChild>
+          <Link href="/">{t("primaryAction")}</Link>
+        </Button>
+        <Button asChild variant="ghost" tone="accent">
+          <Link href="/metas">{t("secondaryAction")}</Link>
+        </Button>
+      </ScreenExit>
     </Page>
   );
 }

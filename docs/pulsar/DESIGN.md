@@ -711,3 +711,5 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   - The amount sheet still has no «Cancelar»: `HoyCantidad` does not draw one.
   - A goal's full name in the rail also shows on keyboard focus, not only on hover, as `ArmazonRielMuchas` draws it.
   - Moving the blocks of `escritorio.spec.ts` waits for module 218.
+- **The failure and the 404 have no back link: their actions are the way out** (`ArmazonFallo`, `ArmazonNoEncontrada`).
+  The header is the title under its eyebrow; «Ir a hoy» leaves. Decided 2026-10-05 by the coordinator.
