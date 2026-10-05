@@ -46,6 +46,48 @@ async function deleteLogDatabase(page: Page): Promise<void> {
   });
 }
 
+// `syncNow()` writes this only after the merge of the pulled rows has landed
+// (`lib/sync/driver.ts`), and nothing on screen reacts to a merge, so it is
+// the one signal that a sync finished. 0 stands for «never synced».
+async function readLastSyncedAt(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const get = db.transaction("sync", "readonly").objectStore("sync").get("state");
+          get.onsuccess = () => resolve(get.result?.lastSyncedAt ?? 0);
+          get.onerror = () => reject(get.error);
+        };
+      }),
+  );
+}
+
+// `SyncOnHide` listens from an effect, and a hide fired before it runs
+// reaches nothing. `RegisterServiceWorker` is its sibling in the layout and
+// runs in the same effect flush, so its `register` call says the listener is
+// on. Call the returned `arm` before a navigation, await its promise after.
+async function trackSyncListener(page: Page): Promise<() => Promise<void>> {
+  let fire: () => void = () => {};
+  let mounted = Promise.resolve();
+  await page.exposeFunction("__voyagerMounted", () => fire());
+  await page.addInitScript(() => {
+    const register = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    navigator.serviceWorker.register = (...args) => {
+      (window as unknown as { __voyagerMounted: () => void }).__voyagerMounted();
+      return register(...args);
+    };
+  });
+  return () => {
+    mounted = new Promise<void>((resolve) => {
+      fire = resolve;
+    });
+    return mounted;
+  };
+}
+
 // Same store, read instead of wiped. Call this before any further
 // navigation on `page`: `addInitScript` reinjects on every document `page`
 // loads, not once (docs/TRAPS.md), so a `deleteLogDatabase`'d page that
@@ -229,6 +271,35 @@ async function breakIndexedDB(page: Page): Promise<void> {
   });
 }
 
+// Every state short of «ready» draws «Instalando el diccionario…» or the
+// failure (`install-status.tsx`); `ready` draws nothing. The server render
+// is already `booting`, so this holds until the client has hydrated, booted
+// the worker and finished installing.
+async function dictionaryReady(page: Page): Promise<void> {
+  await expect(page.getByText(messages.install.unknownSize)).toHaveCount(0);
+  await expect(page.getByText(messages.install.failed)).toHaveCount(0);
+}
+
+// Types `word`, waits for its dictionary answer to be on screen — only then
+// has `recordLookup` been handed the row — and returns the box.
+async function searchFor(page: Page, word: string): Promise<Locator> {
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill(word);
+  const translations = dictionaryTranslations(word);
+  expect(translations.length, `the shipped dictionary carries no entry for "${word}"`).toBeGreaterThan(0);
+  await expect(page.getByText(translations[0]).first()).toBeVisible();
+  return searchBox;
+}
+
+// Clearing the box forces the flush `record.ts` describes: the guard has no
+// other way to learn a query was abandoned mid-word. The row is on disk once
+// the store reads it back.
+async function recordSearch(page: Page, word: string): Promise<void> {
+  const searchBox = await searchFor(page, word);
+  await searchBox.fill("");
+  await expect.poll(async () => (await readLogRows(page)).some((row) => row.normalised === word)).toBe(true);
+}
+
 test("a lookup's row lists the typed word, its count and the dictionary's own translation", async ({ page }) => {
   await deleteTranslator(page);
 
@@ -237,14 +308,9 @@ test("a lookup's row lists the typed word, its count and the dictionary's own tr
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("apple");
-  // Clearing the box forces the flush `record.ts:129-143` describes: the
-  // guard has no other way to learn a query was abandoned mid-word.
-  await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await recordSearch(page, "apple");
 
   await page.goto("/registro");
 
@@ -281,15 +347,13 @@ test("tapping \"Registro\" in the nav bar draws the search that motivated the tr
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("apple");
-  // Long enough for the lookup's own promise to answer and `recordLookup`
-  // to run, well short of `record.ts`'s own `SETTLE_MS` (800ms): the row
+  // The answer on screen is the lookup having answered and `recordLookup`
+  // having run, well short of `record.ts`'s own `SETTLE_MS` (800ms): the row
   // is still only `latestCandidate`, never even `pending`, when the tap
   // below fires — the flush it forces has to fold that candidate in too.
-  await page.waitForTimeout(300);
+  await searchFor(page, "apple");
 
   // A client-side navigation, not `page.goto`: this is the trigger
   // `pagehide`/`visibilitychange` never fire for.
@@ -337,7 +401,7 @@ test("a reader who only ever missed leaves no row, and /registro still shows the
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
   // RL-39: a word the dictionary carries nothing for leaves no row. A
   // multi-character nonsense string, not a single letter, so it stays a
@@ -345,8 +409,8 @@ test("a reader who only ever missed leaves no row, and /registro still shows the
   // queries.
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("xyzzy");
+  await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
   await searchBox.fill("");
-  await page.waitForTimeout(300);
 
   // Read here, on this same document, before anything navigates again:
   // `deleteLogDatabase`'s `addInitScript` reinjects on the `goto` below too
@@ -382,12 +446,9 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("apple");
-  await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await recordSearch(page, "apple");
 
   // A reader, so the confirm block draws both destructive options: the
   // colours below belong to `RegistroVaciarConfirmar`, the signed-in board,
@@ -451,12 +512,9 @@ test("without a session, the confirm panel draws no account option at all, and t
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("apple");
-  await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await recordSearch(page, "apple");
 
   await page.goto("/registro");
   await page.getByRole("button", { name: messages.log.clear.trigger }).click();
@@ -475,12 +533,9 @@ test("«Conservarlo» closes the confirmation without deleting anything", async 
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("apple");
-  await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await recordSearch(page, "apple");
 
   await page.goto("/registro");
   await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
@@ -506,12 +561,9 @@ test("without a session, «Vaciar el registro» empties IndexedDB, falls to the 
   );
   await page.goto("/");
   await firstAsset;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("apple");
-  await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await recordSearch(page, "apple");
 
   await page.goto("/registro");
   await page.getByRole("button", { name: messages.log.clear.trigger }).click();
@@ -526,11 +578,9 @@ test("without a session, «Vaciar el registro» empties IndexedDB, falls to the 
   // browser context, and a revisit serves it from the cache with no fresh
   // network response Playwright's own predicate can ever see.
   await page.goto("/");
-  await page.waitForTimeout(2000);
+  await dictionaryReady(page);
 
-  await searchBox.fill("banana");
-  await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await recordSearch(page, "banana");
 
   await page.goto("/registro");
   await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
@@ -545,12 +595,9 @@ test("without a session, «Vaciar el registro» drops the download link too, wit
   );
   await page.goto("/");
   await firstAsset;
-  await page.waitForTimeout(1000);
+  await dictionaryReady(page);
 
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("apple");
-  await searchBox.fill("");
-  await page.waitForTimeout(300);
+  await recordSearch(page, "apple");
 
   await page.goto("/registro");
   const download = page.getByRole("button", { name: messages.log.study.download });
@@ -583,8 +630,11 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
       (user_id, device_id, local_id, at, text, normalised, kind, outcome, headword, rule, senses, translation, dictionary_ready, origin, record_schema)
       values (${reader.id}, ${foreignDeviceId}, 1, now(), 'foreign-word', 'foreign-word', 'word', 'miss', null, null, 0, null, true, null, 2)`;
 
+    const armListener = await trackSyncListener(page);
+    const firstMount = armListener();
     await page.goto("/registro");
     await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
+    await firstMount;
 
     await seedLocalDatabase(page, {
       sync: {
@@ -600,7 +650,9 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
 
     // First sync: pulls the foreign row down onto this device.
     await hideTab(page);
-    await page.waitForTimeout(2000);
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the first sync never finished" })
+      .toBeGreaterThan(0);
     await page.reload();
     let rows = await readLogRows(page);
     expect(rows.map((row) => row.normalised), "the foreign row never made it down").toContain("foreign-word");
@@ -613,9 +665,14 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
 
     // A fresh mount resets `SyncOnHide`'s own 60s gate, so the sync below is
     // a new call, not the same one blocked from firing twice.
+    const mounted = armListener();
     await page.reload();
+    await mounted;
+    const syncedBefore = await readLastSyncedAt(page);
     await hideTab(page);
-    await page.waitForTimeout(2000);
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the second sync never finished" })
+      .toBeGreaterThan(syncedBefore);
 
     rows = await readLogRows(page);
     expect(rows, "the wiped row came back on the very next sync").toHaveLength(0);
