@@ -2710,3 +2710,35 @@ Every app's `vercel.json` says `deploymentEnabled: { "*": false, "main": true }`
   (`PATCH /v9/projects/<name>`). Cost: a merge to `main` now builds all three apps, three deployments a day at most.
 - **Do.** Count the deployments, not the builds: `GET /v6/deployments?since=<24 h ago>` and group by project and
   `meta.githubCommitRef`. A cancelled preview is not free.
+
+## A rate-limited route shares one bucket across every lane on the local stack
+
+Module 231 caps `/oauth/registro` at ten calls an hour per address. Every lane reaches one local stack from one address,
+so the cap is shared by every lane, every rerun and every `--repeat-each`.
+
+- **Measured 2026-10-05.** `autorizar.spec.ts` went 429 on its fourth run in an hour. A worker cleared `oauth_calls` to
+  get past it, which also reset every other lane's counters.
+- **Do.** Give each run its own address: a random /64 in `2001:db8::/32` as `x-forwarded-for`, on the spec's own API
+  calls and on the browser context's `extraHTTPHeaders`. `scripts/mcp/oauth-flow.ts` and `e2e/autorizar.spec.ts` do it.
+- **Never** wipe `goals.oauth_calls` to make a run pass.
+- **Never** assert the limit by wall-clock time (admitted calls slower than refused ones). Count the rows instead.
+
+## A lane born before the local stack breaks on its first merge of `integracion`
+
+Lanes opened before module 227 hold `scripts/supabase-local.sh` and `supabase/config.toml` as untracked copies.
+`integracion` now tracks both, so `git checkout` and `git merge` refuse: «untracked working tree files would be overwritten».
+
+- **Do.** Move the two files aside, merge, and keep `supabase/signing_keys.json`: it is gitignored and the stack needs it.
+- A branch older than 227 has no tracked script. Switching a lane back to one needs the untracked copy restored.
+- A pulsar check that needs `harness-member-<n>` reads orbit's identity. A lane opened for pulsar alone has no
+  `apps/orbit/.env.local`, so copy it in and run `HARNESS_LANE=<n> ../../scripts/supabase-local.sh exec npm run
+  harness:token` from `apps/orbit`. Check the rows landed in the local `auth.users`, not the remote one.
+
+## A `WIP:` commit can carry a mutant
+
+A session closed by the window commits what is on disk. On 2026-10-05 the voyager `WIP:` commit `89e8867` held
+`commit(pending)` commented out in `apps/voyager/lib/log/record.ts`: a negative control left mid-proof. No run on that
+branch could pass until it was restored.
+
+- **Do.** Before you finish a `WIP:` branch, read `git diff <base>..HEAD` over the app code, not only the specs.
+- **Do.** Before merging, check that the net diff against the base touches only what the module claims.
