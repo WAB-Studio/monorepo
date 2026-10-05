@@ -29,7 +29,20 @@ async function register(baseURL: string, name: string, redirect = REDIRECT): Pro
   return ((await response.json()) as { client_id: string }).client_id;
 }
 
-function consentPath(baseURL: string, clientId: string, challenge: string, redirect = REDIRECT): string {
+// The audience a real client reads from the server's own metadata, never one it builds.
+let resource = "";
+// One registration per worker: `/oauth/registro` is throttled per address (RNP-19).
+let client = { id: "", name: "" };
+test.beforeAll(async ({ baseURL }) => {
+  const response = await fetch(`${baseURL}/.well-known/oauth-protected-resource`);
+  expect(response.status).toBe(200);
+  resource = ((await response.json()) as { resource: string }).resource;
+  expect(resource).toMatch(/\/mcp$/);
+  const name = `Claude ${randomBytes(3).toString("hex")}`;
+  client = { id: await register(baseURL!, name), name };
+});
+
+function consentPath(clientId: string, challenge: string, redirect = REDIRECT): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: clientId,
@@ -37,7 +50,7 @@ function consentPath(baseURL: string, clientId: string, challenge: string, redir
     code_challenge: challenge,
     code_challenge_method: "S256",
     state: STATE,
-    resource: `${baseURL.replace(/\/+$/, "")}/mcp`,
+    resource,
   });
   return `/oauth/autorizar?${params.toString()}`;
 }
@@ -71,11 +84,10 @@ test.describe("the consent screen (RP-41)", () => {
     browser,
     baseURL,
   }) => {
-    const name = `Claude ${randomBytes(3).toString("hex")}`;
-    const clientId = await register(baseURL!, name);
+    const { id: clientId, name } = client;
     const { context, page } = await open(browser, baseURL!, person.sessionFile);
     try {
-      await page.goto(consentPath(baseURL!, clientId, challengeOf(verifier())));
+      await page.goto(consentPath(clientId, challengeOf(verifier())));
       await expect(page.getByRole("heading", { level: 1, name: oauth.title.replace("{client}", name) })).toBeVisible();
       for (const text of [...Object.values(oauth.may), ...Object.values(oauth.never)]) {
         await expect(page.getByText(text, { exact: true })).toBeVisible();
@@ -94,12 +106,11 @@ test.describe("the consent screen (RP-41)", () => {
     browser,
     baseURL,
   }) => {
-    const name = `Claude ${randomBytes(3).toString("hex")}`;
-    const clientId = await register(baseURL!, name);
+    const { id: clientId, name } = client;
     const secret = verifier();
     const { context, page } = await open(browser, baseURL!, person.sessionFile);
     try {
-      await page.goto(consentPath(baseURL!, clientId, challengeOf(secret)));
+      await page.goto(consentPath(clientId, challengeOf(secret)));
       await page.getByRole("button", { name: oauth.allow, exact: true }).click();
       await page.waitForURL(/localhost:6274/);
 
@@ -137,10 +148,10 @@ test.describe("the consent screen (RP-41)", () => {
     browser,
     baseURL,
   }) => {
-    const clientId = await register(baseURL!, `Claude ${randomBytes(3).toString("hex")}`);
+    const clientId = client.id;
     const { context, page } = await open(browser, baseURL!, person.sessionFile);
     try {
-      await page.goto(consentPath(baseURL!, clientId, challengeOf(verifier())));
+      await page.goto(consentPath(clientId, challengeOf(verifier())));
       await page.getByRole("button", { name: oauth.deny }).click();
       await page.waitForURL(/localhost:6274/);
 
@@ -158,10 +169,10 @@ test.describe("the consent screen (RP-41)", () => {
     browser,
     baseURL,
   }) => {
-    const clientId = await register(baseURL!, `Claude ${randomBytes(3).toString("hex")}`);
+    const clientId = client.id;
     const { context, page } = await open(browser, baseURL!, person.sessionFile);
     try {
-      await page.goto(consentPath(baseURL!, clientId, challengeOf(verifier()), "http://localhost:6274/otra"));
+      await page.goto(consentPath(clientId, challengeOf(verifier()), "http://localhost:6274/otra"));
       await expect(page.getByRole("heading", { level: 1, name: oauth.invalid.title })).toBeVisible();
       await expect(page.getByText(oauth.invalid.body, { exact: true })).toBeVisible();
       await expect(page.getByRole("button")).toHaveCount(0);
@@ -173,10 +184,10 @@ test.describe("the consent screen (RP-41)", () => {
   });
 
   test("a request with no PKCE challenge reads as invalid", async ({ person, browser, baseURL }) => {
-    const clientId = await register(baseURL!, `Claude ${randomBytes(3).toString("hex")}`);
+    const clientId = client.id;
     const { context, page } = await open(browser, baseURL!, person.sessionFile);
     try {
-      const path = consentPath(baseURL!, clientId, challengeOf(verifier())).replace(/&code_challenge=[^&]*/, "");
+      const path = consentPath(clientId, challengeOf(verifier())).replace(/&code_challenge=[^&]*/, "");
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1, name: oauth.invalid.title })).toBeVisible();
       await expect(page.getByRole("button")).toHaveCount(0);
@@ -189,8 +200,8 @@ test.describe("the consent screen (RP-41)", () => {
     browser,
     baseURL,
   }) => {
-    const clientId = await register(baseURL!, `Claude ${randomBytes(3).toString("hex")}`);
-    const path = consentPath(baseURL!, clientId, challengeOf(verifier()));
+    const clientId = client.id;
+    const path = consentPath(clientId, challengeOf(verifier()));
     const { context, page } = await open(browser, baseURL!, signedOut);
     try {
       await page.goto(path);
@@ -210,10 +221,10 @@ test.describe("the consent screen (RP-41)", () => {
   });
 
   test("at 1280 the column stands alone and centred, with no overflow", async ({ person, browser, baseURL }) => {
-    const clientId = await register(baseURL!, `Claude ${randomBytes(3).toString("hex")}`);
+    const clientId = client.id;
     const { context, page } = await open(browser, baseURL!, person.sessionFile, 1280);
     try {
-      await page.goto(consentPath(baseURL!, clientId, challengeOf(verifier())));
+      await page.goto(consentPath(clientId, challengeOf(verifier())));
       const button = page.getByRole("button", { name: oauth.allow, exact: true });
       await expect(button).toBeVisible();
       await expectNoOverflow(page);

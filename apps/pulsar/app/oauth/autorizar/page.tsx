@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 
 import { Consent } from "@/components/oauth/consent";
@@ -15,7 +16,7 @@ type Query = Record<string, string | string[] | undefined>;
 type KnownClient = { name: string; redirectUris: string[] };
 
 async function readClient(clientId: string): Promise<KnownClient | null> {
-  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId);
+  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await headers());
 
   const rows = await withGoalsDb((tx) =>
     tx.execute<{ client_name: string; redirect_uris: string[] }>(sql`
