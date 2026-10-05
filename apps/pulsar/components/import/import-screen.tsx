@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { saveDraft } from "@/lib/import/draft-store";
+import { readSource, saveDraft } from "@/lib/import/draft-store";
 import type { ImportDraft } from "@/lib/import/draft";
 import { Button, CodeBlock, FilePick, Flex, Notice, Page, SectionLabel, Text, TextArea } from "@/components/ui";
 
@@ -27,9 +27,11 @@ type Failure =
   | { kind: "templateLine"; line: number; expected: string; text: string }
   | { kind: "key"; key: string; values?: Record<string, string> };
 
+const subscribeNothing = () => () => {};
+
 // What each failure draws: where its box sits and what it offers next.
 function placement(failure: Failure) {
-  if (failure.kind === "templateLine") return { place: "below", template: false } as const;
+  if (failure.kind === "templateLine") return { place: "below", template: true } as const;
   switch (failure.key) {
     case "import.errors.noKey":
     case "import.errors.cap":
@@ -52,7 +54,11 @@ export function ImportScreen() {
   const t = useTranslations();
   const format = useFormatter();
   const router = useRouter();
-  const [text, setText] = useState("");
+  // Storage is the client's: the server snapshot is the empty box, and the
+  // stored text shows once hydrated. What the person types wins from then on.
+  const stored = useSyncExternalStore(subscribeNothing, () => readSource() ?? "", () => "");
+  const [typed, setTyped] = useState<string | null>(null);
+  const text = typed ?? stored;
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [showTemplate, setShowTemplate] = useState(true);
@@ -69,7 +75,8 @@ export function ImportScreen() {
     setShowTemplate(false);
   }
 
-  async function send(form: FormData, source: string) {
+  // `source` is the text a template line is quoted from; `saved` is what the box holds again next time.
+  async function send(form: FormData, source: string, saved: string | null) {
     setBusy(true);
     setFailure(null);
     try {
@@ -83,7 +90,7 @@ export function ImportScreen() {
       } | null;
 
       if (response.ok && body?.draft && body.via) {
-        saveDraft({ via: body.via, draft: body.draft });
+        saveDraft({ via: body.via, draft: body.draft, source: saved });
         router.push("/metas/importar/revisar");
         return;
       }
@@ -110,7 +117,7 @@ export function ImportScreen() {
     if (busy) return;
     const form = new FormData();
     form.set("text", text);
-    void send(form, text);
+    void send(form, text, text);
   }
 
   async function readFile(file: File) {
@@ -130,7 +137,7 @@ export function ImportScreen() {
     form.set("file", file);
     // Only a text file can fail on a template line; its text is the line's source.
     const binary = file.type === "application/pdf" || file.type.startsWith("image/") || /\.pdf$/i.test(file.name);
-    await send(form, binary ? "" : await file.text().catch(() => ""));
+    await send(form, binary ? "" : await file.text().catch(() => ""), null);
   }
 
   function copyTemplate() {
@@ -172,7 +179,7 @@ export function ImportScreen() {
         value={text}
         disabled={busy}
         invalid={failure?.kind === "templateLine"}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => setTyped(event.target.value)}
       />
 
       <FilePick
