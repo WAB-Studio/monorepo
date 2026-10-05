@@ -1,5 +1,7 @@
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 
+import { consentReturnPath } from "@/lib/validation/oauth";
+
 // Copied from `apps/voyager/lib/auth/verify-magic-link.ts` (RP-18): a
 // timeout is the gateway not answering — `verifyOtp` ran but never
 // completed, so the token's fate is unknown. `linkInvalid` covers a
@@ -52,4 +54,9 @@ export async function verifyMagicLink<TParams, TUser>(
     };
   }
   return { ok: true, user: data.user };
+}
+
+/** Where `/auth/confirm` lands after a verified link: the consent it came from, or `/`. */
+export function landingAfterSignIn(next: string | null | undefined, siteUrl: string): string {
+  return consentReturnPath(next, siteUrl) ?? "/";
 }

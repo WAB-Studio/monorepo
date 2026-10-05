@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 
-import { verifyMagicLink } from "./verify-magic-link";
+import { landingAfterSignIn, verifyMagicLink } from "./verify-magic-link";
 
 // RP-18: the link is verified once. `verifyOtp` spends the token, so a second
 // call after a timeout would turn an unknown into a certain failure.
@@ -57,4 +57,12 @@ test("an error that arrives with a user is still a failure", async () => {
   );
   assert.ok(!result.ok);
   assert.equal(result.reason, "linkInvalid");
+});
+
+test("landingAfterSignIn returns to the consent and to / for anything else", () => {
+  const site = "https://pulsar.example";
+  assert.equal(landingAfterSignIn("/oauth/autorizar?client_id=a", site), "/oauth/autorizar?client_id=a");
+  for (const next of ["//evil.example", "https://evil.example/oauth/autorizar", "/metas", "", null, undefined]) {
+    assert.equal(landingAfterSignIn(next, site), "/", String(next));
+  }
 });

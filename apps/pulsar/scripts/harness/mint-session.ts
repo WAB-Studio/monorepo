@@ -28,7 +28,7 @@ import { dirname, resolve } from "node:path";
 import { openRun } from "@repo/harness-registry";
 import postgres from "postgres";
 
-const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
+export const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
   prepare: false,
   max: 1,
 });
@@ -71,7 +71,7 @@ function sessionFile(): string {
  * other. Every column GoTrue's own verify path reads is filled — a null one
  * there is a 500, not a refusal.
  */
-async function createIdentity(runId: string): Promise<{ id: string; email: string }> {
+export async function createIdentity(runId: string): Promise<{ id: string; email: string }> {
   const id = randomUUID();
   const email = `harness-pulsar-${id}@example.invalid`;
 
@@ -104,7 +104,7 @@ async function createIdentity(runId: string): Promise<{ id: string; email: strin
 // Same technique as orbit's `mint-harness-token.ts`: a fresh hash in both
 // `auth.users.recovery_token` and a matching `auth.one_time_tokens` row, the
 // only pair GoTrue's `verifyOtp` accepts for `type=magiclink`.
-async function landRecoveryToken(userId: string, email: string): Promise<string> {
+export async function landRecoveryToken(userId: string, email: string): Promise<string> {
   const hash = randomBytes(32).toString("hex");
 
   await sql`
@@ -168,18 +168,21 @@ function parseSetCookie(line: string, requestHost: string): MintedCookie {
   return { name, value, domain, path, expires, httpOnly, secure, sameSite };
 }
 
+export function confirmResponse(hash: string, next?: string): Promise<Response> {
+  const query = new URLSearchParams({ token_hash: hash, type: "magiclink" });
+  if (next !== undefined) query.set("next", next);
+  return fetch(`${baseUrl()}/auth/confirm?${query}`, { redirect: "manual" });
+}
+
 /**
  * The real route, by HTTP: `GET /auth/confirm?token_hash=…&type=magiclink`.
  * `redirect: "manual"` reads the redirect's own headers instead of following
  * it, which is what lets this see `Set-Cookie` before a followed redirect
  * would consume it.
  */
-async function redeemToken(hash: string): Promise<MintedCookie[]> {
+export async function redeemToken(hash: string, next?: string): Promise<MintedCookie[]> {
   const url = baseUrl();
-  const response = await fetch(
-    `${url}/auth/confirm?token_hash=${hash}&type=magiclink`,
-    { redirect: "manual" },
-  );
+  const response = await confirmResponse(hash, next);
 
   const location = response.headers.get("location");
   if (!location || location.includes("error=")) {
@@ -213,7 +216,8 @@ async function main(): Promise<void> {
   console.log(`minted a session for ${identity.email} (${identity.id}), lane ${lane}`);
 }
 
-void (async () => {
+// Imported by a check, this file only lends its functions.
+if (process.argv[1]?.endsWith("mint-session.ts")) void (async () => {
   try {
     await main();
     process.exit(0);

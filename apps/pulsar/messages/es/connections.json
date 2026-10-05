@@ -48,6 +48,7 @@
     "nameEmpty": "Ponle un nombre a la llave.",
     "nameTooLong": "El nombre cabe en 60 letras.",
     "nameTaken": "Ya tienes una llave con ese nombre. Dale otro.",
-    "notFound": "Esa llave ya no existe."
+    "notFound": "Esa llave ya no existe.",
+    "signedOut": "Entra otra vez para manejar tus llaves."
   }
 }
