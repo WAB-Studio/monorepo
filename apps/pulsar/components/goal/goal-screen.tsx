@@ -9,7 +9,10 @@ import {
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
-import { loadGoal } from "@/lib/queries/goal";
+import { ShiftProposal } from "@/components/month/task-row";
+import { monthList } from "@/lib/plan/carry";
+import { shiftOfferNow } from "@/lib/plan/shift-offer";
+import { listGoals, loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
 import { isTimeUnit } from "@/lib/units/time";
 import {
@@ -82,7 +85,7 @@ function phaseSpanLabel(
  * show and nothing to sum.
  */
 export async function GoalScreen({ goalId }: { goalId: string }) {
-  const goal = await loadGoal(goalId);
+  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
   if (!goal) notFound();
 
   const t = await getTranslations();
@@ -130,6 +133,62 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const daysLeft = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate() - Number(today.slice(8, 10));
   const planned = month?.planned ?? null;
   const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
+  // A goal with no measure has no amount to read, but its months and their
+  // tasks stay reachable (`MetaSinMedida.dc.html`).
+  const bareMonth = !goal.measureUnit && goal.months.some((row) => row.current);
+  const own = bareMonth
+    ? monthList(goal.tasks, `${today.slice(0, 7)}-01`, today).filter((item) => item.carriedFrom === null)
+    : [];
+  const offer =
+    (month || bareMonth) && !archived && !ended
+      ? shiftOfferNow({
+          today,
+          horizon: goal.horizon,
+          budgets: goal.budgets,
+          phases: goal.phases,
+          tasks: goal.tasks,
+          shifts: goal.shifts,
+        })
+      : null;
+  const monthNames = t.raw("day.monthLong") as string[];
+  const closedName = offer ? monthNames[Number(offer.closedMonth.slice(5, 7)) - 1] : "";
+  const shiftOffer = offer ? (
+    <ShiftProposal
+      goalId={goal.id}
+      goalName={goal.name}
+      month={offer.closedMonth.slice(0, 7)}
+      plan={offer.plan}
+      currentPhase={currentPhase?.name ?? null}
+      hasDoneTasks={goal.tasks.some((task) => task.doneOn !== null)}
+      otherGoals={goals.filter((other) => other.id !== goal.id).map((other) => other.name)}
+      proposal={t("month.shift.carriedOver", {
+        month: closedName.charAt(0).toUpperCase() + closedName.slice(1),
+        share: Math.floor((offer.share.carried * 100) / offer.share.planned),
+      })}
+      see={t("month.shift.see")}
+      until={t("month.shift.until", {
+        date: `${Number(offer.until.slice(8, 10))} de ${monthNames[Number(offer.until.slice(5, 7)) - 1]}`,
+      })}
+    />
+  ) : null;
+  const monthsLink = (
+    <Button asChild variant="ghost">
+      <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
+    </Button>
+  );
+  const bareBlock = bareMonth ? (
+    <section>
+      <SectionLabel>{monthName}</SectionLabel>
+      <Text as="p" variant="meta" tone="muted">
+        {t("month.months.withoutMeasure.goalTasks", {
+          count: own.length,
+          done: own.filter((item) => item.done).length,
+        })}
+      </Text>
+      {shiftOffer}
+      {monthsLink}
+    </section>
+  ) : null;
   const monthBlock =
     goal.measureUnit && month ? (
       <section>
@@ -168,6 +227,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             )}
           </>
         ) : null}
+        {shiftOffer}
         <Flex gap="2" wrap="wrap">
           {planned === null && !archived && !ended ? (
             <Button asChild variant="outline">
@@ -176,9 +236,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               </Link>
             </Button>
           ) : null}
-          <Button asChild variant="ghost">
-            <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
-          </Button>
+          {monthsLink}
         </Flex>
       </section>
     ) : null;
@@ -237,7 +295,17 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           ) : null}
         </Panel>
       ) : (
-        phoneActs
+        <>
+          {phoneActs}
+          {bareBlock ? (
+            <Panel>
+              <Text as="p" variant="meta" tone="muted">
+                {t("month.list.noMeasure")}
+              </Text>
+              {bareBlock}
+            </Panel>
+          ) : null}
+        </>
       )}
     </>
   );

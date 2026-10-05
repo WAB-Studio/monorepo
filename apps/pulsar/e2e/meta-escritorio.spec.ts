@@ -163,7 +163,7 @@ test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase
         })
         .map((el) => (el as HTMLElement).innerText.trim()),
     );
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(4);
     for (const text of cards) expect(text).not.toBe("");
 
     const label = await boxOf(page, "cero fases");

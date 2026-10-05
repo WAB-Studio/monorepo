@@ -129,7 +129,7 @@ test("the goal says the month's amount, moves with a done task, and links to its
   }
 });
 
-test("a measure with no amount says so and offers to plan the month; no measure draws no month (RP-28)", async ({
+test("a measure with no amount says so and offers to plan the month; no measure draws its tasks, not an amount (RP-28)", async ({
   person,
   browser,
   baseURL,
@@ -160,9 +160,17 @@ test("a measure with no amount says so and offers to plan the month; no measure 
         `/metas/${bare}/meses`,
       );
 
+      // The month section of a goal with no measure is `MetaSinMedida.dc.html`'s:
+      // no figure and no amount, only its tasks and the way to its months.
       await page.goto(`/metas/${noMeasure}`);
       await expect(page.getByText(`Meta sin medida ${stamp}`).first()).toBeVisible();
-      await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveCount(0);
+      await expect(seen(page, "esta meta no mide nada")).toHaveCount(1);
+      await expect(seen(page, monthName)).toHaveCount(1);
+      await expect(seen(page, "0 tareas · 0 hechas")).toHaveCount(1);
+      await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveAttribute(
+        "href",
+        `/metas/${noMeasure}/meses`,
+      );
       await expect(seen(page, "sin monto planeado")).toHaveCount(0);
       await expect(page.getByRole("link", { name: /^Planear /})).toHaveCount(0);
     }
@@ -243,6 +251,118 @@ test("an archived or ended goal reads its month and offers no way to plan it (RP
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveCount(day === 1 ? 0 : 1);
       await expect(seen(page, "sin monto planeado")).toHaveCount(day === 1 ? 0 : 1);
     }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
+test("a goal with no measure opens its months, its current month and the task form with no time field (RP-31)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  const page = await context.newPage();
+  try {
+    const bare = await seedGoal(db, person, { name: `Meta libre ${stamp}`, budget: null, unit: null });
+    const [done] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${person.id}, ${bare}, ${`Hecha ${stamp}`}, ${monthStart}::date) returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${bare}, ${done.id}, ${monthStart}::date)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${person.id}, ${bare}, ${`Falta ${stamp}`}, ${monthStart}::date)
+    `;
+
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/metas/${bare}`);
+      await expect(seen(page, monthName)).toHaveCount(1);
+      await expect(seen(page, "2 tareas · 1 hecha")).toHaveCount(1);
+      await page.getByRole("link", { name: "Ver por mes", exact: true }).click();
+      await expect(page).toHaveURL(`/metas/${bare}/meses`);
+      await page.getByRole("link", { name: monthName, exact: true }).first().click();
+      await expect(page).toHaveURL(`/metas/${bare}/meses/${today.slice(0, 7)}`);
+      await expect(page.getByText(`Hecha ${stamp}`)).toBeVisible();
+      await page.getByRole("link", { name: /^Otra tarea de /}).click();
+      await expect(page.getByLabel("qué hay que hacer")).toBeVisible();
+      await expect(page.getByLabel("horas")).toHaveCount(0);
+      await expect(page.getByLabel("minutos")).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
+// Calendar-bound as `mes.spec.ts`: «last month» is the month before today, so
+// the window to shift is always open.
+test("a goal whose last month carried over half offers the shift on its month block; accepting moves the plan and the line is gone; at half or archived there is none (RP-34)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const lastMonth = `${dateToCivilDate(new Date(civilDateToDate(monthStart).getTime() - 86400000)).slice(0, 7)}-01`;
+  const lastName = MONTHS[Number(lastMonth.slice(5, 7)) - 1];
+  const task = async (goalId: string, name: string, month: string, doneOn: string | null) => {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${person.id}, ${goalId}, ${name}, ${month}::date, 100) returning id
+    `;
+    if (doneOn) {
+      await db`
+        insert into goals.facts (user_id, goal_id, one_off_id, day)
+        values (${person.id}, ${goalId}, ${row.id}, ${doneOn}::date)
+      `;
+    }
+  };
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  const page = await context.newPage();
+  try {
+    const moved = await seedGoal(db, person, { name: `Meta corre ${stamp}`, budget: 600 });
+    await task(moved, `Sigue ${stamp}`, lastMonth, null);
+    const half = await seedGoal(db, person, { name: `Meta mitad ${stamp}`, budget: 600 });
+    await task(half, `Hecha ${stamp}`, lastMonth, lastMonth);
+    await task(half, `Falta ${stamp}`, lastMonth, null);
+    const archived = await seedGoal(db, person, { name: `Meta archivada ${stamp}`, budget: 600, archived: true });
+    await task(archived, `Sigue ${stamp}`, lastMonth, null);
+
+    const line = `${lastName.charAt(0).toUpperCase()}${lastName.slice(1)} arrastró 100 %. Puedes correr un mes lo que sigue de esta meta.`;
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const none of [half, archived]) {
+        await page.goto(`/metas/${none}`);
+        await expect(seen(page, monthName)).toHaveCount(1);
+        await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
+      }
+    }
+
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto(`/metas/${moved}`);
+    await expect(seen(page, line)).toHaveCount(1);
+    await expect(page.getByText(/^se puede hasta el \d+ de /)).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(seen(page, line)).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
+    await page.getByRole("button", { name: "ver qué se corre" }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "Correr un mes lo que sigue" })).toBeVisible();
+    await sheet.getByRole("button", { name: "Correr un mes" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
