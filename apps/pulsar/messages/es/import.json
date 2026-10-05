@@ -49,9 +49,12 @@
       "title": "No se puede crear",
       "hint": "se queda fuera; corrígelo en tu texto y vuelve a leerlo",
       "from": "{goal} · {group}",
-      "outsideSpan": "queda fuera del plazo de la meta, que abre en {month}",
       "noMeasure": "esta meta no mide nada, así que una tarea no lleva tiempo",
-      "timesPerWeek": "una semana tiene 7 días"
+      "timesPerWeek": "una semana tiene 7 días",
+      "monthBeforeStart": "ya pasó: la meta empieza en {first}",
+      "monthAfterEnd": "queda después del final de la meta, el {last}",
+      "amountNoMeasure": "esta meta no mide nada, así que un mes no lleva monto",
+      "quantityNoMeasure": "esta meta no mide nada, así que un compromiso no lleva cantidad"
     }
   },
   "errors": {
