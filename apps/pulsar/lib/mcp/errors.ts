@@ -1,15 +1,17 @@
 import { createTranslator } from "next-intl";
 
+import connections from "../../messages/es/connections.json";
 import day from "../../messages/es/day.json";
 import goal from "../../messages/es/goal.json";
 import importMessages from "../../messages/es/import.json";
 import mcp from "../../messages/es/mcp.json";
 import month from "../../messages/es/month.json";
+import oauth from "../../messages/es/oauth.json";
 import plan from "../../messages/es/plan.json";
 
 // The request config belongs to a request; a tool answers outside one, so the
 // catalogue is read here directly, in the one locale there is.
-const messages = { day, goal, import: importMessages, mcp, month, plan };
+const messages = { connections, day, goal, import: importMessages, mcp, month, oauth, plan };
 const translate = createTranslator({ locale: "es", messages });
 
 const KEY = /^[A-Za-z]+\.errors\.[A-Za-z]+$/;
