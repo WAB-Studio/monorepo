@@ -15,12 +15,13 @@ const WEEK_NOTE = "No pudimos leer una fuente. Lo declarado esta semana sigue aq
 const GOAL_NOTE = "No pudimos leer una fuente. Lo declarado sigue aquí.";
 const FAILURE = "No se pudo abrir";
 
-// `Semana.dc.html`'s own weekday order, read back here rather than imported.
-const WEEKDAY_SHORT = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+// The Semana row's mark names its day in full («…, lunes 5: hecho»), read
+// back here rather than imported.
+const WEEKDAY_LONG = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
-function weekRowLabel(civilDay: string): string {
+function markDayLabel(civilDay: string): string {
   const weekdayIndex = (new Date(`${civilDay}T12:00:00Z`).getUTCDay() + 6) % 7;
-  return `${WEEKDAY_SHORT[weekdayIndex]} ${Number(civilDay.slice(8, 10))}`;
+  return `${WEEKDAY_LONG[weekdayIndex]} ${Number(civilDay.slice(8, 10))}`;
 }
 
 type Seed = { goalId: string; goalName: string; tapName: string; today: string };
@@ -96,9 +97,8 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
 
       await expect(page.getByText(WEEK_NOTE, { exact: true })).toBeVisible();
       const mark = page
-        .locator("section", { hasText: seeded.goalName })
-        .locator("button", { hasText: weekRowLabel(seeded.today) })
-        .locator(`[role="img"][aria-label^="${seeded.tapName}"]`);
+        .getByRole("main")
+        .getByRole("img", { name: `${seeded.tapName}, ${markDayLabel(seeded.today)}: hecho`, exact: true });
       await expect(mark).toHaveAttribute("data-state", "declared");
       await expect(page.getByText(FAILURE)).toHaveCount(0);
     } finally {
