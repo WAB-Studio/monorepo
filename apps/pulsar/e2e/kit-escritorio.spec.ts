@@ -96,7 +96,7 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
     await page.goto(`/metas/${goalId}/compromisos/nuevo`);
     await page.getByLabel("qué es").fill(`Medida kit ${lane} ${Date.now()}`);
     await page.getByRole("button", { name: "un número", exact: true }).click();
-    await page.getByLabel("cantidad").fill("5");
+    await page.getByLabel("cantidad", { exact: true }).fill("5");
     await page.getByLabel("unidad").fill("minutos");
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await page.waitForURL(`**/metas/${goalId}`);
