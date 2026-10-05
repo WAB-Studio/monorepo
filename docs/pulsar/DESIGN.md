@@ -701,4 +701,4 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   the same two ways. A person with any goal reads the list as before. Decided by the user 2026-10-01, options
   (a) and (c). **Faces not drawn:** both boards are the phone alone (390). At 1280 each follows the existing
   desktop layout (the rail, the 640 column for `/metas`, Hoy's main column), no board of its own; no dark face
-  (the token table says it).
+  (the token table says it). The boards' fixed 844 px phone is not reproduced: both screens flow in the standard `Page`.
