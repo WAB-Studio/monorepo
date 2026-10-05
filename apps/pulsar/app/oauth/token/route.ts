@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { clientFromMetadataUrl } from "@/lib/oauth/client-metadata";
 import { exchangeCode, refreshToken, type IssuedTokens } from "@/lib/oauth/grants";
+import { callerAddress, claimCall, tooMany } from "@/lib/oauth/throttle";
 
 export const runtime = "nodejs";
 
@@ -38,11 +39,11 @@ const refreshGrant = z.object({
 });
 
 // A client named by its metadata URL has its stored id; the rest are ids already.
-async function storedClientId(clientId: string): Promise<string | null> {
+async function storedClientId(clientId: string, caller: Request["headers"]): Promise<string | null> {
   if (z.uuid().safeParse(clientId).success) return clientId;
   if (!clientId.startsWith("https://")) return null;
 
-  return (await clientFromMetadataUrl(clientId))?.id ?? null;
+  return (await clientFromMetadataUrl(clientId, caller))?.id ?? null;
 }
 
 function issued(tokens: IssuedTokens): Response {
@@ -57,6 +58,9 @@ function issued(tokens: IssuedTokens): Response {
 // RFC 6749 §4.1.3 and §6. Every refusal is the same `invalid_grant`: the
 // body never says which of code, verifier, client or redirect was wrong.
 export async function POST(request: Request): Promise<Response> {
+  const claim = await claimCall("token", callerAddress(request));
+  if (!claim.ok) return tooMany(claim.retryAfter, CORS);
+
   const form = await request.formData().catch(() => null);
   if (form === null) return reply(400, { error: "invalid_request" });
   const fields = Object.fromEntries([...form.entries()].filter(([, value]) => typeof value === "string"));
@@ -64,7 +68,7 @@ export async function POST(request: Request): Promise<Response> {
   if (fields.grant_type === "authorization_code") {
     const parsed = codeGrant.safeParse(fields);
     if (!parsed.success) return reply(400, { error: "invalid_request" });
-    const clientId = await storedClientId(parsed.data.client_id);
+    const clientId = await storedClientId(parsed.data.client_id, request.headers);
     if (clientId === null) return refused();
     const tokens = await exchangeCode({
       code: parsed.data.code,
@@ -79,7 +83,7 @@ export async function POST(request: Request): Promise<Response> {
   if (fields.grant_type === "refresh_token") {
     const parsed = refreshGrant.safeParse(fields);
     if (!parsed.success) return reply(400, { error: "invalid_request" });
-    const clientId = await storedClientId(parsed.data.client_id);
+    const clientId = await storedClientId(parsed.data.client_id, request.headers);
     if (clientId === null) return refused();
     const tokens = await refreshToken({ refreshToken: parsed.data.refresh_token, clientId });
 

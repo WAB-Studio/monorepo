@@ -19,6 +19,10 @@ const base = (process.env.PULSAR_BASE_URL ?? `http://localhost:${3200 + lane - 1
 const logPath = resolve(process.cwd(), process.env.PULSAR_SERVER_LOG ?? `private/dev${new URL(base).port}.log`);
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/+$/, "");
 const REDIRECT = "http://localhost:6274/oauth/callback";
+// A /64 of the documentation prefix, new each run: this file's calls to the two
+// limited routes never share a counter with another lane's or another file's.
+const from = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::1`;
+const asRun = { "x-forwarded-for": from };
 
 const admin = adminSql();
 const door = postgres(process.env.DATABASE_URL!, { prepare: false, max: 2 });
@@ -51,7 +55,7 @@ const newVerifier = () => randomBytes(32).toString("base64url");
 async function form(fields: Record<string, string>): Promise<{ status: number; body: Record<string, unknown>; headers: Headers }> {
   const response = await fetch(`${base}/oauth/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", ...asRun },
     body: new URLSearchParams(fields),
   });
 
@@ -169,7 +173,7 @@ test("the metadata parses, names this origin, and its URLs answer", async () => 
     const preflight = await fetch(`${base}${path}`, { method: "OPTIONS" });
     assert.ok(preflight.status < 300, `${path} preflight ${preflight.status}`);
     assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
-    const probe = await fetch(`${base}${path}`, { method: "POST", body: "" });
+    const probe = await fetch(`${base}${path}`, { method: "POST", body: "", headers: asRun });
     assert.equal(probe.status, 400, `${path} answered ${probe.status} to an empty POST`);
     await probe.text();
   }
@@ -179,7 +183,7 @@ test("the metadata parses, names this origin, and its URLs answer", async () => 
 
 test("registration answers 201 with the client, and 400 invalid_client_metadata otherwise", async () => {
   const register = (body: unknown) =>
-    fetch(`${base}/oauth/registro`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    fetch(`${base}/oauth/registro`, { method: "POST", headers: { "Content-Type": "application/json", ...asRun }, body: JSON.stringify(body) });
 
   const created = await register({ client_name: "flow client", redirect_uris: [REDIRECT] });
   assert.equal(created.status, 201);
@@ -209,7 +213,7 @@ test("registration answers 201 with the client, and 400 invalid_client_metadata 
     assert.equal(refused.status, 400, JSON.stringify(bad));
     assert.deepEqual(await refused.json(), { error: "invalid_client_metadata" });
   }
-  const garbage = await fetch(`${base}/oauth/registro`, { method: "POST", body: "{not json" });
+  const garbage = await fetch(`${base}/oauth/registro`, { method: "POST", body: "{not json", headers: asRun });
   assert.equal(garbage.status, 400);
   await garbage.text();
 });

@@ -70,8 +70,9 @@ const eslintConfig = defineConfig([
   },
   // `resolveBearer` runs before any person exists, so it has no settle to
   // offer: it calls one `SECURITY DEFINER` function and reads nothing else.
+  // The call counter has no person either: it claims through one such function.
   {
-    files: ["lib/mcp/tokens.ts", "lib/oauth/grants.ts"],
+    files: ["lib/mcp/tokens.ts", "lib/oauth/grants.ts", "lib/oauth/throttle.ts"],
     rules: { "no-restricted-imports": "off" },
   },
   // A spec asserts what the device really holds, so it reads the store the
