@@ -1,0 +1,250 @@
+// Drives `moveTaskToMonth` (`app/actions/one-offs.ts`, RP-42) the way
+// `task-actions.ts` drives its siblings: the action imported as a plain async
+// function, `server-only`, `next/headers` and `next/cache` stubbed before the
+// first `@/` import, and the cookie `harness:mint-session` left standing is
+// the session `getPerson()` reads. The pooler only reads rows back, backdates
+// a fixture and deletes them.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import Module from "node:module";
+import { resolve } from "node:path";
+import { after, before, test } from "node:test";
+
+import postgres from "postgres";
+
+function laneNumber(): number {
+  const raw = process.env.HARNESS_LANE?.trim();
+  if (!raw) return 1;
+  if (!/^[1-9][0-9]*$/.test(raw)) {
+    throw new Error(`HARNESS_LANE must be a positive integer, not "${raw}"`);
+  }
+  return Number(raw);
+}
+
+type StoredCookie = { name: string; value: string };
+
+function loadCookies(): StoredCookie[] {
+  const file = resolve(process.cwd(), `private/session-${laneNumber()}.json`);
+  let state: { cookies: StoredCookie[] };
+  try {
+    state = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    throw new Error(`no session at ${file} — run harness:mint-session first`);
+  }
+  if (state.cookies.length === 0) {
+    throw new Error(`${file} carries no cookie — the mint did not land one`);
+  }
+  return state.cookies.map(({ name, value }) => ({ name, value }));
+}
+
+const revalidated: string[] = [];
+let wire: string[] | null = null;
+
+type PostgresFactory = (url: string, options: Record<string, unknown>) => unknown;
+
+function installStubs(cookies: StoredCookie[]): void {
+  const untyped = Module as unknown as {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+  };
+  const originalLoad = untyped._load;
+  untyped._load = (request, parent, isMain) => {
+    if (request === "server-only") return {};
+    if (request === "next/headers") {
+      return { cookies: async () => ({ getAll: () => cookies, set() {} }) };
+    }
+    if (request === "next/cache") {
+      return { revalidatePath: (path: string) => void revalidated.push(path) };
+    }
+    // `db/client.ts` is the only `@/` importer of `postgres`; its pool is the
+    // one every statement of the action leaves on.
+    if (request === "postgres") {
+      const real = originalLoad(request, parent, isMain) as PostgresFactory;
+      const wrapped: PostgresFactory = (url, options) =>
+        real(url, {
+          ...options,
+          debug: (_connection: number, query: string) => {
+            wire?.push(query);
+          },
+        });
+      return Object.assign(wrapped, real);
+    }
+    return originalLoad(request, parent, isMain);
+  };
+}
+
+type Actions = typeof import("@/app/actions/one-offs");
+let actions: Actions;
+let createGoal: typeof import("@/app/actions/plan").createGoal;
+let pgCode: typeof import("@/lib/db-error").pgCode;
+
+async function move(input: Parameters<Actions["moveTaskToMonth"]>[0]) {
+  try {
+    return await actions.moveTaskToMonth(input);
+  } catch (error) {
+    assert.fail(`moveTaskToMonth threw ${pgCode(error) ?? "without a code"}`);
+  }
+}
+
+async function created(input: Parameters<Actions["createOneOff"]>[0]): Promise<string> {
+  const result = await actions.createOneOff(input);
+  if (!result.ok) throw new Error(`createOneOff ${input.name}: ${result.error}`);
+  return result.oneOffId;
+}
+
+// "YYYY-MM" `delta` months from the one `day` sits in.
+function monthFrom(day: string, delta: number): string {
+  const index = Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1 + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
+const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
+  prepare: false,
+  max: 1,
+  connection: { statement_timeout: 15_000, lock_timeout: 10_000 },
+});
+
+const goalIds: string[] = [];
+let today: string;
+let thisMonth: string;
+let nextMonth: string;
+let lastMonth: string;
+let goalId: string;
+
+async function monthsOf(...ids: string[]): Promise<(string | null)[]> {
+  const rows = await sql<{ id: string; planned_month: string | null }[]>`
+    select id, planned_month::text as planned_month from goals.one_offs where id in ${sql(ids)}`;
+  const byId = new Map(rows.map((row) => [row.id, row.planned_month]));
+  return ids.map((id) => byId.get(id) ?? null);
+}
+
+before(async () => {
+  installStubs(loadCookies());
+  const plan = await import("@/app/actions/plan");
+  actions = await import("@/app/actions/one-offs");
+  createGoal = plan.createGoal;
+  ({ pgCode } = await import("@/lib/db-error"));
+  const { todayInZone } = await import("@/lib/zone");
+  today = todayInZone();
+  thisMonth = today.slice(0, 7);
+  nextMonth = monthFrom(today, 1);
+  lastMonth = monthFrom(today, -1);
+  // The 1st of the month after next: next month is the last one the goal plans.
+  const made = await createGoal({ name: "RP-42 fixture: mover", horizon: `${monthFrom(today, 2)}-01` });
+  if (!made.ok) throw new Error(`createGoal: ${made.error}`);
+  goalId = made.goalId;
+  goalIds.push(goalId);
+  // Opened last month, so last month is inside the span and already closed.
+  await sql`update goals.goals set created_at = ${`${lastMonth}-15T12:00:00Z`} where id = ${goalId}`;
+});
+
+after(async () => {
+  if (goalIds.length > 0) await sql`delete from goals.goals where id in ${sql(goalIds)}`;
+  await sql.end();
+});
+
+test("moveTaskToMonth: a task of this month moves to next month with its children, in at most three statements", async () => {
+  const taskId = await created({ name: "RP-42 mover", day: null, goalId, plannedMonth: thisMonth });
+  const childId = await created({ name: "RP-42 mover hija", day: null, parentId: taskId, estimate: undefined });
+  revalidated.length = 0;
+  wire = [];
+  const result = await move({ oneOffId: taskId, month: nextMonth });
+  const calls = (wire as string[]).map((q) => q.trim().toLowerCase());
+  wire = null;
+  assert.deepEqual(result, { ok: true });
+  const statements = calls.filter(
+    (q) => q !== "begin" && q !== "commit" && !q.includes("pg_catalog.pg_type"),
+  ).length;
+  assert.ok(statements <= 3, `${statements} statements: ${calls.join(" | ")}`);
+
+  assert.deepEqual(await monthsOf(taskId, childId), [`${nextMonth}-01`, null]);
+  const [{ count }] = await sql<{ count: number }[]>`
+    select count(*)::int as count from goals.one_offs where parent_id = ${taskId}`;
+  assert.equal(count, 1);
+  assert.deepEqual(
+    [...revalidated].sort(),
+    [`/metas/${goalId}/meses/${thisMonth}`, `/metas/${goalId}/meses/${nextMonth}`].sort(),
+  );
+  // The list of the destination reads it.
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const { monthList } = await import("@/lib/plan/carry");
+  const { todayInZone } = await import("@/lib/zone");
+  const view = await loadGoal(goalId, todayInZone());
+  assert.ok(view);
+  assert.ok(monthList(view.tasks, `${nextMonth}-01`, today).some((item) => item.task.id === taskId));
+  assert.ok(!monthList(view.tasks, `${thisMonth}-01`, today).some((item) => item.task.id === taskId));
+});
+
+test("moveTaskToMonth: a closed month and a month outside the span are refused and the task stays", async () => {
+  const taskId = await created({ name: "RP-42 quieta", day: null, goalId, plannedMonth: thisMonth });
+  const closed = await move({ oneOffId: taskId, month: lastMonth });
+  assert.deepEqual(closed, { ok: false, error: "month.errors.monthClosed" });
+  for (const month of [monthFrom(today, -2), monthFrom(today, 2)]) {
+    const outside = await move({ oneOffId: taskId, month });
+    assert.deepEqual(outside, { ok: false, error: "month.errors.outsideSpan" }, month);
+  }
+  assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
+});
+
+test("moveTaskToMonth: a done task, one with a done child and a dated one are refused as oneOffHasFact", async () => {
+  const doneId = await created({ name: "RP-42 hecha", day: null, goalId, plannedMonth: thisMonth });
+  const completed = await actions.completeOneOff({ oneOffId: doneId });
+  assert.equal(completed.ok, true, JSON.stringify(completed));
+
+  const parentId = await created({ name: "RP-42 padre", day: null, goalId, plannedMonth: thisMonth });
+  const childId = await created({ name: "RP-42 hija hecha", day: null, parentId });
+  const childDone = await actions.completeOneOff({ oneOffId: childId });
+  assert.equal(childDone.ok, true, JSON.stringify(childDone));
+
+  const datedId = await created({ name: "RP-42 fechada", day: null, goalId, plannedMonth: thisMonth });
+  const scheduled = await actions.scheduleOneOff({ oneOffId: datedId, day: today });
+  assert.deepEqual(scheduled, { ok: true });
+
+  for (const id of [doneId, parentId, datedId]) {
+    assert.deepEqual(await move({ oneOffId: id, month: nextMonth }), { ok: false, error: "day.errors.oneOffHasFact" });
+  }
+  assert.deepEqual(await monthsOf(doneId, parentId, datedId), [`${thisMonth}-01`, `${thisMonth}-01`, `${thisMonth}-01`]);
+});
+
+test("moveTaskToMonth: a sub-task, a one-off with no month and an id that is nobody's are refused", async () => {
+  const parentId = await created({ name: "RP-42 padre solo", day: null, goalId, plannedMonth: thisMonth });
+  const childId = await created({ name: "RP-42 hija sola", day: null, parentId });
+  assert.deepEqual(await move({ oneOffId: childId, month: nextMonth }), { ok: false, error: "month.errors.invalid" });
+
+  const plainId = await created({ name: "RP-42 suelta", day: null, goalId });
+  assert.deepEqual(await move({ oneOffId: plainId, month: nextMonth }), { ok: false, error: "month.errors.invalid" });
+
+  const nobody = await move({ oneOffId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", month: nextMonth });
+  assert.deepEqual(nobody, { ok: false, error: "plan.errors.notFound" });
+  assert.deepEqual(await move({ oneOffId: parentId, month: "2026-13" }), { ok: false, error: "month.errors.monthInvalid" });
+  assert.deepEqual(await monthsOf(parentId, childId), [`${thisMonth}-01`, null]);
+});
+
+test("moveTaskToMonth: another person's task is not found and keeps its month; an archived goal's task is closed", async () => {
+  const lane = laneNumber();
+  const memberEmail = `harness-member${lane === 1 ? "" : `-${lane}`}@example.invalid`;
+  const [member] = await sql<{ id: string }[]>`select id from auth.users where email = ${memberEmail}`;
+  if (!member) throw new Error("no lane identities — run harness:token for this lane");
+
+  const [foreignGoal] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon)
+    values (${member.id}, 'RP-42 ajena', ${`${monthFrom(today, 2)}-01`}) returning id`;
+  try {
+    const [foreign] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${member.id}, ${foreignGoal.id}, 'RP-42 tarea ajena', ${`${thisMonth}-01`}) returning id`;
+    assert.deepEqual(await move({ oneOffId: foreign.id, month: nextMonth }), { ok: false, error: "plan.errors.notFound" });
+    assert.deepEqual(await monthsOf(foreign.id), [`${thisMonth}-01`]);
+  } finally {
+    await sql`delete from goals.goals where id = ${foreignGoal.id} and user_id = ${member.id}`;
+  }
+
+  const plan = await import("@/app/actions/plan");
+  const made = await createGoal({ name: "RP-42 fixture: archivada", horizon: `${monthFrom(today, 2)}-01` });
+  if (!made.ok) throw new Error(`createGoal: ${made.error}`);
+  goalIds.push(made.goalId);
+  const taskId = await created({ name: "RP-42 de archivada", day: null, goalId: made.goalId, plannedMonth: thisMonth });
+  const archived = await plan.archiveGoal({ goalId: made.goalId });
+  if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
+  assert.deepEqual(await move({ oneOffId: taskId, month: nextMonth }), { ok: false, error: "month.errors.closed" });
+  assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
+});
