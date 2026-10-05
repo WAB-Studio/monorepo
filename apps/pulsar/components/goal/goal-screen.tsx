@@ -32,6 +32,7 @@ import {
   Progress,
   Row,
   SectionLabel,
+  Separator,
   Split,
   Text,
 } from "@/components/ui";
@@ -178,15 +179,20 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   );
   const bareBlock = bareMonth ? (
     <section>
-      <SectionLabel>{monthName}</SectionLabel>
-      <Text as="p" variant="meta" tone="muted">
+      <Separator />
+      <Flex justify="between" align="center">
+        <SectionLabel>{monthName}</SectionLabel>
+        <Button asChild variant="ghost" tone="accent" tap={44}>
+          <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
+        </Button>
+      </Flex>
+      <Text as="p">
         {t("month.months.withoutMeasure.goalTasks", {
           count: own.length,
           done: own.filter((item) => item.done).length,
         })}
       </Text>
       {shiftOffer}
-      {monthsLink}
     </section>
   ) : null;
   const monthBlock =
@@ -262,6 +268,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             {archived ? null : moveAction}
           </Flex>
         )}
+        {goal.measureUnit ? null : (
+          <Text as="p" variant="meta" tone="muted">
+            {t("month.list.noMeasure")}
+          </Text>
+        )}
         {ended ? <Face on="desktop">{moveAction}</Face> : null}
       </Panel>
 
@@ -297,14 +308,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       ) : (
         <>
           {phoneActs}
-          {bareBlock ? (
-            <Panel>
-              <Text as="p" variant="meta" tone="muted">
-                {t("month.list.noMeasure")}
-              </Text>
-              {bareBlock}
-            </Panel>
-          ) : null}
+          {bareBlock}
         </>
       )}
     </>
