@@ -344,6 +344,13 @@
       "when": 1789161395778,
       "tag": "0048_one_source_reference_per_leg",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1791229576363,
+      "tag": "0049_audit_sequence_without_api_grants",
+      "breakpoints": true
     }
   ]
 }
