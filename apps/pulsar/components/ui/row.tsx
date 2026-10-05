@@ -41,6 +41,8 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // The name reads muted: a commitment already met, still tappable
   // (`HoyCuenta.dc.html`).
   quiet?: boolean;
+  // The whole row is one link and nothing else: a goal in the list of goals.
+  href?: string;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -54,6 +56,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     leadingHref,
     leadingLabel,
     quiet,
+    href,
     className,
     type = "button",
     disabled,
@@ -86,6 +89,15 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
     </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className={merged}>
+        {leading ? <span className={styles.leading}>{leading}</span> : null}
+        {body}
+      </Link>
+    );
+  }
 
   if (leadingHref) {
     return (
