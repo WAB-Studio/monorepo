@@ -5,7 +5,12 @@
     "today": "Hoy",
     "week": "Semana",
     "goal": "Meta",
-    "goals": "Metas"
+    "goals": "Metas",
+    "month": "Mes",
+    "goalsSection": "metas abiertas"
+  },
+  "header": {
+    "back": "Volver a {place}"
   },
   "notFound": {
     "kicker": "no está",
