@@ -106,6 +106,19 @@ body {
   min-height: 0;
 }
 
+/* RNP-16, `ArmazonPestanas.dc.html`: below 1024px the tabs are fixed over the
+   foot of the viewport (components/ui/bottom-nav), so the shell keeps their
+   height clear under the content: 56px of tab, the nav's 1px rule, and the
+   home-area inset the nav pads itself with. Print draws no tabs and no gap. */
+@media screen and (max-width: 1023.98px) {
+  body > .radix-themes {
+    /* Grows with its content, so the reserved padding is scrollable height
+       and not an overflow the root's flex shrink clips short. */
+    flex: 1 0 auto;
+    padding-block-end: calc(57px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* RNP-11, `HoyEscritorio.dc.html`: from 1024px the shell is a row. The rail
    (`components/ui/bottom-nav`) stands first and sticks to the viewport; the
    screen takes the rest. The root grows with its content so the rail has the
