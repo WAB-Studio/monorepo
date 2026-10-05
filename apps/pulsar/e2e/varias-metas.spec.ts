@@ -48,7 +48,8 @@ test("the Meta tab opens the goals list, and a second goal is opened from it, no
     // Both open goals draw on the day (§0.3, 5), grouped, with no selector —
     // the newly opened one included, even with no commitment of its own yet.
     await page.goto("/");
-    await expect(page.getByText(SEEDED_GOAL_NAME, { exact: true })).toBeVisible();
+    // A time-unit goal's name also heads its figure card (RP-35): take the section's.
+    await expect(page.getByText(SEEDED_GOAL_NAME, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(goalName, { exact: true })).toBeVisible();
 
     // Its own screen has a quiet way back to the list: the bottom nav's own
