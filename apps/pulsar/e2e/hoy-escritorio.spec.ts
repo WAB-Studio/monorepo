@@ -83,8 +83,8 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
 
     // The goal's name also heads its figure card: the first match is the left column's.
-    const goalLeft = await box(page.getByText(`Meta con cifra ${stamp}`, { exact: true }).first());
-    const goalPlain = await box(page.getByText(`Meta sin cifra ${stamp}`, { exact: true }));
+    const goalLeft = await box(page.getByRole("main").getByText(`Meta con cifra ${stamp}`, { exact: true }).first());
+    const goalPlain = await box(page.getByRole("main").getByText(`Meta sin cifra ${stamp}`, { exact: true }));
     // A time-unit card is headed by the goal's name, never the unit word (RP-35).
     const card = page.getByText("esta semana", { exact: true }).locator("xpath=ancestor::div[.//a][1]");
     const label = card.getByText(`Meta con cifra ${stamp}`, { exact: true });
