@@ -9,7 +9,7 @@ import { createGoal } from "@/app/actions/plan";
 import { createGoalSchema } from "@/lib/validation/plan";
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { todayInZone } from "@/lib/zone";
-import { Button, Field, Page, Text } from "@/components/ui";
+import { Button, Field, Page, ScreenHeader, Text } from "@/components/ui";
 
 // The board's own default (`MetaNueva.dc.html` draws "12 semanas" already
 // filled): a quarter-length plan is the common case, and typing over a
@@ -65,12 +65,15 @@ export function NewGoalForm() {
 
   return (
     <Page>
-      <Text as="p" variant="meta" tone="muted">
-        {t("goal.new.overline")}
-      </Text>
-      <Text as="p" variant="title">
-        {t("goal.new.title")}
-      </Text>
+      <ScreenHeader
+        title={t("goal.new.title")}
+        back={{ href: "/metas", place: t("common.nav.goals") }}
+        eyebrow={
+          <Text as="p" variant="meta" tone="muted">
+            {t("goal.new.overline")}
+          </Text>
+        }
+      />
 
       <Field
         label={t("goal.new.nameLabel")}
