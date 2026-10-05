@@ -23,8 +23,12 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
   await expect(page.locator("main")).toHaveCount(1);
 
   const rail = await box(page, "nav");
-  expect(rail).toMatchObject({ x: 0, y: 0, width: 232, height: 800 });
-  await expect(page.locator("nav").getByRole("link")).toHaveCount(3);
+  expect(rail).toMatchObject({ x: 0, y: 0, width: 232 });
+  // The rail's ground is the page's whole height, never less than the viewport's.
+  expect(rail.height).toBeGreaterThanOrEqual(800);
+  await expect(
+    page.locator("nav").getByRole("link").filter({ hasText: /^(Hoy|Semana|Mes|Metas)$/ }),
+  ).toHaveCount(4);
 
   const main = await box(page, "main");
   expect(main.x).toBeGreaterThanOrEqual(232);
@@ -43,15 +47,14 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1280);
 });
 
-// Boxes measured on `integracion` before this module, at 740 px tall on the
-// same three-tab nav: the nav 51 px at the foot, three equal links, the page
-// column 640 wide and centred from 700 up.
+// Four tabs fixed at the foot (module 203): the nav 57 px (56 of tab and its
+// rule), four equal links, the page column 640 wide and centred from 700 up.
 for (const [width, pageBox] of [
   [360, { x: 0, width: 360 }],
   [800, { x: 80, width: 640 }],
   [1023, { x: 191.5, width: 640 }],
 ] as const) {
-  test(`at ${width} the nav is still three tabs at the foot and the page column has not moved (RNP-11)`, async ({
+  test(`at ${width} the nav is four tabs at the foot and the page column has not moved (RNP-11)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 740 });
@@ -60,16 +63,16 @@ for (const [width, pageBox] of [
     await expect(page.locator("main")).toHaveCount(1);
 
     const nav = await box(page, "nav");
-    expect(nav).toMatchObject({ x: 0, width, height: 51 });
+    expect(nav).toMatchObject({ x: 0, width, height: 57 });
     expect(nav.y + nav.height).toBe(740);
 
     const links = page.locator("nav").getByRole("link");
-    await expect(links).toHaveCount(3);
-    for (let index = 0; index < 3; index++) {
+    await expect(links).toHaveCount(4);
+    for (let index = 0; index < 4; index++) {
       const link = await box(page, "nav a", index);
-      expect(link.x).toBeCloseTo((width / 3) * index, 1);
-      expect(link.width).toBeCloseTo(width / 3, 1);
-      expect(link.height).toBe(50);
+      expect(link.x).toBeCloseTo((width / 4) * index, 1);
+      expect(link.width).toBeCloseTo(width / 4, 1);
+      expect(link.height).toBe(56);
     }
     await expect(page.locator("nav").getByRole("button")).toHaveCount(0);
 

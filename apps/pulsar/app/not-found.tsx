@@ -21,11 +21,8 @@ export default async function NotFound() {
     <>
       <AppNotFound />
       <BottomNav
-        todayLabel={nav("today")}
-        weekLabel={nav("week")}
-        goalLabel={nav("goal")}
+        labels={{ today: nav("today"), week: nav("week"), month: nav("month"), goals: nav("goals") }}
         appName={common("appName")}
-        goalsLabel={nav("goals")}
         date={civilDateShort(todayInZone())}
         theme={{ toLightLabel: theme("toLight"), toDarkLabel: theme("toDark") }}
       />

@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { addCommitment } from "@/app/actions/plan";
 import { addCommitmentSchema, type AddCommitmentInput } from "@/lib/validation/plan";
-import { Button, Chip, Field, Flex, Page, SectionLabel, Text } from "@/components/ui";
+import { Button, Chip, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
 
 export type CommitmentFormProps = {
   goalId: string;
@@ -112,12 +112,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
 
   return (
     <Page>
-      <Text as="p" variant="meta" tone="muted">
-        {goalName}
-      </Text>
-      <Text as="p" variant="title">
-        {t("plan.commitmentForm.title")}
-      </Text>
+      <ScreenHeader title={t("plan.commitmentForm.title")} back={{ href: `/metas/${goalId}`, place: goalName }} />
 
       <Field
         label={t("plan.commitmentForm.whatLabel")}
