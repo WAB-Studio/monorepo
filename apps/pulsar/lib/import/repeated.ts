@@ -1,8 +1,8 @@
 import type { ImportDraft } from "./draft";
 
-// Accents count: «Inglés» and «Ingles» are different names.
+// Accents count: «Inglés» and «Ingles» differ, but one «é» composed or decomposed is the same.
 function key(name: string): string {
-  return name.trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
+  return name.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es");
 }
 
 export function repeatedGoals(draft: ImportDraft, openNames: string[]): number[] {

@@ -37,3 +37,7 @@ test("the second of three repeated is the only one named", () => {
 test("two goals with one open name are both named, ascending", () => {
   assert.deepEqual(repeatedGoals(draftOf("X", "Y", "x"), ["X"]), [0, 2]);
 });
+
+test("an accent composed or decomposed is the same letter", () => {
+  assert.deepEqual(repeatedGoals(draftOf("Inglés"), ["Inglés"]), [0]);
+});
