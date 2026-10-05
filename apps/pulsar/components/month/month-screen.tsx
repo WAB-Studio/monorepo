@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { ShiftProposal, TaskRow } from "@/components/month/task-row";
-import { Button, Flex, Figure, Mark, Page, SectionLabel, Separator, Text } from "@/components/ui";
+import { Button, Flex, Figure, IconButton, Mark, Page, SectionLabel, Separator, Text } from "@/components/ui";
 import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
 import { nextMonth } from "@/lib/plan/months";
 import { shiftOffered, shiftPlan } from "@/lib/plan/shift";
@@ -68,9 +69,29 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
   const closed = row.past;
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
   const eyebrow = (
-    <Text as="p" variant="meta" tone="muted">
-      {goal.name.toLowerCase()}
-    </Text>
+    <Flex align="center" gap="1" ml="-3">
+      <IconButton asChild tap={44} variant="ghost">
+        <Link href={`/metas/${goal.id}`} aria-label={t("goal.review.back")}>
+          <ChevronLeft size={20} aria-hidden />
+        </Link>
+      </IconButton>
+      <Button asChild tap={44} variant="ghost">
+        <Link href={`/metas/${goal.id}`}>
+          <Text variant="meta" tone="accent">
+            {goal.name.toLowerCase()}
+          </Text>
+        </Link>
+      </Button>
+    </Flex>
+  );
+  const allMonths = (
+    <Button asChild tap={44} variant="ghost">
+      <Link href={`/metas/${goal.id}/meses`}>
+        <Text variant="meta" tone="accent">
+          {t("month.list.allMonths")}
+        </Text>
+      </Link>
+    </Button>
   );
 
   const items = monthList(goal.tasks, mes, today);
@@ -114,7 +135,9 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
 
     let meta: string | undefined;
     if (entry.carriedFrom !== null) {
-      meta = t("month.list.owes", { month: monthLabel(entry.carriedFrom), owes: say(entry.owes) });
+      meta = entry.hasAmount
+        ? t("month.list.owes", { month: monthLabel(entry.carriedFrom), owes: say(entry.owes) })
+        : t("month.list.fromMonth", { month: monthLabel(entry.carriedFrom) });
     } else if (isParent) {
       meta = childTotal > 0 ? t("month.list.doneOf", { done: say(childDone), total: say(childTotal) }) : undefined;
     } else if (closed && !entry.done) {
@@ -125,7 +148,6 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
     const subtaskable =
       open &&
       !closed &&
-      (isParent || (unit !== null && children.length === 0)) &&
       entry.carriedFrom === null &&
       task.parentId === null &&
       task.plannedMonth?.slice(0, 7) === month &&
@@ -202,7 +224,10 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
       </Text>
       {unit ? (
         <Flex direction="column" gap="1">
-          <SectionLabel>{label}</SectionLabel>
+          <Flex align="center" justify="between" gap="2">
+            <SectionLabel>{label}</SectionLabel>
+            {allMonths}
+          </Flex>
           <Flex align="baseline" gap="2">
             <Figure value={row.reached} unit={unit} />
             <Text tone="secondary">
@@ -216,9 +241,12 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
           ) : null}
         </Flex>
       ) : (
-        <Text as="p" tone="secondary">
-          {t("month.list.noMeasure")}
-        </Text>
+        <Flex align="center" justify="between" gap="2">
+          <Text as="p" tone="secondary">
+            {t("month.list.noMeasure")}
+          </Text>
+          {allMonths}
+        </Flex>
       )}
       <Separator />
 
@@ -233,7 +261,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
         <Flex direction="column" gap="3" align="start">
           <SectionLabel>{t("month.list.tasks")}</SectionLabel>
           <Text as="p" tone="secondary">
-            {t("month.list.empty", { month: capitalised(name) })}
+            {t(unit ? "month.list.empty" : "month.list.emptyNoMeasure", { month: capitalised(name) })}
           </Text>
           <Button asChild>
             <Link href={addHref}>{t("month.list.emptyAction")}</Link>

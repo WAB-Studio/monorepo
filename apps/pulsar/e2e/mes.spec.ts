@@ -37,10 +37,10 @@ const seg = (month: string) => month.slice(0, 7);
 
 type Db = import("postgres").Sql;
 
-async function seedGoal(db: Db, personId: string, name: string, openedIn = lastMonth) {
+async function seedGoal(db: Db, personId: string, name: string, openedIn = lastMonth, measure = true) {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-    values (${personId}, ${name}, ${horizon}::date, 'minutos', 'minutos', (${openedIn}::date + 14) + time '12:00' at time zone 'UTC')
+    values (${personId}, ${name}, ${horizon}::date, ${measure ? "minutos" : null}, ${measure ? "minutos" : null}, (${openedIn}::date + 14) + time '12:00' at time zone 'UTC')
     returning id
   `;
   return goal.id;
@@ -178,6 +178,81 @@ test("an empty month says so and offers the first task (RP-30)", async ({
       "href",
       `/metas/${goalId}/meses/${seg(thisMonth)}/tarea/nueva`,
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("a carried task with no estimate reads «de <mes>» alone and one with time «debe»; next month lists neither (RP-30, RP-31)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalId = await seedGoal(db, person.id, `Meta debe ${stamp}`);
+  await seedBudget(db, person.id, goalId, thisMonth, 720);
+  await seedTask(db, person.id, goalId, `Sin monto ${stamp}`, lastMonth, null);
+  await seedTask(db, person.id, goalId, `Con monto ${stamp}`, lastMonth, 315);
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
+    const bare = page.getByText(`Sin monto ${stamp}`).locator("xpath=ancestor::button[1]");
+    const owed = page.getByText(`Con monto ${stamp}`).locator("xpath=ancestor::button[1]");
+    await expect(bare).toContainText(`de ${label(lastMonth)}`);
+    await expect(bare).not.toContainText("debe");
+    await expect(bare).not.toContainText("0 min");
+    await expect(owed).toContainText(`de ${label(lastMonth)} · debe 5 h 15 min`);
+
+    if (following.slice(0, 7) <= horizon.slice(0, 7)) {
+      await page.goto(`/metas/${goalId}/meses/${seg(following)}`);
+      await expect(page.getByText(`Sin monto ${stamp}`)).toHaveCount(0);
+      await expect(page.getByText(`Con monto ${stamp}`)).toHaveCount(0);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("a goal with no measure's empty month promises no time; the back arrow, the eyebrow and «Todos los meses» each reach their page (RP-30, RP-31)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalId = await seedGoal(db, person.id, `Meta lisa ${stamp}`, lastMonth, false);
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    for (const width of [360, 1280]) {
+      await page.setViewportSize({ width, height: 740 });
+      const url = `/metas/${goalId}/meses/${seg(thisMonth)}`;
+      await page.goto(url);
+      await expect(page.getByText(/no tiene tareas\./)).toBeVisible();
+      await expect(page.locator("main")).not.toContainText(/tiempo/i);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+      const back = page.getByRole("link", { name: "Volver a la meta" });
+      const arrow = (await back.boundingBox())!;
+      expect(arrow.width).toBeGreaterThanOrEqual(44);
+      expect(arrow.height).toBeGreaterThanOrEqual(44);
+      const all = page.getByRole("link", { name: "Todos los meses" });
+      expect((await all.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+
+      await back.click();
+      await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
+      await page.goto(url);
+      await page.getByRole("link", { name: `meta lisa ${stamp}` }).click();
+      await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
+      await page.goto(url);
+      await all.click();
+      await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses$`));
+    }
   } finally {
     await context.close();
   }
