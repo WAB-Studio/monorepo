@@ -14,7 +14,17 @@ export type MetadataDeps = {
   resolve?: (host: string) => Promise<string[]>;
   register?: (input: { name: string; redirectUris: string[]; metadataUrl: string }) => Promise<string>;
   timeoutMs?: number;
+  // Counts one registration against the caller's address; the default claims the `register` bucket.
+  claim?: (headers: CallerHeaders) => Promise<boolean>;
 };
+
+export type CallerHeaders = { get(name: string): string | null };
+
+async function claimRegistration(headers: CallerHeaders): Promise<boolean> {
+  const { callerAddress, claimCall } = await import("@/lib/oauth/throttle");
+
+  return (await claimCall("register", callerAddress({ headers }))).ok;
+}
 
 function privateV4(address: string): boolean {
   const [a, b, c] = address.split(".").map(Number);
@@ -144,7 +154,17 @@ function fetchDocument(url: string, address: string, deps: MetadataDeps): Promis
   });
 }
 
-export async function clientFromMetadataUrl(url: string, deps: MetadataDeps = {}): Promise<MetadataClient | null> {
+/**
+ * Reads a client's metadata document and registers it. The fetch and the row it
+ * buys share the registration limit (RNP-19), counted here so every caller —
+ * the token route, the consent act, the consent page — is bound by it. A refused
+ * claim reads as an unknown client. `caller` is the request's headers.
+ */
+export async function clientFromMetadataUrl(
+  url: string,
+  caller: CallerHeaders,
+  deps: MetadataDeps = {},
+): Promise<MetadataClient | null> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -162,6 +182,8 @@ export async function clientFromMetadataUrl(url: string, deps: MetadataDeps = {}
     return null;
   }
   if (addresses.length === 0 || addresses.some(privateAddress)) return null;
+
+  if (!(await (deps.claim ?? claimRegistration)(caller))) return null;
 
   const document = await fetchDocument(url, addresses[0], deps);
   if (typeof document !== "object" || document === null) return null;

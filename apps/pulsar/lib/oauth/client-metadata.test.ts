@@ -19,13 +19,13 @@ const json = (body: unknown, over: Res = {}): Res => ({
   headers: { "content-type": "application/json", ...over.headers },
 });
 
-type Calls = { request: number; register: number; resolve: number; options?: Record<string, unknown> };
+type Calls = { request: number; register: number; resolve: number; claim: number; options?: Record<string, unknown> };
 
 function run(
   url: string,
-  over: { response?: () => Promise<Res> | Res; resolve?: () => string[]; address?: string; timeoutMs?: number } = {},
+  over: { admit?: boolean; response?: () => Promise<Res> | Res; resolve?: () => string[]; address?: string; timeoutMs?: number } = {},
 ) {
-  const calls: Calls = { request: 0, register: 0, resolve: 0 };
+  const calls: Calls = { request: 0, register: 0, resolve: 0, claim: 0 };
   const deps: MetadataDeps = {
     request: ((_url: string, options: Record<string, unknown>, cb: (res: unknown) => void) => {
       const req = new EventEmitter() as EventEmitter & { end: () => void; destroy: () => void };
@@ -50,8 +50,12 @@ function run(
       return "client-1";
     },
     timeoutMs: over.timeoutMs,
+    claim: async () => {
+      calls.claim++;
+      return over.admit ?? true;
+    },
   };
-  return clientFromMetadataUrl(url, deps).then((client) => ({ client, calls }));
+  return clientFromMetadataUrl(url, new Headers(), deps).then((client) => ({ client, calls }));
 }
 
 test("a valid document yields the registered client", async () => {
@@ -254,7 +258,8 @@ test("malformed JSON and non-object bodies are refused", async () => {
 });
 
 test("a DNS failure is refused", async () => {
-  const client = await clientFromMetadataUrl(URL_OK, {
+  const client = await clientFromMetadataUrl(URL_OK, new Headers(), {
+    claim: async () => true,
     resolve: async () => {
       throw new Error("ENOTFOUND");
     },
@@ -268,4 +273,15 @@ test("a body that stalls after the headers is aborted", async () => {
     response: () => json("", { stream: new Readable({ read() {} }) }),
   });
   assert.equal(client, null);
+});
+
+test("a refused registration claim stops the fetch and the row", async () => {
+  const { client, calls } = await run(URL_OK, { admit: false });
+  assert.equal(client, null);
+  assert.deepEqual([calls.claim, calls.request, calls.register], [1, 0, 0]);
+});
+
+test("a URL refused before the fetch spends no claim", async () => {
+  const { calls } = await run(URL_OK, { address: "10.0.0.1" });
+  assert.equal(calls.claim, 0);
 });

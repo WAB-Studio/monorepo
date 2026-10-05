@@ -39,11 +39,11 @@ const refreshGrant = z.object({
 });
 
 // A client named by its metadata URL has its stored id; the rest are ids already.
-async function storedClientId(clientId: string): Promise<string | null> {
+async function storedClientId(clientId: string, caller: Request["headers"]): Promise<string | null> {
   if (z.uuid().safeParse(clientId).success) return clientId;
   if (!clientId.startsWith("https://")) return null;
 
-  return (await clientFromMetadataUrl(clientId))?.id ?? null;
+  return (await clientFromMetadataUrl(clientId, caller))?.id ?? null;
 }
 
 function issued(tokens: IssuedTokens): Response {
@@ -68,7 +68,7 @@ export async function POST(request: Request): Promise<Response> {
   if (fields.grant_type === "authorization_code") {
     const parsed = codeGrant.safeParse(fields);
     if (!parsed.success) return reply(400, { error: "invalid_request" });
-    const clientId = await storedClientId(parsed.data.client_id);
+    const clientId = await storedClientId(parsed.data.client_id, request.headers);
     if (clientId === null) return refused();
     const tokens = await exchangeCode({
       code: parsed.data.code,
@@ -83,7 +83,7 @@ export async function POST(request: Request): Promise<Response> {
   if (fields.grant_type === "refresh_token") {
     const parsed = refreshGrant.safeParse(fields);
     if (!parsed.success) return reply(400, { error: "invalid_request" });
-    const clientId = await storedClientId(parsed.data.client_id);
+    const clientId = await storedClientId(parsed.data.client_id, request.headers);
     if (clientId === null) return refused();
     const tokens = await refreshToken({ refreshToken: parsed.data.refresh_token, clientId });
 

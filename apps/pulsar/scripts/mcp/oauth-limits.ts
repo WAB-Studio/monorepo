@@ -45,10 +45,10 @@ const register = (address: string, name: string) =>
 const garbageToken = (address: string) =>
   fetch(`${base}/oauth/token`, { method: "POST", headers: { "x-forwarded-for": address }, body: "" });
 
-const callsOf = async (address: string) => {
+const callsOf = async (address: string, bucket?: string) => {
   const rows = await admin`
     select coalesce(sum(calls), 0)::int as calls from goals.oauth_calls
-    where source = ${fingerprint(callerAddress({ headers: new Headers({ "x-forwarded-for": address }) }))}`;
+    where (${bucket ?? null}::text is null or bucket = ${bucket ?? null}) and source = ${fingerprint(callerAddress({ headers: new Headers({ "x-forwarded-for": address }) }))}`;
 
   return rows[0].calls as number;
 };
@@ -134,6 +134,25 @@ test("a preflight is never counted", async () => {
   assert.equal(first.status, 400);
   await first.text();
   assert.equal(await callsOf(d), 1);
+});
+
+test("a token request naming a metadata URL spends the registration limit before it fetches", async () => {
+  await outwait(3600, 60);
+  const e = `${prefix()}::1`;
+  remember(e);
+  // A public literal that answers nothing: the claim is all that is observed.
+  const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: "plr_x", client_id: "https://192.0.2.1/client.json" });
+  const answers = await Promise.all(
+    Array.from({ length: 12 }, () =>
+      fetch(`${base}/oauth/token`, { method: "POST", headers: { "x-forwarded-for": e }, body }).then(async (response) => {
+        await response.text();
+        return response.status;
+      }),
+    ),
+  );
+  assert.ok(answers.every((status) => status === 400), `answers ${answers}`);
+  assert.equal(await callsOf(e, "register"), 12, "the metadata read did not claim the register bucket");
+  assert.equal(await callsOf(e, "token"), 12);
 });
 
 test("the counter table grants nothing to the API roles", async () => {
