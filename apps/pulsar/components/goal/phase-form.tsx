@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { addPhase } from "@/app/actions/plan";
 import { addPhaseSchema, phasesOverlap, phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
-import { Button, Field, Flex, Page, SectionLabel, Text } from "@/components/ui";
+import { Button, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
 
 import { weeksToPhaseSpan } from "./phase-weeks";
 
@@ -105,12 +105,7 @@ export function PhaseForm({
 
   return (
     <Page>
-      <Text as="p" variant="meta" tone="muted">
-        {goalName}
-      </Text>
-      <Text as="p" variant="title">
-        {t("plan.phaseForm.title")}
-      </Text>
+      <ScreenHeader title={t("plan.phaseForm.title")} back={{ href: `/metas/${goalId}`, place: goalName }} />
 
       <Field
         label={t("plan.phaseForm.aimLabel")}
