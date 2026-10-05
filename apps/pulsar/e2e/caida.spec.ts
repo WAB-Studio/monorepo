@@ -49,6 +49,7 @@ test.describe("a database outage", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Ir a hoy" })).toHaveAttribute("href", "/");
+    await expect(page.getByRole("link", { name: /^Volver a / })).toHaveCount(0);
 
     // `retry()` re-fetches the boundary's children with an `rsc` header; a
     // `Link` prefetch carries it too, so the prefetch header is excluded.

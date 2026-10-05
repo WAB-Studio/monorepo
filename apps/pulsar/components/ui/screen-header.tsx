@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { Skeleton } from "./skeleton";
 import { Text } from "./text";
 import styles from "./screen-header.module.css";
 
@@ -52,5 +53,36 @@ export function ScreenHeader({
         </Text>
       ) : null}
     </header>
+  );
+}
+
+// The header while its screen loads: the way back and the title as blocks, in
+// the header's own height, so the content does not jump when the real one lands.
+export function ScreenHeaderSkeleton() {
+  return (
+    <header aria-hidden className={styles.header}>
+      <span className={styles.backSkeleton}>
+        <Skeleton shape="meta" />
+      </span>
+      <div className={styles.titleSkeleton}>
+        <Skeleton shape="title" width="half" />
+      </div>
+    </header>
+  );
+}
+
+// What a screen that has nothing to show says and offers
+// (`ArmazonFallo.dc.html`, `ArmazonNoEncontrada.dc.html`): an optional line and
+// its exits, stacked full width on the phone, a row capped at 560px from 1024.
+export function ScreenExit({ message, children }: { message?: string; children: ReactNode }) {
+  return (
+    <div className={styles.exit}>
+      {message ? (
+        <Text as="p" tone="secondary">
+          {message}
+        </Text>
+      ) : null}
+      <div className={styles.exitActions}>{children}</div>
+    </div>
   );
 }

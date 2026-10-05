@@ -694,3 +694,5 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
     «Two columns split 3:2 from 1024» for Hoy and the goal.
   - Not drawn: every dark face (the token table says it); «Mes» loading and failure (they are `ArmazonCargando` and
     `ArmazonFallo` with Mes marked); 700–1023 (the phone face, centred).
+  - **The failure and the 404 have no back link: their actions are the way out** (`ArmazonFallo`, `ArmazonNoEncontrada`).
+    The header is the title under its eyebrow; «Ir a hoy» leaves. Decided 2026-10-05 by the coordinator.

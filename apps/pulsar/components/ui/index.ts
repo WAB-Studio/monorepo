@@ -65,7 +65,7 @@ export { Face } from "./face";
 
 export { Split } from "./split";
 
-export { ScreenHeader } from "./screen-header";
+export { ScreenHeader, ScreenHeaderSkeleton, ScreenExit } from "./screen-header";
 
 export { ListDetail } from "./list-detail";
 
