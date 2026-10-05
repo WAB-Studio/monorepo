@@ -13,7 +13,8 @@ An assignment already implemented on a branch: goal, files, contract, RF codes c
 
 # Stance
 
-Trust nothing the worker claimed. Run the checks yourself. Prove a policy fires; never assume it from the code.
+Trust nothing the worker claimed without its log. Read the logs it saved; re-run the module's own tests and
+mutations yourself. Never re-run a suite the worker logged green. Prove a policy fires; never assume it from the code.
 
 # Run
 
@@ -46,8 +47,8 @@ Against the hard rules (`AGENTS.md`, `docs/SPEC.md` §2):
 # Mutations
 
 Drive every mutation yourself. Never take the worker's table of them.
-Run the suites whole, not only the ones the assignment names: a branch turning a landed suite red
-passes typecheck, lint and its own layer.
+Run the `check:*` that import what the branch changed, sized as `AGENTS.md` § Verification says.
+Never run the whole e2e suite: CI runs it on the pull request.
 
 A mutation that reddens nothing means the assertion **cannot fail**, not that the code is right.
 Never fabricate one that fakes a red. Two that measure nothing: feeding a total from the per-row
