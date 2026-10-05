@@ -26,7 +26,7 @@ async function addQuantityCommitment(
   await page.waitForURL(`**/metas/${goalId}/compromisos/nuevo`);
   await page.getByLabel("qué es").fill(name);
   await page.getByRole("button", { name: "un número", exact: true }).click();
-  await page.getByLabel("cantidad").fill(String(target));
+  await page.getByLabel("cantidad", { exact: true }).fill(String(target));
   await page.getByLabel("unidad").fill(unit);
   await page.getByRole("button", { name: "Añadirlo" }).click();
   await page.waitForURL(`**/metas/${goalId}`);

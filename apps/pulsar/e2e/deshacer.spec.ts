@@ -44,7 +44,7 @@ async function addQuantityCommitment(
   await openNewCommitmentForm(page, goalId);
   await page.getByLabel("qué es").fill(name);
   await page.getByRole("button", { name: "un número", exact: true }).click();
-  await page.getByLabel("cantidad").fill(String(target));
+  await page.getByLabel("cantidad", { exact: true }).fill(String(target));
   await page.getByLabel("unidad").fill(unit);
   await page.getByRole("button", { name: "Añadirlo" }).click();
   await page.waitForURL(`**/metas/${goalId}`);
@@ -119,9 +119,35 @@ test("two rapid taps on an undone row leave exactly one fact (RNP-02's own guard
     await page.goto("/");
     const row = page.locator("button", { hasText: name });
 
-    await Promise.all([row.click(), row.click()]);
+    // The first tap's action is held in flight, so the second tap lands while
+    // the row is pending whatever the database's speed. Racing two clicks
+    // proved nothing: Playwright's second click waits for the button to be
+    // enabled and, on a fast database, undoes the first.
+    const actionCalls: string[] = [];
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST" || !request.headers()["next-action"]) {
+        await route.continue();
+        return;
+      }
+      actionCalls.push(request.url());
+      if (actionCalls.length === 1) await held;
+      await route.continue();
+    });
+
+    await row.click();
+    await expect(row).toBeDisabled();
+    await expect.poll(() => actionCalls.length).toBe(1);
+    await row.click({ force: true });
+    release();
+
     await expect(row.locator("svg")).toBeVisible();
     await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
+    expect(actionCalls).toHaveLength(1);
   } finally {
     await deleteGoal(db, personId, goalId);
   }
