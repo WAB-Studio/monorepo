@@ -248,9 +248,52 @@ test("the metadata document answers at both well-known paths with the contract's
   assert.ok(preflight.status < 300);
 });
 
+test("GET and DELETE on /mcp refuse a missing or unknown key with 401 and the challenge", async () => {
+  for (const method of ["GET", "DELETE"]) {
+    for (const headers of [{}, { Authorization: "Bearer pls_notakeyatall" }] as Record<string, string>[]) {
+      const response = await fetch(`${base}/mcp`, { method, headers: { Accept: "application/json, text/event-stream", ...headers } });
+      assert.equal(response.status, 401, `${method} ${JSON.stringify(headers)}`);
+      assert.ok((response.headers.get("www-authenticate") ?? "").includes(challenge), method);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      await response.text();
+    }
+  }
+});
+
+test("GET and DELETE on /mcp with a live key pass the door and meet the stateless transport's 405, uncached", async () => {
+  for (const method of ["GET", "DELETE"]) {
+    const response = await fetch(`${base}/mcp`, {
+      method,
+      headers: { Accept: "application/json, text/event-stream", Authorization: `Bearer ${subject.key}` },
+    });
+    await response.body?.cancel();
+    assert.equal(response.status, 405, method);
+    assert.equal(response.headers.get("cache-control"), "no-store", method);
+    assert.equal(response.headers.get("www-authenticate"), null, method);
+  }
+});
+
+test("a key is echoed in no body and no header, whether the call works or is malformed", async () => {
+  const tail = subject.key.slice(4);
+  const sent = [
+    { jsonrpc: "2.0", id: 91, method: "tools/list" },
+    { jsonrpc: "2.0", id: 92, method: "tools/call", params: { name: "get_goal", arguments: { goal_id: 42 } } },
+    { jsonrpc: "2.0", id: 93, method: "tools/call", params: { name: "nope", arguments: null } },
+    { jsonrpc: "2.0", id: 94, method: "tools/call" },
+  ];
+  for (const payload of sent) {
+    const response = await post({ Authorization: `Bearer ${subject.key}` }, payload);
+    const everything = `${[...response.headers].map(([name, value]) => `${name}: ${value}`).join("\n")}\n${await response.text()}`;
+    assert.equal(everything.includes(subject.key), false, JSON.stringify(payload));
+    assert.equal(everything.includes(tail), false, JSON.stringify(payload));
+  }
+});
+
 test("the server log holds no Auth call and no key", () => {
   const log = serverLog();
   assert.doesNotMatch(log, /\/auth\/v1\//);
+  // A request with no key is refused at the door; reaching the lookup throws there.
+  assert.doesNotMatch(log, /Unexpected error authenticating/);
   for (const key of [subject.key, intruder.key]) assert.equal(log.includes(key), false);
   assert.equal(log.includes(subject.key.slice(4)), false);
 });

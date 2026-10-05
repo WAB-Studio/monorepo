@@ -148,6 +148,7 @@ test("the metadata parses, names this origin, and its URLs answer", async () => 
   const response = await fetch(`${base}/.well-known/oauth-authorization-server`);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  assert.equal(response.headers.get("cache-control"), "max-age=3600");
   const document = await response.json();
   assert.equal(document.issuer, siteUrl);
   assert.equal(document.authorization_endpoint, `${siteUrl}/oauth/autorizar`);
@@ -185,8 +186,14 @@ test("registration answers 201 with the client, and 400 invalid_client_metadata 
   assert.equal(created.headers.get("cache-control"), "no-store");
   const body = await created.json();
   assert.match(body.client_id, /^[0-9a-f-]{36}$/);
-  assert.equal(body.client_name, "flow client");
-  assert.deepEqual(body.redirect_uris, [REDIRECT]);
+  assert.deepEqual(body, {
+    client_id: body.client_id,
+    client_name: "flow client",
+    redirect_uris: [REDIRECT],
+    token_endpoint_auth_method: "none",
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+  });
   clientId = body.client_id;
   const [row] = await admin`select client_name as name, redirect_uris from goals.oauth_clients where id = ${clientId}`;
   assert.equal(row.name, "flow client");
@@ -220,7 +227,9 @@ test("register, approve, exchange, list, refresh, revoke", async () => {
   assert.equal(exchanged.status, 200, JSON.stringify(exchanged.body));
   assert.equal(exchanged.headers.get("cache-control"), "no-store");
   assert.equal(exchanged.body.token_type, "Bearer");
-  assert.equal(exchanged.body.expires_in, 3600);
+  const { ACCESS_TOKEN_SECONDS } = await import("@/lib/oauth/grants");
+  assert.equal(exchanged.body.expires_in, ACCESS_TOKEN_SECONDS);
+  assert.equal(exchanged.headers.get("pragma"), "no-cache");
   const first = remember(exchanged.body);
   assert.match(first.access, /^plo_/);
   assert.match(first.refresh, /^plr_/);
@@ -264,6 +273,49 @@ test("an unknown refresh token, a foreign client and an unknown grant are refuse
   assert.deepEqual([other.status, other.body], [400, { error: "unsupported_grant_type" }]);
   const missing = await form({ grant_type: "authorization_code", client_id: clientId });
   assert.deepEqual([missing.status, missing.body], [400, { error: "invalid_request" }]);
+});
+
+test("a client_id that is no uuid and no https URL is invalid_grant on both grants, as is an unknown uuid", async () => {
+  const unknown = "00000000-0000-4000-8000-000000000000";
+  for (const id of ["http://client.example/metadata.json", "not-a-client", "ftp://client.example/c", unknown]) {
+    const code = await form({ grant_type: "authorization_code", code: "plc_x", code_verifier: newVerifier(), client_id: id, redirect_uri: REDIRECT });
+    assert.deepEqual([code.status, code.body], [400, { error: "invalid_grant" }], `code ${id}`);
+    const refresh = await form({ grant_type: "refresh_token", refresh_token: "plr_x", client_id: id });
+    assert.deepEqual([refresh.status, refresh.body], [400, { error: "invalid_grant" }], `refresh ${id}`);
+  }
+});
+
+test("a refresh without its token is invalid_request", async () => {
+  const response = await form({ grant_type: "refresh_token", client_id: clientId });
+  assert.deepEqual([response.status, response.body], [400, { error: "invalid_request" }]);
+});
+
+test("every OAuth endpoint answers a cross-origin preflight 204 for any origin and never with credentials", async () => {
+  const expected: Record<string, string> = {
+    "/oauth/registro": "POST, OPTIONS",
+    "/oauth/token": "POST, OPTIONS",
+    "/.well-known/oauth-authorization-server": "GET, OPTIONS",
+    "/.well-known/oauth-protected-resource": "GET, OPTIONS",
+    "/.well-known/oauth-protected-resource/mcp": "GET, OPTIONS",
+  };
+  for (const [path, methods] of Object.entries(expected)) {
+    const response = await fetch(`${base}${path}`, { method: "OPTIONS", headers: { Origin: "https://claude.ai" } });
+    assert.equal(response.status, 204, path);
+    assert.equal(response.headers.get("access-control-allow-origin"), "*", path);
+    assert.equal(response.headers.get("access-control-allow-methods"), methods, path);
+    assert.equal(response.headers.get("access-control-allow-credentials"), null, path);
+  }
+  for (const path of ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"]) {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.headers.get("cache-control"), "max-age=3600", path);
+    await response.text();
+  }
+});
+
+test("/mcp sends no CORS headers, not even to a preflight", async () => {
+  const response = await fetch(`${base}/mcp`, { method: "OPTIONS", headers: { Origin: "https://claude.ai", "Access-Control-Request-Method": "POST" } });
+  await response.text();
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
 
 const leaks = (log: string) =>
