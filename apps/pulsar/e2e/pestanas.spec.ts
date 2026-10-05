@@ -112,6 +112,7 @@ test.describe("pestañas y riel", () => {
     { name: "/mes", path: "/mes" },
     { name: "/metas", path: "/metas" },
     { name: "/metas/<id>", path: `/metas/${world.a}` },
+    { name: "/conexiones", path: "/conexiones" },
     { name: "/sueltas", path: "/sueltas" },
     { name: "a past day", path: `/dia/${yesterday}` },
   ];

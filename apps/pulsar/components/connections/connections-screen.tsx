@@ -130,7 +130,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
     return (
       <Page>
         <ScreenHeader title={t("created.title")} back={place} eyebrow={eyebrow} />
-        <Notice>{t("created.once")}</Notice>
+        <Notice role="note">{t("created.once")}</Notice>
         <section>
           <SectionLabel>{created.name}</SectionLabel>
           <Copyable text={created.key} label={t("created.copyName")} />

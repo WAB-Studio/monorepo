@@ -81,7 +81,8 @@ export function BottomNav({
   const openGoal = goals.find(
     (goal) => pathname === `/metas/${goal.id}` || pathname.startsWith(`/metas/${goal.id}/`),
   );
-  const onGoals = pathname.startsWith("/metas");
+  // `/conexiones` hangs from Metas: no tab of its own, so it marks that one.
+  const onGoals = pathname.startsWith("/metas") || pathname.startsWith("/conexiones");
 
   const items = [
     { href: "/", label: labels.today, active: pathname === "/" || pathname.startsWith("/sueltas") },

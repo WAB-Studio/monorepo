@@ -31,6 +31,13 @@ async function create(page: Page, name: string): Promise<string> {
   return (await key.textContent())!;
 }
 
+// Under 1024 the tab, from 1024 the rail's item: either way only «Metas» is current.
+async function expectMetasCurrent(page: Page) {
+  const nav = page.getByRole("navigation");
+  await expect(nav.locator("[aria-current]")).toHaveCount(1);
+  await expect(nav.getByRole("link", { name: "Metas", exact: true })).toHaveAttribute("aria-current", "page");
+}
+
 // The server rendered nothing a later visit can read the key from.
 async function absentEverywhere(page: Page, key: string) {
   expect(await page.content()).not.toContain(key);
@@ -68,6 +75,7 @@ test.describe("the connections screen (RP-38)", () => {
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
       await expect(page.getByRole("heading", { level: 1, name: messages.title })).toBeVisible();
+      await expectMetasCurrent(page);
       await expect(page.getByText(messages.intro, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.sections.first, { exact: true })).toBeVisible();
       await expect(page.getByText(messages.nameHint, { exact: true })).toBeVisible();
@@ -86,6 +94,8 @@ test.describe("the connections screen (RP-38)", () => {
       const key = await create(page, NAME);
 
       await expect(page.getByText(messages.created.once, { exact: true })).toBeVisible();
+      await expect(page.getByRole("note")).toHaveText(messages.created.once);
+      await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
       const command = page.locator("pre").nth(1);
       await expect(command).toContainText("/mcp");
       await expect(command).toContainText(key);
@@ -99,6 +109,9 @@ test.describe("the connections screen (RP-38)", () => {
       expect(stored).toHaveLength(1);
       expect(stored[0].hint).toBe(key.slice(-4));
       expect(Buffer.from(stored[0].token_hash).includes(Buffer.from(key))).toBe(false);
+      // No column of the row, whole, carries the key.
+      const [row] = await db`select to_jsonb(t)::text as doc from goals.access_tokens t where user_id = ${person.id}`;
+      expect(row.doc).not.toContain(key);
 
       await page.reload();
       await expect(page.getByRole("button", { name: messages.create })).toBeVisible();
@@ -180,6 +193,7 @@ test.describe("the connections screen (RP-38)", () => {
       try {
         const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         expect(await overflow()).toBeLessThanOrEqual(0);
+        await expectMetasCurrent(page);
 
         await create(page, NAME);
         expect(await overflow()).toBeLessThanOrEqual(0);
