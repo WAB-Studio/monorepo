@@ -91,7 +91,7 @@ test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ person, br
   try {
     const page = await context.newPage();
     await page.goto("/");
-    await expect(page.getByText("Meta abierta", { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText("Meta abierta", { exact: true })).toBeVisible();
     // Its last day was yesterday: at most the «terminó ayer» line names it, never a goal entry.
     await expect(page.getByText("Meta que terminó", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Hoy no pide nada.")).toHaveCount(0);
