@@ -1,0 +1,312 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import type { Report } from "@/lib/export/report";
+import { monthList, type Task } from "@/lib/plan/carry";
+import type { loadDay } from "@/lib/queries/day";
+import type { GoalView } from "@/lib/queries/goal";
+
+import { amountOf, shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "./shape";
+
+const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+const tasks: Task[] = [
+  { id: ID(1), parentId: null, name: "Capítulo 1", plannedMonth: "2026-09-01", day: null, estimate: 300, doneOn: null },
+  { id: ID(2), parentId: null, name: "Capítulo 0", plannedMonth: "2026-09-01", day: null, estimate: 300, doneOn: "2026-09-10" },
+  { id: ID(3), parentId: null, name: "Parte 2", plannedMonth: "2026-10-01", day: null, estimate: null, doneOn: null },
+  { id: ID(4), parentId: ID(3), name: "Leer", plannedMonth: null, day: null, estimate: 200, doneOn: "2026-10-03" },
+  { id: ID(5), parentId: ID(3), name: "Resumir", plannedMonth: null, day: null, estimate: 100, doneOn: null },
+];
+
+function goalView(unit: string | null): GoalView {
+  return {
+    id: ID(10),
+    name: "Leer más",
+    horizon: "2027-01-01",
+    endedOn: null,
+    createdAt: "2026-08-15T15:00:00.000Z",
+    measureName: unit === null ? null : "Lectura",
+    measureUnit: unit,
+    archivedAt: null,
+    measureTotal: 570,
+    phases: [{ id: ID(11), name: "Arranque", startsOn: "2026-08-17", endsOn: null }],
+    commitments: [
+      {
+        id: ID(12),
+        name: "Leer 30 min",
+        cadence: { kind: "weekdays", days: [1, 3, 5] },
+        satisfiedBy: { kind: "quantity", target: 30, unit: unit ?? "minutos" },
+        retiredAt: null,
+        sourceLabelKey: null,
+        factDayCount: 4,
+      },
+      {
+        id: ID(13),
+        name: "Leer en la app",
+        cadence: { kind: "daily" },
+        satisfiedBy: { kind: "evidence", threshold: 10, unit: "páginas" },
+        retiredAt: "2026-10-01",
+        sourceLabelKey: "sources.reading",
+        factDayCount: 0,
+      },
+      {
+        id: ID(14),
+        name: "Repasar",
+        cadence: { kind: "daily" },
+        satisfiedBy: { kind: "tap" },
+        retiredAt: null,
+        sourceLabelKey: null,
+        factDayCount: 1,
+      },
+    ],
+    weeks: [{ index: 8, startsOn: "2026-10-05", endsOn: "2026-10-11", total: 750, phaseName: "Arranque", current: true }],
+    evidence: "unreadable",
+    month: { month: "2026-10-01", planned: 750, reached: 120, underPace: false },
+    months: [
+      { month: "2026-09-01", planned: 600, reached: 450, current: false, past: true },
+      { month: "2026-10-01", planned: 750, reached: 120, current: true, past: false },
+      { month: "2026-11-01", planned: null, reached: 0, current: false, past: false },
+    ],
+    budgets: [],
+    tasks,
+    shifts: ["2026-09-01"],
+  };
+}
+
+// Every string a field that names a month holds, wherever it sits.
+function monthsIn(value: unknown, found: string[] = []): string[] {
+  if (Array.isArray(value)) value.forEach((v) => monthsIn(v, found));
+  else if (typeof value === "object" && value !== null) {
+    for (const [key, inner] of Object.entries(value)) {
+      if (["month", "from", "carriedFrom"].includes(key) && typeof inner === "string") found.push(inner);
+      else if (key === "shifts" && Array.isArray(inner)) found.push(...(inner as string[]));
+      else monthsIn(inner, found);
+    }
+  }
+  return found;
+}
+
+function numbersIn(value: unknown, found: number[] = []): number[] {
+  if (typeof value === "number") found.push(value);
+  else if (Array.isArray(value)) value.forEach((v) => numbersIn(v, found));
+  else if (typeof value === "object" && value !== null) Object.values(value).forEach((v) => numbersIn(v, found));
+  return found;
+}
+
+test("a goal's months read YYYY-MM, never the first of the month", () => {
+  const shaped = shapeGoal(goalView("minutos"));
+  assert.deepEqual(
+    shaped.months.map((m) => m.month),
+    ["2026-09", "2026-10", "2026-11"],
+  );
+  assert.equal(shaped.thisMonth?.month, "2026-10");
+  assert.deepEqual(shaped.shifts, ["2026-09"]);
+  const months = monthsIn(shaped);
+  assert.ok(months.length >= 6);
+  for (const month of months) assert.match(month, /^\d{4}-\d{2}$/);
+});
+
+test("750 minutes is an amount with its words; another unit has no text", () => {
+  const minutes = shapeGoal(goalView("minutos"));
+  assert.deepEqual(minutes.months[1].planned, { value: 750, unit: "minutos", text: "12 h 30 min" });
+  assert.deepEqual(amountOf(60, "min"), { value: 60, unit: "min", text: "1 h" });
+  const pages = shapeGoal(goalView("páginas"));
+  assert.deepEqual(pages.months[1].planned, { value: 750, unit: "páginas" });
+  assert.equal("text" in (pages.months[1].planned as object), false);
+  assert.equal("text" in (pages.measureTotal as object), false);
+});
+
+test("a goal that measures nothing has a unit of null and no text", () => {
+  assert.deepEqual(amountOf(5, null), { value: 5, unit: null });
+  const shaped = shapeGoal(goalView(null));
+  assert.equal(shaped.measure, null);
+  assert.equal(shaped.measureTotal, null);
+});
+
+test("an amount is an integer: a float is refused and none leaves a shape", () => {
+  assert.throws(() => amountOf(1.5, "páginas"));
+  for (const unit of ["minutos", "páginas", null]) {
+    for (const n of numbersIn(shapeGoal(goalView(unit)))) assert.ok(Number.isInteger(n), String(n));
+  }
+});
+
+test("a finished month's carried share is what its undone tasks left, floored", () => {
+  const [september, october] = shapeGoal(goalView("minutos")).months;
+  assert.deepEqual(september.carried, { value: 300, unit: "minutos", text: "5 h" });
+  assert.equal(september.carriedPercent, 50);
+  assert.equal(october.carried, null);
+  assert.equal(october.carriedPercent, null);
+});
+
+test("tasks are a tree: a sub-task sits under its parent and takes its month", () => {
+  const tree = shapeGoal(goalView("minutos")).tasks;
+  assert.deepEqual(
+    tree.map((t) => t.name),
+    ["Capítulo 1", "Capítulo 0", "Parte 2"],
+  );
+  const parent = tree[2];
+  assert.equal(parent.month, "2026-10");
+  assert.deepEqual(
+    parent.children.map((c) => [c.name, c.month, c.doneOn, c.estimate?.value]),
+    [
+      ["Leer", "2026-10", "2026-10-03", 200],
+      ["Resumir", "2026-10", null, 100],
+    ],
+  );
+  assert.equal(tree[1].doneOn, "2026-09-10");
+  assert.equal(parent.estimate, null);
+});
+
+test("commitments keep cadence, retirement and what satisfies them; evidence is named", () => {
+  const shaped = shapeGoal(goalView("minutos"));
+  const [quantity, evidence, tap] = shaped.commitments;
+  assert.deepEqual(quantity.cadence, { kind: "weekdays", days: [1, 3, 5] });
+  assert.deepEqual(quantity.satisfiedBy, { kind: "quantity", target: { value: 30, unit: "minutos", text: "30 min" } });
+  assert.equal(evidence.retiredAt, "2026-10-01");
+  assert.deepEqual(evidence.satisfiedBy.target, { value: 10, unit: "páginas" });
+  assert.equal(evidence.evidenceSource, "sources.reading");
+  assert.equal(tap.satisfiedBy.target, null);
+  assert.equal(shaped.evidence, "unreadable");
+  assert.equal(shaped.openedOn, "2026-08-15");
+});
+
+test("a shape is plain JSON: nothing is lost or made up by a round trip", () => {
+  const shaped = shapeGoal(goalView("minutos"));
+  assert.deepEqual(JSON.parse(JSON.stringify(shaped)), shaped);
+});
+
+test("a month's list carries the carried tasks first, owing what the month opened with", () => {
+  const items = monthList(tasks, "2026-10-01", "2026-10-05");
+  const shaped = shapeMonth({ goalId: ID(10), month: "2026-10-01", unit: "minutos", items });
+  assert.equal(shaped.month, "2026-10");
+  assert.deepEqual(
+    shaped.items.map((i) => [i.name, i.carriedFrom, i.owes.value, i.done]),
+    [
+      ["Capítulo 1", "2026-09", 300, false],
+      ["Parte 2", null, 300, false],
+    ],
+  );
+  assert.deepEqual(shaped.items[0].owes, { value: 300, unit: "minutos", text: "5 h" });
+  assert.equal(shaped.items[1].children.length, 2);
+  for (const month of monthsIn(shaped)) assert.match(month, /^\d{4}-\d{2}$/);
+});
+
+test("the goal list keeps its three groups and each goal's measure", () => {
+  const summary = (n: number, unit: string | null, archivedAt: string | null) => ({
+    id: ID(n),
+    name: `Meta ${n}`,
+    horizon: "2027-01-01",
+    measureName: unit === null ? null : "Lectura",
+    measureUnit: unit,
+    archivedAt,
+  });
+  const shaped = shapeGoalList({
+    open: [summary(1, "páginas", null)],
+    ended: [summary(2, null, null)],
+    archived: [summary(3, "minutos", "2026-09-01T10:00:00Z")],
+  });
+  assert.deepEqual(shaped.open[0], {
+    id: ID(1),
+    name: "Meta 1",
+    horizon: "2027-01-01",
+    measure: { name: "Lectura", unit: "páginas" },
+    archivedAt: null,
+  });
+  assert.equal(shaped.ended[0].measure, null);
+  assert.equal(shaped.archived[0].archivedAt, "2026-09-01T10:00:00Z");
+});
+
+type LoadedDay = Awaited<ReturnType<typeof loadDay>>;
+
+test("a day pairs each slot with its commitment, its unit and its amounts", () => {
+  const loaded: LoadedDay = {
+    view: {
+      day: "2026-10-05",
+      slots: [
+        { commitmentId: ID(12), satisfied: true, satisfiedBy: "declared", labelKey: null, quantity: 45 },
+        { commitmentId: ID(14), satisfied: false, satisfiedBy: null, labelKey: null, quantity: null },
+      ],
+      phase: { id: ID(11), name: "Arranque", startsOn: "2026-08-17", endsOn: null },
+    },
+    evidence: "unreadable",
+    goals: [
+      { id: ID(10), name: "Leer más", horizon: "2027-01-01", openedOn: "2026-08-15", measureName: "Lectura", measureUnit: "minutos" },
+    ],
+    oneOffs: [
+      { id: ID(20), goalId: ID(10), name: "Pedir el libro", day: "2026-10-03" },
+      { id: ID(21), goalId: null, name: "Llamar", day: "2026-10-05" },
+    ],
+    doneOneOffs: [{ id: ID(22), goalId: null, name: "Pagar", factId: ID(23), writtenAt: "2026-10-05T14:00:00Z" }],
+    daylessCount: 2,
+    scheduledCount: 1,
+    lastEnded: null,
+    endedThisWeek: [],
+    weekMeasure: { [ID(10)]: 90 },
+    monthLine: { [ID(10)]: { planned: 750, reached: 120, underPace: false } },
+    commitments: [
+      { id: ID(12), goalId: ID(10), name: "Leer 30 min", kind: "quantity", target: 30, unit: "minutos", cadence: { kind: "daily" } },
+      { id: ID(14), goalId: ID(10), name: "Repasar", kind: "tap", target: null, unit: null, cadence: { kind: "daily" } },
+    ],
+    phases: [],
+    phasePositions: {},
+    factsByCommitment: {},
+    periodDone: { [ID(12)]: 3 },
+  };
+  const shaped = shapeDay(loaded);
+  assert.equal(shaped.day, "2026-10-05");
+  assert.deepEqual(shaped.slots[0].quantity, { value: 45, unit: "minutos", text: "45 min" });
+  assert.deepEqual(shaped.slots[0].target, { value: 30, unit: "minutos", text: "30 min" });
+  assert.equal(shaped.slots[0].name, "Leer 30 min");
+  assert.equal(shaped.slots[0].periodDone, 3);
+  assert.equal(shaped.slots[1].quantity, null);
+  assert.equal(shaped.slots[1].periodDone, null);
+  assert.deepEqual(shaped.goals[0].weekTotal, { value: 90, unit: "minutos", text: "1 h 30 min" });
+  assert.deepEqual(shaped.oneOffs.map((o) => o.carried), [true, false]);
+  assert.equal(shaped.doneOneOffs[0].factId, ID(23));
+  assert.equal(shaped.evidence, "unreadable");
+  assert.deepEqual(JSON.parse(JSON.stringify(shaped)), shaped);
+});
+
+test("the report shapes every figure as an amount and its months as YYYY-MM", () => {
+  const report: Report = {
+    today: "2026-10-05",
+    evidence: "read",
+    goals: [
+      {
+        id: ID(10),
+        name: "Leer más",
+        horizon: "2027-01-01",
+        endedOn: null,
+        unit: "páginas",
+        thisMonth: { planned: 750, reached: 120, underPace: true },
+        toDate: { planned: 1350, reached: 570 },
+        phases: [{ aim: "Arrancar", startsOn: "2026-08-17", endsOn: "2026-11-01", current: true }],
+        carried: [
+          { name: "Capítulo 1", from: "2026-09-01", owes: 300, hasAmount: true, children: [{ name: "Leer", owes: 300, hasAmount: true }] },
+        ],
+        months: [{ month: "2026-09-01", planned: 600, reached: 450, current: false, past: true, carried: 50 }],
+        weeks: [],
+      },
+    ],
+  };
+  const shaped = shapeReport(report);
+  const goal = shaped.goals[0];
+  assert.deepEqual(goal.thisMonth.planned, { value: 750, unit: "páginas" });
+  assert.deepEqual(goal.toDate.reached, { value: 570, unit: "páginas" });
+  assert.equal(goal.carried[0].from, "2026-09");
+  assert.deepEqual(goal.carried[0].children[0].owes, { value: 300, unit: "páginas" });
+  assert.equal(goal.months[0].month, "2026-09");
+  assert.equal(goal.months[0].carriedPercent, 50);
+  assert.equal(shaped.evidence, "read");
+});
+
+test("loose one-offs keep the two lists apart, the scheduled with their day", () => {
+  const shaped = shapeLoose({
+    dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null }],
+    scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", day: "2026-10-09" }],
+  });
+  assert.deepEqual(shaped, {
+    dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null }],
+    scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", day: "2026-10-09" }],
+  });
+});
