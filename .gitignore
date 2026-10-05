@@ -66,3 +66,6 @@ SS app/
 # Recibos reales para la prueba de lectura (§4e). Llevan nombre, NIT, teléfono,
 # correo y números de cuenta. No se commitean.
 testmodelsphoto/
+supabase/.temp/
+supabase/.branches/
+supabase/signing_keys.json
