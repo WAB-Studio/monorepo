@@ -99,6 +99,41 @@ test.describe("the import screen (RP-37)", () => {
     }
   });
 
+  test("the text last read is in the box when the screen opens again, and a file read leaves it empty", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas/importar");
+      await settled(page);
+      await expect(page.getByLabel(messages.textLabel)).toHaveValue("");
+
+      await page.getByLabel(messages.textLabel).fill(EXAMPLE);
+      await page.getByRole("button", { name: "Leer el plan" }).click();
+      await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+
+      await page.goto("/metas/importar");
+      await settled(page);
+      await expect(page.getByLabel(messages.textLabel)).toHaveValue(EXAMPLE);
+
+      await page.getByLabel(messages.upload).setInputFiles({
+        name: "plan.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from(EXAMPLE),
+      });
+      await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+
+      await page.goto("/metas/importar");
+      await settled(page);
+      await expect(page.getByLabel(messages.textLabel)).toHaveValue("");
+    } finally {
+      await context.close();
+    }
+  });
+
   test("the example with a broken month line names the line and keeps the text", async ({ person, browser, baseURL }) => {
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
     try {
@@ -114,6 +149,11 @@ test.describe("the import screen (RP-37)", () => {
       await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(/^Línea 12: «- 2026-13 · 20 h»\. Esperaba - AAAA-MM · monto\.$/);
       await expect(area).toHaveValue(broken);
       await expect(page).toHaveURL(/\/metas\/importar$/);
+
+      // The template is hidden after the failure; one tap on «ver la plantilla» brings it back.
+      await expect(page.getByRole("button", { name: "copiar la plantilla" })).toHaveCount(0);
+      await page.getByRole("button", { name: "ver la plantilla" }).click();
+      await expect(page.getByRole("button", { name: "copiar la plantilla" })).toBeVisible();
     } finally {
       await context.close();
     }
@@ -244,6 +284,37 @@ test.describe("the import screen (RP-37)", () => {
         const read = await boxOf(page.getByRole("button", { name: "Leer el plan" }));
         expect(read.x).toBeGreaterThanOrEqual(0);
         expect(read.x + read.width).toBeLessThanOrEqual(width);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test(`at ${width} a broken line shows «ver la plantilla» under its error and nothing overflows`, async ({
+      person,
+      browser,
+      baseURL,
+    }) => {
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 800 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/metas/importar");
+        await settled(page);
+
+        await page.getByLabel(messages.textLabel).fill(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h"));
+        await page.getByRole("button", { name: "Leer el plan" }).click();
+        const alert = page.getByRole("alert").filter({ hasText: /Línea 12/ });
+        await expect(alert).toBeVisible();
+        const show = page.getByRole("button", { name: "ver la plantilla" });
+        await expect(show).toBeVisible();
+        expect((await boxOf(show)).y).toBeGreaterThan((await boxOf(alert)).y);
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        );
+        expect(overflow).toBeLessThanOrEqual(0);
       } finally {
         await context.close();
       }
