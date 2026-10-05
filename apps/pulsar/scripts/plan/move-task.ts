@@ -170,8 +170,11 @@ test("moveTaskToMonth: a task of this month moves to next month with its childre
   const { todayInZone } = await import("@/lib/zone");
   const view = await loadGoal(goalId, todayInZone());
   assert.ok(view);
-  assert.ok(monthList(view.tasks, `${nextMonth}-01`, today).some((item) => item.task.id === taskId));
-  assert.ok(!monthList(view.tasks, `${thisMonth}-01`, today).some((item) => item.task.id === taskId));
+  const inDestination = monthList(view.tasks, `${nextMonth}-01`, today).find((item) => item.task.id === taskId);
+  assert.ok(inDestination, "the task is listed under the destination month");
+  assert.deepEqual(inDestination.children.map((child) => child.id), [childId]);
+  const inOrigin = monthList(view.tasks, `${thisMonth}-01`, today);
+  assert.ok(!inOrigin.some((item) => item.task.id === taskId || item.children.some((child) => child.id === childId)));
 });
 
 test("moveTaskToMonth: a closed month and a month outside the span are refused and the task stays", async () => {
