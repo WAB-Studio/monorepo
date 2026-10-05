@@ -215,7 +215,8 @@ test("each refusal reads its words, on the form and from the server (RP-30, RP-3
 
     await page.goto(newHref(goalId, thisMonth));
     await save.click();
-    await expect(page.getByText("Escribe qué es lo suelto.")).toBeVisible();
+    await expect(page.getByText("Escribe qué hay que hacer.")).toBeVisible();
+    await expect(page.getByText("Escribe qué es lo suelto.")).toHaveCount(0);
 
     await page.getByLabel("qué hay que hacer").fill(`Larga ${stamp}`.padEnd(130, "x"));
     await save.click();
@@ -255,7 +256,16 @@ test("each refusal reads its words, on the form and from the server (RP-30, RP-3
   }
 });
 
-test("a goal with no measure writes a task with no time and no amount fields (RP-30)", async ({
+test("Hoy's one-off field still reads «Escribe qué es lo suelto.» for an empty name (RP-19)", async ({ page }) => {
+  await page.goto("/");
+  const field = page.getByLabel("Algo suelto").last();
+  await field.fill("   ");
+  await field.press("Enter");
+  await expect(page.getByText("Escribe qué es lo suelto.")).toBeVisible();
+  await expect(page.getByText("Escribe qué hay que hacer.")).toHaveCount(0);
+});
+
+test("a goal with no measure writes a task with no time and no amount fields, and a parent with sub-tasks that carry none (RP-30, RP-31)", async ({
   person,
   browser,
   baseURL,
@@ -271,7 +281,7 @@ test("a goal with no measure writes a task with no time and no amount fields (RP
     await expect(page.getByText("Esta meta no mide nada, así que la tarea no lleva tiempo.")).toBeVisible();
     await expect(page.getByLabel("horas")).toHaveCount(0);
     await expect(page.getByLabel("minutos")).toHaveCount(0);
-    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(page.getByRole("checkbox", { name: "con sub-tareas" })).toBeVisible();
     await page.getByLabel("qué hay que hacer").fill(`Trámite ${stamp}`);
     await page.getByRole("button", { name: "Guardar la tarea" }).click();
     await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses/${seg(thisMonth)}$`));
@@ -280,6 +290,26 @@ test("a goal with no measure writes a task with no time and no amount fields (RP
       select estimate from goals.one_offs where goal_id = ${goalId}
     `;
     expect(row.estimate).toBeNull();
+
+    // «con sub-tareas» lands on the first sub-task's form: no hours anywhere, the hint speaks of no time.
+    await page.goto(newHref(goalId, thisMonth));
+    await page.getByLabel("qué hay que hacer").fill(`Padre ${stamp}`);
+    await page.getByRole("checkbox", { name: "con sub-tareas" }).click();
+    await expect(page.getByText("se da por hecha cuando lo están sus sub-tareas")).toBeVisible();
+    await page.getByRole("button", { name: "Guardar la tarea" }).click();
+    await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("horas")).toHaveCount(0);
+    await expect(page.getByLabel("minutos")).toHaveCount(0);
+    await page.getByLabel("qué hay que hacer").fill(`Hija ${stamp}`);
+    await page.getByRole("button", { name: "Guardar la sub-tarea" }).click();
+    await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses/${seg(thisMonth)}$`));
+    const parentRow = page.locator("[data-done]").filter({ hasText: `Padre ${stamp}` });
+    await expect(parentRow).toBeVisible();
+    await expect(page.getByText(`Hija ${stamp}`)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Otra sub-tarea" })).toHaveCount(2);
+    await page.getByRole("link", { name: "Otra sub-tarea" }).first().click();
+    await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("horas")).toHaveCount(0);
   } finally {
     await context.close();
   }
@@ -335,7 +365,7 @@ for (const width of [360, 1280]) {
   });
 }
 
-test("«Otra sub-tarea» closes each open parent's children and is offered under a parent and a bare task of a measured goal, never in a closed month, a carried or sub-task row, or a goal that measures nothing (RP-31)", async ({
+test("«Otra sub-tarea» closes each open parent's children and is offered under a parent and a bare task, of a goal that measures nothing as of one that does, never in a closed month, or a carried or sub-task row (RP-31)", async ({
   person,
   browser,
   baseURL,
@@ -380,10 +410,10 @@ test("«Otra sub-tarea» closes each open parent's children and is offered under
     await expect(page.getByText(`Hijo viejo ${stamp}`)).toBeVisible();
     await expect(link).toHaveCount(0);
 
-    // A goal that measures nothing never offers it, not even under a bare task.
+    // A goal that measures nothing offers it under a bare task, by the same rule.
     await page.goto(`/metas/${plainGoal}/meses/${seg(thisMonth)}`);
     await expect(page.getByText(`Trámite ${stamp}`)).toBeVisible();
-    await expect(link).toHaveCount(0);
+    await expect(link).toHaveCount(1);
   } finally {
     await context.close();
   }

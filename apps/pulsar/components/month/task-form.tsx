@@ -12,6 +12,11 @@ import { Button, Chip, Field, Flex, Page, SectionLabel, Text } from "@/component
 
 const WHOLE = /^\d+$/;
 
+// The shared one-off schema speaks Hoy's field; a month task names its own.
+function taskError(key: string): string {
+  return key === "day.errors.oneOffNameEmpty" ? "month.task.nameEmpty" : key;
+}
+
 export type TaskFormProps = {
   goalId: string;
   goalName: string;
@@ -94,7 +99,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
         : { name, day: null, goalId, plannedMonth: month, estimate },
     );
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      setError(taskError(parsed.error.issues[0].message));
       return;
     }
 
@@ -105,7 +110,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
           router.push(!parent && withChildren ? `${monthHref}/tarea/nueva?padre=${result.oneOffId}` : monthHref);
           router.refresh();
         } else {
-          setError(result.error);
+          setError(taskError(result.error));
         }
       });
     });
@@ -180,7 +185,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
         </Text>
       ) : null}
 
-      {measured && !parent ? (
+      {!parent ? (
         <Flex direction="column" gap="2" align="start">
           <Chip
             checkbox
@@ -191,7 +196,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
             {t("month.task.withChildren")}
           </Chip>
           <Text as="p" variant="meta" tone="muted" id="task-with-children-hint">
-            {t("month.task.withChildrenHint")}
+            {t(measured ? "month.task.withChildrenHint" : "month.task.withChildrenHintNoMeasure")}
           </Text>
         </Flex>
       ) : null}
