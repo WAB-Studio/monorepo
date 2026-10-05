@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { isDomainDeliverable } from "@/lib/auth/deliverability";
+import { consentReturnPath } from "@/lib/validation/oauth";
 
 // `@repo/supabase-auth` starts with `import "server-only"`, and `@/lib/env`
 // throws when its required vars are unset — both resolvable only inside
@@ -31,7 +32,7 @@ export type SendSignInLinkResult =
  * `raw_user_meta_data`, which the user can rewrite and which surfaces in the
  * JWT — there is no row of this app's own for state to live in instead.
  */
-export async function sendSignInLink(email: string): Promise<SendSignInLinkResult> {
+export async function sendSignInLink(email: string, next?: string): Promise<SendSignInLinkResult> {
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) return { ok: false, error: "emailInvalid" };
 
@@ -43,11 +44,16 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
 
   const [supabase, { env }] = await Promise.all([supabaseClient(), import("@/lib/env")]);
 
+  // A `next` that is not the consent never rides in the link.
+  const back = consentReturnPath(next, env.NEXT_PUBLIC_SITE_URL);
+  const redirect = new URL(`${env.NEXT_PUBLIC_SITE_URL}/auth/confirm`);
+  if (back) redirect.searchParams.set("next", back);
+
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data,
     options: {
       shouldCreateUser: true,
-      emailRedirectTo: `${env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
+      emailRedirectTo: redirect.toString(),
     },
   });
 
