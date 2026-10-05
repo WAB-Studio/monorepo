@@ -12,8 +12,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-block-size: 32px;
-  margin: -12px 0 0 -12px;
+  min-block-size: 48px;
+  margin: -8px 0 0 -12px;
   padding: 0 12px 0 8px;
   text-decoration: none;
   font-size: var(--pulsar-text-line-size);

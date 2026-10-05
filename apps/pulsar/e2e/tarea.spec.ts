@@ -112,7 +112,7 @@ test("writes a task of 1 h, a parent «con sub-tareas» and two sub-tasks of 1 h
     expect(parent.estimate).toBeNull();
 
     // Two sub-tasks; the sum line counts the amount being typed.
-    await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Una sub-tarea" })).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
     await expect(page.getByText(`«Padre ${stamp}» suma 0 min con esta.`)).toBeVisible();
     await page.getByLabel("qué hay que hacer").fill(`Primera ${stamp}`);
@@ -191,7 +191,7 @@ test("a sub-task under a sub-task, a parent of another goal or month, a closed m
     }
 
     await page.goto(`${newHref(goalId, thisMonth)}?padre=${parent}`);
-    await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Una sub-tarea" })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -297,7 +297,7 @@ test("a goal with no measure writes a task with no time and no amount fields, an
     await page.getByRole("checkbox", { name: "con sub-tareas" }).click();
     await expect(page.getByText("se da por hecha cuando lo están sus sub-tareas")).toBeVisible();
     await page.getByRole("button", { name: "Guardar la tarea" }).click();
-    await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Una sub-tarea" })).toBeVisible();
     await expect(page.getByLabel("horas")).toHaveCount(0);
     await expect(page.getByLabel("minutos")).toHaveCount(0);
     await page.getByLabel("qué hay que hacer").fill(`Hija ${stamp}`);
@@ -308,7 +308,7 @@ test("a goal with no measure writes a task with no time and no amount fields, an
     await expect(page.getByText(`Hija ${stamp}`)).toBeVisible();
     await expect(page.getByRole("link", { name: "Otra sub-tarea" })).toHaveCount(2);
     await page.getByRole("link", { name: "Otra sub-tarea" }).first().click();
-    await expect(page.getByText("Una sub-tarea", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Una sub-tarea" })).toBeVisible();
     await expect(page.getByLabel("horas")).toHaveCount(0);
   } finally {
     await context.close();
