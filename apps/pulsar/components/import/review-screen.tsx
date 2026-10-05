@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -120,12 +120,15 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const [editing, setEditing] = useState<Editing | null>(null);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // The names the draft is first measured against; a server refresh never re-reads it.
+  const [startNames] = useState(openGoalNames);
+  const confirmed = useRef(false);
 
   // The tab's storage is only there once mounted; the server paints no draft.
   useEffect(() => {
     let live = true;
     queueMicrotask(() => {
-      if (!live) return;
+      if (!live || confirmed.current) return;
       const read = readDraft();
       if (!read) {
         router.replace("/metas/importar");
@@ -137,14 +140,14 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       if (read.unmarked !== null) setUnmarked(new Set(read.unmarked));
       else {
         const clean = withoutStrayEstimates(read.draft);
-        setUnmarked(new Set(repeatedGoals(clean, openGoalNames).flatMap((g) => underneath(clean, goalPath(g)))));
+        setUnmarked(new Set(repeatedGoals(clean, startNames).flatMap((g) => underneath(clean, goalPath(g)))));
       }
       setLoaded(true);
     });
     return () => {
       live = false;
     };
-  }, [router, openGoalNames]);
+  }, [router, startNames]);
 
   // The goals with no measure keep their tasks, without the time they cannot hold.
   const work = useMemo(() => (draft ? withoutStrayEstimates(draft) : null), [draft]);
@@ -199,6 +202,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     try {
       const result = await confirmImport(sent);
       if (result.ok) {
+        confirmed.current = true;
         clearDraft();
         router.push("/metas");
         return;

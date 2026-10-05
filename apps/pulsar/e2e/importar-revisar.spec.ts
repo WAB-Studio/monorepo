@@ -116,6 +116,9 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await page.getByRole("button", { name: "Crear 1 meta" }).click();
       await expect(page).toHaveURL(/\/metas$/);
       await expect(page.getByText("IA aplicada").first()).toBeVisible();
+      // The revalidated page has painted: the review's refresh is over, and the person never goes back to the import.
+      await expect(page.getByRole("link", { name: /IA aplicada/ }).first()).toBeVisible();
+      await expect(page).toHaveURL(/\/metas$/);
 
       const goals = await db`select id from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
       expect(goals).toHaveLength(1);
