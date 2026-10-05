@@ -666,6 +666,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   screen lives at `/conexiones`, reached from `/metas`'s «el plan» («Conectar una IA»). Phone and light face only; the dark
   face is the token table's, and 1280 follows the desktop layout. Approved by the user 2026-10-05, «por mientras», with the
   desktop layout as a whole under review.
+- **Signed out, the consent screen names no client.** Before sign-in the name is only what the client declares, so anyone
+  could call itself «Claude»: it reads «Una aplicación pidió entrar…». `AutorizarSinSesion`'s «Claude» is the signed-in
+  name. No grant to `anon`. Decided 2026-10-05 by the coordinator.
+- **The consent screen has no rail: its column is 640 px, centred, at every width from 700.** The shell's rail and left
+  alignment belong to the screens inside `(app)`; `/oauth/autorizar` stands outside it with no nav, and the boards draw one
+  column at 1280. `AutorizarInvalida` centres its content vertically. Decided 2026-10-05 by the coordinator; the design
+  said nothing for a screen outside the shell, so it is centred.
 - **The shell is redrawn before any screen rides on it.** The critic of 2026-10-05 measured the desktop as the phone column
   (640 px pinned left, 456 px empty at 1440) and the phone's tabs off screen on every long page (Hoy's start at y=1490 of
   844). Decided by the user 2026-10-05, four answers:

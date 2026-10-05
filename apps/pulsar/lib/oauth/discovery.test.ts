@@ -5,7 +5,7 @@ import test, { before, mock } from "node:test";
 mock.module("@/lib/env", { namedExports: { env: { NEXT_PUBLIC_SITE_URL: "https://pulsar.test//" } } });
 mock.module("@/lib/mcp/tools/read", { namedExports: { registerReadTools: () => {} } });
 mock.module("@/lib/mcp/tools/write", { namedExports: { registerWriteTools: () => {} } });
-mock.module("@/db/client", { namedExports: { db: {} } });
+mock.module("@/db/client", { namedExports: { db: { execute: async () => [{ wait: 0 }] } } });
 mock.module("@/lib/oauth/grants", { namedExports: { registerClient: async () => "id-1" } });
 
 let server: typeof import("@/app/.well-known/oauth-authorization-server/route");

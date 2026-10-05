@@ -1,6 +1,7 @@
 "use server";
 
 import { sql } from "drizzle-orm";
+import { headers } from "next/headers";
 
 import { env } from "@/lib/env";
 import { issueCode } from "@/lib/oauth/grants";
@@ -18,7 +19,7 @@ const siteUrl = () => env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
 // A client named by its metadata document is fetched and registered here; any
 // other id is looked up. Unknown to both is `null`.
 async function findClient(clientId: string): Promise<KnownClient | null> {
-  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId);
+  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await headers());
 
   const rows = await withGoalsDb((tx) =>
     tx.execute<{ id: string; redirect_uris: string[] }>(sql`
