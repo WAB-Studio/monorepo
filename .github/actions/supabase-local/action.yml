@@ -1,0 +1,60 @@
+name: supabase-local
+description: Start the local Supabase stack on the runner, migrate it and point the named apps at it.
+
+inputs:
+  apps:
+    description: Space-separated apps that get an .env.local (pulsar, orbit, voyager).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Keyed by the CLI version the wrapper pins: a bump of it is a new key.
+    - name: Cache the stack's images
+      id: images
+      uses: actions/cache@v4
+      with:
+        path: ~/supabase-images.tar
+        key: supabase-images-${{ hashFiles('scripts/supabase-local.sh', 'supabase/config.toml') }}
+
+    - name: Load the cached images
+      if: steps.images.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        start=$SECONDS
+        docker load -i ~/supabase-images.tar >/dev/null
+        echo "images loaded in $((SECONDS - start))s"
+
+    # `start` generates the ES256 key (signing_keys.json is gitignored), pulls
+    # what is missing, boots the stack and applies all three migration chains.
+    - name: Start the stack and migrate
+      shell: bash
+      run: |
+        start=$SECONDS
+        scripts/supabase-local.sh start
+        echo "supabase start + migrate: $((SECONDS - start))s (image cache hit: ${{ steps.images.outputs.cache-hit || 'false' }})"
+
+    - name: Save the images for the next run
+      if: steps.images.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        docker images --format '{{.Repository}}:{{.Tag}}' | grep -E 'supabase|mailpit|kong' | grep -v '<none>' \
+          | xargs docker save -o ~/supabase-images.tar
+
+    - name: Write .env.local for the apps and export the same values
+      shell: bash
+      env:
+        APPS: ${{ inputs.apps }}
+      run: |
+        # print_env emits `export K='v'`; a dotenv file and $GITHUB_ENV take `K=v`.
+        scripts/supabase-local.sh env | sed -e 's/^export //' -e "s/='\(.*\)'$/=\1/" > /tmp/supabase-local.env
+        echo "NEXT_PUBLIC_SITE_URL=http://localhost:3000" >> /tmp/supabase-local.env
+        cron_secret="$(openssl rand -hex 16)"
+        echo "::add-mask::$cron_secret"
+        for app in $APPS; do
+          cp /tmp/supabase-local.env "apps/$app/.env.local"
+          if [ "$app" = orbit ]; then echo "CRON_SECRET=$cron_secret" >> "apps/$app/.env.local"; fi
+        done
+        # The publishable key is public by design; the others are fixed local URLs.
+        cat /tmp/supabase-local.env >> "$GITHUB_ENV"
+        echo "env names:" && cut -d= -f1 /tmp/supabase-local.env | tr '\n' ' '
