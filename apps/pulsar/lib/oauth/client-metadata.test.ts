@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { Readable } from "node:stream";
 
 import { clientFromMetadataUrl, privateAddress, type MetadataDeps } from "./client-metadata";
@@ -106,6 +106,41 @@ test("an IP-literal host is judged without resolving", async () => {
   }
 });
 
+test("an IPv6 literal that embeds a private IPv4 is refused in every form", async () => {
+  const forms: Record<string, string> = {
+    "mapped hex loopback": "[::ffff:7f00:1]",
+    "mapped hex 10/8": "[::ffff:a00:1]",
+    "mapped hex metadata": "[::ffff:a9fe:a9fe]",
+    "mapped dotted": "[::ffff:127.0.0.1]",
+    "v4-compatible": "[::7f00:1]",
+    "NAT64 metadata": "[64:ff9b::a9fe:a9fe]",
+    "6to4 loopback": "[2002:7f00:1::]",
+    "6to4 10/8": "[2002:a00:1::1]",
+    "unspecified": "[::]",
+    "unique-local": "[fd00::1]",
+    "link-local": "[fe80::1]",
+    "multicast": "[ff02::1]",
+  };
+  for (const [form, host] of Object.entries(forms)) {
+    const url = `https://${host}/c.json`;
+    const { client, calls } = await run(url, { response: () => json(doc({ client_id: url })) });
+    assert.equal(client, null, form);
+    assert.equal(calls.request, 0, form);
+  }
+});
+
+test("IPv4 special-use ranges are refused", () => {
+  for (const address of ["192.0.0.1", "198.18.0.1", "198.19.255.254", "224.0.0.1", "239.255.255.255", "240.0.0.1", "255.255.255.255"]) {
+    assert.equal(privateAddress(address), true, address);
+  }
+});
+
+test("an IPv6 address embedding a public IPv4 passes", () => {
+  for (const address of ["::ffff:808:808", "64:ff9b::808:808", "2002:808:808::1"]) {
+    assert.equal(privateAddress(address), false, address);
+  }
+});
+
 test("public addresses pass the address check", () => {
   for (const address of ["93.184.216.34", "8.8.8.8", "172.32.0.1", "100.63.0.1", "2606:4700::1111"]) {
     assert.equal(privateAddress(address), false, address);
@@ -176,6 +211,27 @@ test("a slow answer is aborted", async () => {
   const { client } = await run(URL_OK, { timeoutMs: 30, response: () => new Promise<Res>(() => {}) });
   assert.equal(client, null);
   assert.ok(Date.now() - started < 2000);
+});
+
+test("without timeoutMs the default is five seconds", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    let settled = false;
+    const pending = run(URL_OK, { response: () => new Promise<Res>(() => {}) }).then((result) => {
+      settled = true;
+      return result;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    mock.timers.tick(4999);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false);
+    mock.timers.tick(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, true);
+    assert.equal((await pending).client, null);
+  } finally {
+    mock.timers.reset();
+  }
 });
 
 test("fields that fail the registration schema are refused", async () => {
