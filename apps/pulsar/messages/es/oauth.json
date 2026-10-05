@@ -15,6 +15,7 @@
   },
   "allow": "Permitir",
   "deny": "No permitir",
+  "anonymousClient": "Una aplicación",
   "working": "Un momento…",
   "footer": "entraste como {email} · lo revocas cuando quieras en Metas › Conectar una IA",
   "signedOut": {
