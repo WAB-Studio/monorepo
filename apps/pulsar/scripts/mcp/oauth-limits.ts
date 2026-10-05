@@ -154,11 +154,8 @@ test("a preflight is never counted", async () => {
   assert.equal(await callsOf(d), 1);
 });
 
-// A public literal that answers nothing: an admitted read waits out the 5 s fetch
-// timeout, a refused one never starts it, so the time tells which happened.
+// A public literal that answers nothing: the claim is all that is observed.
 const SILENT = "https://192.0.2.1/client.json";
-const READ_STARTED_MS = 3500;
-const READ_REFUSED_MS = 2500;
 
 const grants: Record<string, Record<string, string>> = {
   refresh_token: { grant_type: "refresh_token", refresh_token: "plr_x" },
@@ -171,12 +168,11 @@ const grants: Record<string, Record<string, string>> = {
 };
 
 for (const grant of Object.keys(grants)) {
-  test(`a ${grant} request naming a metadata URL spends the registration limit and reads only while it admits`, async () => {
+  test(`a ${grant} request naming a metadata URL spends the registration limit before it reads`, async () => {
     await outwait(3600, 60);
     const e = `${prefix()}::1`;
     remember(e);
-    const timed = async () => {
-      const started = Date.now();
+    const answer = async () => {
       const response = await fetch(`${base}/oauth/token`, {
         method: "POST",
         headers: { "x-forwarded-for": e },
@@ -184,18 +180,10 @@ for (const grant of Object.keys(grants)) {
       });
       await response.text();
 
-      return { status: response.status, ms: Date.now() - started };
+      return response.status;
     };
-    const admitted = await Promise.all(Array.from({ length: 10 }, timed));
-    for (const [n, call] of admitted.entries()) {
-      assert.equal(call.status, 400);
-      assert.ok(call.ms >= READ_STARTED_MS, `read ${n + 1} took ${call.ms} ms: it was refused, not read`);
-    }
-    for (const n of [11, 12]) {
-      const call = await timed();
-      assert.equal(call.status, 400);
-      assert.ok(call.ms < READ_REFUSED_MS, `read ${n} took ${call.ms} ms: it was read past the cap`);
-    }
+    const answers = [...(await Promise.all(Array.from({ length: 10 }, answer))), await answer(), await answer()];
+    assert.ok(answers.every((status) => status === 400), `answers ${answers}`);
     assert.equal(await callsOf(e, "register"), 12, "the metadata read did not claim the register bucket");
     assert.equal(await callsOf(e, "token"), 12);
   });
