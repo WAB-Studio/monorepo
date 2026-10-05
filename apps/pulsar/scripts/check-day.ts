@@ -2162,6 +2162,7 @@ async function runMain(): Promise<void> {
   await runSurvivorsOf92To94Check();
   await runMonthLineCheck();
   await runMonthTaskCheck();
+  await runPastWeekCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
@@ -2567,6 +2568,82 @@ async function runMonthTaskCheck(): Promise<void> {
     reportRun("month-task", wireCalls.slice(start), true);
   } finally {
     if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
+    await db.end();
+  }
+}
+
+// Module 206 (RP-44, RP-24): a past week keeps the goals that governed it, an
+// archive since included, and drops one opened after it; `firstMonday` is the
+// oldest goal's Monday, archived included, read in the same statement. Rows
+// are relative to today and deleted by id.
+async function runPastWeekCheck(): Promise<void> {
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone, weekOf } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runPastWeekCheck: no verified session");
+  const today = todayInZone();
+  const threeBack = addDays(today, -21);
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const ids: string[] = [];
+
+  async function seedGoal(name: string, createdDay: string, archivedDay: string | null): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+      values (${person!.id}, ${name}, '2099-12-31'::date, ${`${createdDay}T17:00:00Z`}::timestamptz,
+              ${archivedDay ? `${archivedDay}T17:00:00Z` : null}::timestamptz)
+      returning id
+    `;
+    ids.push(row.id);
+    return row.id;
+  }
+
+  try {
+    const oldest = await seedGoal("past-week oldest archived", "2001-01-03", "2001-02-03");
+    const governed = await seedGoal("past-week governed", addDays(today, -35), addDays(today, -14));
+    const later = await seedGoal("past-week opened last week", addDays(today, -7), null);
+
+    await loadWeek(threeBack);
+    const start = wireCalls.length;
+    const past = await loadWeek(threeBack);
+    reportRun("past-week", wireCalls.slice(start), true);
+    const current = await loadWeek(today);
+
+    assert(
+      "a goal opened five weeks ago and archived two weeks ago is in the week three back",
+      past.goals.some((goal) => goal.id === governed),
+      `goals = ${JSON.stringify(past.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "it is not in this week",
+      !current.goals.some((goal) => goal.id === governed),
+      `goals = ${JSON.stringify(current.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "a goal opened last week is absent from the week three back",
+      !past.goals.some((goal) => goal.id === later),
+      `goals = ${JSON.stringify(past.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "it is in this week",
+      current.goals.some((goal) => goal.id === later),
+      `goals = ${JSON.stringify(current.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "a goal archived long before the week is not in it",
+      !past.goals.some((goal) => goal.id === oldest),
+      `goals = ${JSON.stringify(past.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "firstMonday is the Monday of the oldest goal, archived included",
+      past.firstMonday === weekOf("2001-01-03")[0] && current.firstMonday === past.firstMonday,
+      `past ${past.firstMonday}, this ${current.firstMonday}, expected ${weekOf("2001-01-03")[0]}`,
+    );
+  } finally {
+    if (ids.length > 0) {
+      await db`delete from goals.goals where id in ${db(ids)} and user_id = ${person.id}`;
+    }
     await db.end();
   }
 }
