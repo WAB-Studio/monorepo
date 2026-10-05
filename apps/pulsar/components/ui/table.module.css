@@ -205,3 +205,53 @@
 .pending {
   color: var(--pulsar-quiet);
 }
+
+/* A row that is a link (`MesesFilas.dc.html`): the phone's whole row is the
+   anchor, 56px tall, ink, with its chevron at the end. */
+.stackRow.linked {
+  padding: 0;
+  min-block-size: 56px;
+  align-items: stretch;
+}
+
+.rowLink {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 56px;
+  padding: 8px 4px;
+  text-decoration: none;
+  color: var(--pulsar-ink);
+}
+
+.rowLink:focus-visible,
+.cellLink:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: -2px;
+}
+
+.chevron {
+  flex: none;
+  color: var(--pulsar-quiet);
+}
+
+/* The wide face: the lead cell's anchor stretches over the row, so the row is
+   the target and no other cell becomes a link. */
+.linkedRow {
+  position: relative;
+}
+
+.cellLink {
+  color: var(--pulsar-ink);
+  text-decoration: none;
+}
+
+.cellLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  min-block-size: 48px;
+}
