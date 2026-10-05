@@ -661,3 +661,15 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   the header row, so the caption is where that table says its figures are only what was declared, as it did before
   171 made the caption a count. `ReporteSinEvidencia.dc.html` draws the mark under each closed month instead; the
   caption replaces it. Decided 2026-10-05 by the coordinator.
+- **The shell is redrawn before any screen rides on it.** The critic of 2026-10-05 measured the desktop as the phone column
+  (640 px pinned left, 456 px empty at 1440) and the phone's tabs off screen on every long page (Hoy's start at y=1490 of
+  844). Decided by the user 2026-10-05, four answers:
+  - **Phone: four tabs, fixed to the bottom — Hoy · Semana · Mes · Metas.** «Mes» is this month across every goal: its tasks,
+    what was carried, the amounts. Import, export and «Conectar una IA» live inside Metas. Every screen gets one header: its
+    title and one way back. Replaces the three tabs at the foot of the page.
+  - **Desktop: the rail plus list and detail.** The rail names each goal; a list sits beside its open item (goals beside the
+    goal, months beside the month, the import text beside its review); the export and the tables take the full width.
+    **Retires the 640 px column decisions of 2026-09-29 and 2026-09-30** for every screen this shell redraws.
+  - **Semana takes ‹ › and shows any past week, read-only.** Writing stays seven days back.
+  - **A month's tasks live in «Mes».** Hoy keeps only each goal's next task (174, 177).
+  The order is the coordinator's, 2026-10-05: one «armazón» slice first (nav, header, desktop frame), then each screen on it.
