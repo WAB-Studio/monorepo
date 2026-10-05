@@ -34,6 +34,8 @@
     "monthDeclaredOnly": "solo lo que dijiste tú · no pudimos leer el diccionario de lectura"
   },
   "review": {
+    "title": "Por semana",
+    "measure": "mide en {unit}",
     "caption": "por semana",
     "columns": {
       "week": "semana",
@@ -43,8 +45,7 @@
     },
     "weekLabel": "semana {n}",
     "current": "en curso",
-    "noMeasure": "Esta meta todavía no tiene cifra.",
-    "back": "Volver a la meta"
+    "noMeasure": "Esta meta todavía no tiene cifra."
   },
   "commitments": {
     "retired": "retirado",

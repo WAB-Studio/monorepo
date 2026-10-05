@@ -120,11 +120,13 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
 
     await page.goto(`/metas/${goalId}/revision`);
 
-    // Header: the goal's own name as the kicker, the measure's unit as the
-    // one heading — a `<p>` each, so the wide table's own `<th>` repeating
-    // the same string never collides with this lookup.
-    await expect(page.locator("p", { hasText: goalName })).toHaveCount(1);
-    await expect(page.locator("p", { hasText: unit })).toHaveCount(1);
+    // `RevisionAncha.dc.html`: one `h1` in the header, the way back named for
+    // the goal, the measure's unit on its mono line.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Por semana");
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByLabel(`Volver a ${goalName}`)).toHaveAttribute("href", `/metas/${goalId}`);
+    await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
     await expect(page.getByText("la única cifra que predice el progreso")).toHaveCount(0);
 
     // The phone face, `Revision.dc.html`: three rows, the lead figure and
@@ -152,7 +154,7 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
 
     // `RevisionEscritorio.dc.html`: the same rows, a real `<table>`, widened
     // past the kit's usual 640px cap.
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 1440, height: 900 });
     const table = page.getByRole("table");
     await expect(table).toBeVisible();
     const rows = table.getByRole("row");
@@ -169,8 +171,23 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await expect(week3Row.getByRole("cell").nth(3)).toHaveText("en curso");
     await expect(week3Row).toHaveAttribute("data-current", "");
 
-    const pageWidth = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
-    expect(pageWidth).toBeGreaterThan(640);
+    // From 1024 the table spans the main column, past the old 1020 cap.
+    const tableWidth = (await table.boundingBox())!.width;
+    expect(tableWidth).toBeGreaterThan(1020);
+    const mainWidth = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
+    expect(tableWidth).toBeGreaterThan(mainWidth! * 0.8);
+
+    // The header's way back is the only one: no link after the table.
+    await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
+    await page.getByLabel(`Volver a ${goalName}`).click();
+    await page.waitForURL(`**/metas/${goalId}`);
+
+    for (const width of [360, 390, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/metas/${goalId}/revision`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
   } finally {
     await deleteGoal(db, personId, goalId);
   }
@@ -194,7 +211,9 @@ test("a goal with no measure yet says so on its review, with no way in and no ta
     await expect(page.getByRole("table")).toHaveCount(0);
     await expect(page.getByRole("listitem")).toHaveCount(0);
 
-    await page.getByRole("link", { name: "Volver a la meta" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
+    await page.getByLabel(`Volver a ${goalName}`).click();
     await page.waitForURL(`**/metas/${goalId}`);
   } finally {
     await deleteGoal(db, personId, goalId);
