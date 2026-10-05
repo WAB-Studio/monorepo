@@ -124,7 +124,7 @@ test("with every goal ended and none open and a suelta due, Hoy names the goal a
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "Ver las metas" })).toHaveAttribute("href", "/metas");
     await expect(page.getByRole("link", { name: "Abrir otra meta" })).toHaveAttribute("href", "/metas/nueva");
-    await expect(page.getByText("Todavía no tienes una meta abierta.")).toHaveCount(0);
+    await expect(page.getByText("Todavía no hay nada que anotar.")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Algo suelto de hoy", exact: true })).toBeVisible();
   } finally {
     await context.close();

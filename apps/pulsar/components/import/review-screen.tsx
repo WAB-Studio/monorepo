@@ -1,16 +1,21 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
-import { draftRefusals, type ImportDraft } from "@/lib/import/draft";
-import { clearDraft, readDraft } from "@/lib/import/draft-store";
-import { isTimeUnit, splitMinutes } from "@/lib/units/time";
+import { draftRefusals, strayEstimates, withoutStrayEstimates, type ImportDraft } from "@/lib/import/draft";
+import { clearDraft, readDraft, saveReview } from "@/lib/import/draft-store";
+import { repeatedGoals } from "@/lib/import/repeated";
+import { dayBefore } from "@/lib/day/weeks";
+import { formatQuantity, isTimeUnit, splitMinutes } from "@/lib/units/time";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { civilDateToDate } from "@/lib/zone";
+import { useTimeWords } from "@/components/ui/figure";
 import {
   ActionBar,
   Button,
@@ -18,8 +23,10 @@ import {
   Field,
   Figure,
   Flex,
+  IconButton,
   Notice,
   Page,
+  Panel,
   SectionLabel,
   Sheet,
   SheetActions,
@@ -101,10 +108,11 @@ type Editing = { path: string; title: string; unit: string; amount: number; sche
  * amount and an estimate are write-once after the import (RP-30), so the
  * amount buttons are the person's one cheap chance to change one.
  */
-export function ReviewScreen({ today }: { today: string }) {
+export function ReviewScreen({ today, openGoalNames }: { today: string; openGoalNames: string[] }) {
   const t = useTranslations();
   const format = useFormatter();
   const router = useRouter();
+  const words = useTimeWords();
   const [stored, setStored] = useState<ReturnType<typeof readDraft>>(null);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<ImportDraft | null>(null);
@@ -112,12 +120,15 @@ export function ReviewScreen({ today }: { today: string }) {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // The names the draft is first measured against; a server refresh never re-reads it.
+  const [startNames] = useState(openGoalNames);
+  const confirmed = useRef(false);
 
   // The tab's storage is only there once mounted; the server paints no draft.
   useEffect(() => {
     let live = true;
     queueMicrotask(() => {
-      if (!live) return;
+      if (!live || confirmed.current) return;
       const read = readDraft();
       if (!read) {
         router.replace("/metas/importar");
@@ -125,21 +136,32 @@ export function ReviewScreen({ today }: { today: string }) {
       }
       setStored(read);
       setDraft(read.draft);
+      // A fresh draft starts with the goals an open goal already names unmarked.
+      if (read.unmarked !== null) setUnmarked(new Set(read.unmarked));
+      else {
+        const clean = withoutStrayEstimates(read.draft);
+        setUnmarked(new Set(repeatedGoals(clean, startNames).flatMap((g) => underneath(clean, goalPath(g)))));
+      }
       setLoaded(true);
     });
     return () => {
       live = false;
     };
-  }, [router]);
+  }, [router, startNames]);
 
-  const refusals = useMemo(() => (draft ? draftRefusals(draft, today) : []), [draft, today]);
+  // The goals with no measure keep their tasks, without the time they cannot hold.
+  const work = useMemo(() => (draft ? withoutStrayEstimates(draft) : null), [draft]);
+  const strays = useMemo(() => new Set(draft ? strayEstimates(draft).map((stray) => stray.path) : []), [draft]);
+  const repeated = useMemo(() => new Set(work ? repeatedGoals(work, openGoalNames) : []), [work, openGoalNames]);
+  const refusals = useMemo(() => (work ? draftRefusals(work, today) : []), [work, today]);
   const refused = useMemo(() => new Set(refusals.map((refusal) => refusal.path)), [refusals]);
-  const sent = useMemo(() => (draft ? markedDraft(draft, unmarked, refused) : null), [draft, unmarked, refused]);
+  const sent = useMemo(() => (work ? markedDraft(work, unmarked, refused) : null), [work, unmarked, refused]);
 
-  if (!loaded || !stored || !draft || !sent) return <Page />;
+  if (!loaded || !stored || !draft || !work || !sent) return <Page />;
 
   const monthWord = (month: string, long = false) =>
     format.dateTime(civilDateToDate(`${month}-01`), long ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" });
+  const dayLabel = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const shortMonth = (date: string) => format.dateTime(civilDateToDate(date), { month: "short", timeZone: "UTC" }).replace(".", "");
   const figure = (value: number | null, unit: string | null): ReactNode =>
     unit === null || value === null ? null : <Figure value={value} unit={unit} variant="meta" />;
@@ -162,15 +184,13 @@ export function ReviewScreen({ today }: { today: string }) {
   }
 
   function toggle(path: string, on: boolean) {
-    const paths = underneath(draft!, path);
-    setUnmarked((current) => {
-      const next = new Set(current);
-      for (const entry of paths) {
-        if (on) next.delete(entry);
-        else next.add(entry);
-      }
-      return next;
-    });
+    const next = new Set(unmarked);
+    for (const entry of underneath(work!, path)) {
+      if (on) next.delete(entry);
+      else next.add(entry);
+    }
+    setUnmarked(next);
+    saveReview(draft!, [...next]);
   }
 
   const goalsKept = sent.goals.length;
@@ -182,6 +202,7 @@ export function ReviewScreen({ today }: { today: string }) {
     try {
       const result = await confirmImport(sent);
       if (result.ok) {
+        confirmed.current = true;
         clearDraft();
         router.push("/metas");
         return;
@@ -199,14 +220,12 @@ export function ReviewScreen({ today }: { today: string }) {
         return t("import.review.blocked.monthBeforeStart", { first: monthWord(values.first) });
       case "import.errors.monthAfterEnd":
         return t("import.review.blocked.monthAfterEnd", {
-          last: format.dateTime(civilDateToDate(values.last), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
+          last: dayLabel(values.last),
         });
       case "import.errors.amountNoMeasure":
         return t("import.review.blocked.amountNoMeasure");
       case "import.errors.quantityNoMeasure":
         return t("import.review.blocked.quantityNoMeasure");
-      case "month.errors.noMeasure":
-        return t("import.review.blocked.noMeasure");
       default:
         return t(key);
     }
@@ -215,7 +234,7 @@ export function ReviewScreen({ today }: { today: string }) {
   // The refusals list: what each item is called, and where it came from.
   function blockedRow(path: string, key: string, values?: Record<string, string>) {
     const [, g, group, index, , child] = path.split(".");
-    const goal = draft!.goals[Number(g)];
+    const goal = work!.goals[Number(g)];
     let title: ReactNode = goal.name;
     let groupWord = t("import.review.horizon");
     if (group === "phases") {
@@ -260,7 +279,7 @@ export function ReviewScreen({ today }: { today: string }) {
   function amountProps(path: string, name: string, unit: string, amount: number, schema: Editing["schema"]) {
     return {
       amount: figure(amount, unit),
-      amountLabel: t("import.review.amountOf", { name }),
+      amountLabel: t("import.review.amountOf", { name, amount: formatQuantity(amount, unit, words) }),
       onAmount: () => setEditing({ path, title: name, unit, amount, schema }),
     };
   }
@@ -269,6 +288,20 @@ export function ReviewScreen({ today }: { today: string }) {
 
   return (
     <Page>
+      <Flex align="center" gap="1" ml="-3">
+        <IconButton asChild tap={44} variant="ghost">
+          <Link href="/metas/importar" aria-label={t("import.review.backAria")}>
+            <ChevronLeft size={20} aria-hidden />
+          </Link>
+        </IconButton>
+        <Button asChild tap={44} variant="ghost">
+          <Link href="/metas/importar">
+            <Text variant="meta" tone="accent">
+              {t("import.review.back")}
+            </Text>
+          </Link>
+        </Button>
+      </Flex>
       <div>
         <Text as="p" variant="meta" tone="muted">
           {eyebrow}
@@ -299,7 +332,7 @@ export function ReviewScreen({ today }: { today: string }) {
         </section>
       ) : null}
 
-      {draft.goals.map((goal, g) => {
+      {work.goals.map((goal, g) => {
         const at = goalPath(g);
         if (refused.has(`${at}.horizon`)) return null;
         const unit = goal.measure?.unit ?? null;
@@ -315,12 +348,19 @@ export function ReviewScreen({ today }: { today: string }) {
             <Text asChild variant="heading">
               <h2>{goal.name}</h2>
             </Text>
+            {repeated.has(g) ? (
+              <div role="note">
+                <Panel as="div" bordered>
+                  <Text as="p" variant="body">
+                    {t("import.review.repeated")}
+                  </Text>
+                </Panel>
+              </div>
+            ) : null}
             <CheckRow
               checked={goalOn}
               onCheckedChange={(value) => toggle(at, value)}
-              name={t("import.review.horizonUntil", {
-                date: format.dateTime(civilDateToDate(goal.horizon), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
-              })}
+              name={t("import.review.horizonUntil", { date: dayLabel(dayBefore(goal.horizon)) })}
               meta={t("import.review.horizon")}
             />
             {goal.measure ? (
@@ -384,7 +424,13 @@ export function ReviewScreen({ today }: { today: string }) {
                     disabled={!goalOn}
                     onCheckedChange={(value) => toggle(path, value)}
                     name={task.name}
-                    meta={task.children.length > 0 ? t("import.review.sumOfMarked", { month: monthWord(task.month) }) : monthWord(task.month)}
+                    meta={
+                      task.children.length > 0
+                        ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
+                        : strays.has(path)
+                          ? `${monthWord(task.month)} · ${t("import.notices.estimateDropped")}`
+                          : monthWord(task.month)
+                    }
                     {...(task.children.length === 0 && task.estimate !== null
                       ? amountProps(path, task.name, unit ?? "", task.estimate, "task")
                       : {})}
@@ -398,6 +444,7 @@ export function ReviewScreen({ today }: { today: string }) {
                       disabled={!taskOn}
                       onCheckedChange={(value) => toggle(childPath, value)}
                       name={child.name}
+                      meta={strays.has(childPath) ? t("import.notices.estimateDropped") : undefined}
                       {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
                     />
                   ))}
@@ -422,7 +469,9 @@ export function ReviewScreen({ today }: { today: string }) {
           editing={editing}
           onClose={() => setEditing(null)}
           onSave={(amount) => {
-            setDraft((current) => (current ? withAmount(current, editing.path, amount) : current));
+            const next = withAmount(draft, editing.path, amount);
+            setDraft(next);
+            saveReview(next, [...unmarked]);
             setEditing(null);
           }}
         />

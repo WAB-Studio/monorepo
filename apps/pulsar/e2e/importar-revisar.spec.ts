@@ -2,6 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect } from "./fixtures";
+import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, todayInZone } from "../lib/zone";
 
 // Against the ordinary server, which holds no model key (`OPENAI_API_KEY=""`):
@@ -65,6 +66,15 @@ async function asPerson(
   }
 }
 
+const dayWord = (date: string) =>
+  new Intl.DateTimeFormat("es", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(civilDateToDate(date));
+
+// A goal that measures nothing: its month amount and its task's time cannot be kept.
+function noMeasureTemplate(): string {
+  const { first, horizon } = monthsFromToday();
+  return `pulsar · plantilla 1\n\n# Trámites\nhorizonte: ${horizon}\n\n## Meses\n- ${first} · 3\n\n## Tareas\n- ${first} · 2 · Comprar tenis`;
+}
+
 const box = (page: Page, name: string | RegExp) => page.getByRole("checkbox", { name });
 
 test.describe("the review of an imported plan (RP-37, RP-35)", () => {
@@ -106,6 +116,9 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await page.getByRole("button", { name: "Crear 1 meta" }).click();
       await expect(page).toHaveURL(/\/metas$/);
       await expect(page.getByText("IA aplicada").first()).toBeVisible();
+      // The revalidated page has painted: the review's refresh is over, and the person never goes back to the import.
+      await expect(page.getByRole("link", { name: /IA aplicada/ }).first()).toBeVisible();
+      await expect(page).toHaveURL(/\/metas$/);
 
       const goals = await db`select id from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
       expect(goals).toHaveLength(1);
@@ -161,6 +174,104 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     await asPerson({ person, browser, baseURL }, async (fresh) => {
       await fresh.goto("/metas/importar/revisar");
       await expect(fresh).toHaveURL(/\/metas\/importar$/);
+    });
+  });
+
+  test("the goal's last day is the day before its horizon, and a month names the right reason", async ({ person, browser, baseURL }) => {
+    const { previous, first, horizon } = monthsFromToday();
+    const last = dayBefore(horizon);
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, template(horizon.slice(0, 7)).replace("- " + horizon.slice(0, 7) + " · 8 h", `- ${horizon.slice(0, 7)} · 8 h\n- ${previous} · 5 h`));
+
+      await expect(page.getByText(`hasta el ${dayWord(last)}`, { exact: true })).toBeVisible();
+      await expect(page.getByText(messages.review.blocked.monthAfterEnd.replace("{last}", dayWord(last)), { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first)), { exact: true }),
+      ).toBeVisible();
+    });
+  });
+
+  test("a task in a goal that measures nothing is kept, without time, and written with a null estimate", async ({ person, browser, baseURL, db }) => {
+    const { first } = monthsFromToday();
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, noMeasureTemplate());
+
+      await expect(page.getByText(messages.review.blocked.amountNoMeasure, { exact: true })).toBeVisible();
+      const task = box(page, /Comprar tenis/);
+      await expect(task).toBeChecked();
+      await expect(task).toBeEnabled();
+      await expect(page.getByText(`${word(first)} · ${messages.notices.estimateDropped}`, { exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Cambiar el monto de Comprar tenis/ })).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Crear 1 meta" }).click();
+      await expect(page).toHaveURL(/\/metas$/);
+      const rows = await db`select estimate from goals.one_offs where user_id = ${person.id} and name = 'Comprar tenis'`;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].estimate).toBeNull();
+    });
+  });
+
+  test("an unmarked sub-task and a changed month survive a reload, and the way back leads to the text", async ({ person, browser, baseURL }) => {
+    const { first } = monthsFromToday();
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, template());
+      await page.getByRole("button", { name: new RegExp(`^Cambiar el monto de ${word(first)}`) }).click();
+      await page.getByRole("spinbutton", { name: "horas" }).fill("10");
+      await page.getByRole("spinbutton", { name: "minutos" }).fill("0");
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await page.reload();
+      await settled(page);
+      await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 10 h` })).toHaveText("10 h");
+
+      await box(page, /Sesiones 1–4/).uncheck();
+      await page.reload();
+      await settled(page);
+      await expect(box(page, /Sesiones 1–4/)).not.toBeChecked();
+      await expect(box(page, /Elegir tutor/)).toBeChecked();
+      await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 10 h` })).toHaveText("10 h");
+
+      await page.getByRole("link", { name: messages.review.back, exact: true }).click();
+      await expect(page).toHaveURL(/\/metas\/importar$/);
+    });
+  });
+
+  test("an amount button is one button named by its item, and no checkbox takes the amount", async ({ person, browser, baseURL }) => {
+    const { first } = monthsFromToday();
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, template());
+      await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 12 h` })).toHaveCount(1);
+      await expect(page.getByRole("link", { name: messages.review.backAria, exact: true })).toBeVisible();
+      for (const checkbox of await page.getByRole("checkbox").all()) {
+        expect(await checkbox.evaluate((el) => (el as HTMLInputElement).labels?.[0]?.textContent ?? "")).not.toContain("12 h");
+      }
+      await expect(page.getByRole("checkbox", { name: /12 h/ })).toHaveCount(0);
+    });
+  });
+
+  test("a goal an open goal already names starts unmarked with a warning, and marking it writes a second", async ({ person, browser, baseURL, db }) => {
+    const { horizon } = monthsFromToday();
+    await db`insert into goals.goals (user_id, name, horizon) values (${person.id}, 'IA aplicada', ${horizon})`;
+    await db`insert into goals.goals (user_id, name, horizon, archived_at) values (${person.id}, 'Trámites', ${horizon}, now())`;
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, template());
+
+      await expect(page.getByRole("note").filter({ hasText: messages.review.repeated })).toBeVisible();
+      await expect(box(page, /Tema técnico/)).not.toBeChecked();
+      await expect(box(page, /Elegir tutor/)).not.toBeChecked();
+      const none = page.getByRole("button", { name: "Crear 0 metas" });
+      await expect(none).toBeDisabled();
+
+      await box(page, new RegExp(`^${messages.review.horizonUntil.replace("{date}", ".*")}`)).check();
+      await expect(page.getByRole("note")).toHaveCount(1);
+      await page.getByRole("button", { name: "Crear 1 meta" }).click();
+      await expect(page).toHaveURL(/\/metas$/);
+      const goals = await db`select 1 from goals.goals where user_id = ${person.id} and name = 'IA aplicada' and archived_at is null`;
+      expect(goals).toHaveLength(2);
+    });
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, noMeasureTemplate());
+      await expect(page.getByRole("note")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Crear 1 meta" })).toBeEnabled();
     });
   });
 

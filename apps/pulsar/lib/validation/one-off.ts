@@ -69,3 +69,11 @@ export const deleteOneOffSchema = z.object({
 });
 
 export type DeleteOneOffInput = z.infer<typeof deleteOneOffSchema>;
+
+// The act of RP-42: a month task, by id, and the month it moves to.
+export const moveTaskSchema = z.object({
+  oneOffId: z.uuid({ error: "month.errors.invalid" }),
+  month: setMonthBudgetSchema.shape.month,
+});
+
+export type MoveTaskInput = z.infer<typeof moveTaskSchema>;

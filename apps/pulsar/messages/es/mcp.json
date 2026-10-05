@@ -18,7 +18,7 @@
     "move_horizon": "Mueve el plazo de una meta a otro día. El día va como AAAA-MM-DD. Nunca borra ni archiva.",
     "accept_shift": "Acepta correr el plan de un mes cuando la app lo ofrece: las tareas del mes pasan al siguiente. Nunca borra.",
     "move_task_to_month": "Pasa una tarea del mes a otro mes dentro del plazo de su meta. El mes va como AAAA-MM. Nunca borra.",
-    "create_goal": "Abre una meta nueva con su nombre, su plazo y, si mide algo, su medida y su unidad. Nunca borra.",
+    "create_goal": "Abre una meta nueva con su nombre y su plazo; mide lo que mida su primer compromiso con cantidad. Nunca borra.",
     "retire_commitment": "Retira un compromiso: deja de preguntar desde hoy y los días ya hechos quedan hechos. Para cambiarlo, retíralo y agrega otro. Nunca borra."
   },
   "errors": {

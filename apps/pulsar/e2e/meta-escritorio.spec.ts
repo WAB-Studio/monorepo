@@ -38,7 +38,7 @@ async function settled(page: Page) {
 }
 
 async function boxOf(page: Page, text: string) {
-  return page.getByText(text, { exact: true }).evaluate((el) => {
+  return page.getByRole("main").getByText(text, { exact: true }).evaluate((el) => {
     const { x, y } = el.getBoundingClientRect();
     return { x, y };
   });

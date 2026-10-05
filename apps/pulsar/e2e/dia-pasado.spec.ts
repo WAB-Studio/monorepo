@@ -236,7 +236,7 @@ test("a day before every goal this person holds says it asked for nothing, with 
     const page = await context.newPage();
     await page.goto(`/dia/${day}`);
     await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Abrir una meta" })).toHaveCount(0);
     await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
     await expect(page.getByText(`tardía ${stamp} empezó el ${weekday} ${civilDateToDate(opened).getUTCDate()}`)).toBeVisible();
 

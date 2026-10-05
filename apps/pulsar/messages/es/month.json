@@ -131,5 +131,20 @@
     "invalid": "Eso no es válido.",
     "notFound": "Eso ya no existe. Recarga la página.",
     "signedOut": "Tu sesión terminó. Entra otra vez."
+  },
+  "across": {
+    "mark": "Marcar hecha: {name}",
+    "noAmount": "en {month} · sin monto este mes",
+    "nothingPlanned": "en {month} · nada planeado todavía",
+    "noTasks": "ninguna tarea en {month}",
+    "measuresNothing": "no mide nada · solo sus tareas",
+    "measuresNothingCount": "no mide nada · {done} de {total} tareas hechas",
+    "addTask": "Añadir una tarea",
+    "unreadable": "No se pudo leer el diccionario de lectura. Las cifras que dependen de él son solo lo que dijiste tú.",
+    "empty": {
+      "title": "Todavía no tienes una meta abierta.",
+      "create": "Crear una meta",
+      "import": "Importar un plan"
+    }
   }
 }

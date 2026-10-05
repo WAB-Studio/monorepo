@@ -42,8 +42,10 @@
     "toDark": "Cambiar a modo oscuro"
   },
   "empty": {
-    "title": "Todavía no tienes una meta abierta.",
-    "action": "Crear una meta"
+    "title": "Todavía no hay nada que anotar.",
+    "body": "Una meta dice qué cuenta y cada cuánto. Lo que pase después lo anotas de un toque, o lo anota sola la app que ya lo sabe.",
+    "action": "Abrir una meta",
+    "import": "Importar un plan"
   },
   "oneOffs": {
     "title": "Sueltas",
@@ -113,6 +115,7 @@
   },
   "monthLine": {
     "title": "este mes",
+    "markTask": "Marcar hecha: {name}",
     "of": "de",
     "pace": "día {day} · {percent} %, bajo el {threshold} %"
   },

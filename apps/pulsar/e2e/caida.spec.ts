@@ -36,6 +36,15 @@ test.describe("a database outage", () => {
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toHaveCount(0);
   });
 
+  test("at 1280 the rail draws its four tabs and no goal section when the goals read fails", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const nav = page.getByRole("navigation");
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole("link")).toHaveCount(4);
+    await expect(nav.getByText("metas abiertas", { exact: true })).toHaveCount(0);
+  });
+
   test("Intentar otra vez asks the server again", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
