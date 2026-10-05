@@ -136,13 +136,27 @@ export function ShiftProposal({
   proposal,
   see,
   until,
+  compact,
   ...sheet
 }: Omit<ShiftSheetProps, "open" | "onOpenChange"> & {
-  proposal: string;
   see: string;
-  until: string;
+  // `MesesCorrer.dc.html`: on a month's row it is the trigger alone, with
+  // neither the sentence nor the deadline.
+  compact?: boolean;
+  proposal?: string;
+  until?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (compact) {
+    return (
+      <>
+        <Button variant="ghost" tone="accent" onClick={() => setOpen(true)}>
+          {see}
+        </Button>
+        <ShiftSheet {...sheet} open={open} onOpenChange={setOpen} />
+      </>
+    );
+  }
   return (
     <Panel as="div" bordered>
       <Flex direction="column" gap="2" align="start">

@@ -3,9 +3,12 @@ import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
-import { carryShare } from "@/lib/plan/carry";
-import { loadGoal } from "@/lib/queries/goal";
+import { ShiftProposal } from "@/components/month/task-row";
+import { carryShare, monthOfTask } from "@/lib/plan/carry";
+import { shiftOfferNow } from "@/lib/plan/shift-offer";
+import { listGoals, loadGoal } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
+import { todayInZone } from "@/lib/zone";
 import { Button, Flex, Page, Table, Text, type TableRow } from "@/components/ui";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
@@ -16,11 +19,14 @@ function monthLabel(month: string): string {
 }
 
 /**
- * `Meses.dc.html` / `MesesVacio.dc.html` / `MesesEscritorio` (RP-32): one row
- * per month of the goal's span from `loadGoal`'s own `months`. The amount in
- * each row opens the amount sheet through `?planear=`, the same door the
- * query parameter gives; the month's name leads to its own page. An ended or
- * archived goal reads and offers neither the sheet nor the links to it.
+ * `Meses.dc.html` / `MesesVacio.dc.html` / `MesesEscritorio` /
+ * `MesesSinMedida.dc.html` / `MesesCorrer.dc.html` (RP-28, RP-31, RP-32,
+ * RP-34): one row per month of the goal's span from `loadGoal`'s own `months`.
+ * The amount of a month still to be planned opens the amount sheet through
+ * `?planear=`; a closed month's amount is text. The month's name leads to its
+ * own page. An ended or archived goal reads and offers neither the sheet, the
+ * links to it nor the shift; `listGoals` rides in the fan-out for the shift
+ * sheet's «las demás metas».
  */
 export async function MonthsScreen({
   goalId,
@@ -29,19 +35,58 @@ export async function MonthsScreen({
   goalId: string;
   planning: string | null;
 }) {
-  const goal = await loadGoal(goalId);
+  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
   if (!goal) notFound();
 
   const t = await getTranslations();
+  const open = goal.archivedAt === null && goal.endedOn === null;
 
   if (!goal.measureUnit || !goal.measureName) {
+    const counts = new Map<string, number>();
+    for (const task of goal.tasks) {
+      if (task.parentId !== null) continue;
+      const month = monthOfTask(task);
+      if (month !== null) counts.set(month, (counts.get(month) ?? 0) + 1);
+    }
+    const bare: TableRow[] = goal.months.map((row) => {
+      const href = `/metas/${goal.id}/meses/${row.month.slice(0, 7)}`;
+      const count = counts.get(row.month) ?? 0;
+      const tasks = (
+        <Text tone="secondary">
+          <Link href={href}>
+            {count === 0
+              ? t("month.months.withoutMeasure.none")
+              : t("month.months.withoutMeasure.tasks", { count })}
+          </Link>
+        </Text>
+      );
+      return {
+        key: row.month,
+        cells: [<Link key="month" href={href}>{monthLabel(row.month)}</Link>, tasks],
+        detail: row.current ? t("month.months.current") : null,
+        note: tasks,
+      };
+    });
+    const now = goal.months.findIndex((row) => row.current);
     return (
       <Page>
         <Text as="p" variant="meta" tone="muted">
           {goal.name}
         </Text>
+        <Text as="p" variant="title">
+          {t("month.months.title")}
+        </Text>
         <Text as="p" tone="secondary">
-          {t("month.errors.noMeasure")}
+          {t("month.months.withoutMeasure.subtitle")}
+        </Text>
+        <Table
+          caption={t("month.months.caption", { count: goal.months.length })}
+          columns={[t("month.months.columns.month"), t("month.months.withoutMeasure.columnTasks")]}
+          rows={bare}
+          current={now === -1 ? undefined : now}
+        />
+        <Text as="p" variant="meta" tone="muted">
+          {t("month.months.withoutMeasure.hint")}
         </Text>
         <Flex>
           <Button asChild variant="ghost">
@@ -59,8 +104,22 @@ export async function MonthsScreen({
     min: (min) => units("min", { min }),
     join: (h, min) => units("join", { h, min }),
   };
-  const open = goal.archivedAt === null && goal.endedOn === null;
+  const today = todayInZone();
+  const offer = open
+    ? shiftOfferNow({
+        today,
+        horizon: goal.horizon,
+        budgets: goal.budgets,
+        phases: goal.phases,
+        tasks: goal.tasks,
+        shifts: goal.shifts,
+      })
+    : null;
   const planHref = (month: string) => `/metas/${goal.id}/meses?planear=${month.slice(0, 7)}`;
+
+  const currentPhase =
+    goal.phases.find((phase) => phase.startsOn <= today && (phase.endsOn === null || today <= phase.endsOn))
+      ?.name ?? null;
 
   const rows: TableRow[] = goal.months.map((row) => {
     const label = monthLabel(row.month);
@@ -85,7 +144,7 @@ export async function MonthsScreen({
         : row.planned !== null && !started
           ? t("month.months.planned")
           : null;
-    const note = open ? (
+    const note = open && !row.past ? (
       <Text asChild tone="accent">
         <Link href={planHref(row.month)}>{amount}</Link>
       </Text>
@@ -102,7 +161,25 @@ export async function MonthsScreen({
         started ? row.reached : null,
         note,
       ],
-      detail: state,
+      detail:
+        offer && row.month === offer.closedMonth ? (
+          <Flex as="span" direction="column" align="start">
+            <span>{state}</span>
+            <ShiftProposal
+              compact
+              goalId={goal.id}
+              goalName={goal.name}
+              month={row.month.slice(0, 7)}
+              plan={offer.plan}
+              currentPhase={currentPhase}
+              hasDoneTasks={goal.tasks.some((task) => task.doneOn !== null)}
+              otherGoals={goals.filter((other) => other.id !== goal.id).map((other) => other.name)}
+              see={t("month.shift.monthsAction")}
+            />
+          </Flex>
+        ) : (
+          state
+        ),
       note,
     };
   });
@@ -111,7 +188,9 @@ export async function MonthsScreen({
   const empty = goal.budgets.length === 0;
   const target = goal.months.find((row) => row.current) ?? goal.months[0];
 
-  const planned = open ? goal.months.find((row) => row.month.slice(0, 7) === planning) : undefined;
+  const planned = open
+    ? goal.months.find((row) => !row.past && row.month.slice(0, 7) === planning)
+    : undefined;
 
   return (
     <Page>
