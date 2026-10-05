@@ -694,3 +694,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
     «Two columns split 3:2 from 1024» for Hoy and the goal.
   - Not drawn: every dark face (the token table says it); «Mes» loading and failure (they are `ArmazonCargando` and
     `ArmazonFallo` with Mes marked); 700–1023 (the phone face, centred).
+- **Module 203 against its boards.** Decided 2026-10-05 by the coordinator:
+  - The amount sheet still has no «Cancelar»: `HoyCantidad` does not draw one.
+  - A goal's full name in the rail also shows on keyboard focus, not only on hover, as `ArmazonRielMuchas` draws it.
+  - Moving the blocks of `escritorio.spec.ts` waits for module 218.
