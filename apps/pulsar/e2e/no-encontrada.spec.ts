@@ -20,7 +20,9 @@ for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 800 });
       await page.goto(path);
       await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
-      await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(3);
+      await expect(
+        page.getByRole("navigation").getByRole("link").filter({ hasText: /^(Hoy|Semana|Mes|Metas)$/ }),
+      ).toHaveCount(4);
       await expect(page.locator("a[aria-current]")).toHaveCount(0);
     });
   }

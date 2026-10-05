@@ -243,7 +243,9 @@ for (const route of ROUTES) {
       const rail = await railBox(page);
       expect(rail).toMatchObject({ x: 0, y: 0, width: RAIL });
       expect(rail.height).toBeGreaterThan(400);
-      await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(3);
+      await expect(
+        page.getByRole("navigation").getByRole("link").filter({ hasText: /^(Hoy|Semana|Mes|Metas)$/ }),
+      ).toHaveCount(4);
       await expect(page.getByRole("navigation").getByText("Bitácora")).toBeVisible();
 
       // Two toggles would be the phone face drawn beside the rail's own.
@@ -310,7 +312,7 @@ worldTest("the move sheet on /sueltas opens centred at 480 px at 1280 (RNP-11)",
   }
 });
 
-// The phone face runs to 1023: the nav a bar at the foot, no table, one toggle.
+// The phone face runs to 1023: the nav four tabs fixed at the foot, no table, one toggle.
 for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
   worldTest(`${path} is still the phone face at 1023 (RNP-11)`, async ({ browser, baseURL, world }) => {
     const { context, page } = await signedIn(browser, baseURL, world, 1023, 740);
@@ -320,9 +322,8 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
 
       const nav = await railBox(page);
       expect(nav).toMatchObject({ x: 0, width: 1023 });
-      // The bar closes the column: under the screen, never beside it.
-      const main = (await page.getByRole("main").boundingBox())!;
-      expect(nav.y).toBeGreaterThanOrEqual(main.y + main.height - 1);
+      // The bar is fixed to the viewport's foot, under the screen, never beside it.
+      expect(nav.y + nav.height).toBe(740);
       expect(nav.height).toBeLessThan(100);
       await expect(page.getByRole("table")).toHaveCount(0);
       await expect(page.getByRole("navigation").getByText("Bitácora")).toBeHidden();

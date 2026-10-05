@@ -247,7 +247,7 @@ test("a goal with no measure's empty month promises no time; the back arrow, the
       await back.click();
       await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
       await page.goto(url);
-      await page.getByRole("link", { name: `meta lisa ${stamp}` }).click();
+      await page.getByRole("main").getByRole("link", { name: `meta lisa ${stamp}` }).click();
       await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
       await page.goto(url);
       await all.click();

@@ -2,7 +2,8 @@ import { test, expect } from "./fixtures";
 import { civilDateShort, todayInZone } from "@/lib/zone";
 
 // RNP-11: every signed-in screen stands in the desktop frame — the rail's
-// name, its three entries, today's date and the face toggle at its foot.
+// name, its four entries, today's date and the face toggle at its foot.
+const PLACES = /^(Hoy|Semana|Mes|Metas)$/;
 const ROUTES = [
   ["/", "Hoy"],
   ["/semana", "Semana"],
@@ -18,7 +19,8 @@ for (const [path, marked] of ROUTES) {
     const rail = page.getByRole("navigation");
     await expect(rail).toContainText("Bitácora");
     await expect(rail).toContainText("de metas");
-    await expect(rail.getByRole("link")).toHaveCount(3);
+    // The four places; the goals the rail names after them are `pestanas.spec.ts`'s.
+    await expect(rail.getByRole("link").filter({ hasText: PLACES })).toHaveCount(4);
     await expect(rail).toContainText(civilDateShort(todayInZone()));
     await expect(rail.getByRole("button")).toHaveCount(1);
 
@@ -44,14 +46,14 @@ test("at 1280 the rail's toggle switches the face and the choice survives a relo
   ).toBeVisible();
 });
 
-test("at 360 the bottom nav is three tabs with no name, date or toggle", async ({ page }) => {
+test("at 360 the bottom nav is four tabs with no name, date or toggle", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto("/semana");
 
   const nav = page.getByRole("navigation");
-  await expect(nav.getByRole("link")).toHaveCount(3);
+  await expect(nav.getByRole("link")).toHaveCount(4);
   await expect(nav.getByText("Bitácora")).toBeHidden();
   await expect(nav.getByText(civilDateShort(todayInZone()))).toBeHidden();
   await expect(nav.getByRole("button")).toBeHidden();
-  await expect(nav.getByRole("link", { name: "Meta", exact: true })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Metas", exact: true })).toBeVisible();
 });
