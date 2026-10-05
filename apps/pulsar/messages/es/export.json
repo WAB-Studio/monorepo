@@ -10,6 +10,7 @@
   "openGoals": "{count, plural, one {# meta abierta} other {# metas abiertas}}",
   "download": "Descargar PDF",
   "printBrand": "pulsar",
+  "printHead": "{brand} · {date}",
   "measures": "mide {unit} · hasta el {date}",
   "measuresFed": "mide {unit} · alimentada por el diccionario",
   "noMeasure": "no mide nada · hasta el {date}",
@@ -19,6 +20,16 @@
     "carried": "arrastrado",
     "months": "por mes",
     "weeks": "por semana"
+  },
+  "monthsCaption": "{count, plural, one {# mes} other {# meses}}",
+  "monthsCaptionDeclared": "{count, plural, one {# mes} other {# meses}} · solo lo dicho",
+  "weeksCaption": "{count, plural, one {# semana} other {# semanas}}",
+  "columns": {
+    "month": "mes",
+    "reached": "alcanzado",
+    "week": "semana",
+    "total": "total",
+    "phase": "fase"
   },
   "of": "de {planned}",
   "fromMonth": "de {month}",

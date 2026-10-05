@@ -1,4 +1,8 @@
 /* On screen `.page` and `.block` draw nothing; everything is under print. */
+.only {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4;
@@ -40,6 +44,10 @@
 
   .block {
     break-inside: avoid;
+  }
+
+  .only {
+    display: block;
   }
 
   .hidden {

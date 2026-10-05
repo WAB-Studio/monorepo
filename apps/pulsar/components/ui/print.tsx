@@ -9,10 +9,14 @@ export function PrintPage({ children }: { children?: ReactNode }) {
   return <div className={styles.page}>{children}</div>;
 }
 
-// A block the printer keeps whole where it fits: wrap a goal's table in one,
-// as a direct child of `PrintPage`. It sets no style on screen.
+// A block the printer keeps whole where it fits: wrap a goal's section in one. It sets no style on screen.
 export function PrintBlock({ children }: { children?: ReactNode }) {
   return <section className={styles.block}>{children}</section>;
+}
+
+// Gone on screen, shown in print: the head's brand and dated year.
+export function PrintOnly({ children }: { children?: ReactNode }) {
+  return <div className={styles.only}>{children}</div>;
 }
 
 // Shown on screen, gone in print: the button that calls `window.print()`.

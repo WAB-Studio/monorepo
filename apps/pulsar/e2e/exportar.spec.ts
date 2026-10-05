@@ -3,13 +3,21 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { test, expect, type Person } from "./fixtures";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { dayBefore } from "@/lib/day/weeks";
+import {
+  civilDateToDate,
+  civilDayMonthShort,
+  dateToCivilDate,
+  todayInZone,
+} from "@/lib/zone";
 import type postgres from "postgres";
 
 // `Reporte.dc.html`, `ReporteImpreso.dc.html`, `ReporteSinEvidencia.dc.html`,
 // `ReporteVacio.dc.html` (module 131, RP-33, RP-35): `/exportar` is a page the
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
+// Pages the two-goal seeded report takes on A4, measured under the fix.
+const A4_PAGES = 7;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {
@@ -18,7 +26,13 @@ function plusDays(days: number): string {
   return dateToCivilDate(date);
 }
 
-type Seed = { goalId: string; name: string; taskName: string; childName: string; phaseName: string };
+type Seed = {
+  goalId: string;
+  name: string;
+  taskName: string;
+  childName: string;
+  phaseName: string;
+};
 
 // A goal in minutes: 90 declared today against a 12 h month amount, a phase,
 // and a task planned last month that nobody did, so it carries into this one.
@@ -74,8 +88,14 @@ test.describe("the report page (RP-33, RP-35)", () => {
     db,
   }, testInfo) => {
     const seeded = await seed(db, person);
-    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
-    const anonymous = await browser.newContext({ storageState: { cookies: [], origins: [] }, baseURL: baseURL! });
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
+    const anonymous = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+      baseURL: baseURL!,
+    });
     try {
       const page = await context.newPage();
       const response = await page.goto("/exportar");
@@ -84,7 +104,8 @@ test.describe("the report page (RP-33, RP-35)", () => {
       expect(new URL(signedInUrl).pathname).toBe("/exportar");
 
       await expect(page.locator("main")).toHaveCount(1);
-      const seen = (text: string) => page.getByText(text, { exact: true }).locator("visible=true");
+      const seen = (text: string) =>
+        page.getByText(text, { exact: true }).locator("visible=true");
       await expect(seen(seeded.name)).toHaveCount(1);
       await expect(seen("1 h 30 min").first()).toBeVisible();
       await expect(seen("12 h").first()).toBeVisible();
@@ -97,7 +118,9 @@ test.describe("the report page (RP-33, RP-35)", () => {
       await expect(page.getByText(/^exportar · /)).toBeVisible();
       await expect(page).toHaveTitle(/^pulsar · /);
       // The evidence read, so no notice.
-      await expect(page.getByText(/No pudimos leer el diccionario/)).toHaveCount(0);
+      await expect(
+        page.getByText(/No pudimos leer el diccionario/),
+      ).toHaveCount(0);
       await expect(page.getByText("solo lo que dijiste tú")).toHaveCount(0);
 
       const out = await anonymous.newPage();
@@ -107,7 +130,10 @@ test.describe("the report page (RP-33, RP-35)", () => {
       expect(new URL(signedOutUrl).pathname).toBe("/entrar");
       await expect(out.getByText(seeded.name)).toHaveCount(0);
 
-      testInfo.annotations.push({ type: "final-urls", description: `signed in ${signedInUrl} · signed out ${signedOutUrl}` });
+      testInfo.annotations.push({
+        type: "final-urls",
+        description: `signed in ${signedInUrl} · signed out ${signedOutUrl}`,
+      });
     } finally {
       await anonymous.close();
       await context.close();
@@ -122,7 +148,10 @@ test.describe("the report page (RP-33, RP-35)", () => {
     db,
   }) => {
     const seeded = await seed(db, person);
-    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
     try {
       const page = await context.newPage();
       await page.addInitScript(() => {
@@ -139,15 +168,23 @@ test.describe("the report page (RP-33, RP-35)", () => {
       await expect(button).toBeVisible();
       await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
 
-      const prints = () => page.evaluate(() => (window as unknown as { __prints: { n: number } }).__prints.n);
+      const prints = () =>
+        page.evaluate(
+          () => (window as unknown as { __prints: { n: number } }).__prints.n,
+        );
       expect(await prints()).toBe(0);
       await button.click();
       expect(await prints()).toBe(1);
 
-      const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      const ground = () =>
+        page.evaluate(() => getComputedStyle(document.body).backgroundColor);
       const ink = () =>
-        page.getByText(seeded.name, { exact: true }).evaluate((node) => getComputedStyle(node).color);
-      expect(await ground(), "screen ground under dark").not.toBe("rgb(255, 255, 255)");
+        page
+          .getByText(seeded.name, { exact: true })
+          .evaluate((node) => getComputedStyle(node).color);
+      expect(await ground(), "screen ground under dark").not.toBe(
+        "rgb(255, 255, 255)",
+      );
 
       await page.emulateMedia({ media: "print" });
       await expect(button).toBeHidden();
@@ -172,7 +209,12 @@ test.describe("the report page (RP-33, RP-35)", () => {
     }
   });
 
-  test("a goal that measures nothing prints its phases and no figure", async ({ person, browser, baseURL, db }) => {
+  test("a goal that measures nothing prints its phases and no figure", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
     const stamp = Date.now();
     const name = `Meta sin medida ${stamp}`;
     const phaseName = `Fase sola ${stamp}`;
@@ -185,7 +227,10 @@ test.describe("the report page (RP-33, RP-35)", () => {
       insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
       values (${person.id}, ${goal.id}, ${phaseName}, ${plusDays(-5)}, ${plusDays(30)})
     `;
-    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
@@ -202,14 +247,25 @@ test.describe("the report page (RP-33, RP-35)", () => {
     }
   });
 
-  test("no goal open: one line and the way back to the goals", async ({ person, browser, baseURL }) => {
-    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  test("no goal open: one line and the way back to the goals", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
     try {
       const page = await context.newPage();
       const response = await page.goto("/exportar");
       expect(response?.status()).toBe(200);
-      await expect(page.getByText("No tienes metas abiertas. No hay nada que exportar.")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Descargar PDF" })).toHaveCount(0);
+      await expect(
+        page.getByText("No tienes metas abiertas. No hay nada que exportar."),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Descargar PDF" }),
+      ).toHaveCount(0);
       await page.getByRole("link", { name: "volver a metas" }).click();
       await page.waitForURL(/\/metas/);
     } finally {
@@ -222,19 +278,31 @@ test.describe("the report page (RP-33, RP-35)", () => {
     browser,
     db,
   }) => {
-    test.skip(!FAULT, "needs PULSAR_FAULT_BASE_URL, a next start with PULSAR_FAULT_SEAM set");
+    test.skip(
+      !FAULT,
+      "needs PULSAR_FAULT_BASE_URL, a next start with PULSAR_FAULT_SEAM set",
+    );
     const seeded = await seed(db, person);
-    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: FAULT! });
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: FAULT!,
+    });
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
       await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
       await expect(
-        page.getByText("No pudimos leer el diccionario de lectura. Las cifras que salen de él son solo lo que dijiste tú."),
+        page.getByText(
+          "No pudimos leer el diccionario de lectura. Las cifras que salen de él son solo lo que dijiste tú.",
+        ),
       ).toHaveCount(1);
-      await expect(page.getByText("solo lo que dijiste tú", { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByText("solo lo que dijiste tú", { exact: true }).first(),
+      ).toBeVisible();
       await expect(page.getByText("solo lo dicho").first()).toBeVisible();
-      await expect(page.getByText("alimentada por el diccionario")).toBeVisible();
+      await expect(
+        page.getByText("alimentada por el diccionario"),
+      ).toBeVisible();
       await expect(page.getByText("1 h 30 min").first()).toBeVisible();
     } finally {
       await context.close();
@@ -253,26 +321,41 @@ test.describe("the way in from /metas (RP-33, RP-37)", () => {
     db,
   }) => {
     const seeded = await seed(db, person);
-    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
     try {
       const page = await context.newPage();
       await page.goto("/metas");
       await expect(page.getByText("el plan", { exact: true })).toBeVisible();
       const exportLink = page.getByRole("link", { name: /^Exportar/ });
-      await expect(exportLink).toContainText("un PDF con cada meta, su mes y lo que se arrastró");
+      await expect(exportLink).toContainText(
+        "un PDF con cada meta, su mes y lo que se arrastró",
+      );
       const importLink = page.getByRole("link", { name: /^Importar un plan/ });
-      await expect(importLink).toContainText("pégalo o súbelo y revisa antes de crear");
+      await expect(importLink).toContainText(
+        "pégalo o súbelo y revisa antes de crear",
+      );
       await expect(importLink).toHaveAttribute("href", "/metas/importar");
 
       // Below «Nueva meta», in the order the board draws.
-      const order = await page.locator("main a").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href")));
-      expect(order.indexOf("/metas/nueva")).toBeLessThan(order.indexOf("/exportar"));
-      expect(order.indexOf("/exportar")).toBeLessThan(order.indexOf("/metas/importar"));
+      const order = await page
+        .locator("main a")
+        .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("href")));
+      expect(order.indexOf("/metas/nueva")).toBeLessThan(
+        order.indexOf("/exportar"),
+      );
+      expect(order.indexOf("/exportar")).toBeLessThan(
+        order.indexOf("/metas/importar"),
+      );
 
       await exportLink.click();
       await page.waitForURL(/\/exportar$/);
       await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
-      await expect(page.getByText(seeded.taskName, { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(seeded.taskName, { exact: true }),
+      ).toBeVisible();
     } finally {
       await context.close();
     }
@@ -288,15 +371,238 @@ test.describe("the way in from /metas (RP-33, RP-37)", () => {
       insert into goals.goals (user_id, name, horizon, archived_at, created_at)
       values (${person.id}, ${`Archivada ${Date.now()}`}, ${plusDays(60)}, now(), now() - interval '20 days')
     `;
-    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
     try {
       const page = await context.newPage();
       await page.goto("/metas");
       await expect(page).toHaveURL(/\/metas$/);
-      await expect(page.getByRole("link", { name: /^Importar un plan/ })).toBeVisible();
-      await expect(page.getByRole("link", { name: /^Exportar/ })).toHaveCount(0);
+      await expect(
+        page.getByRole("link", { name: /^Importar un plan/ }),
+      ).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Exportar/ })).toHaveCount(
+        0,
+      );
     } finally {
       await context.close();
+    }
+  });
+});
+
+// Module 171 (RP-31, RP-32, RP-33, RP-35): what is owed, the goal's last day,
+// the months whole, a head that says pulsar, and page 1 used.
+test.describe("the report's figures and its paper (RP-31, RP-32, RP-33, RP-35)", () => {
+  async function seedExtras(db: postgres.Sql, person: Person, seeded: Seed) {
+    const stamp = Date.now();
+    const today = todayInZone();
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const noAmount = `Sin monto ${stamp}`;
+    const doneChild = `Hija hecha ${stamp}`;
+    const openChild = `Hija abierta ${stamp}`;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${seeded.goalId}, (${monthStart}::date - interval '1 month')::date, 600)
+    `;
+    const [parent] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${person.id}, ${seeded.goalId}, ${noAmount}, (${monthStart}::date - interval '1 month')::date)
+      returning id
+    `;
+    const [done] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name)
+      values (${person.id}, ${seeded.goalId}, ${parent.id}, ${doneChild})
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name)
+      values (${person.id}, ${seeded.goalId}, ${parent.id}, ${openChild})
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${seeded.goalId}, ${done.id}, ${today}::date)
+    `;
+    return { noAmount, doneChild, openChild };
+  }
+
+  const monthLong = (day: string) =>
+    new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" }).format(
+      civilDateToDate(day),
+    );
+
+  test("a goal reads its last day, never the day after; a carried task with no amount says no «debe»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seed(db, person);
+    const extras = await seedExtras(db, person, seeded);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      const horizon = plusDays(90);
+      await expect(
+        page.getByText(
+          `mide minutos · hasta el ${civilDayMonthShort(dayBefore(horizon))}`,
+        ),
+      ).toBeVisible();
+      await expect(
+        page.getByText(`hasta el ${civilDayMonthShort(horizon)}`),
+      ).toHaveCount(0);
+
+      const lastMonth = monthLong(`${plusDays(-31).slice(0, 7)}-01`);
+      const noAmount = page.getByText(extras.noAmount, { exact: true });
+      await expect(noAmount).toBeVisible();
+      const noAmountBlock = page.locator("p", { has: noAmount }).first();
+      await expect(
+        noAmountBlock.locator("xpath=following-sibling::p[1]"),
+      ).toHaveText(new RegExp(`^de ${lastMonth} de \\d{4}$`));
+      await expect(
+        page.getByText(extras.openChild, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(extras.doneChild, { exact: true }),
+      ).toHaveCount(0);
+      // The carried task with an amount and its child keep their «debe».
+      await expect(page.getByText(/· debe 45 min$/)).toHaveCount(2);
+      await expect(page.getByText(/debe 0/)).toHaveCount(0);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("months: no unit word in the header, planned and share on both faces, each table named once", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seed(db, person);
+    await seedExtras(db, person, seeded);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
+    try {
+      const wide = await context.newPage();
+      await wide.setViewportSize({ width: 1280, height: 900 });
+      await wide.goto("/exportar");
+      const headers = wide
+        .locator("table", { hasText: "planeado" })
+        .first()
+        .locator("thead th");
+      await expect(headers).toHaveText(["mes", "alcanzado", "planeado", ""]);
+      const closed = wide
+        .locator("table tbody tr", { hasText: /se arrastró \d+ %/ })
+        .first();
+      await expect(closed).toBeVisible();
+      await expect(closed.locator("td").nth(2)).toHaveText("10 h");
+      await expect(
+        wide
+          .locator("table tbody tr[data-current]", { hasText: "en curso" })
+          .first(),
+      ).toBeVisible();
+      const weekHeaders = wide
+        .locator("table", { hasText: "semana" })
+        .last()
+        .locator("thead th");
+      await expect(weekHeaders).toHaveText(["semana", "total", "fase", ""]);
+      await expect(
+        wide.getByText("por mes", { exact: true }).locator("visible=true"),
+      ).toHaveCount(1);
+      await expect(
+        wide.getByText("por semana", { exact: true }).locator("visible=true"),
+      ).toHaveCount(1);
+
+      const phone = await context.newPage();
+      await phone.setViewportSize({ width: 360, height: 740 });
+      await phone.goto("/exportar");
+      const note = phone
+        .locator("ol li", { hasText: /se arrastró \d+ %/ })
+        .first();
+      await expect(note).toBeVisible();
+      await expect(note).toContainText(/de 10 h · se arrastró \d+ %/);
+      await expect(
+        phone
+          .locator("ol li[data-current]", { hasText: /de 12 h · en curso/ })
+          .first(),
+      ).toBeVisible();
+      await expect(
+        phone.getByText("por mes", { exact: true }).locator("visible=true"),
+      ).toHaveCount(1);
+      await expect(
+        phone.getByText(/^\d+ meses$/).locator("visible=true"),
+      ).toHaveCount(1);
+      await expect(
+        phone.getByText(/^\d+ semanas$/).locator("visible=true"),
+      ).toHaveCount(1);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("on paper the head says pulsar with the year, and page 1 is used: a goal breaks between sections", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }, testInfo) => {
+    const first = await seed(db, person);
+    await seedExtras(db, person, first);
+    const second = await seed(db, person);
+    await seedExtras(db, person, second);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText(/^exportar · /)).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const year = todayInZone().slice(0, 4);
+      await expect(
+        page.getByText(new RegExp(`^pulsar · .*${year}$`)),
+      ).toBeVisible();
+      await expect(
+        page.getByText(/^exportar · /).locator("visible=true"),
+      ).toHaveCount(0);
+
+      const pdf = await page.pdf({ format: "A4" });
+      const dir = resolve(process.cwd(), "private/export-pdf");
+      mkdirSync(dir, { recursive: true });
+      const file = resolve(dir, `171-${first.goalId}.pdf`);
+      writeFileSync(file, pdf);
+      const pages = Number(
+        /Pages:\s+(\d+)/.exec(
+          execFileSync("pdfinfo", [file], { encoding: "utf8" }),
+        )![1],
+      );
+      const onFirst = execFileSync(
+        "pdftotext",
+        ["-f", "1", "-l", "1", file, "-"],
+        { encoding: "utf8" },
+      );
+      testInfo.annotations.push({
+        type: "a4-pages",
+        description: String(pages),
+      });
+      expect(pages).toBeLessThanOrEqual(A4_PAGES);
+      // Page 1 holds the head and the first goal's name with its first section.
+      expect(onFirst).toContain("Tu plan");
+      expect(onFirst).toMatch(/Meta exportada \d+/);
+      expect(onFirst.toLowerCase()).toContain("hasta hoy");
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
     }
   });
 });

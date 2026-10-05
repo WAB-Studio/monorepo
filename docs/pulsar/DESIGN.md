@@ -657,3 +657,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   integers. The own field «otro número, en minutos» stays. Decided 2026-09-30 by the user.
   **Under an hour the steps are 5 minutes**, four below (only those above zero) and three above: 10 min
   reads «5, 10, 15, 20, 25 min», 45 min reads «25 … 60 min». Decided 2026-09-30 by the coordinator.
+- **With the source unreadable, the months table's caption reads «{count} meses · solo lo dicho».** The phone hides
+  the header row, so the caption is where that table says its figures are only what was declared, as it did before
+  171 made the caption a count. `ReporteSinEvidencia.dc.html` draws the mark under each closed month instead; the
+  caption replaces it. Decided 2026-10-05 by the coordinator.
