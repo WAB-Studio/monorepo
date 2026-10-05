@@ -46,6 +46,25 @@ async function deleteLogDatabase(page: Page): Promise<void> {
   });
 }
 
+// `syncNow()` writes this only after the merge of the pulled rows has landed
+// (`lib/sync/driver.ts`), and nothing on screen reacts to a merge, so it is
+// the one signal that a sync finished. 0 stands for «never synced».
+async function readLastSyncedAt(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const get = db.transaction("sync", "readonly").objectStore("sync").get("state");
+          get.onsuccess = () => resolve(get.result?.lastSyncedAt ?? 0);
+          get.onerror = () => reject(get.error);
+        };
+      }),
+  );
+}
+
 // Same store, read instead of wiped. Call this before any further
 // navigation on `page`: `addInitScript` reinjects on every document `page`
 // loads, not once (docs/TRAPS.md), so a `deleteLogDatabase`'d page that
@@ -600,7 +619,9 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
 
     // First sync: pulls the foreign row down onto this device.
     await hideTab(page);
-    await page.waitForTimeout(2000);
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the first sync never finished" })
+      .toBeGreaterThan(0);
     await page.reload();
     let rows = await readLogRows(page);
     expect(rows.map((row) => row.normalised), "the foreign row never made it down").toContain("foreign-word");
@@ -613,9 +634,27 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
 
     // A fresh mount resets `SyncOnHide`'s own 60s gate, so the sync below is
     // a new call, not the same one blocked from firing twice.
+    // `SyncOnHide` listens from an effect, and a hide fired before it runs
+    // reaches nothing. `RegisterServiceWorker` is its sibling in the layout
+    // and runs in the same effect flush, so its `register` call says the
+    // listener is on.
+    const mounted = new Promise<void>((resolve) => {
+      void page.exposeFunction("__voyagerMounted", resolve);
+    });
+    await page.addInitScript(() => {
+      const register = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      navigator.serviceWorker.register = (...args) => {
+        (window as unknown as { __voyagerMounted: () => void }).__voyagerMounted();
+        return register(...args);
+      };
+    });
     await page.reload();
+    await mounted;
+    const syncedBefore = await readLastSyncedAt(page);
     await hideTab(page);
-    await page.waitForTimeout(2000);
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the second sync never finished" })
+      .toBeGreaterThan(syncedBefore);
 
     rows = await readLogRows(page);
     expect(rows, "the wiped row came back on the very next sync").toHaveLength(0);
