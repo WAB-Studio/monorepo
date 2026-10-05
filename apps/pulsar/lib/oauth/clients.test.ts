@@ -58,4 +58,7 @@ test("a redirect matches only as the whole registered string", () => {
   assert.equal(redirectAllowed(client, "https://a.example/cb/evil"), false);
   assert.equal(redirectAllowed(client, "https://a.example/c"), false);
   assert.equal(redirectAllowed(client, "https://a.example/cb?x=1"), false);
+  assert.equal(redirectAllowed(client, "https://a.example/cb/"), false);
+  assert.equal(redirectAllowed(client, "https://A.example/cb"), false);
+  assert.equal(redirectAllowed(client, "https://a.example/CB"), false);
 });
