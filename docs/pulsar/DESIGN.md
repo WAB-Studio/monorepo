@@ -694,3 +694,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
     «Two columns split 3:2 from 1024» for Hoy and the goal.
   - Not drawn: every dark face (the token table says it); «Mes» loading and failure (they are `ArmazonCargando` and
     `ArmazonFallo` with Mes marked); 700–1023 (the phone face, centred).
+- **`/metas` with no goal ever draws `MetasVacio.dc.html`, and the empty Hoy draws `HoyVacioImportar.dc.html`;
+  the Semana is unchanged.** Reverses the 2026-09-27 redirect to `/metas/nueva` (see «`/metas` lists open
+  goals first»): a person with no goal, open, ended or archived, reads «Todavía no hay metas», «Abrir una meta»
+  and, under «el plan», «Importar un plan» with no «Exportar»; Hoy says «Todavía no hay nada que anotar.» with
+  the same two ways. A person with any goal reads the list as before. Decided by the user 2026-10-01, options
+  (a) and (c). **Faces not drawn:** both boards are the phone alone (390). At 1280 each follows the existing
+  desktop layout (the rail, the 640 column for `/metas`, Hoy's main column), no board of its own; no dark face
+  (the token table says it). The boards' fixed 844 px phone is not reproduced: both screens flow in the standard `Page`.

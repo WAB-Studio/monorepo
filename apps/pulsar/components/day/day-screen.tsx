@@ -208,7 +208,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       </Button>
     </Panel>
   ) : goals.length === 0 ? (
-    <EmptyDay title={t("day.empty.title")} action={t("day.empty.action")} />
+    <EmptyDay />
   ) : (
     <>
       {goals.map((goal) => {
