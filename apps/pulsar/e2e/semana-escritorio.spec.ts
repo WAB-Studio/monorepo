@@ -28,6 +28,12 @@ function shortLabel(day: string): string {
   return `${weekday} ${Number(day.slice(8, 10))}`;
 }
 
+function longName(day: string): string {
+  const date = civilDateToDate(day);
+  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
+  return `${weekday} ${date.getUTCDate()}`;
+}
+
 function openName(day: string): string {
   const date = civilDateToDate(day);
   const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
@@ -171,14 +177,17 @@ test("at 1280 the week is a table: commitments down, days across, today's fact i
     await expect(table.getByRole("rowheader", { name: new RegExp(`^${goalName}`, "i") })).toBeVisible();
     await expect(marks(first, todayIndex)).toHaveAttribute("data-state", "declared");
     await expect(marks(second, todayIndex)).toHaveAttribute("data-state", "empty");
+    // Before it was written the commitment asked nothing: a named «·».
     for (let index = 0; index < todayIndex; index++) {
-      await expect(marks(second, index)).toHaveCount(0);
+      await expect(marks(second, index)).toHaveAttribute("data-state", "none");
+      await expect(marks(second, index)).toHaveAccessibleName(`${second}, ${longName(weekDays[index])}: no pedía`);
     }
 
     for (const name of [named, loose]) {
       await expect(rowOf(name)).toHaveCount(1);
       await expect(marks(name, todayIndex)).toHaveAttribute("data-state", "declared");
-      await expect(rowOf(name).getByRole("img")).toHaveCount(1);
+      await expect(rowOf(name).locator('[data-state="declared"]')).toHaveCount(1);
+      await expect(marks(name, todayIndex)).toHaveAccessibleName(`${name}, ${longName(today)}: hecho`);
     }
     await expect(table.getByRole("rowheader", { name: "Sueltas" })).toBeVisible();
 
@@ -224,11 +233,31 @@ test("at 1280 a past day's header opens that day (RP-06)", async ({ page, db, pe
   }
 });
 
-test("at 360 the week is still the list, not the table (RNP-07)", async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 740 });
-  await page.goto("/semana");
-  await expect(page.getByRole("table")).toBeHidden();
-  await expect(page.getByText("hoy", { exact: true }).first()).toBeVisible();
+test("at 360 the week is folded: no table, a seven-day header once, a row of seven marks per commitment (RNP-07, Q3)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const name = `Meta plegada ${Date.now()}`;
+  const commitment = `Compromiso plegado ${name}`;
+  const goalId = await seedGoal(db, personId, name, shift(today, 60));
+  try {
+    await seedCommitment(db, personId, goalId, commitment, longAgo());
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto("/semana");
+    await expect(page.getByRole("table")).toBeHidden();
+    const marks = page.getByRole("img", { name: new RegExp(`^${commitment}, `) });
+    await expect(marks).toHaveCount(7);
+    // One row: the seven marks share a line, left to right in the week's order.
+    const boxes = await marks.evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+    expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(1);
+    expect(boxes.map((box) => box.left)).toEqual([...boxes.map((box) => box.left)].sort((a, b) => a - b));
+    for (const [index, day] of weekDays.entries()) {
+      await expect(marks.nth(index)).toHaveAccessibleName(new RegExp(`^${commitment}, ${longName(day)}: `));
+    }
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
 });
 
 // Ended today, or tomorrow on a Monday so the goal still lived this week.
@@ -259,22 +288,22 @@ test("a goal whose horizon falls this week draws nothing from its horizon on, on
       .locator("tr", { has: page.getByRole("rowheader", { name: commitment, exact: true }) });
     await expect(row).toHaveCount(1);
     for (const day of livedDays) {
-      await expect(row.locator("td").nth(weekDays.indexOf(day)).getByRole("img")).toHaveCount(1);
+      const mark = row.locator("td").nth(weekDays.indexOf(day)).getByRole("img");
+      await expect(mark).not.toHaveAttribute("data-state", "none");
     }
     for (const day of blankDays) {
-      await expect(row.locator("td").nth(weekDays.indexOf(day)).getByRole("img")).toHaveCount(0);
+      const mark = row.locator("td").nth(weekDays.indexOf(day)).getByRole("img");
+      await expect(mark).toHaveAttribute("data-state", "none");
     }
 
     await page.setViewportSize({ width: 360, height: 740 });
-    const section = page.locator("section", { hasText: goalName });
+    const marks = page.getByRole("img", { name: new RegExp(`^${commitment}, `) });
+    await expect(marks).toHaveCount(7);
     for (const day of blankDays) {
-      const dayRow = section.locator("button, div").filter({ hasText: shortLabel(day) }).first();
-      await expect(dayRow.locator('[role="img"]')).toHaveCount(0);
-      await expect(dayRow).not.toContainText(/\d+ de \d+|hoy/);
+      await expect(marks.nth(weekDays.indexOf(day))).toHaveAccessibleName(`${commitment}, ${longName(day)}: no pedía`);
     }
     for (const day of livedDays) {
-      const dayRow = section.locator("button, div").filter({ hasText: shortLabel(day) }).first();
-      await expect(dayRow.locator('[role="img"]')).toHaveCount(1);
+      await expect(marks.nth(weekDays.indexOf(day))).not.toHaveAccessibleName(/no pedía/);
     }
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;

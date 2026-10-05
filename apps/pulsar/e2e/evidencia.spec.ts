@@ -6,14 +6,11 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import { todayInZone } from "../lib/zone";
 
-// `Semana.dc.html`'s own weekday order (`week.weekdayShort`), read back here
-// rather than imported — `week-screen.tsx` composes it from next-intl, and
-// this file never opens a component to borrow one string.
-const WEEKDAY_SHORT = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
-
-function weekRowLabel(civilDay: string): string {
-  const weekdayIndex = (new Date(`${civilDay}T12:00:00Z`).getUTCDay() + 6) % 7;
-  return `${WEEKDAY_SHORT[weekdayIndex]} ${Number(civilDay.slice(8, 10))}`;
+// ICU's Spanish, never the catalogue's list the screen reads.
+function weekLongName(civilDay: string): string {
+  const date = new Date(`${civilDay}T12:00:00Z`);
+  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
+  return `${weekday} ${date.getUTCDate()}`;
 }
 
 // 23:30 in Bogotá, a fixed -05:00 offset: Colombia keeps no daylight-saving
@@ -183,13 +180,10 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await expect(row).toBeDisabled();
     expect(await factCount(db, commitmentId)).toBe(0);
 
-    // /semana draws that same day's dot as evidence, named the same way
-    // `week.dot.evidence` composes it.
+    // /semana draws that same day's mark as evidence, named the way
+    // `week.mark.evidence` composes it.
     await page.goto("/semana");
-    const goalSection = page.locator("section", { hasText: goalName });
-    const todayRow = goalSection.locator("button", { hasText: weekRowLabel(day) });
-    await expect(todayRow).toBeVisible();
-    const dot = todayRow.locator(`[role="img"][aria-label="${commitmentName}: diccionario"]`);
+    const dot = page.getByRole("img", { name: `${commitmentName}, ${weekLongName(day)}: hecho, por evidencia` });
     await expect(dot).toHaveCount(1);
     await expect(dot).toHaveAttribute("data-state", "evidence");
 

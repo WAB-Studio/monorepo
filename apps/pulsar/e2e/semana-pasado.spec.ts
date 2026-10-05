@@ -27,11 +27,10 @@ function openName(day: string): string {
   return `Abrir el ${weekday} ${date.getUTCDate()}`;
 }
 
-function shortLabel(day: string): string {
-  const weekday = new Intl.DateTimeFormat("es", { weekday: "short", timeZone: "UTC" })
-    .format(civilDateToDate(day))
-    .replace(".", "");
-  return `${weekday} ${Number(day.slice(8, 10))}`;
+function longName(day: string): string {
+  const date = civilDateToDate(day);
+  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
+  return `${weekday} ${date.getUTCDate()}`;
 }
 
 async function seedGoal(db: postgres.Sql, personId: string, name: string) {
@@ -65,22 +64,18 @@ test("a past day of the week is a link to its own screen, today and a future day
   const goalId = await seedGoal(db, personId, `Compromiso semana ${Date.now()}`);
   try {
     await page.goto("/semana");
-    const section = page.locator("section", { hasText: "Meta semana pasada" }).first();
-    await expect(section).toBeVisible();
+    await expect(page.getByText("Meta semana pasada").locator("visible=true").first()).toBeVisible();
 
-    await expect(section.getByRole("link")).toHaveCount(pastDays.length);
+    const links = page.getByRole("link", { name: /^Abrir el/ });
+    await expect(links).toHaveCount(pastDays.length);
     for (const day of pastDays) {
-      const link = section.getByRole("link", { name: openName(day) });
-      await expect(link).toHaveAttribute("href", `/dia/${day}`);
-      await expect(link).toHaveText(shortLabel(day));
+      await expect(page.getByRole("link", { name: openName(day) })).toHaveAttribute("href", `/dia/${day}`);
     }
 
-    // Plain text, never a link: the label is there, no `Abrir` names it.
+    // Plain header cells, never a link: no `Abrir` names them.
     for (const day of [today, ...futureDays]) {
-      await expect(section.getByRole("link", { name: openName(day) })).toHaveCount(0);
-      await expect(section.getByText(shortLabel(day), { exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: openName(day) })).toHaveCount(0);
     }
-    await expect(section.getByRole("link", { name: /^Abrir el/ })).toHaveCount(pastDays.length);
   } finally {
     await deleteGoal(db, personId, goalId);
   }
@@ -96,52 +91,52 @@ test("a tap on a past day from the week fills that day's dot on return (RP-06)",
 
   try {
     await page.goto("/semana");
-    const section = page.locator("section", { hasText: "Meta semana pasada" }).first();
-    const dot = section.getByRole("img", { name: `${name}: pendiente` });
-    await expect(dot).toHaveCount(weekDays.length);
-    await expect(section.getByRole("link")).toHaveCount(pastDays.length);
-    await expect(section.getByRole("link", { name: openName(today) })).toHaveCount(0);
+    const marks = page.getByRole("img", { name: new RegExp(`^${name}, `) });
+    await expect(marks).toHaveCount(weekDays.length);
+    await expect(page.getByRole("link", { name: /^Abrir el/ })).toHaveCount(pastDays.length);
+    await expect(page.getByRole("link", { name: openName(today) })).toHaveCount(0);
 
     if (day !== undefined) {
-      const row = section.locator("div").filter({ has: page.getByRole("link", { name: openName(day) }) });
-      await expect(row.getByRole("img")).toHaveAttribute("data-state", "empty");
+      const mark = page.getByRole("img", { name: `${name}, ${longName(day)}: no hecho` });
+      await expect(mark).toHaveAttribute("data-state", "empty");
 
-      await section.getByRole("link", { name: openName(day) }).click();
+      await page.getByRole("link", { name: openName(day) }).click();
       await page.waitForURL(`**/dia/${day}`);
       await page.locator("button", { hasText: name }).click();
       await expect(page.locator("button", { hasText: name }).locator("svg")).toBeVisible();
 
       await page.goto("/semana");
-      await expect(row.getByRole("img")).toHaveAttribute("data-state", "declared");
-      await expect(row.getByRole("img")).toHaveAccessibleName(`${name}: hecho`);
+      const after = page.getByRole("img", { name: `${name}, ${longName(day)}: hecho` });
+      await expect(after).toHaveAttribute("data-state", "declared");
     }
   } finally {
     await deleteGoal(db, personId, goalId);
   }
 });
 
-test("the week holds at 360px with its links, every row at least 56px (RP-06, RNP-07)", async ({
+test("the week holds at 360px with its links, every day link and every commitment row at least 48px (RP-06, RNP-07)", async ({
   page,
   db,
   personId,
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
-  const goalId = await seedGoal(db, personId, `Compromiso semana ${Date.now()}`);
+  const name = `Compromiso semana ${Date.now()}`;
+  const goalId = await seedGoal(db, personId, name);
   try {
     await page.goto("/semana");
-    const section = page.locator("section", { hasText: "Meta semana pasada" }).first();
-    await expect(section).toBeVisible();
+    await expect(page.getByText("Meta semana pasada").locator("visible=true").first()).toBeVisible();
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(360);
 
-    const heights = await section
-      .locator(":scope > button, :scope > div")
-      .filter({ has: page.locator('[role="img"]') })
+    const links = await page
+      .getByRole("link", { name: /^Abrir el/ })
       .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
-    expect(heights.length).toBe(7);
-    for (const height of heights) expect(height).toBeGreaterThanOrEqual(56);
-    await page.screenshot({ path: "private/semana-pasado-360.png", fullPage: true });
+    expect(links.length).toBe(pastDays.length);
+    for (const height of links) expect(height).toBeGreaterThanOrEqual(48);
+
+    const row = page.locator("p", { hasText: name }).locator("xpath=..");
+    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(48);
   } finally {
     await deleteGoal(db, personId, goalId);
   }

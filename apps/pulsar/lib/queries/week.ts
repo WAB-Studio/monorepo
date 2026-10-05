@@ -34,6 +34,7 @@ type GoalRow = {
   name: string;
   horizon: string;
   created_at: string;
+  archived_at: string | null;
 };
 
 // `source_key` / `source_unit` ride in from the join to `evidence_sources`;
@@ -193,10 +194,18 @@ export type GoalSummary = {
   name: string;
   horizon: string;
   createdAt: string;
+  // Set only on a goal archived after the week read (RP-24).
+  archivedAt: string | null;
 };
 
 function toGoalSummary(row: GoalRow): GoalSummary {
-  return { id: row.id, name: row.name, horizon: row.horizon, createdAt: row.created_at };
+  return {
+    id: row.id,
+    name: row.name,
+    horizon: row.horizon,
+    createdAt: row.created_at,
+    archivedAt: row.archived_at,
+  };
 }
 
 // Which goal a commitment's own dots belong to, and its name for the dot's
