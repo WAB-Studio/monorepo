@@ -2161,6 +2161,7 @@ async function runMain(): Promise<void> {
   await runFlexibleDayFeedCheck();
   await runSurvivorsOf92To94Check();
   await runMonthLineCheck();
+  await runMonthTaskCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
@@ -2472,6 +2473,100 @@ async function runMonthLineCheck(): Promise<void> {
     if (goalIds.length > 0) {
       await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
     }
+    await db.end();
+  }
+}
+
+// Module 174: each open goal's next undone leaf of the month, read inside the
+// goals statement (RP-31, RNP-03). Seeded on today's own month, since only
+// today reads it; creation stamps are fixed so only the order decides.
+async function runMonthTaskCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { monthOf, nextMonth } = await import("@/lib/plan/months");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runMonthTaskCheck: no verified session");
+  const userId = person.id;
+  const today = todayInZone();
+  const month = monthOf(today);
+  const previous = monthOf(addDays(month, -1));
+  const following = nextMonth(month);
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId = "";
+
+  async function seed(
+    name: string,
+    plannedMonth: string | null,
+    parentId: string | null,
+    day: string | null,
+    createdAt: string,
+    estimate: number | null = null,
+  ): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, created_at)
+      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate},
+              ${createdAt}::timestamptz)
+      returning id
+    `;
+    return row.id;
+  }
+  async function finish(oneOffId: string): Promise<void> {
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day) values (${userId}, ${goalId}, ${oneOffId}, ${today}::date)
+    `;
+  }
+
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${userId}, 'month-task probe', '2099-12-31'::date, '2020-01-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+
+    await seed("month-task dated", month, null, today, "2020-01-01T00:00:00Z");
+    await seed("month-task next month", following, null, null, "2020-01-02T00:00:00Z");
+    const own = await seed("month-task own", month, null, null, "2020-01-03T00:00:00Z", 90);
+    const parent = await seed("month-task carried parent", previous, null, null, "2020-01-04T00:00:00Z");
+    const first = await seed("month-task child 1", null, parent, null, "2020-01-05T00:00:00Z", 30);
+    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45);
+    await finish(first);
+
+    const nextOf = async () => (await loadDay(today)).monthTask[goal.id];
+    const carried = await nextOf();
+    assert(
+      "the carried parent's undone child is the goal's next task, before the month's own and any dated one-off",
+      carried?.id === second && carried.name === "month-task child 2" && carried.estimate === 45,
+      `monthTask = ${JSON.stringify(carried)}`,
+    );
+
+    await finish(second);
+    const ownNext = await nextOf();
+    assert(
+      "with the carried child done the month's own task is next, and a task of the month after never is",
+      ownNext?.id === own && ownNext.estimate === 90,
+      `monthTask = ${JSON.stringify(ownNext)}`,
+    );
+
+    await finish(own);
+    const none = await loadDay(today);
+    assert(
+      "with every task of the month done the goal reads null, a dated one-off and a later month never next",
+      goal.id in none.monthTask && none.monthTask[goal.id] === null,
+      `monthTask = ${JSON.stringify(none.monthTask[goal.id])}`,
+    );
+
+    const past = await loadDay(addDays(today, -1));
+    assert("a past day reads an empty monthTask", Object.keys(past.monthTask).length === 0, JSON.stringify(past.monthTask));
+
+    await loadDay(today);
+    const start = wireCalls.length;
+    await loadDay(today);
+    reportRun("month-task", wireCalls.slice(start), true);
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
     await db.end();
   }
 }

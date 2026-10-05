@@ -30,7 +30,7 @@ import {
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, weekOf } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -112,6 +112,10 @@ type DoneOneOffRow = {
   written_at: string;
 };
 
+type MonthTaskRow = { goal_id: string; id: string; name: string; estimate: number | null };
+
+export type MonthTask = { id: string; name: string; estimate: number | null };
+
 // Every evidence commitment of a goal, retired ones included: the source keys
 // a goal's measure reads, as `loadGoal` reads them.
 type MeasureSourceRow = {
@@ -129,6 +133,7 @@ type GoalsQueryRow = {
   month_budgets: MonthBudgetRow[];
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
+  month_tasks: MonthTaskRow[];
   dayless_count: number;
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
@@ -184,6 +189,7 @@ async function queryGoalsRow(
   tx: Transaction,
   day: string,
   weekStart: string,
+  isToday: boolean,
 ): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
     select
@@ -238,6 +244,29 @@ async function queryGoalsRow(
          from "goals"."one_offs" o
          join "goals"."facts" f on f.one_off_id = o.id
          where f.day = ${day}::date) as done_one_offs,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'goal_id', t.goal_id,
+                 'id', t.id,
+                 'name', t.name,
+                 'estimate', t.estimate
+               )), '[]'::json)
+         from (
+           select distinct on (coalesce(p.goal_id, o.goal_id))
+                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate
+             from "goals"."one_offs" o
+             left join "goals"."one_offs" p on p.id = o.parent_id
+             join "goals"."goals" g on g.id = coalesce(p.goal_id, o.goal_id) and ${openGoal("g", day)}
+            where ${isToday}::boolean
+              and o.day is null
+              and coalesce(p.planned_month, o.planned_month) <= date_trunc('month', ${day}::date)::date
+              and (p.id is null or p.day is null)
+              and not exists (select 1 from "goals"."one_offs" k where k.parent_id = o.id)
+              and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
+            order by coalesce(p.goal_id, o.goal_id),
+                     coalesce(p.planned_month, o.planned_month),
+                     coalesce(p.created_at, o.created_at),
+                     o.created_at
+         ) t) as month_tasks,
       (select count(*)::int
          from "goals"."one_offs" o
          where o.day is null
@@ -482,6 +511,15 @@ function monthLineOf(
   return lines;
 }
 
+function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, MonthTask | null> {
+  const tasks: Record<string, MonthTask | null> = {};
+  for (const goal of goals) {
+    const next = row.month_tasks.find((task) => task.goal_id === goal.id);
+    tasks[goal.id] = next ? { id: next.id, name: next.name, estimate: next.estimate } : null;
+  }
+  return tasks;
+}
+
 // The goal's measure from the Monday of `day` to `day`: the current row of
 // the same `measureByWeek` `loadGoal`'s `weeks` runs, over the week's facts
 // of the goal's own commitments and the evidence in its unit, deduped by
@@ -565,6 +603,9 @@ export async function loadDay(day: string): Promise<{
   endedThisWeek: EndedGoal[];
   weekMeasure: Record<string, number>;
   monthLine: Record<string, MonthLine>;
+  // Each open goal's next undone leaf of the month, carried first; read on
+  // today alone, `{}` on any other day.
+  monthTask: Record<string, MonthTask | null>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
@@ -579,12 +620,13 @@ export async function loadDay(day: string): Promise<{
 
   const weekStart = weekOf(day)[0];
   const monthStart = monthOf(day);
+  const isToday = day === todayInZone();
   // The month's evidence reaches back past the week's Monday when the month
   // opened earlier; the day's slots still filter their own day below.
   const evidenceFrom = weekStart < monthStart ? weekStart : monthStart;
 
   const [row, evidenceOutcome] = await Promise.all([
-    withGoalsDb((tx) => queryGoalsRow(tx, day, weekStart)),
+    withGoalsDb((tx) => queryGoalsRow(tx, day, weekStart, isToday)),
     withReadingDb((tx) => queryEvidenceBySource(tx, person.id, evidenceFrom, day)).then(
       (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
       (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
@@ -653,6 +695,7 @@ export async function loadDay(day: string): Promise<{
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     monthLine: monthLineOf(goals, row, evidenceOutcome, day),
+    monthTask: isToday ? monthTaskOf(goals, row) : {},
     commitments: row.commitments.map(toCommitmentInfo),
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),
