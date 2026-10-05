@@ -112,6 +112,12 @@ for (const width of [360, 390, 1280, 1440]) {
       }
 
       await page.goto("/metas");
+      // «Importar un plan» comes before «Exportar»: above on the phone, left or above in the plan column.
+      const importBox = await page.getByRole("link", { name: /^Importar un plan/ }).boundingBox();
+      const exportBox = await page.getByRole("link", { name: /^Exportar/ }).boundingBox();
+      expect(importBox!.y).toBeLessThan(exportBox!.y);
+
+      await page.goto("/metas");
       await page.getByRole("link", { name: /^Importar un plan/ }).click();
       await page.waitForURL(/\/metas\/importar$/);
 

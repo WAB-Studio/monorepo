@@ -1302,6 +1302,29 @@ async function runPlanMonthsCheck(): Promise<void> {
   }
 }
 
+/**
+ * `/metas` reads the goals and the evidence on two connections at once, never
+ * one after the other. A warm call (the first pays the dial) must show the
+ * two transactions' wall-clock windows overlapping, the way `check-day.ts`
+ * asserts it for `loadDay`.
+ */
+async function runMetasOverlapCheck(): Promise<void> {
+  const { listGoalsForMetas } = await import("@/lib/queries/goal");
+  await listGoalsForMetas();
+  const start = wireCalls.length;
+  await listGoalsForMetas();
+  const groups = [...groupByConnection(wireCalls.slice(start)).entries()].map(([connection, calls]) =>
+    analyzeGroup(connection, calls),
+  );
+  const [a, b] = groups.map((group) => group.window);
+  const overlaps = a !== undefined && b !== undefined && Math.max(a.start, b.start) < Math.min(a.end, b.end);
+  assert(
+    "listGoalsForMetas' two transactions overlap in wall-clock time (warm)",
+    groups.length === 2 && overlaps,
+    `${groups.length} connection(s), overlap = ${overlaps}`,
+  );
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -1388,6 +1411,7 @@ async function runMain(): Promise<void> {
   await runLateNightOpenCheck();
   await runEndedCheck();
   await runPlanMonthsCheck();
+  await runMetasOverlapCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
