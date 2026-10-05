@@ -12,7 +12,25 @@ import styles from "./page.module.css";
 // Beside the rail a screen is one 640px column unless it says otherwise:
 // `width="full"` is for the screens that lay out two columns of their own
 // (Hoy, the goal, Semana's table), which take all the rail leaves.
-export function Page({ children, width }: { children?: ReactNode; width?: "wide" | "full" }) {
+//
+// `alone` is a screen outside the shell, with no rail beside it (the consent
+// screen): from 1024 its 640px column stays centred at the phone's padding.
+// `middle` centres the column's content vertically on a screen that has one
+// thing to say.
+export function Page({
+  children,
+  width,
+  alone,
+  middle,
+}: {
+  children?: ReactNode;
+  width?: "wide" | "full";
+  alone?: boolean;
+  middle?: boolean;
+}) {
   const cap = width === "wide" ? styles.wide : width === "full" ? styles.full : undefined;
-  return <main className={cap ? `${styles.page} ${cap}` : styles.page}>{children}</main>;
+  const className = [styles.page, cap, alone ? styles.alone : undefined, middle ? styles.middle : undefined]
+    .filter(Boolean)
+    .join(" ");
+  return <main className={className}>{children}</main>;
 }

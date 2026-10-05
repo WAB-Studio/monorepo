@@ -1,6 +1,4 @@
-import { SectionLabel, Text } from "@/components/ui";
-
-import styles from "./consent.module.css";
+import { MarkList, SectionLabel, Text } from "@/components/ui";
 
 export function ConsentList({
   label,
@@ -16,16 +14,7 @@ export function ConsentList({
   return (
     <section>
       <SectionLabel>{label}</SectionLabel>
-      <ul className={styles.list}>
-        {items.map((item) => (
-          <li key={item} className={styles.item}>
-            <span className={styles.mark} aria-hidden>
-              {mark}
-            </span>
-            <Text tone={tone}>{item}</Text>
-          </li>
-        ))}
-      </ul>
+      <MarkList mark={mark} items={items.map((item) => ({ key: item, node: <Text tone={tone}>{item}</Text> }))} />
     </section>
   );
 }

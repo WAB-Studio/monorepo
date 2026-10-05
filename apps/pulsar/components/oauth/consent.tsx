@@ -40,7 +40,7 @@ export function Consent({
   }
 
   return (
-    <Page>
+    <Page alone>
       <Text as="p" variant="meta" tone="muted">
         {t("eyebrow")}
       </Text>

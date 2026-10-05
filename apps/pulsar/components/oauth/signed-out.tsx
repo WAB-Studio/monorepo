@@ -25,7 +25,7 @@ export function SignedOut({ client, next }: { client: string; next: string }) {
   }
 
   return (
-    <Page>
+    <Page alone>
       <Text as="p" variant="meta" tone="muted">
         {t("eyebrow")}
       </Text>

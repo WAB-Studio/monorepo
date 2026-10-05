@@ -17,8 +17,3 @@
   font-family: var(--font-mono);
   color: var(--pulsar-muted);
 }
-
-.centred {
-  justify-content: center;
-  flex: 1;
-}

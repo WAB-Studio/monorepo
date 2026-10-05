@@ -208,4 +208,21 @@ test.describe("the consent screen (RP-41)", () => {
       await context.close();
     }
   });
+
+  test("at 1280 the column stands alone and centred, with no overflow", async ({ person, browser, baseURL }) => {
+    const clientId = await register(baseURL!, `Claude ${randomBytes(3).toString("hex")}`);
+    const { context, page } = await open(browser, baseURL!, person.sessionFile, 1280);
+    try {
+      await page.goto(consentPath(baseURL!, clientId, challengeOf(verifier())));
+      const button = page.getByRole("button", { name: oauth.allow, exact: true });
+      await expect(button).toBeVisible();
+      await expectNoOverflow(page);
+      // 640px column centred in 1280: its left edge is 320px, never the rail's.
+      const box = (await page.getByRole("main").boundingBox())!;
+      expect(Math.abs(box.x - 320)).toBeLessThanOrEqual(1);
+      expect(box.width).toBeLessThanOrEqual(640);
+    } finally {
+      await context.close();
+    }
+  });
 });
