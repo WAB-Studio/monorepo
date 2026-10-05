@@ -61,15 +61,15 @@ for (const width of [390, 1440]) {
       await context.close();
     });
 
-    // Every screen's header lands at one place; the skeleton's block stands there.
+    // The skeleton's block stands where a real screen's header (`/mes`) lands.
     test("a route held in loading shows the header block where the header lands", async ({
       browser,
       baseURL,
       person,
     }) => {
       const { context, page } = await open(browser, baseURL, person, width, 900);
-      await page.goto(`/metas/${UNKNOWN_GOAL}`);
-      await loaded(page);
+      await page.goto("/mes");
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       const landed = await page.locator("main header").first().boundingBox();
 
       await page.goto("/");
@@ -78,12 +78,12 @@ for (const width of [390, 1440]) {
       const gate = new Promise<void>((done) => {
         release = done;
       });
-      await page.route("**/semana**", async (route) => {
+      await page.route("**/mes**", async (route) => {
         if (route.request().headers()["rsc"] === "1") await gate;
         await route.continue();
       });
 
-      await page.getByRole("navigation").getByRole("link", { name: "Semana" }).first().click();
+      await page.getByRole("navigation").getByRole("link", { name: "Mes" }).first().click();
       const block = page.locator("main header[aria-hidden]");
       await expect(block).toBeVisible();
       await expect(page.getByRole("heading")).toHaveCount(0);
@@ -91,6 +91,7 @@ for (const width of [390, 1440]) {
       expect(Math.abs(held!.y - landed!.y)).toBeLessThanOrEqual(2);
 
       release();
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(block).toHaveCount(0);
       await context.close();
     });
