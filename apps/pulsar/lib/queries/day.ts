@@ -156,7 +156,7 @@ function dayBefore(day: string): string {
   return dateToCivilDate(date);
 }
 
-type EvidenceOutcome = {
+export type EvidenceOutcome = {
   status: "read" | "unreadable";
   bySourceKey: Record<string, EvidenceDay[]>;
 };
@@ -325,6 +325,20 @@ async function queryEvidenceBySource(
   }
 
   return bySourceKey;
+}
+
+// A source that cannot be read degrades to an empty outcome, never a throw
+// (RNP-04): the caller still draws, minus the evidence. Hoy and `/metas` both
+// read their figures through this.
+export async function readEvidenceOutcome(
+  personId: string,
+  from: string,
+  to: string,
+): Promise<EvidenceOutcome> {
+  return withReadingDb((tx) => queryEvidenceBySource(tx, personId, from, to)).then(
+    (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
+    (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
+  );
 }
 
 function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
@@ -627,10 +641,7 @@ export async function loadDay(day: string): Promise<{
 
   const [row, evidenceOutcome] = await Promise.all([
     withGoalsDb((tx) => queryGoalsRow(tx, day, weekStart, isToday)),
-    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, evidenceFrom, day)).then(
-      (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
-      (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
-    ),
+    readEvidenceOutcome(person.id, evidenceFrom, day),
   ]);
 
   const commitments = row.commitments.map(toCommitmentPlan);

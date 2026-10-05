@@ -4,6 +4,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
+import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
@@ -15,6 +16,7 @@ import {
   type CommitmentRow as BaseCommitmentRow,
   type PhaseRow,
 } from "@/lib/queries/rows";
+import { readEvidenceOutcome } from "@/lib/queries/day";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
@@ -550,9 +552,9 @@ export async function listGoals(): Promise<GoalSummary[]> {
 }
 
 // An open goal's current month, as `/metas` draws it beside the goal: the
-// amount in its unit, or the tasks when it measures nothing. Evidence readings
-// stay out: they live in the reading database, a second connection this
-// statement does not pay for.
+// amount in its unit, or the tasks when it measures nothing. The amount folds
+// in the evidence readings, as Hoy's month line does; they ride a second
+// connection, in parallel with the goals statement.
 export type MetasMonth =
   | { kind: "amount"; month: string; planned: number | null; reached: number }
   | { kind: "tasks"; month: string; done: number; total: number };
@@ -563,6 +565,7 @@ type MetasRow = GoalRow & {
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
+  measure_sources: { satisfaction: string; source_key: string | null; source_unit: string | null }[];
 };
 
 /**
@@ -578,27 +581,40 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
   archived: GoalSummary[];
 }> {
   const month = monthOf(today);
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<MetasRow>(sql`
-      select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
-        (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                   'commitment_unit', c.unit
-                 )), '[]'::json)
-           from "goals"."facts" f
-           left join "goals"."commitments" c on c.id = f.commitment_id
-           where f.goal_id = g.id
-             and f.day between ${month}::date and ${today}::date) as facts,
-        (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
-           from "goals"."month_budgets" b
-           where b.goal_id = g.id and b.month = ${month}::date) as budgets,
-        (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
-                   'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-                 ) order by o.created_at, o.id), '[]'::json)
-           from "goals"."one_offs" o where o.goal_id = g.id) as tasks
-      from "goals"."goals" g
-      order by g.created_at
-    `),
-  );
+  const person = await getPerson();
+  if (!person) throw new Error("listGoalsForMetas called without a verified session");
+  const [rows, evidenceOutcome] = await Promise.all([
+    withGoalsDb((tx) =>
+      tx.execute<MetasRow>(sql`
+        select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
+          (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
+                     'commitment_unit', c.unit
+                   )), '[]'::json)
+             from "goals"."facts" f
+             left join "goals"."commitments" c on c.id = f.commitment_id
+             where f.goal_id = g.id
+               and f.day between ${month}::date and ${today}::date) as facts,
+          (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
+             from "goals"."month_budgets" b
+             where b.goal_id = g.id and b.month = ${month}::date) as budgets,
+          (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
+                     'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
+                   ) order by o.created_at, o.id), '[]'::json)
+             from "goals"."one_offs" o where o.goal_id = g.id) as tasks,
+          (select coalesce(json_agg(jsonb_build_object(
+                     'satisfaction', c.satisfaction,
+                     'source_key', s.key,
+                     'source_unit', s.unit
+                   )), '[]'::json)
+             from "goals"."commitments" c
+             join "goals"."evidence_sources" s on s.id = c.source_id
+             where c.goal_id = g.id and c.satisfaction = 'evidence') as measure_sources
+        from "goals"."goals" g
+        order by g.created_at
+      `),
+    ),
+    readEvidenceOutcome(person.id, month, today),
+  ]);
 
   const toMonth = (row: MetasRow): MetasMonth | null => {
     const unit = row.measure_unit;
@@ -621,7 +637,11 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
       .map(toDeclaredFact);
     const doneTasks = estimateFacts(tasks, unit).filter((fact) => monthOf(fact.day) === month);
-    const reached = reachedByMonth({ unit, facts: [...declared, ...doneTasks], evidence: [] }).get(month) ?? 0;
+    const reached = reachedByMonth({
+      unit,
+      facts: [...declared, ...doneTasks],
+      evidence: evidenceDaysFor(unit, row.measure_sources, evidenceOutcome.bySourceKey),
+    }).get(month) ?? 0;
     const planned = row.budgets.find((budget) => budget.month === month)?.amount ?? null;
     if (planned === null && reached === 0) return null;
     return { kind: "amount", month, planned, reached };

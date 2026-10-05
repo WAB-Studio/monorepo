@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
@@ -210,3 +212,52 @@ for (const width of [390, 1440]) {
     }
   });
 }
+
+test("/metas at 1440: a goal's figure folds in the evidence its source recorded this month, as Hoy does", async ({
+  person,
+  browser,
+  db,
+}) => {
+  const today = todayInZone();
+  const month = `${today.slice(0, 7)}-01`;
+  const monthName = MONTH_LONG[Number(today.slice(5, 7)) - 1];
+  const name = `Evidencia ${Date.now()}`;
+  const deviceId = randomUUID();
+  // 23:30 Bogotá is the next UTC day: the row is today's only through the zone.
+  const at = new Date(`${today}T23:30:00-05:00`);
+
+  const goalId = await seedGoal(db, person.id, name, plusDays(60), 0);
+  await db`update goals.goals set measure_name = 'búsquedas', measure_unit = 'searches' where id = ${goalId}`;
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${goalId}, ${month}::date, 10)
+  `;
+  await db`
+    insert into goals.commitments
+      (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+    values (
+      ${person.id}, ${goalId}, 'leer', 'daily', 'evidence',
+      (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
+      now() - interval '20 days'
+    )
+  `;
+  for (const localId of [1, 2, 3]) {
+    await db`insert into reading.lookups
+      (user_id, device_id, local_id, at, text, normalised, kind, outcome, headword, rule, senses, translation, dictionary_ready, origin, record_schema)
+      values (${person.id}, ${deviceId}, ${localId}, ${at}, 'palabra', 'palabra', 'word', 'miss', null, null, 0, null, true, null, 2)`;
+  }
+
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    viewport: { width: 1440, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/metas");
+    const row = page.locator("main").locator("a", { hasText: name });
+    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s*searches\\s+de\\s+10\\s*searches`));
+  } finally {
+    await context.close();
+    await db`delete from reading.lookups where user_id = ${person.id} and device_id = ${deviceId}`;
+  }
+});

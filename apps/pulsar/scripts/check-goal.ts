@@ -1148,8 +1148,8 @@ async function runEndedCheck(): Promise<void> {
       where(split.archived, archivedId) && !where(split.ended, archivedId) && !where(split.open, archivedId),
       `open=${where(split.open, archivedId)} ended=${where(split.ended, archivedId)} archived=${where(split.archived, archivedId)}`,
     );
-    assert("listGoalsForMetas stays one query behind its settle (two application statements)",
-      statements === 2,
+    assert("listGoalsForMetas reads the goals in one statement and the evidence in another, each behind its settle (four application statements)",
+      statements === 4,
       `${statements} application statement(s)`);
 
     const listed = await listGoals();
