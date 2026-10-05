@@ -36,7 +36,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Use the credential the user hands you. Configure with it and move on.
 - Never tell the user to rotate, revoke or replace a credential. Decided by the user 2026-09-10.
 - Ship one slice at a time.
-- Work five tracks at once, one per lane. See `## Parallel tracks`.
+- Work one track per lane. See `## Parallel tracks`.
 - Start the dev server on :3000 yourself and keep it running. Restart it when you must.
 - Run one instance per worktree. Take `Another next dev server is already running` as: one is up, use it.
 - Never ask whether to keep going or close the handoff. The `Stop` hook says when the window is full.
@@ -109,7 +109,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 ## Parallel tracks
 
-- Five lanes exist. Lane 1 is this checkout; lanes 2 to 5 are worktrees at `../<checkout>-l<n>`.
+- Lane 1 is this checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`. Lanes 2 to 5 may run
+  e2e specs; lanes 6 and up take only work with no e2e (docs, words, pure functions, `check:*`).
+  Decided by the user 2026-10-05. The cap is RAM and the shared Auth, not the lane count.
 - A lane's port comes from its app: finances on :300<n-1>, reading on :310<n-1>. They never collide.
 - Run an app's npm scripts from its own directory, `apps/orbit`, or from the root with `-w apps/orbit`.
 - Open a lane: `scripts/worktree.sh <lane> <branch> [base] [--app <name>]`. It costs 4 seconds.
@@ -232,13 +234,22 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 ## Verification
 
 - Verify once at the end of a slice. Never after a micro-edit.
-- Run every `check:*` script of the app, not only the one named, when a module changes a server
-  action or a query. Measured 2026-09-29: module 88 made `addCommitment` refuse an ended goal and
-  broke three `check:day` probes; neither its worker nor its validator ran `check:day`.
-- Run the whole pulsar e2e suite, never a selection, on a module that changes what a screen prints.
-  Measured 2026-09-30: a chosen list missed `deshacer.spec.ts` under module 146 and `cifra-unidad.spec.ts`
-  under module 135; both went red in CI. Run at most two whole suites at once: a third exhausts the
-  shared pool (`EMAXCONNSESSION`, 15 clients).
+- Size the proof by what the change reaches. Decided by the user 2026-10-05: module 182 spent 22
+  minutes re-running suites its new, unimported file could not break, and each module paid the same
+  suite up to three times (worker, validator, CI).
+  - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit`, its own
+    tests and its mutations. Nothing else.
+  - A query or a server action: add every `check:*` that imports it. Grep the importers; when in doubt,
+    run them all. Measured 2026-09-29: module 88 made `addCommitment` refuse an ended goal and broke
+    three `check:day` probes nobody ran.
+  - A screen: its own specs and the specs the plan names. **The whole e2e suite runs once, in CI on
+    the pull request — never locally.** A red there is fixed on the branch before it merges. A chosen
+    list missed `deshacer.spec.ts` and `cifra-unidad.spec.ts` on 2026-09-30; CI is what caught them.
+- Have the worker save every check's output to a file under the lane's `private/` and name the paths.
+  The validator reads those logs, re-runs only the module's own tests and mutations, and asks of each
+  assertion whether it can fail. It never re-runs a suite the worker already logged green.
+- Run at most two whole suites at once, CI included: a third exhausts the shared pool
+  (`EMAXCONNSESSION`, 15 clients).
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
   boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
