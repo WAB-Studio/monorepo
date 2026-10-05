@@ -138,6 +138,19 @@ test("a finished month's carried share is what its undone tasks left, floored", 
   assert.equal(october.carriedPercent, null);
 });
 
+test("a share floors: 2 carried of 3 planned is 66, never rounded to 67", () => {
+  const view = goalView("minutos");
+  view.months = [{ month: "2026-08-01", planned: 3, reached: 1, current: false, past: true }];
+  view.tasks = [
+    { id: ID(40), parentId: null, name: "a", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: "2026-08-20" },
+    { id: ID(41), parentId: null, name: "b", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: null },
+    { id: ID(42), parentId: null, name: "c", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: null },
+  ];
+  const [august] = shapeGoal(view).months;
+  assert.equal(august.carried?.value, 2);
+  assert.equal(august.carriedPercent, 66);
+});
+
 test("tasks are a tree: a sub-task sits under its parent and takes its month", () => {
   const tree = shapeGoal(goalView("minutos")).tasks;
   assert.deepEqual(

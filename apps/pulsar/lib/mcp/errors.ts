@@ -26,8 +26,9 @@ function hasSentence(key: string): boolean {
 }
 
 // What an act's error key says, in Spanish. The key survives beside it so a
-// caller can branch on it; an unknown one reads `mcp.errors.unknown`.
+// caller can branch on it; an unknown one is `mcp.errors.unknown`, never an
+// echo of its input.
 export function errorOf(key: string): { key: string; message: string } {
-  if (!hasSentence(key)) return { key, message: translate("mcp.errors.unknown") };
+  if (!hasSentence(key)) return { key: "mcp.errors.unknown", message: translate("mcp.errors.unknown") };
   return { key, message: translate(key as Parameters<typeof translate>[0]) };
 }
