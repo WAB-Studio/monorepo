@@ -22,6 +22,8 @@ export type TaskRowProps = {
   child?: boolean;
   meta?: string;
   trailing?: string;
+  // Names the open mark; absent, the month page's «Marcar como hecho».
+  markLabel?: string;
 };
 
 /**
@@ -38,6 +40,7 @@ export function TaskRow({
   child,
   meta,
   trailing,
+  markLabel,
 }: TaskRowProps) {
   const t = useTranslations();
   const router = useRouter();
@@ -99,7 +102,7 @@ export function TaskRow({
     row = (
       <Row
         leading={<Mark state="empty" />}
-        leadingLabel={t("day.oneOffs.markLabel")}
+        leadingLabel={markLabel ?? t("day.oneOffs.markLabel")}
         name={name}
         meta={meta}
         trailing={trail}

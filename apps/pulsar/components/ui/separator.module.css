@@ -3,3 +3,8 @@
 .rule.rule {
   background-color: var(--pulsar-line);
 }
+
+.strong.strong {
+  background-color: var(--pulsar-ink);
+  height: 2px;
+}
