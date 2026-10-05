@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { dayBefore } from "@/lib/day/weeks";
 import { monthsOfSpan } from "@/lib/plan/months";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
@@ -99,7 +100,7 @@ export type ImportDraft = z.infer<typeof importDraftSchema>;
 // What 151 hands the model as its response format.
 export const importDraftJsonSchema = z.toJSONSchema(importDraftSchema);
 
-export type DraftRefusal = { path: string; key: string };
+export type DraftRefusal = { path: string; key: string; values?: Record<string, string> };
 
 // What the draft holds that cannot be written, and why. Pure: the schema
 // above says what is well-formed, this says what the goal's own span refuses.
@@ -107,7 +108,8 @@ export function draftRefusals(draft: ImportDraft, today: string): DraftRefusal[]
   const refusals: DraftRefusal[] = [];
   draft.goals.forEach((goal, g) => {
     const at = `goals.${g}`;
-    const refuse = (path: string, key: string) => refusals.push({ path: `${at}.${path}`, key });
+    const refuse = (path: string, key: string, values?: Record<string, string>) =>
+      refusals.push({ path: `${at}.${path}`, key, ...(values ? { values } : {}) });
 
     const past = goal.horizon <= today;
     if (past) refuse("horizon", "import.errors.horizonPast");
@@ -121,20 +123,26 @@ export function draftRefusals(draft: ImportDraft, today: string): DraftRefusal[]
 
     // A goal whose end already passed has no span: it is refused whole.
     const span = past ? null : new Set(monthsOfSpan(today, goal.horizon));
-    const outside = (m: string) => span !== null && !span.has(`${m}-01`);
+    const lastDay = dayBefore(goal.horizon);
+    // Which side of the span a month falls on: before today's month or after the goal's last.
+    const outsideSpan = (path: string, m: string) => {
+      if (span === null || span.has(`${m}-01`)) return;
+      if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });
+      else refuse(path, "import.errors.monthAfterEnd", { last: lastDay });
+    };
 
     const seen = new Set<string>();
     goal.months.forEach((entry, m) => {
-      if (outside(entry.month)) refuse(`months.${m}`, "month.errors.outsideSpan");
+      outsideSpan(`months.${m}`, entry.month);
       if (seen.has(entry.month)) refuse(`months.${m}`, "import.errors.duplicateMonth");
       seen.add(entry.month);
-      if (goal.measure === null) refuse(`months.${m}`, "month.errors.noMeasure");
+      if (goal.measure === null) refuse(`months.${m}`, "import.errors.amountNoMeasure");
     });
 
     // A quantity counts in the goal's unit: with no measure there is none.
     goal.commitments.forEach((commitment, c) => {
       if (commitment.satisfaction === "quantity" && goal.measure === null) {
-        refuse(`commitments.${c}`, "month.errors.noMeasure");
+        refuse(`commitments.${c}`, "import.errors.quantityNoMeasure");
       }
       // A tap counts nothing: the table refuses a target or a unit on one.
       if (commitment.satisfaction === "tap" && (commitment.targetQuantity !== null || commitment.unit !== null)) {
@@ -143,7 +151,7 @@ export function draftRefusals(draft: ImportDraft, today: string): DraftRefusal[]
     });
 
     goal.tasks.forEach((task, t) => {
-      if (outside(task.month)) refuse(`tasks.${t}`, "month.errors.outsideSpan");
+      outsideSpan(`tasks.${t}`, task.month);
       // A parent is measured by its sub-tasks; the policy refuses one with an estimate.
       if (task.children.length > 0 && task.estimate !== null) refuse(`tasks.${t}`, "import.errors.parentWithAmount");
       if (goal.measure === null) {
@@ -155,4 +163,38 @@ export function draftRefusals(draft: ImportDraft, today: string): DraftRefusal[]
     });
   });
   return refusals;
+}
+
+// The estimates a goal with no measure cannot keep: a task's or a sub-task's.
+export function strayEstimates(draft: ImportDraft): DraftRefusal[] {
+  const stray: DraftRefusal[] = [];
+  const key = "import.notices.estimateDropped";
+  draft.goals.forEach((goal, g) => {
+    if (goal.measure !== null) return;
+    goal.tasks.forEach((task, t) => {
+      if (task.estimate !== null) stray.push({ path: `goals.${g}.tasks.${t}`, key });
+      task.children.forEach((child, c) => {
+        if (child.estimate !== null) stray.push({ path: `goals.${g}.tasks.${t}.children.${c}`, key });
+      });
+    });
+  });
+  return stray;
+}
+
+// The draft with those estimates nulled and nothing else changed: the task stays.
+export function withoutStrayEstimates(draft: ImportDraft): ImportDraft {
+  return {
+    goals: draft.goals.map((goal) =>
+      goal.measure !== null
+        ? goal
+        : {
+            ...goal,
+            tasks: goal.tasks.map((task) => ({
+              ...task,
+              estimate: null,
+              children: task.children.map((child) => ({ ...child, estimate: null })),
+            })),
+          },
+    ),
+  };
 }

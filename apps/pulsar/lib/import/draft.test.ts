@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { readFileSync } from "node:fs";
 import { parseTemplate } from "./template";
-import { draftRefusals, importDraftJsonSchema, importDraftSchema, type ImportDraft } from "./draft";
+import { draftRefusals, importDraftJsonSchema, importDraftSchema, strayEstimates, withoutStrayEstimates, type ImportDraft } from "./draft";
 
 const TODAY = "2026-10-15";
 
@@ -123,9 +123,9 @@ test("draftRefusals: a month or a task outside the span from today's month to th
     phases: [],
   });
   assert.deepEqual(draftRefusals(draft(g), TODAY), [
-    { path: "goals.0.months.0", key: "month.errors.outsideSpan" },
-    { path: "goals.0.months.3", key: "month.errors.outsideSpan" },
-    { path: "goals.0.tasks.0", key: "month.errors.outsideSpan" },
+    { path: "goals.0.months.0", key: "import.errors.monthBeforeStart", values: { first: "2026-10" } },
+    { path: "goals.0.months.3", key: "import.errors.monthAfterEnd", values: { last: "2026-12-31" } },
+    { path: "goals.0.tasks.0", key: "import.errors.monthAfterEnd", values: { last: "2026-12-31" } },
   ]);
 });
 
@@ -139,7 +139,7 @@ test("draftRefusals: an amount or an estimate on a goal with no measure", () => 
     ],
   });
   assert.deepEqual(draftRefusals(draft(g), TODAY), [
-    { path: "goals.0.months.0", key: "month.errors.noMeasure" },
+    { path: "goals.0.months.0", key: "import.errors.amountNoMeasure" },
     { path: "goals.0.tasks.0", key: "import.errors.parentWithAmount" },
     { path: "goals.0.tasks.0", key: "month.errors.noMeasure" },
     { path: "goals.0.tasks.0.children.0", key: "month.errors.noMeasure" },
@@ -166,9 +166,9 @@ const exampleDraft = (): ImportDraft => {
 
 test("draftRefusals: the catalogue's example, a month after October, refuses October's month and both its tasks", () => {
   assert.deepEqual(draftRefusals(exampleDraft(), "2026-11-15"), [
-    { path: "goals.0.months.0", key: "month.errors.outsideSpan" },
-    { path: "goals.0.tasks.0", key: "month.errors.outsideSpan" },
-    { path: "goals.0.tasks.1", key: "month.errors.outsideSpan" },
+    { path: "goals.0.months.0", key: "import.errors.monthBeforeStart", values: { first: "2026-11" } },
+    { path: "goals.0.tasks.0", key: "import.errors.monthBeforeStart", values: { first: "2026-11" } },
+    { path: "goals.0.tasks.1", key: "import.errors.monthBeforeStart", values: { first: "2026-11" } },
   ]);
 });
 
@@ -214,7 +214,7 @@ test("draftRefusals: a quantity commitment on a goal with no measure, and a tap,
   const quantity = { name: "q", cadenceKind: "daily" as const, cadenceWeekdays: null, cadenceN: null, satisfaction: "quantity" as const, targetQuantity: 5, unit: "min" };
   const tap = { ...quantity, name: "t", satisfaction: "tap" as const, targetQuantity: null, unit: null };
   assert.deepEqual(draftRefusals(draft(goal({ measure: null, months: [], tasks: [], commitments: [tap, quantity] })), TODAY), [
-    { path: "goals.0.commitments.1", key: "month.errors.noMeasure" },
+    { path: "goals.0.commitments.1", key: "import.errors.quantityNoMeasure" },
   ]);
   assert.deepEqual(draftRefusals(draft(goal({ commitments: [quantity] })), TODAY), []);
 });
@@ -233,4 +233,47 @@ test("draftRefusals: a tap commitment carrying a target or a unit, at the commit
   for (const g of [withTarget, withUnit]) {
     assert.deepEqual(draftRefusals(draft(g), TODAY), [{ path: "goals.0.commitments.0", key: "import.errors.tapWithAmount" }]);
   }
+});
+
+test("draftRefusals: a goal ending 2027-03-31 names the months after it with its last day", () => {
+  const g = goal({ horizon: "2027-04-01", phases: [], months: [{ month: "2027-04", amount: 1 }, { month: "2027-05", amount: 1 }], tasks: [] });
+  assert.deepEqual(draftRefusals(draft(g), TODAY), [
+    { path: "goals.0.months.0", key: "import.errors.monthAfterEnd", values: { last: "2027-03-31" } },
+    { path: "goals.0.months.1", key: "import.errors.monthAfterEnd", values: { last: "2027-03-31" } },
+  ]);
+});
+
+const unmeasured = () =>
+  goal({
+    measure: null,
+    months: [],
+    commitments: [],
+    tasks: [
+      { name: "a", month: "2026-10", estimate: 120, children: [{ name: "c", estimate: 60 }] },
+      { name: "b", month: "2026-10", estimate: null, children: [] },
+    ],
+  });
+
+test("strayEstimates and withoutStrayEstimates: only the estimates go, the tasks stay", () => {
+  const raw = draft(unmeasured());
+  const key = "import.notices.estimateDropped";
+  assert.deepEqual(strayEstimates(raw), [
+    { path: "goals.0.tasks.0", key },
+    { path: "goals.0.tasks.0.children.0", key },
+  ]);
+  const kept = withoutStrayEstimates(raw);
+  const expected = structuredClone(raw);
+  expected.goals[0].tasks[0].estimate = null;
+  expected.goals[0].tasks[0].children[0].estimate = null;
+  assert.deepEqual(kept, expected);
+  assert.deepEqual(strayEstimates(kept), []);
+  assert.deepEqual(draftRefusals(kept, TODAY), []);
+  assert.deepEqual(
+    draftRefusals(raw, TODAY).filter((r) => r.key === "month.errors.noMeasure").map((r) => r.path),
+    ["goals.0.tasks.0", "goals.0.tasks.0.children.0"],
+  );
+});
+
+test("strayEstimates: a goal with a measure drops nothing", () => {
+  assert.deepEqual(strayEstimates(draft(goal())), []);
 });

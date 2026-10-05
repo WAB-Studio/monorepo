@@ -294,7 +294,7 @@ test("confirmImport: a four-goal draft pays the same number of statements as the
 test("confirmImport: a month outside the goal's span is refused with its key and path, and writes nothing", async () => {
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: fuera de plazo").replace("- 2026-11 · 20 h", "- 2028-01 · 20 h"));
   const result = await confirmImport(draft);
-  assert.deepEqual(result, { ok: false, error: "month.errors.outsideSpan", at: "goals.0.months.1" });
+  assert.deepEqual(result, { ok: false, error: "import.errors.monthAfterEnd", at: "goals.0.months.1" });
   assert.equal(await countGoals("RP-37 fixture: fuera de plazo"), 0);
 });
 
@@ -319,6 +319,20 @@ test("confirmImport: a parent task with its own estimate is refused at the paren
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0].tasks[1] = { ...draft.goals[0].tasks[1], estimate: 30 };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.parentWithAmount", at: "goals.0.tasks.1" });
+  assert.equal(await countGoals(name), 0);
+});
+
+test("confirmImport: a forged draft with an estimate on a goal with no measure is refused whole and writes nothing", async () => {
+  const name = "RP-37 fixture: estimado sin medida";
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  const [first] = draft.goals;
+  draft.goals[0] = {
+    ...first,
+    measure: null,
+    months: [],
+    commitments: first.commitments.filter((c) => c.satisfaction === "tap"),
+  };
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "month.errors.noMeasure", at: "goals.0.tasks.0" });
   assert.equal(await countGoals(name), 0);
 });
 
