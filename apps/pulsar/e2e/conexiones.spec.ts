@@ -168,6 +168,89 @@ test.describe("the connections screen (RP-38)", () => {
     }
   });
 
+  // `token_hash` is unique and never read back: a seeded row needs only a distinct one.
+  async function seed(
+    db: import("postgres").Sql,
+    person: Person,
+    row: { kind: "personal" | "oauth"; name: string; created: string; revoked?: string; used?: string },
+  ) {
+    await db`
+      insert into goals.access_tokens (user_id, kind, name, token_hash, hint, created_at, last_used_at, revoked_at)
+      values (${person.id}, ${row.kind}, ${row.name}, ${Buffer.from(`${row.name}-${Math.random()}`)},
+        ${row.kind === "personal" ? "abcd" : null}, ${row.created}, ${row.used ?? null}, ${row.revoked ?? null})`;
+  }
+
+  test("live keys are listed before revoked ones, even when the revoked one is newer", async ({
+    person,
+    db,
+    browser,
+    baseURL,
+  }) => {
+    await seed(db, person, { kind: "personal", name: "Vieja viva", created: "2026-01-01T10:00:00Z" });
+    await seed(db, person, {
+      kind: "personal",
+      name: "Nueva revocada",
+      created: "2026-02-01T10:00:00Z",
+      revoked: "2026-02-02T10:00:00Z",
+    });
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      const text = await page.locator("main").innerText();
+      expect(text.indexOf("Vieja viva")).toBeGreaterThan(-1);
+      expect(text.indexOf("Vieja viva")).toBeLessThan(text.indexOf("Nueva revocada"));
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a claude.ai connection has its own section and «Revocar» shuts it", async ({
+    person,
+    db,
+    browser,
+    baseURL,
+  }) => {
+    await seed(db, person, {
+      kind: "oauth",
+      name: "Claude",
+      created: "2026-03-01T10:00:00Z",
+      used: "2026-03-02T10:00:00Z",
+    });
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
+      await expect(page.getByText("Claude", { exact: true })).toBeVisible();
+      await expect(page.getByText(/^conectada el .* · usada /)).toBeVisible();
+      await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
+
+      await page.getByRole("button", { name: messages.row.revoke }).click();
+      await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
+      await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
+      const [row] = await db`select revoked_at from goals.access_tokens where user_id = ${person.id}`;
+      expect(row.revoked_at).not.toBeNull();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("revoking a key already revoked elsewhere refreshes the list and shows no failure", async ({
+    person,
+    db,
+    browser,
+    baseURL,
+  }) => {
+    await seed(db, person, { kind: "personal", name: "Doble", created: "2026-01-01T10:00:00Z" });
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await db`update goals.access_tokens set revoked_at = now() where user_id = ${person.id}`;
+      await page.getByRole("button", { name: messages.row.revoke }).click();
+      await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
+      await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
+      await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+
   test("an empty name and a name already taken say why and keep the field", async ({ person, browser, baseURL }) => {
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
