@@ -2643,3 +2643,13 @@ A fresh identity was not the cause.
 - **Do.** Delete fixtures by the ids the run collected, as `import-actions.ts`'s `after` does, or by
   name **and** the lane identity's `user_id`. Never by name alone. Select the `user_id` before any
   owner-connection delete. Say it in every dispatch that runs mutations against a check that writes rows.
+
+## Four lanes running suites time out Auth for CI too
+
+- **What.** `pulsar-e2e` on #390 went 292/10/1: `GET /auth/confirm redirected to …/entrar?error=linkTimeout`, rows whose
+  mark never drew, `getByRole('status')` never found — across Hoy, one-off, task and week specs the branch never touched.
+  The same hour, lane 5 measured `/auth/confirm` at 7–14 s and `Failed query` with no cause in `check:plan`/`check:day`.
+- **Measured 2026-10-05**: four lanes ran suites at once (165, 182, 204, 208) against the one database and Auth that CI
+  also uses. No `429`: a timeout, not a quota. Log in `private/ci-reds/pr390/`.
+- **Do.** Hold the three-suite cap counting CI as one. Read a red that spans unrelated specs with `linkTimeout` as load,
+  rerun only the failed job once the lanes are quiet, and keep the log.
