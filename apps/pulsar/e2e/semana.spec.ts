@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
@@ -9,58 +9,55 @@ const GOAL_NAME = "Inglés B1/B2 → B2+ laboral";
 const ONE_OFF_NAME = "Grabar el audio de referencia (semana 1)";
 
 // The same civil-day technique `lib/zone.ts`'s `civilDateInZone`/`weekOf`
-// use and `components/week/week-screen.tsx`'s own `dayLabel` formats with —
-// read-only here, never imported, so this spec proves the screen's own
+// use — read-only here, never imported, so this spec proves the screen's own
 // output rather than assuming its implementation.
 const TIME_ZONE = "America/Bogota";
-const WEEKDAY_SHORT = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+const WEEKDAY_LONG = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
-function civilLabel(date: Date): string {
+function civilName(date: Date): string {
   const civil = new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(date);
-  const day = Number(civil.slice(8, 10));
   const weekdayIndex = (new Date(`${civil}T12:00:00Z`).getUTCDay() + 6) % 7;
-  return `${WEEKDAY_SHORT[weekdayIndex]} ${day}`;
+  return `${WEEKDAY_LONG[weekdayIndex]} ${Number(civil.slice(8, 10))}`;
 }
 
-function todayLabel(): string {
-  return civilLabel(new Date());
+function todayName(): string {
+  return civilName(new Date());
 }
 
-// A day guaranteed not to be today and inside today's own week, so its dots
+// A day guaranteed not to be today and inside today's own week, so its marks
 // are asserted independently of whatever the "complete the one-off" test below
-// does to today's own row. Yesterday on a Monday belongs to the week before.
-function otherDayLabel(): string {
-  const today = todayLabel();
-  const isMonday = today.startsWith(`${WEEKDAY_SHORT[0]} `);
+// does to today's own column. Yesterday on a Monday belongs to the week before.
+function otherDayName(): string {
+  const today = todayName();
+  const isMonday = today.startsWith(`${WEEKDAY_LONG[0]} `);
   const step = isMonday ? 1 : -1;
   for (let hours = 24; hours <= 48; hours += 12) {
-    const label = civilLabel(new Date(Date.now() + step * hours * 3_600_000));
-    if (label !== today) return label;
+    const name = civilName(new Date(Date.now() + step * hours * 3_600_000));
+    if (name !== today) return name;
   }
   throw new Error("no other day of this week found");
 }
 
-// The state `components/ui/mark.tsx` should have painted for a given dot,
-// read off nothing but its own accessible name (`week.dot.*`,
-// `messages/es/week.json`) — never `commitmentDotState`'s own source, so a
-// mutation that paints the wrong fill while leaving the label alone (module
-// 17's own surviving mutant) has somewhere to be caught.
+// The state `components/ui/week-table.tsx` should have painted for a given
+// mark, read off nothing but its own accessible name (`week.mark.*`,
+// `messages/es/week.json`), so a mutation that paints the wrong fill while
+// leaving the label alone has somewhere to be caught.
 function expectedStateFor(label: string): string {
-  if (label === "suelta hecha") return "declared";
-  if (label.endsWith(": pendiente")) return "empty";
+  if (label.endsWith(": no pedía")) return "none";
+  if (label.endsWith(": no hecho") || label.endsWith(": todavía no")) return "empty";
   if (label.endsWith(": hecho")) return "declared";
   return "evidence";
 }
 
-// A past day's row is a `div` with a link (`Semana.dc.html`), today's and a
-// future day's a `button`: the label's own text finds either.
-function dayRow(section: Locator, label: string): Locator {
-  return section.locator("button, div").filter({ hasText: label });
-}
-
-async function dotStates(locator: Locator): Promise<{ label: string | null; state: string | null }[]> {
-  return locator.locator('[role="img"]').evaluateAll((els) =>
-    els.map((el) => ({ label: el.getAttribute("aria-label"), state: el.getAttribute("data-state") })),
+// The marks on screen: the phone's fold and the desktop's table both sit in
+// the markup, one of them hidden.
+async function marks(page: Page, namePrefix: string): Promise<{ label: string | null; state: string | null }[]> {
+  return page.locator('[role="img"]').evaluateAll(
+    (els, prefix) =>
+      els
+        .filter((el) => el.checkVisibility() && (el.getAttribute("aria-label") ?? "").startsWith(prefix))
+        .map((el) => ({ label: el.getAttribute("aria-label"), state: el.getAttribute("data-state") })),
+    namePrefix,
   );
 }
 
@@ -108,18 +105,24 @@ async function backdateCommitments(
   };
 }
 
-test("seven rows per goal at 360px, no horizontal overflow (RP-16)", async ({ page }) => {
+test("at 360px a commitment is one row of seven marks, no horizontal overflow (RP-16)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const [commitment] = await db<{ name: string }[]>`
+    select c.name from goals.commitments c join goals.goals g on g.id = c.goal_id
+    where c.user_id = ${personId} and g.name = ${GOAL_NAME} and c.retired_at is null order by c.created_at limit 1
+  `;
   await page.goto("/semana");
+  await expect(page.getByText(GOAL_NAME, { exact: false }).locator("visible=true").first()).toBeVisible();
 
-  const goalSection = page.locator("section", { hasText: GOAL_NAME });
-  await expect(goalSection).toBeVisible();
-  await expect(goalSection.locator("button, a")).toHaveCount(7);
-
+  expect((await marks(page, `${commitment.name}, `)).length).toBe(7);
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(360);
 });
 
-test("a day with no facts carries no filled dot (RP-16)", async ({ page, db, personId }) => {
+test("a day with no facts carries no filled mark (RP-16)", async ({ page, db, personId }) => {
   const restore = await backdateCommitments(db, personId);
   try {
     await checkEmptyOtherDay(page);
@@ -130,31 +133,24 @@ test("a day with no facts carries no filled dot (RP-16)", async ({ page, db, per
 
 async function checkEmptyOtherDay(page: Page): Promise<void> {
   await page.goto("/semana");
+  await expect(page.getByText(GOAL_NAME, { exact: false }).locator("visible=true").first()).toBeVisible();
 
-  const goalSection = page.locator("section", { hasText: GOAL_NAME });
-  const row = dayRow(goalSection, otherDayLabel());
-  await expect(row).toBeVisible();
-
-  const dots = await dotStates(row);
-  // A fresh seed writes no fact anywhere: every dot reads "pendiente"
-  // (`week.dot.commitment`/`week.dot.done`/`week.dot.pending`,
-  // `messages/es/week.json`), none "hecho" — the mark's own fill, read back
-  // through its accessible name rather than a CSS class the build hashes.
+  const day = otherDayName();
+  const dots = (await marks(page, "")).filter(({ label }) => label?.includes(`, ${day}: `));
+  // A fresh seed writes no fact anywhere: every mark of the day reads «no
+  // hecho» (or «todavía no» on a Monday's tomorrow), none «hecho».
   expect(dots.length).toBeGreaterThan(0);
-  expect(dots.some(({ label }) => label?.includes("hecho"))).toBe(false);
+  expect(dots.some(({ label }) => label?.endsWith(": hecho") || label?.includes("por evidencia"))).toBe(false);
   // The label alone is not the mark: a dot could still paint its accent fill
-  // while its own name still read "pendiente" (module 17's surviving
-  // mutant, `commitmentDotState` pinned to "declared"). Every dot on an
-  // untouched day must paint `empty`, and every one of them must paint what
-  // its own name says it should — the same rule a satisfied or an evidence
-  // day would be held to.
+  // while its own name read «no hecho» (`slotStatus` pinned to done). Every
+  // mark must paint what its own name says.
   for (const { label, state } of dots) {
     expect(state).toBe(expectedStateFor(label ?? ""));
   }
-  expect(dots.every(({ state }) => state === "empty")).toBe(true);
+  expect(dots.every(({ state }) => state === "empty" || state === "none")).toBe(true);
 }
 
-test("a one-off under a goal completed today fills a dot in that goal's today row (RP-20)", async ({
+test("a one-off under a goal completed today fills a mark in that goal's today column (RP-20)", async ({
   page,
   db,
   personId,
@@ -164,10 +160,9 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
 
   try {
     await page.goto("/semana");
-    const goalSection = page.locator("section", { hasText: GOAL_NAME });
-    const todayRow = dayRow(goalSection, todayLabel());
-    await expect(todayRow).toBeVisible();
-    const before = await todayRow.locator('[role="img"]').count();
+    await expect(page.getByText(GOAL_NAME, { exact: false }).locator("visible=true").first()).toBeVisible();
+    // Undone, the one-off has no fact and so no row.
+    expect((await marks(page, `${ONE_OFF_NAME}, `)).length).toBe(0);
 
     // Completed from the day screen (`OneOffRow`, `app/actions/one-
     // offs.ts`), never by writing the fact directly — the same gesture a
@@ -181,16 +176,15 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
     await expect(page.getByRole("button", { name: `Deshacer: ${ONE_OFF_NAME}` })).toBeVisible();
 
     await page.goto("/semana");
-    const afterRow = dayRow(goalSection, todayLabel());
-    await expect(afterRow.locator('[role="img"]')).toHaveCount(before + 1);
-
-    const dots = await dotStates(afterRow);
-    const oneOff = dots.find(({ label }) => label?.includes("suelta hecha"));
-    expect(oneOff).toBeDefined();
-    // The one-off's own dot paints the accent fill exactly like a satisfied
+    await expect(page.getByText(ONE_OFF_NAME).locator("visible=true").first()).toBeVisible();
+    const dots = await marks(page, `${ONE_OFF_NAME}, `);
+    expect(dots.length).toBe(7);
+    const mark = dots.find(({ label }) => label === `${ONE_OFF_NAME}, ${todayName()}: hecho`);
+    expect(mark).toBeDefined();
+    // The one-off's own mark paints the accent fill exactly like a satisfied
     // commitment's — never left `empty` under a label that already says
-    // "hecha", and never a third colour of its own.
-    expect(oneOff?.state).toBe("declared");
+    // «hecho», and never a third colour of its own.
+    expect(mark?.state).toBe("declared");
     for (const { label, state } of dots) {
       expect(state).toBe(expectedStateFor(label ?? ""));
     }
@@ -199,7 +193,7 @@ test("a one-off under a goal completed today fills a dot in that goal's today ro
   }
 });
 
-test("a one-off belonging to nothing, done today, fills a dot in the Sueltas row on /semana (RP-20)", async ({
+test("a one-off belonging to nothing, done today, fills a mark in the Sueltas group on /semana (RP-20)", async ({
   page,
   db,
   personId,
@@ -232,15 +226,12 @@ test("a one-off belonging to nothing, done today, fills a dot in the Sueltas row
     await page.goto("/semana");
     // `loadWeek`'s own `oneOffFacts` (RP-20's second half): a fact with no
     // goal still has a day, so this group draws even with no goal open.
-    const sueltas = page.locator("section", { hasText: "Sueltas" });
-    await expect(sueltas).toBeVisible();
-    const todayRow = dayRow(sueltas, todayLabel());
-    await expect(todayRow).toBeVisible();
+    await expect(page.getByText("Sueltas", { exact: true }).locator("visible=true")).toBeVisible();
 
-    const dots = await dotStates(todayRow);
-    const oneOff = dots.find(({ label }) => label?.includes("suelta hecha"));
-    expect(oneOff).toBeDefined();
-    expect(oneOff?.state).toBe("declared");
+    const dots = await marks(page, `${name}, `);
+    const mark = dots.find(({ label }) => label === `${name}, ${todayName()}: hecho`);
+    expect(mark).toBeDefined();
+    expect(mark?.state).toBe("declared");
   } finally {
     // Deletes the fact along with it (`facts.one_off_id`'s own cascade) —
     // never a blanket delete by name, only this exact row's id.

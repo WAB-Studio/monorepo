@@ -67,21 +67,20 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
     await page.goto("/semana");
     // `loading.tsx` may still stand: one `main` says the page itself has rendered.
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText(`${goalName} · por semana y por mes`)).toBeVisible();
-    const flexRow = (name: string) => page.getByRole("button", { name: new RegExp(`^${name}`) });
-    await expect(flexRow(weekly)).toContainText("3 veces por semana");
-    await expect(flexRow(weekly)).toContainText(weekProgress);
-    await expect(flexRow(monthly)).toContainText("4 al mes");
-    await expect(flexRow(monthly)).toContainText(monthProgress);
-    // Only the daily commitment draws dots in the day rows: one per day it was done.
-    await expect(page.getByRole("img", { name: new RegExp(`^${weekly}`) })).toHaveCount(0);
-    await expect(page.getByRole("img", { name: new RegExp(`^${monthly}`) })).toHaveCount(0);
-    await expect(page.getByRole("img", { name: `${daily}: hecho` })).toHaveCount(inWeek.length);
-    // Only a lived day reads «1 de 1» (the daily, done): a Monday has none, so none reads it.
-    await expect(page.getByText("1 de 1", { exact: true }).locator("visible=true")).toHaveCount(
-      inWeek.filter((day) => day < today).length,
+    // One row per commitment: its cadence and count under the name.
+    await expect(page.getByText(`3 veces por semana · ${weekProgress}`).filter({ visible: true })).toBeVisible();
+    await expect(page.getByText(`4 al mes · ${monthProgress}`).filter({ visible: true })).toBeVisible();
+    // A flexible row marks the days it was done and reads «no pedía» on the rest.
+    const marksOf = (name: string) => page.getByRole("img", { name: new RegExp(`^${name}, `) });
+    for (const name of [weekly, monthly, daily]) await expect(marksOf(name)).toHaveCount(7);
+    await expect(page.getByRole("img", { name: new RegExp(`^${weekly}, .*: hecho$`) })).toHaveCount(inWeek.length);
+    await expect(page.getByRole("img", { name: new RegExp(`^${weekly}, .*: no pedía$`) })).toHaveCount(
+      7 - inWeek.length,
     );
-    await expect(page.getByText("3 de 3", { exact: true }).locator("visible=true")).toHaveCount(0);
+    await expect(page.getByRole("img", { name: new RegExp(`^${daily}, .*: hecho$`) })).toHaveCount(inWeek.length);
+    // Only the daily commitment is counted in «hechos»: every lived day reads «de 1».
+    const rests = await page.getByText(/^de \d+$/).locator("visible=true").allTextContents();
+    expect(rests).toEqual(Array(week.indexOf(today) + 1).fill("de 1"));
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     await page.screenshot({ path: "private/screenshots/semana-flexible-360.png", fullPage: true });
 
@@ -97,7 +96,9 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
     await expect(rowOf(monthly).getByRole("rowheader")).toContainText(`4 al mes · ${monthProgress}`);
     const cellsOf = (day: string) => rowOf(weekly).locator("td").nth(week.indexOf(day)).getByRole("img");
     for (const day of inWeek) await expect(cellsOf(day)).toHaveAttribute("data-state", "declared");
-    for (const day of week.filter((other) => !inWeek.includes(other))) await expect(cellsOf(day)).toHaveCount(0);
+    for (const day of week.filter((other) => !inWeek.includes(other))) {
+      await expect(cellsOf(day)).toHaveAttribute("data-state", "none");
+    }
     // Only the daily commitment's slots are in «hechos»: today it is 1 of 1.
     const todayIndex = week.indexOf(today);
     await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("1 de 1");
@@ -120,7 +121,7 @@ test("on the phone a goal with no commitment still draws its own section", async
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText(goalName)).toBeVisible();
+    await expect(page.getByText(goalName).filter({ visible: true })).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;
@@ -175,7 +176,7 @@ test("Hoy carries a flexible commitment's period count on its row and asks it on
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
     const row = (name: string) => page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row(weekly)).toContainText(`${inWeek.length} de 3 esta semana`);
     await expect(row(monthly)).toContainText(`${inMonth.length} de 4 este mes`);

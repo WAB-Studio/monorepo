@@ -17,10 +17,38 @@ export type WeekTableColumn = {
   today?: boolean;
 };
 
-export type WeekTableCell = { state: MarkState; label: string };
+// `none` is a day nothing asked for: a quiet «·» that still has a name. A
+// `null` cell has no name at all (a day before the commitment was written).
+export type WeekTableCell = { state: MarkState | "none"; label: string };
 
-// `SemanaEscritorio.dc.html`: commitments down, days across. A `null` cell is
-// a day nothing asked for; it draws a quiet dot and holds no text.
+// The «hechos» of a day, split where the phone's narrow cell breaks it:
+// «3» over «de 8».
+export type WeekTableTally = { figure: string; rest: string };
+
+type WeekTableGroup = {
+  key: string;
+  label: string;
+  // A line under the label, for what the group itself says.
+  note?: ReactNode;
+  rows: readonly { key: string; name: string; detail?: string; cells: readonly (WeekTableCell | null)[] }[];
+};
+
+function join(...names: (string | undefined)[]): string {
+  return names.filter(Boolean).join(" ");
+}
+
+function Dot({ cell, fold }: { cell: WeekTableCell; fold?: boolean }) {
+  return (
+    <span
+      className={join(cell.state === "none" ? styles.none : join(styles.dot, styles[cell.state]), fold ? styles.foldDot : undefined)}
+      role="img"
+      aria-label={cell.label}
+      data-state={cell.state}
+    />
+  );
+}
+
+// `SemanaEscritorio.dc.html`: commitments down, days across.
 export function WeekTable({
   caption,
   columns,
@@ -29,17 +57,10 @@ export function WeekTable({
 }: {
   caption: string;
   columns: readonly WeekTableColumn[];
-  groups: readonly {
-    key: string;
-    label: string;
-    // A line under the label, for what the group itself says.
-    note?: ReactNode;
-    rows: readonly { key: string; name: string; detail?: string; cells: readonly (WeekTableCell | null)[] }[];
-  }[];
-  footer?: { label: string; cells: readonly string[] };
+  groups: readonly WeekTableGroup[];
+  footer?: { label: string; cells: readonly (WeekTableTally | null)[] };
 }) {
   const shade = (column: number) => (columns[column]?.today ? styles.today : undefined);
-  const join = (...names: (string | undefined)[]) => names.filter(Boolean).join(" ");
 
   return (
     <table className={styles.table}>
@@ -92,12 +113,7 @@ export function WeekTable({
                   return (
                     <td key={column.key} className={join(styles.cell, shade(index))}>
                       {cell ? (
-                        <span
-                          className={join(styles.dot, styles[cell.state])}
-                          role="img"
-                          aria-label={cell.label}
-                          data-state={cell.state}
-                        />
+                        <Dot cell={cell} />
                       ) : (
                         <span className={styles.none} aria-hidden />
                       )}
@@ -117,12 +133,97 @@ export function WeekTable({
             </th>
             {columns.map((column, index) => (
               <td key={column.key} className={join(styles.footCell, shade(index))}>
-                {footer.cells[index]}
+                {footer.cells[index] ? `${footer.cells[index].figure} ${footer.cells[index].rest}` : null}
               </td>
             ))}
           </tr>
         </tfoot>
       ) : null}
     </table>
+  );
+}
+
+// `SemanaPlegada.dc.html`: the table narrowed to the phone. The seven days sit
+// once under the header; each commitment is a name over its seven marks, in
+// the day's own column.
+export function WeekFold({
+  columns,
+  groups,
+  footer,
+}: {
+  columns: readonly WeekTableColumn[];
+  groups: readonly WeekTableGroup[];
+  footer?: { label: string; cells: readonly (WeekTableTally | null)[] };
+}) {
+  const shade = (column: number) => (columns[column]?.today ? styles.foldToday : undefined);
+
+  return (
+    <div className={styles.fold}>
+      <div className={styles.foldHead}>
+        {columns.map((column, index) => {
+          const [weekday, date] = column.label.split(" ");
+          const stack = (
+            <>
+              <span>{weekday}</span>
+              <span>{date}</span>
+            </>
+          );
+          return (
+            <div key={column.key} className={join(styles.foldDay, shade(index), columns[index]?.today ? styles.foldTop : undefined)}>
+              {column.href ? (
+                <Link href={column.href} aria-label={column.hrefLabel} className={join(styles.foldDayBox, styles.dayLink)}>
+                  {stack}
+                </Link>
+              ) : (
+                <span className={styles.foldDayBox}>{stack}</span>
+              )}
+              {column.mark ? <span className={styles.hidden}>{column.mark}</span> : null}
+            </div>
+          );
+        })}
+      </div>
+      {groups.map((group) => (
+        <section key={group.key} className={styles.foldGroup}>
+          <h2 className={styles.foldGroupLabel}>{group.label}</h2>
+          {group.note ? <div className={styles.foldGroupNote}>{group.note}</div> : null}
+          {group.rows.map((row) => (
+            <div key={row.key} className={styles.foldRow}>
+              <p className={styles.foldName}>{row.name}</p>
+              {row.detail ? <p className={styles.foldDetail}>{row.detail}</p> : null}
+              <div className={styles.foldMarks}>
+                {columns.map((column, index) => {
+                  const cell = row.cells[index] ?? null;
+                  return (
+                    <div key={column.key} className={join(styles.foldCell, shade(index))}>
+                      {cell ? <Dot cell={cell} fold /> : <span className={styles.none} aria-hidden />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
+      ))}
+      {footer ? (
+        <div className={styles.foldFoot}>
+          <p className={styles.foldGroupLabel}>{footer.label}</p>
+          <div className={styles.foldMarks}>
+            {columns.map((column, index) => {
+              const cell = footer.cells[index];
+              return (
+                <div key={column.key} className={join(styles.foldTally, shade(index), columns[index]?.today ? styles.foldBottom : undefined)}>
+                  {cell ? (
+                    <>
+                      <span className={styles.foldFigure}>{cell.figure}</span>
+                      <span>{cell.rest}</span>
+                    </>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

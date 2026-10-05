@@ -3,12 +3,11 @@ import { randomUUID } from "node:crypto";
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 
-// `Semana.dc.html`'s own weekday order, read back here rather than imported.
-const WEEKDAY_SHORT = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
-
-function weekRowLabel(civilDay: string): string {
-  const weekdayIndex = (new Date(`${civilDay}T12:00:00Z`).getUTCDay() + 6) % 7;
-  return `${WEEKDAY_SHORT[weekdayIndex]} ${Number(civilDay.slice(8, 10))}`;
+// ICU's Spanish, never the catalogue's list the screen reads.
+function weekLongName(civilDay: string): string {
+  const date = new Date(`${civilDay}T12:00:00Z`);
+  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
+  return `${weekday} ${date.getUTCDate()}`;
 }
 
 test("emptying the reading record empties the evidence mark on Hoy and on Semana, and writes no fact (RP-10, RP-09)", async ({
@@ -57,10 +56,7 @@ test("emptying the reading record empties the evidence mark on Hoy and on Semana
 
     const page = await context.newPage();
     const row = page.locator("button", { hasText: commitmentName });
-    const dot = page
-      .locator("section", { hasText: goalName })
-      .locator("button", { hasText: weekRowLabel(today) })
-      .locator(`[role="img"][aria-label^="${commitmentName}"]`);
+    const dot = page.getByRole("img", { name: new RegExp(`^${commitmentName}, ${weekLongName(today)}: `) });
 
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
