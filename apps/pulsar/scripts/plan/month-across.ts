@@ -142,6 +142,7 @@ let bId: string;
 let cId: string;
 let archivedId: string;
 let endedId: string;
+let dId: string;
 let loadMonthAcross: typeof import("@/lib/queries/month").loadMonthAcross;
 let archiveGoal: typeof import("@/app/actions/plan").archiveGoal;
 
@@ -181,6 +182,29 @@ before(async () => {
   cId = (await goal("RP-43 fixture: C", null)).goalId;
   archivedId = (await goal("RP-43 fixture: archivada", "minutos")).goalId;
   endedId = (await goal("RP-43 fixture: terminada", "minutos")).goalId;
+  // D measures in the reading source's own unit, so its evidence feeds `reached`.
+  const d = await goal("RP-43 fixture: D", "searches");
+  dId = d.goalId;
+  const source = await plan.addCommitment({
+    goalId: dId,
+    name: "RP-43 fixture: evidencia",
+    cadenceKind: "daily",
+    satisfaction: "evidence",
+    sourceKey: "reading_lookups",
+    threshold: 1,
+  });
+  if (!source.ok) throw new Error(`addCommitment: ${source.error}`);
+  // A's second commitment holds the month's first-day fact, so no date collides
+  // with the one `declareFact` writes today.
+  const second = await plan.addCommitment({
+    goalId: aId,
+    name: "RP-43 fixture: segunda cantidad",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 10,
+    unit: "minutos",
+  });
+  if (!second.ok) throw new Error(`addCommitment: ${second.error}`);
 
   const budget = await setMonthBudget({ goalId: aId, month: today.slice(0, 7), amount: 600 });
   if (!budget.ok) throw new Error(`setMonthBudget: ${budget.error}`);
@@ -190,10 +214,12 @@ before(async () => {
   const [owner] = await sql<{ user_id: string }[]>`
     select user_id from goals.goals where id = ${aId}`;
   const lastMonth = monthFrom(today, -1);
-  // A commitment holds one fact a day: the second 30 sits on the month's first day.
   await sql`
     insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
-    values (${owner.user_id}, ${aId}, ${a.commitmentId}, ${monthStart}, 30)`;
+    values (${owner.user_id}, ${aId}, ${second.commitmentId}, ${monthStart}, 30)`;
+  await sql`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${owner.user_id}, ${dId}, ${d.commitmentId}, ${monthStart}, 7)`;
   await sql`
     insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
     values (${owner.user_id}, ${aId}, ${a.commitmentId}, ${`${lastMonth}-15`}, 45)`;
@@ -220,15 +246,15 @@ after(async () => {
   await sql.end();
 });
 
-const own = () => [aId, bId, cId, archivedId, endedId];
+const own = () => [aId, bId, cId, dId, archivedId, endedId];
 
-test("loadMonthAcross: A, B and C read; the archived and the ended goal do not", async () => {
+test("loadMonthAcross: A, B, C and D read; the archived and the ended goal do not", async () => {
   const month = await loadMonthAcross(today);
   assert.equal(month.month, monthStart);
   assert.equal(month.evidence, "read");
   assert.deepEqual(
     month.goals.map((goal) => goal.id).filter((id) => own().includes(id)),
-    [aId, bId, cId],
+    [aId, bId, cId, dId],
   );
 });
 
@@ -262,12 +288,18 @@ test("loadMonthAcross: C lists its carried task first, from last month; A's done
   );
 });
 
-test("loadMonthAcross: evidence that cannot be read says so and A keeps 120", async () => {
+test("loadMonthAcross: D reaches its 7 declared plus 10 of evidence when the reader reads", async () => {
+  const month = await loadMonthAcross(today);
+  assert.equal(month.goals.find((goal) => goal.id === dId)!.line?.reached, 7 + 5 + 3 + 2);
+});
+
+test("loadMonthAcross: evidence that cannot be read says so; A keeps 120 and D its declared 7", async () => {
   evidenceRejects = true;
   try {
     const month = await loadMonthAcross(today);
     assert.equal(month.evidence, "unreadable");
     assert.equal(month.goals.find((goal) => goal.id === aId)!.line?.reached, 120);
+    assert.equal(month.goals.find((goal) => goal.id === dId)!.line?.reached, 7);
   } finally {
     evidenceRejects = false;
   }
@@ -282,10 +314,10 @@ async function wireOfOneRead() {
   return wireCalls.slice(before);
 }
 
-test("loadMonthAcross: four application statements in two overlapping transactions, three goals", async () => {
+test("loadMonthAcross: four application statements in two overlapping transactions, four goals", async () => {
   const calls = await wireOfOneRead();
   const wire = readWire(calls);
-  console.log(`wire (3 goals): ${JSON.stringify(wire)}`);
+  console.log(`wire (4 goals): ${JSON.stringify(wire)}`);
   assert.equal(wire.connections, 2);
   assert.equal(wire.applicationStatements, 4);
   assert.equal(wire.overlap, true);
@@ -295,12 +327,14 @@ test("loadMonthAcross: the reading statement bounds its days on both ends", asyn
   const calls = await wireOfOneRead();
   const reading = calls.filter((call) => normalized(call.query).includes('"lookups"'));
   assert.equal(reading.length, 1);
-  assert.ok(reading[0].parameters.includes(monthStart), "the month's first day bounds it");
-  assert.ok(reading[0].parameters.includes(today), "today bounds it");
+  const bounds = /::date between \$(\d+) and \$(\d+)/.exec(normalized(reading[0].query));
+  assert.ok(bounds, "the civil day sits between two parameters");
+  assert.equal(reading[0].parameters[Number(bounds[1]) - 1], monthStart, "the month's first day opens it");
+  assert.equal(reading[0].parameters[Number(bounds[2]) - 1], today, "today closes it");
 });
 
 test("loadMonthAcross: the same four statements with one goal", async () => {
-  for (const id of [bId, cId]) {
+  for (const id of [bId, cId, dId]) {
     const archived = await archiveGoal({ goalId: id });
     if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
   }
