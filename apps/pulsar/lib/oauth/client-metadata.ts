@@ -17,7 +17,7 @@ export type MetadataDeps = {
 };
 
 function privateV4(address: string): boolean {
-  const [a, b] = address.split(".").map(Number);
+  const [a, b, c] = address.split(".").map(Number);
   return (
     a === 0 ||
     a === 10 ||
@@ -26,8 +26,30 @@ function privateV4(address: string): boolean {
     (a === 100 && b >= 64 && b <= 127) ||
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168)
+    (a === 192 && b === 168) ||
+    (a === 192 && b === 0 && c === 0) ||
+    (a === 198 && (b === 18 || b === 19))
   );
+}
+
+// The 16 bytes of an IPv6 literal, however it is written: `::`, a dotted v4 tail, a zone id.
+function v6Bytes(address: string): number[] {
+  const text = address.split("%")[0].toLowerCase();
+  const dotted = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  let head = text;
+  const tail: number[] = [];
+  if (dotted) {
+    head = `${dotted[1]}0:0`;
+    const octets = dotted[2].split(".").map(Number);
+    tail.push(octets[0] * 256 + octets[1], octets[2] * 256 + octets[3]);
+  }
+  const [left, right] = head.split("::");
+  const groups = (part: string | undefined) => (part ? part.split(":").map((g) => parseInt(g, 16)) : []);
+  const front = groups(left);
+  const back = right === undefined ? [] : groups(right);
+  const words = right === undefined ? front : [...front, ...Array<number>(8 - front.length - back.length).fill(0), ...back];
+  if (dotted) words.splice(6, 2, ...tail);
+  return words.flatMap((word) => [word >> 8, word & 0xff]);
 }
 
 export function privateAddress(address: string): boolean {
@@ -35,12 +57,21 @@ export function privateAddress(address: string): boolean {
   if (kind === 4) return privateV4(address);
   if (kind !== 6) return true;
 
-  const lower = address.toLowerCase();
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-  if (mapped) return privateV4(mapped[1]);
-  if (lower === "::" || lower === "::1") return true;
+  const bytes = v6Bytes(address);
+  const v4 = (at: number) => bytes.slice(at, at + 4).join(".");
+  const zeros = (to: number) => bytes.slice(0, to).every((byte) => byte === 0);
+
+  // ::ffff:0:0/96 mapped and ::/96 compatible.
+  if (zeros(10) && bytes[10] === 0xff && bytes[11] === 0xff) return privateV4(v4(12));
+  if (zeros(12)) return privateV4(v4(12));
+  // 64:ff9b::/96 NAT64.
+  if (bytes[0] === 0 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b && bytes.slice(4, 12).every((byte) => byte === 0)) {
+    return privateV4(v4(12));
+  }
+  // 2002::/16 6to4.
+  if (bytes[0] === 0x20 && bytes[1] === 0x02) return privateV4(v4(2));
   // fc00::/7 unique-local, fe80::/10 link-local, ff00::/8 multicast.
-  return /^f[cd]/.test(lower) || /^fe[89ab]/.test(lower) || lower.startsWith("ff");
+  return (bytes[0] & 0xfe) === 0xfc || (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80) || bytes[0] === 0xff;
 }
 
 async function resolveAll(host: string): Promise<string[]> {
