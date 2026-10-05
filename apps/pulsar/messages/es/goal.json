@@ -104,6 +104,7 @@
     "archivedTitle": "Archivadas",
     "openTitle": "abiertas",
     "untilShort": "hasta el {date}",
+    "monthTasks": "{month} · {done} de {total} tareas",
     "archivedOnShort": "archivada el {date}"
   },
   "horizon": {

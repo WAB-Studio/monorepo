@@ -121,3 +121,92 @@ for (const width of [360, 390, 1280, 1440]) {
     }
   });
 }
+
+const MONTH_LONG = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+for (const width of [390, 1440]) {
+  test(`/metas at ${width}: the desktop row carries the goal's month and figure; the phone keeps its last day and puts the plan before «Archivadas»`, async ({
+    person,
+    browser,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const today = todayInZone();
+    const month = `${today.slice(0, 7)}-01`;
+    const monthName = MONTH_LONG[Number(today.slice(5, 7)) - 1];
+    const horizon = plusDays(60);
+    const measuredName = `Medida ${stamp}`;
+    const taskedName = `Tareas ${stamp}`;
+    const archivedName = `Archivada ${stamp}`;
+
+    const [measured] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${measuredName}, ${horizon}::date, 'estudio', 'min',
+              ${new Date(Date.now() - 20 * 86_400_000)})
+      returning id
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${measured.id}, ${month}::date, 720)
+    `;
+    const [done] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${person.id}, ${measured.id}, 'hecha', ${month}::date, 161)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${measured.id}, ${done.id}, ${today}::date)
+    `;
+
+    const tasked = await seedGoal(db, person.id, taskedName, horizon, 1000);
+    for (const [name, doneToday] of [["a", true], ["b", false], ["c", false]] as const) {
+      const [task] = await db<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${person.id}, ${tasked}, ${name}, ${month}::date)
+        returning id
+      `;
+      if (doneToday) {
+        await db`
+          insert into goals.facts (user_id, goal_id, one_off_id, day)
+          values (${person.id}, ${tasked}, ${task.id}, ${today}::date)
+        `;
+      }
+    }
+    await seedGoal(db, person.id, archivedName, horizon, 3000, true);
+
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      viewport: { width, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas");
+      const main = page.locator("main");
+      const measuredRow = main.locator("a", { hasText: measuredName });
+      const taskedRow = main.locator("a", { hasText: taskedName });
+
+      if (width >= 1024) {
+        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`)).toBeVisible();
+        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`)).toBeVisible();
+        await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).last()).toBeVisible();
+      } else {
+        await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).first()).toBeVisible();
+        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`)).toBeHidden();
+        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`)).toBeHidden();
+
+        const y = async (locator: ReturnType<typeof page.getByText>) => (await locator.boundingBox())!.y;
+        const addAnother = await y(page.getByRole("link", { name: "Abrir otra meta" }));
+        const plan = await y(page.getByText("el plan", { exact: true }));
+        const archived = await y(page.getByText("Archivadas", { exact: true }));
+        expect(addAnother).toBeLessThan(plan);
+        expect(plan).toBeLessThan(archived);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+}

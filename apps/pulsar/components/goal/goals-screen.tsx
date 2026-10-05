@@ -3,9 +3,24 @@ import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import { Button, Flex, Page, Panel, Row, ScreenHeader, SectionLabel, Split, Text } from "@/components/ui";
+import {
+  Button,
+  Figure,
+  Flex,
+  Page,
+  Panel,
+  Row,
+  ScreenHeader,
+  SectionLabel,
+  Split,
+  Text,
+} from "@/components/ui";
 import { dayBefore } from "@/lib/day/weeks";
-import type { GoalSummary } from "@/lib/queries/goal";
+import type {
+  GoalSummary,
+  MetasMonth,
+  MetasOpenGoal,
+} from "@/lib/queries/goal";
 import { civilDateInZone, civilDayMonthShort, todayInZone } from "@/lib/zone";
 
 /**
@@ -19,7 +34,7 @@ export async function GoalsScreen({
   archived,
   connect,
 }: {
-  open: GoalSummary[];
+  open: MetasOpenGoal[];
   ended: GoalSummary[];
   archived: GoalSummary[];
   connect?: ReactNode;
@@ -29,7 +44,10 @@ export async function GoalsScreen({
   if (open.length === 0 && ended.length === 0 && archived.length === 0) {
     return (
       <Page>
-        <ScreenHeader eyebrow={t("goal.none.eyebrow")} title={t("goal.none.title")} />
+        <ScreenHeader
+          eyebrow={t("goal.none.eyebrow")}
+          title={t("goal.none.title")}
+        />
         <Text as="p" tone="secondary">
           {t("goal.none.body")}
         </Text>
@@ -59,26 +77,67 @@ export async function GoalsScreen({
   };
   const archivedLine = (goal: GoalSummary) =>
     goal.archivedAt
-      ? t("goal.list.archivedOnShort", { date: civilDayMonthShort(civilDateInZone(new Date(goal.archivedAt))) })
+      ? t("goal.list.archivedOnShort", {
+          date: civilDayMonthShort(civilDateInZone(new Date(goal.archivedAt))),
+        })
       : undefined;
+  const monthName = (month: string) =>
+    (t.raw("day.monthLong") as string[])[Number(month.slice(5, 7)) - 1];
+  const monthMeta = (goal: MetasOpenGoal) => {
+    const month: MetasMonth | null = goal.month;
+    if (!month) return undefined;
+    if (month.kind === "tasks") {
+      return t("goal.list.monthTasks", {
+        month: monthName(month.month),
+        done: month.done,
+        total: month.total,
+      });
+    }
+    const unit = goal.measureUnit ?? undefined;
+    return (
+      <>
+        {monthName(month.month)} ·{" "}
+        <Figure value={month.reached} unit={unit} variant="meta" />
+        {month.planned === null ? null : (
+          <>
+            {" "}
+            {t("day.monthLine.of")}{" "}
+            <Figure value={month.planned} unit={unit} variant="meta" />
+          </>
+        )}
+      </>
+    );
+  };
   const chevron = <ChevronRight size={16} strokeWidth={1.5} aria-hidden />;
 
   return (
     <Page width="full">
       <ScreenHeader title={t("common.nav.goals")} />
       <Split
-        aside={380}
+        twoFifths
         main={
           <>
             <Panel as="div">
               <SectionLabel>{t("goal.list.openTitle")}</SectionLabel>
-              <Flex direction="column" role="group" aria-label={t("goal.list.openTitle")}>
+              <Flex
+                direction="column"
+                role="group"
+                aria-label={t("goal.list.openTitle")}
+              >
                 {open.map((goal) => (
                   <Row
                     key={goal.id}
                     href={`/metas/${goal.id}`}
                     name={goal.name}
                     meta={t("goal.list.untilShort", { date: lastDay(goal) })}
+                    wideMeta={monthMeta(goal)}
+                    wideTrailing={
+                      goal.month ? (
+                        <Text variant="meta">
+                          {t("goal.list.untilShort", { date: lastDay(goal) })}
+                        </Text>
+                      ) : undefined
+                    }
                     trailing={chevron}
                   />
                 ))}
@@ -97,24 +156,9 @@ export async function GoalsScreen({
                       key={goal.id}
                       href={`/metas/${goal.id}`}
                       name={goal.name}
-                      meta={t("goal.list.endedOnShort", { date: civilDayMonthShort(dayBefore(goal.horizon)) })}
-                      trailing={chevron}
-                    />
-                  ))}
-                </Flex>
-              </Panel>
-            ) : null}
-
-            {archived.length > 0 ? (
-              <Panel>
-                <SectionLabel>{t("goal.list.archivedTitle")}</SectionLabel>
-                <Flex direction="column">
-                  {archived.map((goal) => (
-                    <Row
-                      key={goal.id}
-                      href={`/metas/${goal.id}`}
-                      name={goal.name}
-                      meta={archivedLine(goal)}
+                      meta={t("goal.list.endedOnShort", {
+                        date: civilDayMonthShort(dayBefore(goal.horizon)),
+                      })}
                       trailing={chevron}
                     />
                   ))}
@@ -123,9 +167,35 @@ export async function GoalsScreen({
             ) : null}
           </>
         }
+        tail={
+          archived.length > 0 ? (
+            <Panel>
+              <SectionLabel>{t("goal.list.archivedTitle")}</SectionLabel>
+              <Flex direction="column">
+                {archived.map((goal) => (
+                  <Row
+                    key={goal.id}
+                    href={`/metas/${goal.id}`}
+                    name={goal.name}
+                    meta={archivedLine(goal)}
+                    trailing={chevron}
+                  />
+                ))}
+              </Flex>
+            </Panel>
+          ) : null
+        }
         after={
           <Panel>
             <SectionLabel>{t("export.entry.section")}</SectionLabel>
+            <Button asChild variant="outline" block>
+              <Link href="/metas/importar">
+                {t("import.entry.title")}
+                <Text variant="meta" end>
+                  {t("import.entry.hint")}
+                </Text>
+              </Link>
+            </Button>
             {open.length + ended.length > 0 ? (
               <Button asChild variant="outline" block>
                 <Link href="/exportar">
@@ -136,14 +206,6 @@ export async function GoalsScreen({
                 </Link>
               </Button>
             ) : null}
-            <Button asChild variant="outline" block>
-              <Link href="/metas/importar">
-                {t("import.entry.title")}
-                <Text variant="meta" end>
-                  {t("import.entry.hint")}
-                </Text>
-              </Link>
-            </Button>
             {connect}
           </Panel>
         }

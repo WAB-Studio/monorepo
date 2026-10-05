@@ -18,7 +18,7 @@ import {
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
-import { estimateFacts, type Task } from "@/lib/plan/carry";
+import { estimateFacts, monthList, type Task } from "@/lib/plan/carry";
 import {
   monthLine,
   monthOf,
@@ -549,33 +549,92 @@ export async function listGoals(): Promise<GoalSummary[]> {
   return rows.filter((row) => row.horizon > today).map(toGoalSummary);
 }
 
+// An open goal's current month, as `/metas` draws it beside the goal: the
+// amount in its unit, or the tasks when it measures nothing. Evidence readings
+// stay out: they live in the reading database, a second connection this
+// statement does not pay for.
+export type MetasMonth =
+  | { kind: "amount"; month: string; planned: number | null; reached: number }
+  | { kind: "tasks"; month: string; done: number; total: number };
+
+export type MetasOpenGoal = GoalSummary & { month: MetasMonth | null };
+
+type MetasRow = GoalRow & {
+  facts: FactRow[];
+  budgets: { month: string; amount: number }[];
+  tasks: TaskRow[];
+};
+
 /**
  * `/metas`'s own query (RP-24): one statement, every goal the person has
  * ever opened, split into "open", "ended" and "archived" here rather than by a
  * second round trip — the screen lists the first, then a quiet "Archivadas"
- * section for the second, each still its own way into `Meta.dc.html`.
+ * section for the second, each still its own way into `Meta.dc.html`. The
+ * month's facts, budget and tasks ride the same statement, per goal.
  */
-export async function listGoalsForMetas(): Promise<{
-  open: GoalSummary[];
+export async function listGoalsForMetas(today: string = todayInZone()): Promise<{
+  open: MetasOpenGoal[];
   ended: GoalSummary[];
   archived: GoalSummary[];
 }> {
+  const month = monthOf(today);
   const rows = await withGoalsDb((tx) =>
-    tx.execute<GoalRow>(sql`
-      select id, name, horizon, measure_name, measure_unit, archived_at
-      from "goals"."goals"
-      order by created_at
+    tx.execute<MetasRow>(sql`
+      select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
+        (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
+                   'commitment_unit', c.unit
+                 )), '[]'::json)
+           from "goals"."facts" f
+           left join "goals"."commitments" c on c.id = f.commitment_id
+           where f.goal_id = g.id
+             and f.day between ${month}::date and ${today}::date) as facts,
+        (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
+           from "goals"."month_budgets" b
+           where b.goal_id = g.id and b.month = ${month}::date) as budgets,
+        (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
+                   'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
+                 ) order by o.created_at, o.id), '[]'::json)
+           from "goals"."one_offs" o where o.goal_id = g.id) as tasks
+      from "goals"."goals" g
+      order by g.created_at
     `),
   );
 
+  const toMonth = (row: MetasRow): MetasMonth | null => {
+    const unit = row.measure_unit;
+    const tasks: Task[] = row.tasks.map((task) => ({
+      id: task.id,
+      parentId: task.parent_id,
+      name: task.name,
+      plannedMonth: task.planned_month,
+      day: task.day,
+      estimate: task.estimate,
+      doneOn: task.done_on,
+      factId: null,
+    }));
+    if (unit === null) {
+      const items = monthList(tasks, month, today);
+      if (items.length === 0) return null;
+      return { kind: "tasks", month, done: items.filter((item) => item.done).length, total: items.length };
+    }
+    const declared = row.facts
+      .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+      .map(toDeclaredFact);
+    const doneTasks = estimateFacts(tasks, unit).filter((fact) => monthOf(fact.day) === month);
+    const reached = reachedByMonth({ unit, facts: [...declared, ...doneTasks], evidence: [] }).get(month) ?? 0;
+    const planned = row.budgets.find((budget) => budget.month === month)?.amount ?? null;
+    if (planned === null && reached === 0) return null;
+    return { kind: "amount", month, planned, reached };
+  };
+
   // Archived wins over ended: the check runs first.
-  const today = todayInZone();
-  const summaries = rows.map(toGoalSummary);
-  const archived = summaries.filter((goal) => goal.archivedAt !== null);
-  const live = summaries.filter((goal) => goal.archivedAt === null);
+  const archived = rows.filter((row) => row.archived_at !== null).map(toGoalSummary);
+  const live = rows.filter((row) => row.archived_at === null);
   return {
-    open: live.filter((goal) => goal.horizon > today),
-    ended: live.filter((goal) => goal.horizon <= today),
+    open: live
+      .filter((row) => row.horizon > today)
+      .map((row) => ({ ...toGoalSummary(row), month: toMonth(row) })),
+    ended: live.filter((row) => row.horizon <= today).map(toGoalSummary),
     archived,
   };
 }
