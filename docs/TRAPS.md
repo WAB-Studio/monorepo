@@ -2694,3 +2694,19 @@ A fresh identity was not the cause.
 - **Do.** Read a red on the local stack as the branch first: no other lane or run touches that database.
   Skip the load explanations above for CI.
   Keep them for lanes and for the RNF-09 timing, which still read the remote project.
+
+## «Skip unaffected projects» spends the deploy quota on branches no project builds
+
+Every app's `vercel.json` says `deploymentEnabled: { "*": false, "main": true }`, and still Vercel answered
+`Resource is limited - try again in 24 hours (more than 100, code: "api-deployments-free-per-day")` on `#395`.
+
+- **Measured 2026-10-05**, API `v6/deployments`, last 24 h: **140 deployments, all `Preview` `CANCELED`, none built.**
+  orbit 69 (60 from `pulsar-*` branches, 9 from `integracion`), reading 70 (61, 9), pulsar 2.
+- **The cause.** The three projects had `enableAffectedProjectsDeployments: true`. A push that does not touch
+  `apps/orbit` makes orbit write a cancelled deployment through the «unaffected» path, which never reads the
+  `vercel.json`. Each cancelled record counts against the 100 a day. The project the branch touches reads its
+  `vercel.json` and writes nothing — that is why pulsar had 2 and its siblings 70.
+- **Fixed the same day**: `enableAffectedProjectsDeployments: false` on orbit, reading and pulsar
+  (`PATCH /v9/projects/<name>`). Cost: a merge to `main` now builds all three apps, three deployments a day at most.
+- **Do.** Count the deployments, not the builds: `GET /v6/deployments?since=<24 h ago>` and group by project and
+  `meta.githubCommitRef`. A cancelled preview is not free.
