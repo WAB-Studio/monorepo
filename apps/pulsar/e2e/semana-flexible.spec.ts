@@ -120,7 +120,7 @@ test("on the phone a goal with no commitment still draws its own section", async
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText(goalName)).toBeVisible();
+    await expect(page.getByRole("main").getByText(goalName)).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;
@@ -175,7 +175,7 @@ test("Hoy carries a flexible commitment's period count on its row and asks it on
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
     const row = (name: string) => page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row(weekly)).toContainText(`${inWeek.length} de 3 esta semana`);
     await expect(row(monthly)).toContainText(`${inMonth.length} de 4 este mes`);

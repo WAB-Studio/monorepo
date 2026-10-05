@@ -173,7 +173,7 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
     await expect(page.getByText(/hechos \d+ de \d+/).first()).toBeVisible();
-    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("main").getByText(name, { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Algo suelto")).toHaveCount(0);
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -205,12 +205,12 @@ test("a commitment created today and a goal opened today are absent from yesterd
     `;
 
     await page.goto("/");
-    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
     await expect(page.locator("button", { hasText: commitmentName })).toBeVisible();
 
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
-    await expect(page.getByText(goalName, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("main").getByText(goalName, { exact: true })).toHaveCount(0);
     await expect(page.locator("button", { hasText: commitmentName })).toHaveCount(0);
   } finally {
     await deleteGoal(db, personId, goal.id);
