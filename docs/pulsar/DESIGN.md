@@ -666,3 +666,36 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   screen lives at `/conexiones`, reached from `/metas`'s «el plan» («Conectar una IA»). Phone and light face only; the dark
   face is the token table's, and 1280 follows the desktop layout. Approved by the user 2026-10-05, «por mientras», with the
   desktop layout as a whole under review.
+- **The shell is redrawn before any screen rides on it.** The critic of 2026-10-05 measured the desktop as the phone column
+  (640 px pinned left, 456 px empty at 1440) and the phone's tabs off screen on every long page (Hoy's start at y=1490 of
+  844). Decided by the user 2026-10-05, four answers:
+  - **Phone: four tabs, fixed to the bottom — Hoy · Semana · Mes · Metas.** «Mes» is this month across every goal: its tasks,
+    what was carried, the amounts. Import, export and «Conectar una IA» live inside Metas. Every screen gets one header: its
+    title and one way back. Replaces the three tabs at the foot of the page.
+  - **Desktop: the rail plus list and detail.** The rail names each goal; a list sits beside its open item (goals beside the
+    goal, months beside the month, the import text beside its review); the export and the tables take the full width.
+    **Retires the 640 px column decisions of 2026-09-29 and 2026-09-30** for every screen this shell redraws.
+  - **Semana takes ‹ › and shows any past week, read-only.** Writing stays seven days back.
+  - **A month's tasks live in «Mes».** Hoy keeps only each goal's next task (174, 177).
+  The order is the coordinator's, 2026-10-05: one «armazón» slice first (nav, header, desktop frame), then each screen on it.
+- **The armazón boards are approved as drawn**, 38 of them on four new canvas pages and four existing ones:
+  «Armazón» (`ArmazonPestanas`, `ArmazonPestanasHoja`, `ArmazonEncabezado`, `ArmazonFormulario`, `ArmazonCargando`,
+  `ArmazonFallo`, `ArmazonNoEncontrada`, `ArmazonRiel`, `ArmazonRielMuchas`, `ArmazonRielSinMetas`, `ArmazonListaDetalle`,
+  `ArmazonFormularioEscritorio`, `ArmazonCargandoEscritorio`, `ArmazonFalloEscritorio`, `ArmazonNoEncontradaEscritorio`);
+  «Mes» (`MesTodas`, `MesTodasVacio`, `MesTodasNada`, `MesTodasHecho`, `MesTodasSinEvidencia`, `MesTodasEscritorio`);
+  «Semana pasada» (`SemanaPlegada`, `SemanaPasada`, `SemanaPrimera`, `SemanaPasadaArchivada`, `SemanaPasadaEscritorio`,
+  `SemanaEstaSemana`); «Metas» (`MetasCentro`, `MetasCentroEscritorio`, `MetaRiel`); and `MesesFilas`, `MesesListaDetalle`
+  («El plan»), `ImportarListaDetalle` («Importar»), `ReporteMarco`, `ReporteMarcoEscritorio` («Exportar»), `RevisionAncha`
+  («Semana y revisión»), `SueltasEncabezado`, `DiaPasadoEscritorio` («Hoy»). Approved by the user 2026-10-05: «sí acepto».
+  - Taken by the boards: the tab bar is 56 px plus the safe area; the back is a chevron and the place's name, 48 px; the rail
+    stays 232 px with 44 px items and the open goals under «metas abiertas»; on a goal's page only the goal is marked; the
+    list column is 320 px (360 for the import); a form caps at 560 px, left under its title; a past week has no «volver a
+    esta semana» (the Semana tab is the way back); in «Mes» a goal's name opens that goal's month.
+  - **Retired** for every screen the armazón redraws: «A one-column screen caps at 640 px from 1024» (2026-09-29);
+    `MesesEscritorio`'s 640 px column (2026-09-30); «The export and the import at 1280… 640 px column» (2026-09-30); «The
+    review is the one screen wider than 640 px» (2026-09-28); «Semana's name column is 200 px at 1280» (2026-09-29); and
+    the 2026-09-28 entry's «the past day, `/sueltas`, `/metas`, the forms… sit in the same frame as one column».
+  - **Kept:** «From 700 to 1023 px the phone face's column holds 600 px» (2026-09-30); every sheet a centred 480 px dialog;
+    «Two columns split 3:2 from 1024» for Hoy and the goal.
+  - Not drawn: every dark face (the token table says it); «Mes» loading and failure (they are `ArmazonCargando` and
+    `ArmazonFallo` with Mes marked); 700–1023 (the phone face, centred).
