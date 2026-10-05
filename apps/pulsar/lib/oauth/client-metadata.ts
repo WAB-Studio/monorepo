@@ -1,4 +1,5 @@
 import { lookup } from "node:dns/promises";
+import { request } from "node:https";
 import { isIP } from "node:net";
 
 import { registrationSchema } from "@/lib/oauth/clients";
@@ -9,7 +10,7 @@ const TIMEOUT_MS = 5000;
 export type MetadataClient = { id: string; name: string; redirectUris: string[] };
 
 export type MetadataDeps = {
-  fetch?: typeof fetch;
+  request?: typeof request;
   resolve?: (host: string) => Promise<string[]>;
   register?: (input: { name: string; redirectUris: string[]; metadataUrl: string }) => Promise<string>;
   timeoutMs?: number;
@@ -52,63 +53,66 @@ async function defaultRegister(input: { name: string; redirectUris: string[]; me
   return registerClient(input);
 }
 
-async function readCapped(response: Response): Promise<string | null> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BYTES) return null;
-  if (!response.body) return "";
+// The socket connects to `address`, the one already validated; TLS and Host still carry the URL's name.
+function fetchDocument(url: string, address: string, deps: MetadataDeps): Promise<unknown> {
+  const host = new URL(url).hostname;
+  const family = isIP(address);
 
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_BYTES) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-
-  return Buffer.concat(chunks).toString("utf8");
-}
-
-async function fetchDocument(url: string, deps: MetadataDeps): Promise<unknown> {
-  const controller = new AbortController();
-  const ms = deps.timeoutMs ?? TIMEOUT_MS;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  // The race also bounds a fetch that ignores the signal.
-  const expired = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      reject(new Error("timeout"));
-    }, ms);
-  });
-  try {
-    const response = await Promise.race([
-      (deps.fetch ?? fetch)(url, {
-        redirect: "manual",
-        signal: controller.signal,
+  return new Promise<unknown>((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      req.destroy();
+      finish(null);
+    }, deps.timeoutMs ?? TIMEOUT_MS);
+    const finish = (value: unknown) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const req = (deps.request ?? request)(
+      url,
+      {
+        method: "GET",
         headers: { accept: "application/json" },
-      }),
-      expired,
-    ]);
-    if (response.status !== 200) return null;
-    const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
-    if (type !== "application/json") return null;
-    const text = await Promise.race([readCapped(response), expired]);
-    if (text === null) return null;
-
-    return JSON.parse(text);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+        servername: isIP(host) ? undefined : host,
+        lookup: ((_host: string, options: { all?: boolean }, callback: (...args: unknown[]) => void) => {
+          if (options?.all) callback(null, [{ address, family }]);
+          else callback(null, address, family);
+        }) as never,
+      },
+      (res) => {
+        const type = String(res.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+        const declared = Number(res.headers["content-length"]);
+        if (res.statusCode !== 200 || type !== "application/json" || (Number.isFinite(declared) && declared > MAX_BYTES)) {
+          res.destroy();
+          return finish(null);
+        }
+        const chunks: Buffer[] = [];
+        let total = 0;
+        res.on("data", (chunk: Buffer) => {
+          total += chunk.length;
+          if (total > MAX_BYTES) {
+            res.destroy();
+            return finish(null);
+          }
+          chunks.push(chunk);
+        });
+        res.on("end", () => {
+          try {
+            finish(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+          } catch {
+            finish(null);
+          }
+        });
+        res.on("error", () => finish(null));
+      },
+    );
+    req.on("error", () => finish(null));
+    req.end();
+  });
 }
 
-// A DNS answer that changes between this check and the fetch is not caught: fetch resolves again.
 export async function clientFromMetadataUrl(url: string, deps: MetadataDeps = {}): Promise<MetadataClient | null> {
   let parsed: URL;
   try {
@@ -128,7 +132,7 @@ export async function clientFromMetadataUrl(url: string, deps: MetadataDeps = {}
   }
   if (addresses.length === 0 || addresses.some(privateAddress)) return null;
 
-  const document = await fetchDocument(url, deps);
+  const document = await fetchDocument(url, addresses[0], deps);
   if (typeof document !== "object" || document === null) return null;
   if ((document as { client_id?: unknown }).client_id !== url) return null;
   const fields = registrationSchema.safeParse(document);
