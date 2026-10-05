@@ -1,39 +1,53 @@
 {
   "entry": {
     "title": "Conectar una IA",
-    "hint": "deja que Claude lea y reorganice tus metas"
+    "hint": "Claude lee y reorganiza tus metas"
   },
-  "eyebrow": "la IA",
-  "title": "Conexiones",
-  "empty": "Deja que Claude lea y reorganice tus metas. Nunca borra ni archiva.",
+  "eyebrow": "la ia",
+  "title": "Conectar una IA",
+  "intro": "Deja que Claude lea tus metas, anote lo hecho y reorganice tus meses. Nunca borra ni archiva.",
+  "sections": {
+    "first": "una llave para claude code",
+    "keys": "llaves",
+    "another": "otra llave",
+    "oauth": "claude.ai",
+    "connector": "en claude.ai"
+  },
   "nameLabel": "nombre de la llave",
-  "namePlaceholder": "Claude Code",
+  "namePlaceholder": "mi portátil",
+  "nameHint": "para reconocerla: dónde la usas",
   "create": "Crear llave",
   "creating": "Creando…",
+  "connector": {
+    "note": "Agrega un conector con esta dirección y entra con tu correo.",
+    "copy": "Copiar",
+    "copyName": "Copiar la dirección"
+  },
   "row": {
-    "created": "creada {date}",
-    "lastUsed": "último uso {date}",
+    "meta": "creada el {created} · usada {used}",
     "neverUsed": "sin usar",
-    "revoked": "revocada {date}",
+    "revokedMeta": "revocada el {date} · ya no entra",
     "revoke": "Revocar",
     "revoking": "Revocando…"
   },
   "oauth": {
-    "connected": "conectada {date}",
-    "kind": "conexión de una IA"
+    "meta": "conectada el {date} · usada {used}"
   },
   "created": {
     "title": "Tu llave",
-    "keyLabel": "la llave",
+    "once": "No la volverás a ver. Si la pierdes, revócala y crea otra.",
     "copy": "Copiar",
-    "copied": "Copiada",
-    "claudeCodeLabel": "pégalo en Claude Code",
+    "copyName": "Copiar la llave",
+    "terminal": "pégalo en tu terminal",
     "claudeCode": "claude mcp add --transport http pulsar {url}/mcp --header \"Authorization: Bearer {key}\"",
-    "once": "No la volverás a ver. Si la pierdes, revócala y crea otra."
+    "copyCommandName": "Copiar el comando",
+    "connected": "Claude Code queda conectado. Prueba: «lee mi meta de inglés y dime qué sigue».",
+    "done": "Listo"
   },
   "errors": {
     "nameEmpty": "Ponle un nombre a la llave.",
     "nameTooLong": "El nombre cabe en 60 letras.",
+    "nameTaken": "Ya tienes una llave con ese nombre. Dale otro.",
     "notFound": "Esa llave ya no existe."
   }
 }
