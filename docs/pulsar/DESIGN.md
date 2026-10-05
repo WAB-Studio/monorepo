@@ -661,6 +661,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   the header row, so the caption is where that table says its figures are only what was declared, as it did before
   171 made the caption a count. `ReporteSinEvidencia.dc.html` draws the mark under each closed month instead; the
   caption replaces it. Decided 2026-10-05 by the coordinator.
+- **Page «La IA» approved as drawn: `ConexionesVacio`, `ConexionesUna`, `ConexionesCreada`, `ConexionesRevocada`,
+  `ConexionesFallo`, `ConexionesOAuth`, `MetasConectar`, `Autorizar`, `AutorizarSinSesion`, `AutorizarInvalida`.** The
+  screen lives at `/conexiones`, reached from `/metas`'s «el plan» («Conectar una IA»). Phone and light face only; the dark
+  face is the token table's, and 1280 follows the desktop layout. Approved by the user 2026-10-05, «por mientras», with the
+  desktop layout as a whole under review.
 - **The shell is redrawn before any screen rides on it.** The critic of 2026-10-05 measured the desktop as the phone column
   (640 px pinned left, 456 px empty at 1440) and the phone's tabs off screen on every long page (Hoy's start at y=1490 of
   844). Decided by the user 2026-10-05, four answers:

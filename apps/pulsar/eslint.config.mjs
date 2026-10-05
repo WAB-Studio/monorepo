@@ -68,6 +68,12 @@ const eslintConfig = defineConfig([
     files: ["lib/session.ts"],
     rules: { "no-restricted-imports": "off", "no-restricted-syntax": "off" },
   },
+  // `resolveBearer` runs before any person exists, so it has no settle to
+  // offer: it calls one `SECURITY DEFINER` function and reads nothing else.
+  {
+    files: ["lib/mcp/tokens.ts", "lib/oauth/grants.ts"],
+    rules: { "no-restricted-imports": "off" },
+  },
   // A spec asserts what the device really holds, so it reads the store the
   // browser exposes rather than the one the app imports.
   {

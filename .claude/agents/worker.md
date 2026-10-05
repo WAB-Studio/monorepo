@@ -41,7 +41,8 @@ Ask nothing when nothing qualifies.
 # Verify
 
 Run `npm run typecheck` (tsgo) and `npm run lint` (eslint cache). Fix what you broke.
-Run the assignment's done criterion.
+Run the assignment's done criterion, sized as `AGENTS.md` § Verification says. Never the whole e2e suite.
+Save every check's output to a file under the lane's `private/` and name the paths in the report.
 
 # Commit
 
