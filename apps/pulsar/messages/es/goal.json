@@ -91,6 +91,12 @@
     "diecinueve",
     "veinte"
   ],
+  "none": {
+    "eyebrow": "metas",
+    "title": "Todavía no hay metas",
+    "body": "Abre una meta a mano, o trae el plan que ya tienes escrito.",
+    "action": "Abrir una meta"
+  },
   "list": {
     "title": "tus metas",
     "addAnother": "Abrir otra meta",

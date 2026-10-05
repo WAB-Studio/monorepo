@@ -1,16 +1,26 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { Button, Text } from "@/components/ui";
 
-// A day with no goal open yet (`HoyVacio.dc.html`). `/metas/nueva` is module
-// 16's own screen and does not exist in this slice; the link is written
-// anyway, exactly as the contract asks, and resolves once that module lands.
-export function EmptyDay({ title, action }: { title: string; action: string }) {
+// A day with no goal ever (`HoyVacioImportar.dc.html`): the two ways a person
+// starts, opening one by hand or bringing the plan already written. It reads
+// its own words so `day-screen.tsx` passes it nothing.
+export async function EmptyDay() {
+  const t = await getTranslations("day.empty");
   return (
     <>
-      <Text as="p">{title}</Text>
-      <Button asChild>
-        <Link href="/metas/nueva">{action}</Link>
+      <Text as="p" variant="title">
+        {t("title")}
+      </Text>
+      <Text as="p" tone="secondary">
+        {t("body")}
+      </Text>
+      <Button asChild block>
+        <Link href="/metas/nueva">{t("action")}</Link>
+      </Button>
+      <Button asChild block variant="outline">
+        <Link href="/metas/importar">{t("import")}</Link>
       </Button>
     </>
   );
