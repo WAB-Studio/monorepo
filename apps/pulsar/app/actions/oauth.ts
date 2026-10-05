@@ -1,11 +1,13 @@
 "use server";
 
 import { sql } from "drizzle-orm";
+import { headers } from "next/headers";
 
 import { env } from "@/lib/env";
 import { issueCode } from "@/lib/oauth/grants";
 import { clientFromMetadataUrl } from "@/lib/oauth/client-metadata";
 import { redirectAllowed } from "@/lib/oauth/clients";
+import { callerAddress, claimCall } from "@/lib/oauth/throttle";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { authorizationErrorKey, authorizationRequestSchema, type AuthorizationRequest } from "@/lib/validation/oauth";
 
@@ -18,7 +20,11 @@ const siteUrl = () => env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
 // A client named by its metadata document is fetched and registered here; any
 // other id is looked up. Unknown to both is `null`.
 async function findClient(clientId: string): Promise<KnownClient | null> {
-  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId);
+  if (clientId.startsWith("https://")) {
+    // The fetch and the row it buys are the registration route's, so they share its limit.
+    const claim = await claimCall("register", callerAddress({ headers: await headers() }));
+    return claim.ok ? clientFromMetadataUrl(clientId) : null;
+  }
 
   const rows = await withGoalsDb((tx) =>
     tx.execute<{ id: string; redirect_uris: string[] }>(sql`

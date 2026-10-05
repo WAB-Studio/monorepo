@@ -1,5 +1,6 @@
 import { registerClient } from "@/lib/oauth/grants";
 import { registrationSchema } from "@/lib/oauth/clients";
+import { callerAddress, claimCall, tooMany } from "@/lib/oauth/throttle";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,9 @@ function reply(status: number, body: unknown): Response {
 
 // RFC 7591 §3: a public client, so the response carries no secret.
 export async function POST(request: Request): Promise<Response> {
+  const claim = await claimCall("register", callerAddress(request));
+  if (!claim.ok) return tooMany(claim.retryAfter, CORS);
+
   const body: unknown = await request.json().catch(() => null);
   const parsed = registrationSchema.safeParse(body);
   if (!parsed.success) return reply(400, { error: "invalid_client_metadata" });

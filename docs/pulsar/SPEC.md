@@ -183,6 +183,9 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [ ] **RNP-18** — «Mes» pays two transactions fanned with `Promise.all` — the goals and the evidence — whatever the number
   of goals; a past week pays what this week pays. The rail's goal names cost one statement per page, read beside the
   screen's own.
+- [ ] **RNP-19** — The app's own authorization server answers one address past ten registrations an hour, or past thirty
+  token requests in five minutes, with 429 and the seconds to wait. It keeps at most one hundred registered assistants that
+  nobody has used, dropping the oldest.
 
 ---
 

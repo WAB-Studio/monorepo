@@ -10,6 +10,8 @@ const metadataCalls: string[] = [];
 const grantCalls: { kind: string; input: Record<string, unknown> }[] = [];
 let granted = true;
 
+// The route claims its call first; this file proves what follows an admitted one.
+mock.module("@/db/client", { namedExports: { db: { execute: async () => [{ wait: 0 }] } } });
 mock.module("@/lib/oauth/client-metadata", {
   namedExports: {
     clientFromMetadataUrl: async (url: string) => {

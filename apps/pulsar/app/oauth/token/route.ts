@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { clientFromMetadataUrl } from "@/lib/oauth/client-metadata";
 import { exchangeCode, refreshToken, type IssuedTokens } from "@/lib/oauth/grants";
+import { callerAddress, claimCall, tooMany } from "@/lib/oauth/throttle";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,9 @@ function issued(tokens: IssuedTokens): Response {
 // RFC 6749 §4.1.3 and §6. Every refusal is the same `invalid_grant`: the
 // body never says which of code, verifier, client or redirect was wrong.
 export async function POST(request: Request): Promise<Response> {
+  const claim = await claimCall("token", callerAddress(request));
+  if (!claim.ok) return tooMany(claim.retryAfter, CORS);
+
   const form = await request.formData().catch(() => null);
   if (form === null) return reply(400, { error: "invalid_request" });
   const fields = Object.fromEntries([...form.entries()].filter(([, value]) => typeof value === "string"));
