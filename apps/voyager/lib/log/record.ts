@@ -336,7 +336,7 @@ export function flushPendingLookup(): void {
   }
   settleCandidate();
   if (pending) {
-    // mutant
+    commit(pending);
     pending = null;
   }
 }
