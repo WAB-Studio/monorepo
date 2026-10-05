@@ -1,0 +1,39 @@
+{
+  "entry": {
+    "title": "Conectar una IA",
+    "hint": "deja que Claude lea y reorganice tus metas"
+  },
+  "eyebrow": "la IA",
+  "title": "Conexiones",
+  "empty": "Deja que Claude lea y reorganice tus metas. Nunca borra ni archiva.",
+  "nameLabel": "nombre de la llave",
+  "namePlaceholder": "Claude Code",
+  "create": "Crear llave",
+  "creating": "Creando…",
+  "row": {
+    "created": "creada {date}",
+    "lastUsed": "último uso {date}",
+    "neverUsed": "sin usar",
+    "revoked": "revocada {date}",
+    "revoke": "Revocar",
+    "revoking": "Revocando…"
+  },
+  "oauth": {
+    "connected": "conectada {date}",
+    "kind": "conexión de una IA"
+  },
+  "created": {
+    "title": "Tu llave",
+    "keyLabel": "la llave",
+    "copy": "Copiar",
+    "copied": "Copiada",
+    "claudeCodeLabel": "pégalo en Claude Code",
+    "claudeCode": "claude mcp add --transport http pulsar {url}/mcp --header \"Authorization: Bearer {key}\"",
+    "once": "No la volverás a ver. Si la pierdes, revócala y crea otra."
+  },
+  "errors": {
+    "nameEmpty": "Ponle un nombre a la llave.",
+    "nameTooLong": "El nombre cabe en 60 letras.",
+    "notFound": "Esa llave ya no existe."
+  }
+}
