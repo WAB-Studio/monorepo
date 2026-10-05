@@ -14,6 +14,10 @@ import { test, expect, type Person } from "./fixtures";
 // inbox.
 const REDIRECT = "http://localhost:6274/oauth/callback";
 const STATE = "estado-de-prueba-123";
+// A /64 of the documentation prefix, new per worker: the spec's calls to the
+// throttled routes never share a counter with another lane, file or run.
+const from = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::1`;
+const asRun = { "x-forwarded-for": from };
 const signedOut = { cookies: [], origins: [] };
 
 const verifier = () => randomBytes(32).toString("base64url");
@@ -22,7 +26,7 @@ const challengeOf = (value: string) => createHash("sha256").update(value).digest
 async function register(baseURL: string, name: string, redirect = REDIRECT): Promise<string> {
   const response = await fetch(`${baseURL}/oauth/registro`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...asRun },
     body: JSON.stringify({ client_name: name, redirect_uris: [redirect] }),
   });
   expect(response.status).toBe(201);
@@ -66,6 +70,7 @@ async function open(
     baseURL,
     viewport: { width, height: 740 },
     hasTouch: width < 1024,
+    extraHTTPHeaders: asRun,
   });
   const page = await context.newPage();
   // The client's own address: answered here, never reached.
@@ -124,7 +129,7 @@ test.describe("the consent screen (RP-41)", () => {
       // The connection exists once the client exchanges the code for its tokens.
       const exchanged = await fetch(`${baseURL}/oauth/token`, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: { "Content-Type": "application/x-www-form-urlencoded", ...asRun },
         body: new URLSearchParams({
           grant_type: "authorization_code",
           code: code!,
