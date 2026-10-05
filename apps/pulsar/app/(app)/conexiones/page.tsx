@@ -20,7 +20,7 @@ export default async function ConnectionsPage() {
   const today = todayInZone();
   const used = (instant: string | null) => {
     if (!instant) return t("connections.row.neverUsed");
-    const when = civilDateInZone(new Date(instant)) === today ? t("week.today") : dayOf(instant);
+    const when = civilDateInZone(new Date(instant)) === today ? t("connections.row.today") : dayOf(instant);
     return `${when} ${timeInZone(instant)}`;
   };
 
