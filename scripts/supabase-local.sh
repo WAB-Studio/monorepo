@@ -47,7 +47,7 @@ cmd_migrate() {
   local app
   for app in "${apps[@]}"; do
     # drizzle-kit directly: db:migrate also demands the app's .env.local, which a fresh lane may lack.
-    if ! (cd "$ROOT/apps/$app" && eval "$(print_env)" && node ../../node_modules/drizzle-kit/bin.cjs migrate); then
+    if ! (cd "$ROOT/apps/$app" && env_lines="$(print_env)" && eval "$env_lines" && node ../../node_modules/drizzle-kit/bin.cjs migrate); then
       echo "supabase-local: migrate failed for ${app}" >&2
       exit 1
     fi
@@ -77,7 +77,9 @@ case "${1:-}" in
     shift
     [ $# -gt 0 ] || { echo "usage: supabase-local.sh exec <cmd…>" >&2; exit 1; }
     require_up
-    eval "$(print_env)"
+    # A failed print_env must stop here: an empty env falls back to .env.local, the remote project.
+    env_lines="$(print_env)" || exit 1
+    eval "$env_lines"
     echo "supabase-local: API 127.0.0.1:54321, DB 127.0.0.1:54322" >&2
     exec "$@"
     ;;
