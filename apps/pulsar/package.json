@@ -19,12 +19,14 @@
     "check:day": "node --import tsx --env-file=.env.local scripts/check-day.ts",
     "check:goal": "node --import tsx --env-file=.env.local scripts/check-goal.ts",
     "check:goal-actions": "node --import tsx --env-file=.env.local --test scripts/check-goal-actions.ts",
+    "check:mcp": "node --import tsx --env-file=.env.local --test \"scripts/mcp/*.ts\"",
     "check:plan": "node --import tsx --env-file=.env.local --test \"scripts/plan/*.ts\"",
     "source:add": "node --import tsx --env-file=.env.local scripts/add-evidence-source.ts",
     "harness:mint-session": "node --import tsx --env-file=.env.local scripts/harness/mint-session.ts",
     "harness:seed-goal": "node --import tsx --env-file=.env.local scripts/harness/seed-goal.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.3.1",
     "@radix-ui/themes": "^3.3.0",
     "@repo/supabase-auth": "*",
     "@supabase/ssr": "^0.12.5",
@@ -32,6 +34,7 @@
     "@t3-oss/env-nextjs": "^0.13.11",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.34.0",
+    "mcp-handler": "^2.2.0",
     "next": "16.3.3",
     "next-intl": "^4.13.7",
     "postgres": "^3.4.9",
