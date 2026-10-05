@@ -64,6 +64,13 @@
       "when": 1790864328567,
       "tag": "0008_phase_shift_update",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791221231051,
+      "tag": "0009_ai_door",
+      "breakpoints": true
     }
   ]
 }
