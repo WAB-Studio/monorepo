@@ -2,6 +2,7 @@
 // exchange it, refresh it, and the revocations a replay brings. A secret is
 // never printed; a failure names the step.
 import assert from "node:assert/strict";
+import { randomBytes, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
 import postgres from "postgres";
@@ -9,7 +10,12 @@ import postgres from "postgres";
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "./lib/people";
 
 const admin = adminSql();
-const door = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
+const wire: string[] = [];
+const door = postgres(process.env.DATABASE_URL!, {
+  prepare: false,
+  max: 1,
+  debug: (_connection: number, query: string) => void wire.push(query),
+});
 (globalThis as unknown as { sql: unknown }).sql = door;
 
 const REDIRECT = "http://localhost:6274/oauth/callback";
@@ -21,6 +27,7 @@ let grants: typeof import("@/lib/oauth/grants");
 let resolveBearer: typeof import("@/lib/mcp/tokens").resolveBearer;
 let subject: Person;
 let clientId: string;
+let otherClientId: string;
 
 // Dynamic: `@/db/client` needs `stubServerOnly` first.
 async function codeFor(person: Person, redirect = REDIRECT): Promise<string> {
@@ -51,19 +58,32 @@ before(async () => {
   grants = await import("@/lib/oauth/grants");
   ({ resolveBearer } = await import("@/lib/mcp/tokens"));
   const runId = await openCheckRun(admin);
-  [subject] = await createPeople(admin, runId, door, 1);
-  clientId = await grants.registerClient({ name: "check client", redirectUris: [REDIRECT] });
+  try {
+    [subject] = await createPeople(admin, runId, door, 1);
+    clientId = await grants.registerClient({ name: "check client", redirectUris: [REDIRECT] });
+    otherClientId = await grants.registerClient({ name: "other check client", redirectUris: [REDIRECT] });
+  } catch (error) {
+    await after_();
+    throw error;
+  }
 });
 
-after(async () => {
+let closed = false;
+
+async function after_(): Promise<void> {
+  if (closed) return;
+  closed = true;
   try {
-    await admin`delete from goals.oauth_clients where id = ${clientId}`;
+    const ids = [clientId, otherClientId].filter(Boolean);
+    if (ids.length > 0) await admin`delete from goals.oauth_clients where id in ${admin(ids)}`;
     await dropPeople(admin);
   } finally {
     await door.end();
     await admin.end();
   }
-});
+}
+
+after(after_);
 
 test("a code exchanged with the right verifier yields a token that resolves to the person", async () => {
   const code = await codeFor(subject);
@@ -76,10 +96,15 @@ test("a code exchanged with the right verifier yields a token that resolves to t
   assert.equal(issued.personId, subject.id);
   assert.equal((await resolveBearer(issued.accessToken))?.id, subject.id);
 
-  const [row] = await admin`select kind, expires_at > now() as live from goals.access_tokens
+  const [row] = await admin`select kind,
+      extract(epoch from expires_at - now()) as remaining
+    from goals.access_tokens
     where token_hash = ${(await import("@/lib/mcp/tokens")).fingerprint(issued.accessToken)}`;
   assert.equal(row.kind, "oauth");
-  assert.equal(row.live, true);
+  assert.ok(
+    Math.abs(Number(row.remaining) - issued.expiresIn) < 60,
+    `the row lasts ${row.remaining} s, the response says ${issued.expiresIn}`,
+  );
 });
 
 test("a second exchange yields nothing and the first access token stops resolving", async () => {
@@ -93,7 +118,7 @@ test("a second exchange yields nothing and the first access token stops resolvin
   assert.equal(await resolveBearer(first.accessToken), null);
 });
 
-test("a wrong verifier, a wrong redirect and a malformed verifier yield nothing", async () => {
+test("a wrong verifier and a wrong redirect yield nothing and spare the code", async () => {
   const code = await codeFor(subject);
   const other = "A".repeat(43);
   assert.equal(await grants.exchangeCode({ code, verifier: other, clientId, redirectUri: REDIRECT }), null);
@@ -101,9 +126,42 @@ test("a wrong verifier, a wrong redirect and a malformed verifier yield nothing"
     await grants.exchangeCode({ code, verifier: VERIFIER, clientId, redirectUri: REDIRECT + "/x" }),
     null,
   );
-  assert.equal(await grants.exchangeCode({ code, verifier: "short", clientId, redirectUri: REDIRECT }), null);
   // The code survived those refusals.
   assert.ok(await grants.exchangeCode({ code, verifier: VERIFIER, clientId, redirectUri: REDIRECT }));
+});
+
+test("a malformed verifier yields nothing and sends no statement", async () => {
+  const code = await codeFor(subject);
+  wire.length = 0;
+  assert.equal(await grants.exchangeCode({ code, verifier: "short", clientId, redirectUri: REDIRECT }), null);
+  assert.equal(wire.length, 0, `the wire carried ${wire.length} statement(s)`);
+});
+
+// The code row is written through the owner so its expiry can be in the past.
+async function plantCode(expiresAt: "past" | "future"): Promise<string> {
+  const { fingerprint } = await import("@/lib/mcp/tokens");
+  const code = "plc_" + randomBytes(32).toString("base64url");
+  await admin`insert into goals.oauth_codes
+      (user_id, client_id, code_hash, code_challenge, redirect_uri, resource, expires_at)
+    values (${subject.id}, ${clientId}, ${fingerprint(code)}, ${CHALLENGE}, ${REDIRECT},
+      'https://pulsar.example/mcp',
+      ${expiresAt === "past" ? admin`now() - interval '1 minute'` : admin`now() + interval '5 minutes'`})`;
+
+  return code;
+}
+
+test("a code past its expiry yields nothing; the same code unexpired exchanges", async () => {
+  const input = { verifier: VERIFIER, clientId, redirectUri: REDIRECT };
+  assert.equal(await grants.exchangeCode({ ...input, code: await plantCode("past") }), null);
+  assert.ok(await grants.exchangeCode({ ...input, code: await plantCode("future") }));
+});
+
+test("an unknown client and another client's exchange yield nothing and spare the code", async () => {
+  const code = await codeFor(subject);
+  const input = { code, verifier: VERIFIER, redirectUri: REDIRECT };
+  assert.equal(await grants.exchangeCode({ ...input, clientId: randomUUID() }), null);
+  assert.equal(await grants.exchangeCode({ ...input, clientId: otherClientId }), null);
+  assert.ok(await grants.exchangeCode({ ...input, clientId }));
 });
 
 test("a refresh rotates: the old access token stops resolving and the new one resolves", async () => {
