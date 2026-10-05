@@ -135,7 +135,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(refused).toBeDisabled();
       await expect(refused).not.toBeChecked();
       await expect(
-        page.getByText(messages.review.blocked.outsideSpan.replace("{month}", word(first)), { exact: true }),
+        page.getByText(messages.review.blocked.monthBeforeStart.replace("{first}", word(first)), { exact: true }),
       ).toBeVisible();
       // The warnings stand above the goal.
       const above = (await title.boundingBox())!.y;

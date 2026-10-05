@@ -193,14 +193,27 @@ export function ReviewScreen({ today }: { today: string }) {
     setPending(false);
   }
 
-  function reasonOf(key: string): string {
-    if (key === "month.errors.outsideSpan") return t("import.review.blocked.outsideSpan", { month: monthWord(today.slice(0, 7)) });
-    if (key === "month.errors.noMeasure") return t("import.review.blocked.noMeasure");
-    return t(key);
+  function reasonOf(key: string, values: Record<string, string> = {}): string {
+    switch (key) {
+      case "import.errors.monthBeforeStart":
+        return t("import.review.blocked.monthBeforeStart", { first: monthWord(values.first) });
+      case "import.errors.monthAfterEnd":
+        return t("import.review.blocked.monthAfterEnd", {
+          last: format.dateTime(civilDateToDate(values.last), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
+        });
+      case "import.errors.amountNoMeasure":
+        return t("import.review.blocked.amountNoMeasure");
+      case "import.errors.quantityNoMeasure":
+        return t("import.review.blocked.quantityNoMeasure");
+      case "month.errors.noMeasure":
+        return t("import.review.blocked.noMeasure");
+      default:
+        return t(key);
+    }
   }
 
   // The refusals list: what each item is called, and where it came from.
-  function blockedRow(path: string, key: string) {
+  function blockedRow(path: string, key: string, values?: Record<string, string>) {
     const [, g, group, index, , child] = path.split(".");
     const goal = draft!.goals[Number(g)];
     let title: ReactNode = goal.name;
@@ -239,7 +252,7 @@ export function ReviewScreen({ today }: { today: string }) {
         disabled
         name={title}
         meta={t("import.review.blocked.from", { goal: goal.name, group: groupWord })}
-        reason={reasonOf(key)}
+        reason={reasonOf(key, values)}
       />
     );
   }
@@ -282,7 +295,7 @@ export function ReviewScreen({ today }: { today: string }) {
               const g = refusal.path.split(".")[1];
               return refusal.path.endsWith(".horizon") || !refused.has(`goals.${g}.horizon`);
             })
-            .map((refusal) => blockedRow(refusal.path, refusal.key))}
+            .map((refusal) => blockedRow(refusal.path, refusal.key, refusal.values))}
         </section>
       ) : null}
 

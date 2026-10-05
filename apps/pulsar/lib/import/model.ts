@@ -39,6 +39,7 @@ const SYSTEM_PROMPT =
   `You read a personal plan and return it as JSON shaped exactly by the given schema. ` +
   `Extract goals, their phases, month amounts, commitments, and tasks with estimates and sub-tasks. ` +
   `Write every time amount in minutes. Write every date as YYYY-MM-DD and every month as YYYY-MM. ` +
+  `A goal's horizon is the day after its last day: a plan running until March 31, 2027 has horizon 2027-04-01. ` +
   `Invent nothing: a figure or date the plan does not state is null where the schema allows it, and ` +
   `a part the plan does not mention is an empty array. Keep the plan's own language for names.`;
 
