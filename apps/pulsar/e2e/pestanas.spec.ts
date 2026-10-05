@@ -243,6 +243,43 @@ test.describe("pestañas y riel", () => {
     });
   }
 
+  test("at 1280 a cut goal name shows whole on keyboard focus, a short one shows none (RNP-17)", async ({
+    browser,
+    baseURL,
+    person,
+    db,
+  }) => {
+    const long = `Una meta con un nombre larguísimo que no cabe en el riel ${stamp}`;
+    await db`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${long}, ${shift(today, 90)}, ${new Date(Date.now() - 19 * 86_400_000)})
+    `;
+    const short = `Corta ${stamp % 1000}`;
+    await db`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${short}, ${shift(today, 90)}, ${new Date(Date.now() - 18 * 86_400_000)})
+    `;
+    const { context, page } = await open(browser, baseURL, person, 1280, 800);
+    try {
+      await page.goto("/");
+      await loaded(page);
+      const nav = page.getByRole("navigation");
+      const balloon = page.locator("[data-goal-balloon]");
+      await nav.getByRole("link", { name: OPEN_B }).focus();
+      await page.keyboard.press("Tab");
+      await expect(nav.getByRole("link", { name: long })).toBeFocused();
+      await expect(balloon).toBeVisible();
+      await expect(balloon).toHaveText(long);
+      const [tip, link] = await Promise.all([balloon.boundingBox(), nav.getByRole("link", { name: long }).boundingBox()]);
+      expect(tip!.x).toBeGreaterThanOrEqual(link!.x + link!.width);
+      await page.keyboard.press("Tab");
+      await expect(nav.getByRole("link", { name: short })).toBeFocused();
+      await expect(balloon).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+
   test("on a goal's page its rail item is current and Metas is not; below 1024 Metas is (RNP-17)", async ({
     browser,
     baseURL,

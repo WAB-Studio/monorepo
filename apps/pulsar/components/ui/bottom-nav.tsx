@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type FocusEvent, type MouseEvent } from "react";
 import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "./theme-toggle";
@@ -56,6 +56,8 @@ const serverWide = () => false;
 // `labels` fill the parts only the rail draws, and none of them renders below
 // that width. The visual mark of a goal's page is CSS from the first paint;
 // `aria-current` follows the width once the page hydrates.
+type Balloon = { name: string; top: number; left: number };
+
 export function BottomNav({
   labels,
   appName,
@@ -72,6 +74,7 @@ export function BottomNav({
   goalsSectionLabel?: string;
 }) {
   const pathname = usePathname();
+  const [balloon, setBalloon] = useState<Balloon | null>(null);
   const unmarked = useSyncExternalStore(subscribe, readUnmarked, serverUnmarked);
   const wide = useSyncExternalStore(subscribeWide, readWide, serverWide);
   // The name's first word is the mark, the rest its mono line under it.
@@ -82,6 +85,18 @@ export function BottomNav({
     (goal) => pathname === `/metas/${goal.id}` || pathname.startsWith(`/metas/${goal.id}/`),
   );
   const onGoals = pathname.startsWith("/metas");
+
+  // The rail cuts a long name; hover and keyboard focus show it whole, beside
+  // the link. Fixed, since the scrolling goal list would clip anything outside it.
+  const showBalloon = (event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>, name: string) => {
+    const link = event.currentTarget;
+    const label = link.firstElementChild;
+    if (!label || label.scrollWidth <= label.clientWidth) return setBalloon(null);
+    if (event.type === "focus" && !link.matches(":focus-visible")) return;
+    const { top, bottom, right } = link.getBoundingClientRect();
+    setBalloon({ name, top: (top + bottom) / 2, left: right + 8 });
+  };
+  const hideBalloon = () => setBalloon(null);
 
   const items = [
     { href: "/", label: labels.today, active: pathname === "/" || pathname.startsWith("/sueltas") },
@@ -141,7 +156,10 @@ export function BottomNav({
                   <Link
                     key={goal.id}
                     href={`/metas/${goal.id}`}
-                    title={goal.name}
+                    onMouseEnter={(event) => showBalloon(event, goal.name)}
+                    onMouseLeave={hideBalloon}
+                    onFocus={(event) => showBalloon(event, goal.name)}
+                    onBlur={hideBalloon}
                     aria-current={current && wide ? "page" : undefined}
                     className={current ? `${styles.goal} ${styles.goalActive}` : styles.goal}
                   >
@@ -151,6 +169,16 @@ export function BottomNav({
               })}
             </div>
           </>
+        ) : null}
+        {balloon ? (
+          <div
+            aria-hidden="true"
+            data-goal-balloon
+            className={styles.balloon}
+            style={{ top: balloon.top, left: balloon.left }}
+          >
+            {balloon.name}
+          </div>
         ) : null}
         {date || theme ? (
           <div className={styles.foot}>

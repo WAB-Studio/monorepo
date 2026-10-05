@@ -205,4 +205,20 @@
     font-size: var(--pulsar-text-meta-size);
     color: var(--pulsar-muted);
   }
+
+  .balloon {
+    position: fixed;
+    z-index: 30;
+    transform: translateY(-50%);
+    max-inline-size: 320px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: #fff;
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+    pointer-events: none;
+    overflow-wrap: anywhere;
+  }
 }
