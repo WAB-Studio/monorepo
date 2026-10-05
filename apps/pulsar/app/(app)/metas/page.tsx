@@ -8,32 +8,57 @@ import { civilDayMonthShort } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
 import { Button, Page, SectionLabel, Text } from "@/components/ui";
 
-// No board draws this screen. It always lists the person's open goals, one
-// with the other — never a redirect past a single one, or a second goal is
-// reachable only by typing a URL (RP-11: "the app holds more than one at a
-// time"). It ends with the same way in `commitment-list.tsx` draws under a
-// goal's own commitments: outlined, since there is always at least one goal
-// already open by the time this list draws at all. With none yet there is
-// nothing to list and nobody to open a second goal from, so `/metas/nueva`
-// is the only useful screen and this alone still redirects there.
+// A person with goals sees them listed one with the other — never a redirect
+// past a single one, or a second goal is reachable only by typing a URL
+// (RP-11: "the app holds more than one at a time"). It ends with the way into
+// the import (`Exportar.dc.html`), outlined like the add-another button.
+//
+// With no goal ever, open, ended or archived, it draws `MetasVacio.dc.html`
+// instead: the import was built for exactly this person and a redirect to
+// `/metas/nueva` hid it (RP-37). An all-archived person still gets the list.
 //
 // RP-24: an archived goal is never in the "open" section, and lists apart
 // under a quiet "Archivadas" one when there is at least one — each still its
-// own way into `Meta.dc.html`, from where it reopens. The redirect to
-// `/metas/nueva` only fires when the person has never opened a goal at all,
-// open, ended or archived: an all-archived person still lands here, not there.
-// An ended goal (`MetasTerminadas.dc.html`) lists under "terminadas" between
-// the two, and counts against the redirect the same way.
+// own way into `Meta.dc.html`, from where it reopens. An ended goal
+// (`MetasTerminadas.dc.html`) lists under "terminadas" between the two.
 export default async function GoalsIndexPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
   const { open, ended, archived } = await listGoalsForMetas();
-  if (open.length === 0 && ended.length === 0 && archived.length === 0) {
-    redirect("/metas/nueva");
-  }
-
   const t = await getTranslations();
+
+  if (open.length === 0 && ended.length === 0 && archived.length === 0) {
+    return (
+      <Page>
+        <div>
+          <Text as="p" variant="meta" tone="muted">
+            {t("goal.none.eyebrow")}
+          </Text>
+          <Text asChild variant="title">
+            <h1>{t("goal.none.title")}</h1>
+          </Text>
+        </div>
+        <Text as="p" tone="secondary">
+          {t("goal.none.body")}
+        </Text>
+        <Button asChild block>
+          <Link href="/metas/nueva">{t("goal.none.action")}</Link>
+        </Button>
+        <section>
+          <SectionLabel>{t("export.entry.section")}</SectionLabel>
+          <Button asChild variant="outline" block>
+            <Link href="/metas/importar">
+              {t("import.entry.title")}
+              <Text variant="meta" end>
+                {t("import.entry.hint")}
+              </Text>
+            </Link>
+          </Button>
+        </section>
+      </Page>
+    );
+  }
 
   return (
     <Page>
