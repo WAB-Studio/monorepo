@@ -5,7 +5,8 @@ import styles from "./check-row.module.css";
 
 // docs/pulsar/DESIGN.md "Importar": a row the person marks in or out, the
 // review's one shape. The checkbox is the native one, so a reader and the
-// keyboard get it whole.
+// keyboard get it whole. The amount button sits beside the label, not in it:
+// a label names one control, and the checkbox must not take the amount's name.
 export function CheckRow({
   checked,
   onCheckedChange,
@@ -37,32 +38,46 @@ export function CheckRow({
   indent?: boolean;
 }) {
   return (
-    <label className={indent ? `${styles.row} ${styles.indent}` : styles.row}>
-      <input
-        type="checkbox"
-        className={styles.box}
-        checked={checked}
-        disabled={disabled}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => onCheckedChange?.(event.target.checked)}
-      />
-      <span className={styles.body}>
-        <Text as="span" variant="body" tone={disabled && !checked && reason ? "quiet" : "ink"}>
-          {name}
-        </Text>
-        {meta ? (
-          <Text as="span" variant="meta" tone="quiet">
-            {meta}
+    <div className={indent ? `${styles.row} ${styles.indent}` : styles.row}>
+      <label className={styles.label}>
+        <input
+          type="checkbox"
+          className={styles.box}
+          checked={checked}
+          disabled={disabled}
+          onChange={(event: ChangeEvent<HTMLInputElement>) =>
+            onCheckedChange?.(event.target.checked)
+          }
+        />
+        <span className={styles.body}>
+          <Text
+            as="span"
+            variant="body"
+            tone={disabled && !checked && reason ? "quiet" : "ink"}
+          >
+            {name}
           </Text>
-        ) : null}
-        {reason ? <span className={styles.reason}>{reason}</span> : null}
-      </span>
-      {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
+          {meta ? (
+            <Text as="span" variant="meta" tone="quiet">
+              {meta}
+            </Text>
+          ) : null}
+          {reason ? <span className={styles.reason}>{reason}</span> : null}
+        </span>
+        {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
+      </label>
       {amount !== undefined && amount !== null ? (
-        <button type="button" className={styles.amount} aria-label={amountLabel} onClick={onAmount} disabled={disabled}>
+        <button
+          type="button"
+          className={styles.amount}
+          aria-label={amountLabel}
+          onClick={onAmount}
+          disabled={disabled}
+        >
           {amount}
         </button>
       ) : null}
-    </label>
+    </div>
   );
 }
 

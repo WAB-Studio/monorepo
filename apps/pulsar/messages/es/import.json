@@ -41,7 +41,10 @@
     "create": "{count, plural, one {Crear # meta} other {Crear # metas}}",
     "creating": "Creando…",
     "failed": "No se pudo crear el plan. Inténtalo otra vez.",
-    "amountOf": "Cambiar el monto de {name}",
+    "amountOf": "Cambiar el monto de {name}, {amount}",
+    "back": "volver al texto",
+    "backAria": "Volver al texto",
+    "repeated": "Ya tienes una meta abierta con este nombre. Quedó desmarcada: márcala si quieres otra.",
     "edit": {
       "title": "Cambiar el monto"
     },
@@ -49,13 +52,15 @@
       "title": "No se puede crear",
       "hint": "se queda fuera; corrígelo en tu texto y vuelve a leerlo",
       "from": "{goal} · {group}",
-      "noMeasure": "esta meta no mide nada, así que una tarea no lleva tiempo",
       "timesPerWeek": "una semana tiene 7 días",
       "monthBeforeStart": "ya pasó: la meta empieza en {first}",
       "monthAfterEnd": "queda después del final de la meta, el {last}",
       "amountNoMeasure": "esta meta no mide nada, así que un mes no lleva monto",
       "quantityNoMeasure": "esta meta no mide nada, así que un compromiso no lleva cantidad"
     }
+  },
+  "notices": {
+    "estimateDropped": "se crea sin tiempo: esta meta no mide nada"
   },
   "errors": {
     "signedOut": "Tu sesión terminó. Entra otra vez.",
