@@ -226,7 +226,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Ride a docs-only change along with the work that produced it. A trap a module taught you belongs in
   that module's PR. It earns its own PR only when no work produced it.
   Measured 2026-09-08: 4 of the day's 17 PRs were docs alone, three of them one Markdown file, and
-  each cost two Vercel deployments per push and a place in the one-slot `e2e` queue.
+  each cost two Vercel deployments per push.
 - **`main` refuses a direct push: the deploy goes through a pull request.** Measured 2026-09-11:
   `git push origin main` is rejected with `GH013 ... Changes must be made through a pull request`,
   even fast-forward and even with every check already green. Open it `integracion` → `main` and
@@ -251,8 +251,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Have the worker save every check's output to a file under the lane's `private/` and name the paths.
   The validator reads those logs, re-runs only the module's own tests and mutations, and asks of each
   assertion whether it can fail. It never re-runs a suite the worker already logged green.
-- Run at most two whole suites at once, CI included: a third exhausts the shared pool
-  (`EMAXCONNSESSION`, 15 clients).
+- Run at most two whole suites at once against the remote pool: a third exhausts it (`EMAXCONNSESSION`,
+  15 clients). CI and the lanes run on local stacks and do not count.
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
   boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
 - **Pulsar's `pulsar-e2e` is informative on a pull request to `integracion`, not blocking.** Decided by
@@ -367,6 +367,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Install only from §4. Discard the do-not-install list.
 - Leave `apps/voyager/.env.local` alone. It is gitignored, it never ships, and its keys are not
   rotated on an agent's initiative. Decided by the user 2026-09-08. Do not raise it again.
+- Copy `apps/voyager/.env.local` unchanged into a lane that runs voyager's suites, as `worktree.sh --app voyager`
+  does. Never edit it, never commit it. Decided by the user 2026-10-05.
 - Write code and identifiers in English. Write user-facing copy in the user's language.
 
 ## Comments

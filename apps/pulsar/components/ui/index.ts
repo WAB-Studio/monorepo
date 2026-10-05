@@ -65,6 +65,10 @@ export { Face } from "./face";
 
 export { Split } from "./split";
 
+export { ScreenHeader } from "./screen-header";
+
+export { ListDetail } from "./list-detail";
+
 export { WeekTable } from "./week-table";
 
 export { SheetActions } from "./sheet-actions";

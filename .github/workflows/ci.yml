@@ -5,7 +5,7 @@ on:
   push:
     branches: [main, integracion]
   # So the browser suite can be driven on demand — to smoke-test the job itself,
-  # or to re-run it after a stall in the remote database without an empty commit.
+  # or to re-run it without an empty commit.
   workflow_dispatch:
 
 jobs:
@@ -73,17 +73,12 @@ jobs:
 
   # Drives the policies on `reading` against the real database, DELETE included
   # — the only proof RNL-10 has. One transaction that always rolls back, so it
-  # leaves no row and `harness:census` does not move. Also absent until
+  # leaves no row. Also absent until
   # 2026-09-10: the role that makes every policy apply is settled by one shared
   # statement, and nothing in CI watched it.
   policies:
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -91,20 +86,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # `check:sync` reads `--env-file=.env.local`, not the job environment.
-      - name: Write .env.local from the secrets
-        working-directory: apps/voyager
-        run: |
-          missing=""
-          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
-                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
-            [ -n "${!name}" ] || missing="$missing $name"
-            printf '%s=%s\n' "$name" "${!name}" >> .env.local
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::missing repository secrets:$missing"
-            exit 1
-          fi
+      # `check:sync` reads `--env-file=.env.local`, which the action writes.
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: voyager
       - run: npm run check:sync -w apps/voyager
 
   # The pure modules, mirrors voyager's `unit` job. No database, no secret.
@@ -124,12 +109,7 @@ jobs:
   # so it leaves no row. The npm script sets its own NODE_PATH.
   pulsar-policies:
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -137,25 +117,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # `check:policies` reads `--env-file=.env.local`, not the job environment.
-      - name: Write .env.local from the secrets
-        working-directory: apps/pulsar
-        run: |
-          missing=""
-          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
-                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
-            [ -n "${!name}" ] || missing="$missing $name"
-            printf '%s=%s\n' "$name" "${!name}" >> .env.local
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::missing repository secrets:$missing"
-            exit 1
-          fi
+      # `check:policies` reads `--env-file=.env.local`, which the action writes.
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: pulsar
       - run: npm run check:policies -w apps/pulsar
 
   # The 12-minute suite runs here so a laptop is not holding a dev server and a
-  # Chromium for it. One at a time: every run drives the one remote Postgres, and
-  # a second concurrent run would contend with it and with a lane running locally.
+  # Chromium for it. Every job runs on its own stack, so runs never contend.
   # Every path below addresses `apps/orbit`: the suite, its `.env.local`,
   # its route types and its results directory all live there since the monorepo.
   # `apps/voyager` has no database, no identity and no harness, so nothing here
@@ -288,31 +257,23 @@ jobs:
 
   # `apps/pulsar`'s own browser suite, against `next build && next start` —
   # never `next dev`, for the reason `playwright.config.ts`'s own head gives.
-  # Its own lane (8: local lanes are 1-5, orbit's CI lane is 9 — nothing in
-  # pulsar's harness forbids it) and its own concurrency group, never orbit's
-  # `e2e-remote-db`: this suite mints no row and reads no policy that group
-  # exists to serialize, and sharing it would only lengthen orbit's queue.
-  # Push only: on a pull request it is informative and only queued behind
-  # itself. A newer push to the same branch cancels the older run, so only the
-  # branch's newest tip is proved.
+  # Its own lane (8: local lanes are 1-5, orbit's CI lane is 9). The stack is
+  # the runner's own, so no group serialises its runs.
+  # Push only: on a pull request it is informative. A newer push to the same
+  # branch cancels the older run, so only the branch's newest tip is proved.
   pulsar-e2e:
     runs-on: ubuntu-latest
     needs: changes
     if: github.event_name != 'pull_request'
     # The suite is about two minutes; `playwright install --with-deps` alone
     # took eight on 2026-09-30, when apt was slow.
-    timeout-minutes: 20
+    timeout-minutes: 30
     concurrency:
       group: pulsar-e2e-${{ github.ref }}
       cancel-in-progress: true
     env:
       HARNESS_LANE: 8
       PULSAR_BASE_URL: http://localhost:3207
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -322,21 +283,10 @@ jobs:
       - run: npm ci
 
       # `check:e2e` and the harness scripts its global setup spawns all read
-      # `--env-file=.env.local`, not the job environment.
-      - name: Write .env.local from the secrets
-        working-directory: apps/pulsar
-        run: |
-          missing=""
-          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
-                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
-            [ -n "${!name}" ] || missing="$missing $name"
-            printf '%s=%s\n' "$name" "${!name}" >> .env.local
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::missing repository secrets:$missing"
-            exit 1
-          fi
-
+      # `--env-file=.env.local`, which the action writes.
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: pulsar
       - run: npx playwright install --with-deps chromium
       - run: sudo apt-get install -y poppler-utils
 
@@ -389,45 +339,12 @@ jobs:
       # Its global setup (`scripts/harness/e2e-run.ts`) opens the one harness
       # run, mints and seeds lane 8's person under it — no typed address, no
       # email sent (RNP-09) — and its teardown drops every identity and closes
-      # the run, so the reap below is never blocked by this job's own run.
+      # the run.
       - name: Run the e2e suite, caida and fuente projects included
         env:
           PULSAR_DOWN_BASE_URL: http://localhost:3217
           PULSAR_FAULT_BASE_URL: http://localhost:3227
         run: npm run check:e2e -w apps/pulsar
-
-      # The reaper lives in `apps/orbit` — `harness.identities` and
-      # `harness.runs` carry no app column, so the one script that owns
-      # tearing a dead run down reaches a pulsar-minted row exactly as it
-      # reaches its own. It reads its own `.env.local`, not pulsar's; the
-      # only variable its own import chain reaches through `process.env` is
-      # `DATABASE_URL` (`apps/orbit/scripts/harness/fixtures.ts`), already
-      # named present by this job's own secret check above. `always()`, like
-      # the reap it feeds: skipped after a red suite, the reap died on a
-      # missing `.env.local` exactly when it had a run to take.
-      - name: Write apps/orbit/.env.local for the reaper
-        if: always()
-        working-directory: apps/orbit
-        run: printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env.local
-
-      # Same reasoning and the same BLOCKED handling as orbit's own `e2e`
-      # job's step of the same name — copied in behaviour, not repeated.
-      - name: Reap orphaned harness data
-        if: always()
-        run: |
-          set +e
-          npm run harness:reap -w apps/orbit -- --yes 2>&1 | tee /tmp/harness-reap.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -eq 0 ]; then
-            exit 0
-          fi
-          if grep -q '^BLOCKED' /tmp/harness-reap.log; then
-            echo "::warning::harness:reap was blocked by a live run elsewhere; nothing reaped this run"
-            exit 0
-          fi
-          echo "::error::harness:reap failed for a reason other than a live run blocking it"
-          exit "$status"
 
       - name: Upload the server log
         if: always()
@@ -469,18 +386,10 @@ jobs:
       github.event_name != 'pull_request' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
        needs.changes.outputs.pulsar == 'true')
-    timeout-minutes: 15
-    concurrency:
-      group: pulsar-checks
-      cancel-in-progress: false
+    timeout-minutes: 25
     env:
       HARNESS_LANE: 7
       PULSAR_BASE_URL: http://localhost:3206
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -489,28 +398,10 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - name: Write .env.local from the secrets
-        working-directory: apps/pulsar
-        run: |
-          missing=""
-          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
-                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
-            [ -n "${!name}" ] || missing="$missing $name"
-            printf '%s=%s\n' "$name" "${!name}" >> .env.local
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::missing repository secrets:$missing"
-            exit 1
-          fi
-
-      # The three variables `harness:token`'s import chain reads
-      # (`fixtures.ts`: DATABASE_URL; `session.ts`: the Supabase URL and key).
-      - name: Write apps/orbit/.env.local for harness:token
-        working-directory: apps/orbit
-        run: |
-          printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env.local
-          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_URL" >> .env.local
-          printf 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" >> .env.local
+      # Orbit is there for `harness:token`.
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: pulsar orbit
 
       # Creates or refreshes lane 7's shared pair; idempotent.
       - run: npm run harness:token -w apps/orbit
@@ -542,35 +433,22 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: changes
-    # Off until the repository variable E2E_IN_CI is "true". The secrets do not
-    # exist until someone puts them there, and without them every step that reads
-    # .env.local dies on an empty URL — a red run on every push that says nothing.
-    # Turning it on is deliberate, because it also decides which database the
-    # suite seeds and purges on every pull request:
+    # Off until the repository variable E2E_IN_CI is "true":
     #   gh variable set E2E_IN_CI --body true
     #
-    # The second half: the repository is public and GitHub hands no secret to a
-    # run triggered from a fork, so those are skipped rather than failed.
+    # The second half: forks are skipped rather than failed, as in the other
+    # suite jobs.
     if: >-
       vars.E2E_IN_CI == 'true' &&
       (github.event_name != 'pull_request' ||
        (github.event.pull_request.head.repo.full_name == github.repository &&
         needs.changes.outputs.orbit == 'true'))
-    timeout-minutes: 30
-    concurrency:
-      group: e2e-remote-db
-      cancel-in-progress: false
+    timeout-minutes: 40
     env:
       # Its own harness identities and seeded rows, so a CI run never touches the
       # rows a local lane is driving. Lanes 1 to 5 are the checkouts.
       HARNESS_LANE: 9
       HARNESS_BASE_URL: http://localhost:3000
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
-      CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -582,35 +460,15 @@ jobs:
         working-directory: apps/orbit
 
       # The scripts read `.env.local` through `--env-file`, which has no fallback
-      # to the process environment: without this file every one of them dies.
-      # It belongs beside the app that reads it, never at the repository root.
-      - name: Write .env.local from the secrets
-        working-directory: apps/orbit
-        run: |
-          missing=""
-          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
-                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL CRON_SECRET; do
-            [ -n "${!name}" ] || missing="$missing $name"
-            printf '%s=%s\n' "$name" "${!name}" >> .env.local
-          done
-          # Named here, or it surfaces three steps later as `Invalid URL` on an
-          # empty string and reads like the harness broke.
-          if [ -n "$missing" ]; then
-            echo "::error::missing repository secrets:$missing"
-            exit 1
-          fi
+      # to the process environment; the action writes it beside the app.
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: orbit
 
       - run: npx playwright install --with-deps chromium
 
       # Lane 9's two identities and their token rows. Idempotent.
       - run: npm run harness:token -w apps/orbit
-
-      # No step here runs a migration — the database is remote and shared, and
-      # whatever schema it carries came from a migration applied out of band.
-      # This only reports the weight already on it, so a regression shows up
-      # as a number in a diff of two logs (docs/TRAPS.md, "One database, many
-      # branches").
-      - run: npm run harness:census -w apps/orbit
 
       - name: Start the dev server and wait for it to answer
         run: |
@@ -628,38 +486,7 @@ jobs:
 
       - run: npm run check:e2e -w apps/orbit
 
-      # Runs whether check:e2e passed, failed or the job was cancelled — a
-      # cancelled or failed run is exactly the one that leaves orphans behind.
-      # `--yes` is required (dry-run is the default); the reaper never touches
-      # a `shared` identity, so lane 9's own two rows survive every run.
-      #
-      # A live run elsewhere (another lane driving the same remote database)
-      # makes the reaper refuse to start and exit 1 — the concurrency group
-      # above keeps that from being *this* job's own next run, but it cannot
-      # stop a developer's lane from holding harness.runs at the same moment.
-      # That refusal is the interlock working, not a broken build, so it must
-      # not turn a green e2e run red. Anything else non-zero — a purge that
-      # failed, an unhandled exception — is a real reaper failure and must
-      # still fail the job.
-      - name: Reap orphaned harness data
-        if: always()
-        run: |
-          set +e
-          npm run harness:reap -w apps/orbit -- --yes 2>&1 | tee /tmp/harness-reap.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -eq 0 ]; then
-            exit 0
-          fi
-          if grep -q '^BLOCKED' /tmp/harness-reap.log; then
-            echo "::warning::harness:reap was blocked by a live run elsewhere; nothing reaped this run"
-            exit 0
-          fi
-          echo "::error::harness:reap failed for a reason other than a live run blocking it"
-          exit "$status"
-
-      # The server log is where a red spec is explained — a `57014` there is the
-      # remote database stalling, not the code (docs/TRAPS.md).
+      # The server log is where a red spec is explained.
       - name: Upload the dev server log
         if: always()
         uses: actions/upload-artifact@v5
@@ -677,23 +504,10 @@ jobs:
   # `apps/voyager`'s own browser suite. It ran nowhere until 2026-09-08, and
   # that is how two seeded specs sat red on `main` unnoticed: they opened
   # `reading-log` pinned at version 1 after module 6 raised the store to 2.
-  #
-  # Deliberately NOT in the `e2e-remote-db` group. This app has no database, no
-  # identity and no harness, so it contends with nothing — putting it in that
-  # one-slot queue would only make the queue evict more (docs/TRAPS.md, "Every
-  # push enters the one-slot group").
   voyager-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
-      # The build validates these through `lib/env.ts`, where module 8 made all
-      # five required. The suite itself reaches none of them: the word path is
-      # IndexedDB and the sync copy is never turned on in a spec.
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
       VOYAGER_BASE_URL: http://localhost:3100
       # Arms `app/layout.tsx`'s test hook for this job's own build alone.
       # `apps/voyager/vercel.json` names no such variable, so a Vercel build
@@ -709,21 +523,11 @@ jobs:
       - run: npx next typegen
         working-directory: apps/voyager
 
-      - name: Write .env.local from the secrets
-        working-directory: apps/voyager
-        run: |
-          missing=""
-          for name in DATABASE_URL MIGRATION_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL \
-                      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY NEXT_PUBLIC_SITE_URL; do
-            [ -n "${!name}" ] || missing="$missing $name"
-            printf '%s=%s\n' "$name" "${!name}" >> .env.local
-          done
-          # Named here, or it surfaces later as `Invalid URL` on an empty string
-          # and reads like the suite broke.
-          if [ -n "$missing" ]; then
-            echo "::error::missing repository secrets:$missing"
-            exit 1
-          fi
+      # The build validates the five variables through `lib/env.ts`; the suite
+      # itself reaches none of them.
+      - uses: ./.github/actions/supabase-local
+        with:
+          apps: voyager
 
       - run: npx playwright install --with-deps chromium
 

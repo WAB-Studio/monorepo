@@ -1,0 +1,59 @@
+# Local stack for the suites. Driven by scripts/supabase-local.sh; the remote project is never read here.
+project_id = "universo"
+
+[api]
+enabled = true
+port = 54321
+schemas = []
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = true
+port = 54324
+
+[storage]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+# Every lane's port: 3000-3009, 3100-3109, 3200-3229.
+additional_redirect_urls = ["http://localhost:*/auth/confirm", "http://127.0.0.1:*/auth/confirm"]
+signing_keys_path = "./signing_keys.json"
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[auth.rate_limit]
+email_sent = 10000
+sms_sent = 10000
+anonymous_users = 10000
+token_refresh = 10000
+sign_in_sign_ups = 10000
+token_verifications = 10000
+web3 = 10000

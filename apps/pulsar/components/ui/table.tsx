@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { isTimeUnit, type TimeWords } from "@/lib/units/time";
@@ -21,6 +23,10 @@ export type TableRow = {
   note?: ReactNode;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
+  // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
+  // The lead cell must then be plain text: it is what the link names, so a
+  // link of its own there would nest. Every other cell stays text.
+  href?: string;
 };
 
 type TableProps = {
@@ -75,6 +81,22 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
 
   const join = (...names: (string | undefined)[]) => names.filter(Boolean).join(" ");
 
+  const phoneRow = (row: TableRow): ReactNode => (
+    <>
+      <span className={styles.stackLabel}>
+        {row.cells[0]}
+        {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
+      </span>
+      {lead === undefined ? null : (
+        <span className={styles.stackFigure}>
+          {figureCell(row.cells[lead], unit, words)}
+          {unitWord && !isEmpty(row.cells[lead]) ? <span className={styles.unit}>{unitWord}</span> : null}
+        </span>
+      )}
+      {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
+    </>
+  );
+
   return (
     <div className={styles.table}>
       <div className={styles.phone}>
@@ -83,22 +105,17 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
           {rows.map((row, index) => (
             <li
               key={row.key}
-              className={styles.stackRow}
+              className={row.href ? `${styles.stackRow} ${styles.linked}` : styles.stackRow}
               data-current={index === current ? "" : undefined}
             >
-              <span className={styles.stackLabel}>
-                {row.cells[0]}
-                {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
-              </span>
-              {lead === undefined ? null : (
-                <span className={styles.stackFigure}>
-                  {figureCell(row.cells[lead], unit, words)}
-                  {unitWord && !isEmpty(row.cells[lead]) ? (
-                    <span className={styles.unit}>{unitWord}</span>
-                  ) : null}
-                </span>
+              {row.href ? (
+                <Link href={row.href} className={styles.rowLink}>
+                  {phoneRow(row)}
+                  <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.chevron} />
+                </Link>
+              ) : (
+                phoneRow(row)
               )}
-              {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
             </li>
           ))}
         </ol>
@@ -120,10 +137,22 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={row.key} data-current={index === current ? "" : undefined}>
+            <tr
+              key={row.key}
+              className={row.href ? styles.linkedRow : undefined}
+              data-current={index === current ? "" : undefined}
+            >
               {columns.map((_, column) => (
                 <td key={column} className={join(styles.cell, cellClass(column))}>
-                  {figures.includes(column) ? figureCell(row.cells[column], unit, words) : row.cells[column]}
+                  {column === 0 && row.href ? (
+                    <Link href={row.href} className={styles.cellLink}>
+                      {row.cells[column]}
+                    </Link>
+                  ) : figures.includes(column) ? (
+                    figureCell(row.cells[column], unit, words)
+                  ) : (
+                    row.cells[column]
+                  )}
                   {column === 0 && row.detail ? (
                     <span className={styles.detailWide}>{row.detail}</span>
                   ) : null}

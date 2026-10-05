@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { createOneOff } from "@/app/actions/one-offs";
 import { isTimeUnit, formatQuantity, type TimeWords } from "@/lib/units/time";
 import { createOneOffSchema } from "@/lib/validation/one-off";
-import { Button, Chip, Field, Flex, Page, SectionLabel, Text } from "@/components/ui";
+import { Button, Chip, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
 
 const WHOLE = /^\d+$/;
 
@@ -118,16 +118,19 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
 
   return (
     <Page>
-      <SectionLabel>
-        {t(parent ? "month.task.sub.eyebrow" : "month.task.eyebrow", {
-          goal: goalName,
-          parent: parent?.name ?? "",
-          month: monthName,
-        })}
-      </SectionLabel>
-      <Text as="p" variant="title">
-        {parent ? t("month.task.sub.title") : t("month.task.title", { month: monthName })}
-      </Text>
+      <ScreenHeader
+        title={parent ? t("month.task.sub.title") : t("month.task.title", { month: monthName })}
+        back={{ href: monthHref, place: monthName }}
+        eyebrow={
+          <SectionLabel>
+            {t(parent ? "month.task.sub.eyebrow" : "month.task.eyebrow", {
+              goal: goalName,
+              parent: parent?.name ?? "",
+              month: monthName,
+            })}
+          </SectionLabel>
+        }
+      />
 
       <Field
         label={t("month.task.nameLabel")}

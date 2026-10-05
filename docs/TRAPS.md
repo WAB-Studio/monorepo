@@ -109,6 +109,9 @@ with an outlier at 4121 ms. Dev is not merely slower; it is noisier, and the out
 
 ### One database, many branches
 
+Narrowed 2026-10-05 by module 227: CI no longer reads the remote schema, so a migration applied from a branch cannot redden CI.
+The rule stands for lanes and for production.
+
 A migration applied from any branch is applied for everyone, immediately, including branches
 whose schema files know nothing about it. Never apply one to reach a proof.
 
@@ -180,6 +183,9 @@ settings.spec.ts:117`.
 
 Turning it off is one command, and it is the switch that also decides which database CI seeds and
 purges: `gh variable set E2E_IN_CI --body false`.
+
+**CI half closed 2026-10-05 by module 227:** CI runs on its runner's own stack, so its runs no longer grow the remote `audit_log`.
+The lanes' own rows and the policy fix below stand.
 
 **Updated 2026-09-06.** `audit_log` sits at 105 971 rows, 110 MB, of a 136 MB database. 75
 identities are registered in `harness.identities` (72 `ephemeral`, 3 `shared`) after
@@ -943,6 +949,8 @@ reason that has nothing to do with its diff.
 It happened with #30 and #31 on 2026-09-07. Land one PR's `e2e` before opening the next when both
 touch the group, or expect to re-run by hand.
 
+Closed 2026-10-05 by module 227: CI runs on its runner's own stack.
+
 ### "Keep a retired code's tick" means leave it as it was, not tick it
 
 `AGENTS.md` says to keep a retired code's tick. RL-05 was retired on 2026-09-07 and a decision
@@ -1019,6 +1027,9 @@ green but for one write-path timeout is the shape of contention, not of a defect
 
 `AGENTS.md` allows three suites at once. Three is what produced both of these.
 
+Narrowed 2026-10-05 by module 227: CI no longer pays the shared pooler.
+The trap stands for lanes that still drive the remote database.
+
 ### Every push enters the one-slot group, not just every PR
 
 The entry above and `AGENTS.md` both frame `e2e-remote-db` as something a second **PR** disturbs. It
@@ -1048,6 +1059,9 @@ of them held the slot while PR #48 — the only PR of the day that actually need
 waited in the queue behind it.
 
 Fast-forward `integracion` when you are about to merge into it. Not after every merge to `main`.
+
+Closed 2026-10-05 by module 227: CI runs on its runner's own stack. The group is gone; a push queues nothing.
+Fast-forwarding `integracion` still spends a run, so keep the advice above.
 
 ### A lane born for one app cannot typecheck the other until typegen runs there
 
@@ -1193,6 +1207,9 @@ The two rules pull against each other: one PR at a time protects the CI queue an
 quota. When a day's work is many small landings, batch what can be batched — a docs change and a
 trap entry are one PR, not two — and check the URL of a failing Vercel check before believing it:
 `upgradeToPro=build-rate-limit` in it means quota, never code.
+
+Narrowed 2026-10-05 by module 227: `e2e-remote-db` no longer exists, so no CI rule asks for one PR at a time.
+The deployment quota above stands.
 
 ### Voyager's browser suite reads three false reds against `next dev`
 
@@ -1475,6 +1492,8 @@ No hay nada que arreglar. La cobertura existe: el mismo árbol pasó la `e2e` en
 PR #140, y `AGENTS.md` ya dice que la `e2e` de orbit es informativa y que ningún check la exige en
 `main`. Lo único que se pierde es la señal en el push cuando los runs se amontonan. **Escrito para
 que nadie lo investigue una cuarta vez.**
+
+Closed 2026-10-05 by module 227: CI runs on its runner's own stack. El grupo `e2e-remote-db` ya no existe y el push a `main` no cancela la `e2e`.
 
 ## This machine cannot test a reserved scrollbar
 
@@ -2605,6 +2624,7 @@ A fresh identity was not the cause.
 - **Do.** Open pulsar pull requests one at a time, each after the previous one's `pulsar-e2e` started.
   Read `gh api repos/<repo>/actions/jobs/<id> -q .conclusion` before reading a `fail` as a red.
   Relaunch a cancelled one with `gh run rerun <run> --failed`, or a rebase and push.
+- Closed 2026-10-05 by module 227: CI runs on its runner's own stack. The `pulsar-e2e` group is gone; a cancelled run with no steps is no longer this queue.
 
 ## Two `voyager-e2e` runs at once fail `registro.spec.ts:568`
 
@@ -2615,6 +2635,8 @@ A fresh identity was not the cause.
   minutes before, passed. #329's rerun, alone, passed. Logs in `private/ci-reds/`.
 - **Do.** Read two simultaneous `voyager-e2e` reds on that spec as this collision, not as the branch.
   Rerun it alone. Never answer it with a retry or a longer sleep: the sleep is the defect.
+- Closed 2026-10-05 by module 227: CI runs on its runner's own stack. Two `voyager-e2e` runs no longer share a database.
+  The `waitForTimeout(2000)` in the spec is still the defect.
 
 ## A policy mutant proved inside a rollback locks the shared database for everyone
 
@@ -2630,6 +2652,8 @@ A fresh identity was not the cause.
 - **Do.** Run DDL mutants only while no other lane and no CI run touches the schema. Say so in the
   dispatch, and wait for `gh run list --status in_progress` to be empty first. Never add `LOCK TABLE`
   to a probe. Read a burst of timeouts across unrelated suites in one window as this, not as a branch.
+- Narrowed 2026-10-05 by module 227: CI jobs run on their own stack and cannot be locked by a lane's DDL.
+  The rule stands for every lane on the remote database.
 
 ## A cleanup that deletes by name can take a real person's row
 
@@ -2653,3 +2677,20 @@ A fresh identity was not the cause.
   also uses. No `429`: a timeout, not a quota. Log in `private/ci-reds/pr390/`.
 - **Do.** Hold the three-suite cap counting CI as one. Read a red that spans unrelated specs with `linkTimeout` as load,
   rerun only the failed job once the lanes are quiet, and keep the log.
+- Narrowed 2026-10-05 by module 227: CI no longer shares the database or Auth with lanes, so lanes cannot time it out.
+  Lanes still contend with each other on the remote project.
+
+## A local stack per runner runs `pulsar-e2e` in 1.8 min and exposes a spec the remote hid
+
+- **What.** Module 227 moved the six suite jobs of `ci.yml` onto the runner's own Supabase stack.
+  PR #396's first run on it:
+  - `pulsar-e2e`: 310 passed, 1 failed, 1.8 min. On the remote it took ~14 min.
+  - `voyager-e2e`: green.
+  - `pulsar-policies`: green.
+- **The one red was a real defect.** `deshacer.spec.ts:47` used `getByLabel("cantidad")`. Module 204's back link
+  carries `aria-label="Volver a Meta cantidad …"`, so the locator matched two elements. Fixed in PR #397.
+- **Measured 2026-10-05.** The ~14 min was contention and round trips to the remote pooler, not the suite.
+  The `linkTimeout`, `CONNECTION_ENDED` and `57014` reds listed above came from that sharing.
+- **Do.** Read a red on the local stack as the branch first: no other lane or run touches that database.
+  Skip the load explanations above for CI.
+  Keep them for lanes and for the RNF-09 timing, which still read the remote project.
