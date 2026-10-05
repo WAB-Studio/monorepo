@@ -58,7 +58,7 @@ test("saveReview with [] reads [], never null", () => {
 
 test("saveReview does nothing when nothing is stored", () => {
   saveReview(draft(), ["a"]);
-  assert.equal(readDraft(), null);
+  assert.equal(memory.size, 0);
 });
 
 test("the older shape reads the defaults", () => {
