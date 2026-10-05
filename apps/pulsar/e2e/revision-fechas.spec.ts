@@ -140,7 +140,7 @@ async function addMeasure(page: Page, goalId: string, name: string): Promise<voi
   await page.waitForURL(`**/metas/${goalId}/compromisos/nuevo`);
   await page.getByLabel("qué es").fill(name);
   await page.getByRole("button", { name: "un número", exact: true }).click();
-  await page.getByLabel("cantidad").fill("5");
+  await page.getByLabel("cantidad", { exact: true }).fill("5");
   await page.getByLabel("unidad").fill("minutos");
   await page.getByRole("button", { name: "Añadirlo" }).click();
   await page.waitForURL(`**/metas/${goalId}`);

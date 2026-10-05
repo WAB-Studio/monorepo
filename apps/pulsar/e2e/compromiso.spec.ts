@@ -88,7 +88,7 @@ test("a weekdays commitment with an untyped goal's first quantity lands in goals
     await page.getByRole("button", { name: "J", exact: true }).click();
 
     await page.getByRole("button", { name: "un número", exact: true }).click();
-    await page.getByLabel("cantidad").fill("15");
+    await page.getByLabel("cantidad", { exact: true }).fill("15");
     await page.getByLabel("unidad").fill("minutos");
 
     // The goal has no measure yet: this is the note this screen draws only

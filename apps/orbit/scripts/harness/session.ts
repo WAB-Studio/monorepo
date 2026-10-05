@@ -69,7 +69,12 @@ export const HARNESS_MEMBER_EMAIL = `harness-member${HARNESS_LANE_SUFFIX}@exampl
 export function sessionFileName(email: string): string {
   const suffix = email.split("@")[0].replace(/^harness/, "");
 
-  return `private/harness-session${suffix}.json`;
+  // A refresh token is only good against the auth server that minted it, so the
+  // local stack keeps files of its own and the remote's survive a local run.
+  const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname;
+  const local = host === "127.0.0.1" || host === "localhost" ? ".local" : "";
+
+  return `private/harness-session${suffix}${local}.json`;
 }
 
 function sessionFile(email: string): string {

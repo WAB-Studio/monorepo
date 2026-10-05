@@ -123,6 +123,13 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [ ] **RP-35** — A quantity in a unit of time reads in hours and minutes wherever it is drawn — «12 h 30 min», «45 min», «2 h» — on Hoy, in the quantity sheet, on the goal, in the review, the months, a month's list, the export and the import's review. The app knows a unit of time from a short catalogue of the words for a minute (minutos, minuto, min, mins, in any case); a unit named any other way reads as it does today. What is stored stays whole minutes. A field that asks for a new amount of time — a month's amount, a task's estimate — takes hours and minutes; the commitment's target and the quantity sheet's own field keep taking minutes. Decided by the user 2026-09-30.
 - [ ] **RP-36** — A one-off with an estimated amount (RP-30), once done, adds that amount to its goal's measure on the day it was done — to the total, the week, the month and the export — and undone, takes it back. A one-off that holds others adds nothing of its own; each of them adds its own. **The same hours can count twice:** a task done inside a day's block also counts in that block's quantity (RP-03), and the app does not tell the two apart. Decided by the user 2026-09-30, knowing it.
 
+#### The month across goals
+
+- [ ] **RP-43** — «Mes» reads this month across every open goal: for each, the amount planned and reached (RP-28), and its
+  month's list — the tasks carried in first, with the month they came from and what they owe (RP-31), then the month's
+  own — where a task is marked done in one tap. A goal that measures nothing shows its tasks with no amount. Reading it
+  writes nothing. Decided by the user 2026-10-05.
+
 #### Bringing a plan in
 
 - [ ] **RP-37** — A person brings a plan in by pasting its text or uploading a file — Markdown, text, PDF or any other. A plan written in the app's documented template is read with no model call. Anything else is sent to OpenAI, and the screen says so, in one line, before it is sent: the plan leaves for OpenAI. The model proposes goals, their phases, their month amounts, their commitments and their tasks with estimates and sub-tasks. **Nothing is written from the model's answer alone:** the person reviews the proposal, unmarks what they do not want, can change an amount, and confirms; what cannot be written — a month outside the goal's span — says why and is left out. An import creates new goals and never changes an existing one. Decided by the user 2026-09-30: «si se sube algo random también debería poder».
@@ -139,6 +146,10 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 - [x] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
 - [x] **RP-17** — A goal's measure is read week by week, as the one table its review needs, from the first week to the current one.
+- [ ] **RP-44** — The week is read for any past week, one step back or forward at a time, from the week the first goal was
+  opened to this one. A past week draws as it was lived (RP-16): the goals that were open in it, its facts and its evidence,
+  a goal archived since still in the weeks it governed (RP-24). It is read-only: a day in it opens its own screen only
+  within the seven days a fact may still name (RP-06). Decided by the user 2026-10-05.
 
 #### The account
 
@@ -158,11 +169,20 @@ of this gets built, and no schema, table or column is "prepared for" it.
   - Limits that remain, 2026-09-30, written and not built: (1) `withReadingDb` in `lib/session.ts` fixes `search_path` to `reading`, so a source in another schema needs a qualified reader plus that app's own grants and RLS. (2) Every reader runs in one transaction, so one failing source makes every source unreadable.
   - What a second source costs today: one reader in `lib/evidence/registry.ts`, one entry in `lib/evidence/source-rows.ts`, two keys in `messages/es/sources.json` (`<name>` and `<name>Unit`), then `npm run source:add -w apps/pulsar`.
 - [x] **RNP-09** — Every `auth.users` row a script of this app creates is registered through `@repo/harness-registry`. No automated check ever submits the sign-in form with a typed address: it sends a real email from the user's own account and mints a real row.
-- [x] **RNP-11** — From 1024 px the app has a desktop face: a left rail in place of the bottom nav, Hoy and a goal in two columns, the week as a table of commitments by day, every sheet a centred dialog, every other screen one column in the same frame, with no horizontal overflow at 1280×800. Below 1024 the phone face holds unchanged (RNP-07). Asked for by the user 2026-09-28.
 - [ ] **RNP-12** — The goal's months, a month's list, the export, the shift and the import's confirmation each pay a bounded number of round trips to Postgres — never one per month, per task or per item imported — fanned out together with the evidence query where they read it, never a chain of awaits; the goal screen and Hoy keep the four statements RNP-03 already measures.
 - [ ] **RNP-13** — A call to a paid model is claimed in the person's own record before it is made and refused past ten a day per person; the record keeps the day, the model and, once answered, the tokens and the outcome. With no key the import says it is not available and offers the template — never an answer with nothing in it, never a 204. No automated check or spec reaches the paid model: they run with no key, or against a stub that a deployed build ignores. Decided by the user 2026-09-30.
 - [ ] **RNP-14** — A call from a connected AI resolves its person in one statement to Postgres and never through the Auth server, so no call spends an Auth request. A read pays the round trips of the screen loader it reuses plus that one; a write pays its act's plus that one. Every statement after the first runs under the person's own policies (RNP-05).
 - [ ] **RNP-15** — A key, an authorization code and a token are stored only as their SHA-256 fingerprint; none of them appears in clear after the response that created it — never in a log, a URL, an error or a check's output. No automated check reaches a real assistant: `check:mcp` drives the app's own door with keys it mints for registered harness identities.
+- [ ] **RNP-16** — Below 1024 px four tabs — Hoy, Semana, Mes, Metas — stay on screen on every signed-in page, clear of the
+  device's home area; they never cover a screen's content or a sheet's controls. Every screen carries one header: its
+  title and, except the four tabs' own screens, one way back. Decided by the user 2026-10-05.
+- [ ] **RNP-17** — From 1024 px the app has a desktop face: a left rail names Hoy, Semana, Mes, Metas and each open goal;
+  a screen that has a list shows it beside the open item; the week, the review and the export take the full width; every
+  sheet is a centred dialog; nothing overflows from 1024 to 1440. Between 700 and 1023 the phone face holds, centred
+  (RNP-07, RNP-16). Successor of RNP-11. Decided by the user 2026-10-05.
+- [ ] **RNP-18** — «Mes» pays two transactions fanned with `Promise.all` — the goals and the evidence — whatever the number
+  of goals; a past week pays what this week pays. The rail's goal names cost one statement per page, read beside the
+  screen's own.
 
 ---
 
@@ -170,6 +190,8 @@ of this gets built, and no schema, table or column is "prepared for" it.
 
 - [ ] **RP-26** — A goal past its end says the day it ended, leaves the day and the week, and is listed apart among the goals; it can be archived or have its end moved. Nothing is deleted. Asked for by the user 2026-09-28.
   - Retired 2026-09-30 by the user. The week keeps a goal until the Sunday of the week it ended in (decided 2026-09-29, `SemanaMetaTerminada.dc.html`), so it does not leave the week. Successor: **RP-27**.
+- [x] **RNP-11** — From 1024 px the app has a desktop face: a left rail in place of the bottom nav, Hoy and a goal in two columns, the week as a table of commitments by day, every sheet a centred dialog, every other screen one column in the same frame, with no horizontal overflow at 1280×800. Below 1024 the phone face holds unchanged (RNP-07). Asked for by the user 2026-09-28.
+  - Retired 2026-10-05 by the user. The desktop face is redrawn with a rail that names the goals and a list beside the open item. Successor: **RNP-17**.
 
 ## 2. Model and invariants
 

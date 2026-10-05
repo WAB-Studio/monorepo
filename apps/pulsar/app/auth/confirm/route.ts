@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { env } from "@/lib/env";
-import { verifyMagicLink, type FailureReason } from "@/lib/auth/verify-magic-link";
+import { landingAfterSignIn, verifyMagicLink, type FailureReason } from "@/lib/auth/verify-magic-link";
 
 const supabaseConfig = {
   url: env.NEXT_PUBLIC_SUPABASE_URL,
@@ -16,6 +16,7 @@ const supabaseConfig = {
 const confirmSchema = z.object({
   token_hash: z.string().min(1),
   type: z.enum(["magiclink", "signup", "email"]),
+  next: z.string().optional(),
 });
 
 function failure(request: NextRequest, headers: Headers, reason: FailureReason): NextResponse {
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
     return failure(request, authHeaders, result.reason);
   }
 
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = NextResponse.redirect(new URL(landingAfterSignIn(query.data.next, env.NEXT_PUBLIC_SITE_URL), request.url));
   authHeaders.forEach((value, name) => response.headers.set(name, value));
   return response;
 }
