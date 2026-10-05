@@ -2472,6 +2472,15 @@ connection caches, not with the code.
 - **Do.** Run `HARNESS_LANE=<n> PULSAR_BASE_URL=http://localhost:<port> npm run harness:mint-session
   -w apps/pulsar` before `check:day`, `check:goal` or `check:goal-actions` when the last mint is over
   half an hour old. A red on an insert naming a `user_id` that is not the lane's is this, not the code.
+- **Its access token also dies after an hour, and then every call spends a refresh.** `getClaims()` refreshes an
+  expired token and a script never writes the new cookie back, so each server action pays one
+  `POST /token?grant_type=refresh_token`. Auth's refresh limit is per IP, and the five lanes share one.
+- **Measured 2026-10-05** on lane 3: `session-3.json`'s token had expired ten hours before. One `check:plan` logged
+  **202** `429 over_request_rate_limit` and passed 22 of 74; five runs read 21–25 of 74. After a fresh mint the same
+  code passed 74 of 74 with no 429. Logs in `private/auth-rate-limit-2026-10-05/`.
+- `mint-session` needs the lane's own server up. Without it it prints `FAILED  fetch failed`, which is not a 429.
+- **Do.** Mint before every `check:*` run, not by the half hour. Read the token's `exp` when a check reds on
+  `signedOut` or `withGoalsDb called without a verified session`.
 
 ## A spec that counts a number another spec moves in parallel is a race, not a check
 
