@@ -45,6 +45,32 @@ test.describe("a database outage", () => {
     await expect(nav.getByText("metas abiertas", { exact: true })).toHaveCount(0);
   });
 
+  for (const width of [390, 1440]) {
+    test(`at ${width} the failure on /mes marks Mes and draws its exit as the board does`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/mes");
+      await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();
+      await expect(page.locator("a[aria-current]")).toHaveCount(1);
+      await expect(page.getByRole("navigation").getByRole("link", { name: "Mes" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+
+      const retry = await page.getByRole("button", { name: "Intentar otra vez" }).boundingBox();
+      const home = await page.getByRole("main").getByRole("link", { name: "Ir a hoy" }).boundingBox();
+      const main = await page.getByRole("main").boundingBox();
+      if (width >= 1024) {
+        expect(Math.abs(retry!.y - home!.y)).toBeLessThanOrEqual(1);
+        expect(home!.x).toBeGreaterThan(retry!.x + retry!.width - 1);
+        expect(home!.x + home!.width - retry!.x).toBeLessThanOrEqual(560);
+      } else {
+        expect(home!.y).toBeGreaterThan(retry!.y + retry!.height - 1);
+        expect(retry!.width).toBeCloseTo(home!.width, 0);
+        expect(retry!.width).toBeGreaterThan(main!.width - 64);
+      }
+    });
+  }
+
   test("Intentar otra vez asks the server again", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toBeVisible();

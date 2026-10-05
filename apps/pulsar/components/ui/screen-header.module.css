@@ -103,6 +103,10 @@
   gap: 6px;
 }
 
+.exitActions > :is(a, button) {
+  inline-size: 100%;
+}
+
 @media (min-width: 1024px) {
   .exit {
     max-inline-size: 560px;
@@ -112,5 +116,9 @@
     flex-direction: row;
     align-items: center;
     gap: 12px;
+  }
+
+  .exitActions > :is(a, button) {
+    inline-size: auto;
   }
 }
