@@ -147,7 +147,7 @@ test.describe("pestañas y riel", () => {
     }
   });
 
-  test("a sheet stands over the tabs: both its buttons are the topmost element at their centres (RNP-16)", async ({
+  test("a sheet stands over the tabs: its buttons and the part of it inside the bar's band are topmost (RNP-16)", async ({
     browser,
     baseURL,
     person,
@@ -170,6 +170,48 @@ test.describe("pestañas y riel", () => {
         });
         expect(topmost, `${name} is topmost`).toBe(true);
       }
+
+      // A button may sit clear of the bar; the sheet's own ground does not.
+      const band = await page.evaluate(() => {
+        const nav = document.querySelector("nav")!.getBoundingClientRect();
+        const dialog = document.querySelector('[role="dialog"]')!.getBoundingClientRect();
+        const y = (Math.max(nav.top, dialog.top) + Math.min(nav.bottom, dialog.bottom)) / 2;
+        const x = dialog.left + dialog.width / 2;
+        const hit = document.elementFromPoint(x, y);
+        return {
+          overlaps: nav.top < dialog.bottom && nav.bottom > dialog.top,
+          inSheet: !!hit && !!document.querySelector('[role="dialog"]')!.contains(hit),
+          inNav: !!hit && document.querySelector("nav")!.contains(hit),
+        };
+      });
+      expect(band.overlaps, "the sheet reaches the bar's band").toBe(true);
+      expect(band.inNav, "the bar is not drawn over the sheet").toBe(false);
+      expect(band.inSheet, "the sheet is what is drawn in the bar's band").toBe(true);
+
+      // `elementFromPoint` cannot see a nav over the sheet: the modal sets
+      // `pointer-events: none` on the page behind it, so the nav is never a hit.
+      // The stacking itself is asserted here instead: the nav's `z-index` is
+      // held inside the theme root's stacking context, and the sheet is a
+      // later sibling of that root.
+      const order = await page.evaluate(() => {
+        const topOf = (el: Element) => {
+          let node = el;
+          while (node.parentElement && node.parentElement !== document.body) node = node.parentElement;
+          return node;
+        };
+        const navTop = topOf(document.querySelector("nav")!);
+        const sheetTop = topOf(document.querySelector('[role="dialog"]')!);
+        const z = (el: Element) => Number(getComputedStyle(el).zIndex) || 0;
+        return {
+          sameRoot: navTop === sheetTop,
+          after: !!(navTop.compareDocumentPosition(sheetTop) & Node.DOCUMENT_POSITION_FOLLOWING),
+          navRootZ: z(navTop),
+          sheetRootZ: z(sheetTop),
+        };
+      });
+      expect(order.sameRoot, "the sheet is a portal outside the nav's root").toBe(false);
+      expect(order.after, "the sheet's root follows the nav's").toBe(true);
+      expect(order.sheetRootZ, "the sheet's root is not under the nav's").toBeGreaterThanOrEqual(order.navRootZ);
     } finally {
       await context.close();
     }
@@ -275,6 +317,83 @@ test.describe("pestañas y riel", () => {
       await page.keyboard.press("Tab");
       await expect(nav.getByRole("link", { name: short })).toBeFocused();
       await expect(balloon).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("in the dark face the balloon is a raised dark surface, not white (RNP-08, RNP-17)", async ({
+    browser,
+    baseURL,
+    person,
+    db,
+  }) => {
+    const long = `Una meta con un nombre larguísimo que no cabe en el riel ${stamp}`;
+    await db`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${long}, ${shift(today, 90)}, ${new Date(Date.now() - 19 * 86_400_000)})
+    `;
+    const { context, page } = await open(browser, baseURL, person, 1280, 800);
+    try {
+      await page.emulateMedia({ colorScheme: "light" });
+      await page.goto("/");
+      await loaded(page);
+      await page.getByRole("button", { name: "Cambiar a modo oscuro" }).click();
+      await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+      const nav = page.getByRole("navigation");
+      await nav.getByRole("link", { name: OPEN_B }).focus();
+      await page.keyboard.press("Tab");
+      const balloon = page.locator("[data-goal-balloon]");
+      await expect(balloon).toBeVisible();
+      const colours = await balloon.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return { background: style.backgroundColor, ink: style.color };
+      });
+      expect(colours.background).not.toBe("rgb(255, 255, 255)");
+      expect(colours.background).toBe("rgb(22, 27, 32)");
+      expect(colours.ink).toBe("rgb(231, 236, 241)");
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("the rail follows a goal created, archived, reopened and renamed, with no reload (RNP-17)", async ({
+    browser,
+    baseURL,
+    person,
+  }) => {
+    const created = `Pestañas creada ${stamp}`;
+    const { context, page } = await open(browser, baseURL, person, 1280, 800);
+    try {
+      await page.goto("/");
+      await loaded(page);
+      const nav = page.getByRole("navigation");
+      await expect(nav.getByRole("link", { name: OPEN_A })).toBeVisible();
+      await expect(nav.getByRole("link", { name: created })).toHaveCount(0);
+
+      // One document load, then client navigations only: the layout persists.
+      await page.goto("/metas/nueva");
+      await page.getByLabel("nombre").fill(created);
+      await page.getByRole("button", { name: "Abrirla" }).click();
+      await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
+      await expect(nav.getByRole("link", { name: created })).toBeVisible();
+
+      await page.getByRole("button", { name: "Archivar", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Archivarla" }).click();
+      await expect(page.getByRole("button", { name: "Reabrir" })).toBeVisible();
+      await expect(nav.getByRole("link", { name: created })).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Reabrir" }).click();
+      await expect(nav.getByRole("link", { name: created })).toBeVisible();
+
+      const renamed = `${created} renombrada`;
+      await page.getByRole("button", { name: "Renombrar" }).click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByLabel("nombre").fill(renamed);
+      await sheet.getByRole("button", { name: "Guardarlo" }).click();
+      await expect(sheet).toBeHidden();
+      await expect(nav.getByRole("link", { name: renamed })).toBeVisible();
+      await expect(nav.getByRole("link", { name: created, exact: true })).toHaveCount(0);
     } finally {
       await context.close();
     }

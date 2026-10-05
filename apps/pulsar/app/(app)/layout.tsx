@@ -19,10 +19,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // this pays the same one JWT read every page under here already does.
   const person = await getPerson();
   // The rail names the open goals; a failed read draws it without them.
-  const goals = person ? await listGoals().catch(() => []) : [];
-  const t = await getTranslations("common.nav");
-  const common = await getTranslations("common");
-  const theme = await getTranslations("day.theme");
+  const [goals, t, common, theme] = await Promise.all([
+    person ? listGoals().catch(() => []) : [],
+    getTranslations("common.nav"),
+    getTranslations("common"),
+    getTranslations("day.theme"),
+  ]);
 
   return (
     <>

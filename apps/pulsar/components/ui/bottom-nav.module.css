@@ -213,11 +213,11 @@
     max-inline-size: 320px;
     padding: 8px 12px;
     border-radius: 10px;
-    background: #fff;
-    color: #1a1a1a;
+    background: var(--pulsar-raised);
+    color: var(--pulsar-ink);
+    border: 1px solid var(--pulsar-border);
     font-size: 14px;
     font-weight: 500;
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
     pointer-events: none;
     overflow-wrap: anywhere;
   }
