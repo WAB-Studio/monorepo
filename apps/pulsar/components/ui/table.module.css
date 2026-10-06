@@ -112,6 +112,15 @@
   }
 }
 
+/* Inside a narrow column the phone's stack stays at every width. */
+.narrow .phone {
+  display: block;
+}
+
+.narrow .wide {
+  display: none;
+}
+
 .hidden {
   position: absolute;
   inline-size: 1px;
@@ -254,4 +263,18 @@
   position: absolute;
   inset: 0;
   min-block-size: 48px;
+}
+
+/* The month open beside the list is marked from 1024, where a list sits beside
+   its item. */
+@media (min-width: 1024px) {
+  .stackRow.open {
+    background: var(--pulsar-accent-soft);
+    border-radius: 10px;
+  }
+
+  .stackRow.open .stackLabel {
+    font-weight: 600;
+    color: var(--pulsar-ink);
+  }
 }

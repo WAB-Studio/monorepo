@@ -91,13 +91,13 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(last).toContainText("1 h 40 min");
     await expect(last).toContainText("de 10 h");
     await expect(last).toContainText("se arrastró 66 %");
-    // The name stands alone: no year, and the state sits under it, never in the note.
-    await expect(last.getByRole("link", { name: label(lastMonth), exact: true })).toBeVisible();
+    // The whole row is the one link; no year, and the state sits under the name, never in the note.
+    await expect(last.getByRole("link")).toHaveCount(1);
     await expect(last).not.toContainText(lastMonth.slice(0, 4));
     await expect(last.locator("span").filter({ hasText: /^se arrastró 66 %$/ })).toHaveCount(1);
     // A closed month's amount is text, never a door to the sheet.
     await expect(last.getByText("de 10 h", { exact: true })).toBeVisible();
-    await expect(last.getByRole("link", { name: "de 10 h", exact: true })).toHaveCount(0);
+    await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
     await expect(last.getByRole("link", { name: label(lastMonth) })).toHaveAttribute(
       "href",
       `/metas/${goalId}/meses/${lastMonth.slice(0, 7)}`,
@@ -114,8 +114,10 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(items.nth(2)).not.toContainText("planeado");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
-    // Set: 12 and 30 are 750, read back in the row with no reload.
-    await current.getByRole("link", { name: "sin monto" }).click();
+    // Set: the amount is set from the month's own page. 12 and 30 are 750, read back in the row.
+    await current.getByRole("link").click();
+    await page.waitForURL(`**/meses/${seg(thisMonth)}`);
+    await page.getByRole("link", { name: "sin monto planeado" }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByRole("heading", { name: `¿Cuánto en ${label(thisMonth)}?` })).toBeVisible();
     await expect(sheet.getByRole("button", { name: /^quitar el monto/ })).toHaveCount(0);
@@ -138,12 +140,12 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     const future = items.nth(2);
     await expect(future).toContainText("planeado");
     await expect(future).toContainText("—");
-    await expect(future.getByRole("link", { name: "12 h", exact: true })).toBeVisible();
+    await expect(future).toContainText("12 h");
     await expect(future).not.toContainText("de 12 h");
     await expect(future).not.toContainText("sin monto");
 
     // Refused: 60 minutes is no minute count, and nothing changes.
-    await current.getByRole("link", { name: "de 12 h 30 min" }).click();
+    await page.goto(`/metas/${goalId}/meses?planear=${seg(thisMonth)}`);
     await expect(sheet.getByLabel("horas", { exact: true })).toHaveValue("12");
     await expect(sheet.getByLabel("minutos", { exact: true })).toHaveValue("30");
     await sheet.getByLabel("minutos", { exact: true }).fill("60");
@@ -159,30 +161,18 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     expect(await stored()).toEqual([765]);
 
     // Removed.
-    await current.getByRole("link", { name: "de 12 h 45 min" }).click();
+    await page.goto(`/metas/${goalId}/meses?planear=${seg(thisMonth)}`);
     await sheet.getByRole("button", { name: `quitar el monto de ${label(thisMonth)}` }).click();
     await expect(sheet).toHaveCount(0);
     await expect(current).toContainText("sin monto");
     expect(await stored()).toEqual([]);
 
-    // The desktop face: the same rows as a table, in the 640 column.
+    // From 1024 the list and the current month stand side by side, one h1 over both.
     await page.setViewportSize({ width: 1280, height: 900 });
-    const table = page.getByRole("table");
-    await expect(table).toBeVisible();
-    const rows = table.getByRole("row");
-    await expect(rows).toHaveCount(4);
-    await expect(table.getByRole("columnheader")).toHaveText(["mes", "alcanzado", "planeado"]);
-    await expect(rows.nth(1).getByRole("cell")).toHaveCount(3);
-    await expect(rows.nth(1).getByRole("cell").nth(1)).toHaveText("1 h 40 min");
-    await expect(rows.nth(1).getByRole("cell").nth(2)).toHaveText("de 10 h");
-    await expect(rows.nth(2)).toHaveAttribute("data-current", "");
-    await expect(rows.nth(2).getByRole("cell").nth(0)).toContainText("en curso");
-    const width = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
-    // 640 px of content with the 56 px padding standing outside it on each side.
-    expect(width).toBe(752);
-
-    await rows.nth(2).getByRole("link", { name: "sin monto" }).click();
-    await expect(sheet.getByRole("heading", { name: `¿Cuánto en ${label(thisMonth)}?` })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.locator("main ol a:visible")).toHaveCount(3);
+    await expect(page.locator("main ol a[aria-current=page]")).toContainText(label(thisMonth));
+    await expect(page.getByRole("heading", { level: 2 })).toContainText(label(thisMonth), { ignoreCase: true });
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
@@ -273,7 +263,6 @@ test("a goal with no measure lists every month of its span with its task count, 
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(`/metas/${goal.id}/meses`);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toHaveCount(0);
-    await expect(page.getByText("las tareas de cada mes")).toBeVisible();
     await expect(page.getByText("Esta meta no mide nada, así que no lleva montos ni tiempo.")).toHaveCount(0);
     const items = page.getByRole("listitem");
     await expect(items).toHaveCount(3);
@@ -286,7 +275,6 @@ test("a goal with no measure lists every month of its span with its task count, 
     await expect(current).toContainText("2 tareas");
     await expect(items.nth(2)).toContainText(label(followingMonth));
     await expect(items.nth(2)).toContainText("sin tareas");
-    await expect(page.getByText("Toca un mes para ver sus tareas.")).toBeVisible();
     // No figure, no amount, no door to the sheet.
     await expect(page.getByText(/sin monto|planeado|%/)).toHaveCount(0);
     for (const href of await page.locator("main a").evaluateAll((links) =>
@@ -301,12 +289,8 @@ test("a goal with no measure lists every month of its span with its task count, 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     await page.setViewportSize({ width: 1280, height: 900 });
-    const table = page.getByRole("table");
-    await expect(table.getByRole("columnheader")).toHaveText(["mes", "tareas"]);
-    await expect(table.getByRole("row")).toHaveCount(4);
-
-    await table.locator("tr[data-current]").getByRole("link", { name: label(thisMonth), exact: true }).click();
-    await page.waitForURL(`**/metas/${goal.id}/meses/${seg(thisMonth)}`);
+    await page.locator("main ol a", { hasText: label(lastMonth) }).click();
+    await page.waitForURL(`**/metas/${goal.id}/meses/${seg(lastMonth)}`);
 
     await page.goto("/metas/00000000-0000-0000-0000-000000000000/meses");
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
@@ -332,13 +316,14 @@ test("a closed month's amount is text and ?planear= on it mounts no sheet; this 
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}/meses?planear=${seg(lastMonth)}`);
     await expect(page.getByRole("listitem").first()).toContainText("de 10 h");
-    await expect(page.getByRole("link", { name: "de 10 h" })).toHaveCount(0);
+    await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^quitar el monto/ })).toHaveCount(0);
 
     await page.goto(`/metas/${goalId}/meses?planear=${seg(thisMonth)}`);
     await expect(page.getByRole("dialog").getByRole("heading", { name: `¿Cuánto en ${label(thisMonth)}?` })).toBeVisible();
     await page.goto(`/metas/${goalId}/meses`);
+    await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
     await page.getByRole("link", { name: "de 5 h" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
   } finally {
@@ -392,17 +377,16 @@ test("the closed month's row offers «correr el plan un mes» only over half car
     await page.goto(`/metas/${moved}/meses`);
     const items = page.getByRole("listitem");
     await expect(items.nth(0)).toContainText("se arrastró 100 %");
-    await expect(items.nth(0).getByRole("button", { name: action })).toBeVisible();
-    await expect(items.nth(1).getByRole("button", { name: action })).toHaveCount(0);
-    await expect(items.nth(2).getByRole("button", { name: action })).toHaveCount(0);
+    // One trigger under the list, never inside a row (a row is a link).
+    await expect(items.getByRole("button", { name: action })).toHaveCount(0);
     await expect(page.getByRole("button", { name: action })).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     await page.setViewportSize({ width: 1280, height: 900 });
-    await expect(page.getByRole("table").getByRole("button", { name: action })).toBeVisible();
+    await expect(page.getByRole("button", { name: action })).toBeVisible();
     await page.setViewportSize({ width: 360, height: 740 });
 
-    await items.nth(0).getByRole("button", { name: action }).click();
+    await page.getByRole("button", { name: action }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByRole("heading", { name: "Correr un mes lo que sigue" })).toBeVisible();
     await expect(sheet.getByText("1 tarea planeada")).toBeVisible();
@@ -460,7 +444,7 @@ test("an ended goal and an archived one read their months and offer no way into 
       await page.goto(`/metas/${goalId}/meses`);
       await expect(page.locator("main")).toHaveCount(1);
       await expect(page.getByRole("listitem").first()).toContainText("de 10 h");
-      await expect(page.getByRole("link", { name: "de 10 h" })).toHaveCount(0);
+      await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
       await expect(page.getByRole("link", { name: /^Planear / })).toHaveCount(0);
       await expect(page.getByText(/^Toca un mes/)).toHaveCount(0);
       await expect(
@@ -470,6 +454,60 @@ test("an ended goal and an archived one read their months and offer no way into 
       await page.goto(`/metas/${goalId}/meses?planear=${month.slice(0, 7)}`);
       await expect(page.locator("main")).toHaveCount(1);
       await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
+test("each month is a whole 48 px link in ink to its month; one h1; the back reaches the goal; from 1024 the current month stands beside the list and tapping another swaps it (RP-32, RP-28, RNP-16, RNP-17)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  test.slow();
+  const stamp = Date.now();
+  const name = `Meta filas ${stamp}`;
+  const goalId = await seedGoal(db, person.id, name);
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${goalId}, ${lastMonth}::date, 600), (${person.id}, ${goalId}, ${thisMonth}::date, 720)
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    for (const width of [360, 390, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/metas/${goalId}/meses`);
+      await expect(page.getByRole("heading", { level: 1, name: "Por mes" })).toHaveCount(1);
+      const rows = page.locator("main ol a:visible");
+      await expect(rows).toHaveCount(3);
+      for (const row of await rows.all()) {
+        expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+        expect(await row.evaluate((node) => getComputedStyle(node).color)).not.toBe("rgb(0, 0, 238)");
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+      if (width >= 1024) {
+        await expect(page.locator("main ol a[aria-current=page]")).toContainText(label(thisMonth));
+        const listBox = (await rows.first().boundingBox())!;
+        const detailBox = (await page.getByRole("heading", { level: 2 }).boundingBox())!;
+        expect(listBox.x + listBox.width).toBeLessThan(detailBox.x);
+        await rows.first().click();
+        await page.waitForURL(`**/meses/${seg(lastMonth)}`);
+        await expect(rows).toHaveCount(3);
+        await expect(page.locator("main ol a[aria-current=page]")).toContainText(label(lastMonth));
+      } else {
+        await rows.first().click();
+        await page.waitForURL(`**/meses/${seg(lastMonth)}`);
+        await page.goBack();
+      }
+
+      await page.goto(`/metas/${goalId}/meses`);
+      await page.getByRole("link", { name: `Volver a ${name}` }).click();
+      await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
     }
   } finally {
     await context.close();
