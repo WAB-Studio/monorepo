@@ -38,12 +38,25 @@
   border-radius: 10px;
 }
 
+/* The name and what trails it. The trailing block stays beside the name while
+   the name fits by word (its min-content) and drops under it, start-aligned,
+   when it does not. */
+.content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
 /* A long name wraps rather than pushing the measure off the row. */
 .body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1 1 auto;
+  flex: 1 1 min-content;
   min-inline-size: 0;
   overflow-wrap: break-word;
 }

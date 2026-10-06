@@ -94,7 +94,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     .join(" ");
 
   const body = (
-    <>
+    <span className={styles.content}>
       <span className={styles.body}>
         <Text as="span" variant="name" tone={quiet ? "muted" : undefined}>
           {name}
@@ -117,7 +117,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
       </span>
       {wideTrailing ? <span className={`${styles.trailing} ${styles.wideOnly}`}>{wideTrailing}</span> : null}
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
-    </>
+    </span>
   );
 
   if (href) {
