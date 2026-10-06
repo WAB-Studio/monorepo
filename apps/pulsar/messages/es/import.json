@@ -73,6 +73,7 @@
     "templateLine": "Línea {line}: «{text}». Esperaba {expected}.",
     "noKey": "La lectura con IA no está disponible ahora. Un plan escrito en la plantilla sí se lee.",
     "cap": "Ya leíste 10 planes con IA hoy. Mañana puedes leer otros 10. Un plan escrito en la plantilla sí se lee hoy.",
+    "blank": "No pegaste nada. Pega tu plan o sube un archivo.",
     "empty": "No encontramos metas, meses ni tareas en este texto. Prueba escribirlo en la plantilla.",
     "modelFailed": "No pudimos leer el plan. Tu texto sigue aquí.",
     "modelInvalid": "No pudimos leer el plan. Tu texto sigue aquí.",

@@ -204,10 +204,35 @@ test.describe("the import screen (RP-37)", () => {
       await page.goto("/metas/importar");
       await settled(page);
 
+      await page.route("**/importar/leer", (route) =>
+        route.fulfill({ status: 422, json: { error: "import.errors.empty" } }),
+      );
+      await page.getByLabel(messages.textLabel).fill("algo sin metas");
       await page.getByRole("button", { name: "Leer el plan" }).click();
       await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(messages.errors.empty);
       await page.getByRole("button", { name: "ver la plantilla" }).click();
       await expect(page.getByRole("button", { name: "copiar la plantilla" })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a blank box answers the blank notice without sending anything", async ({ person, browser, baseURL }) => {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      let sent = 0;
+      await page.route("**/importar/leer", (route) => {
+        sent += 1;
+        return route.fulfill({ status: 422, json: { error: "import.errors.empty" } });
+      });
+      await page.goto("/metas/importar");
+      await settled(page);
+
+      await page.getByLabel(messages.textLabel).fill("   \n ");
+      await page.getByRole("button", { name: "Leer el plan" }).click();
+      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(messages.errors.blank);
+      expect(sent).toBe(0);
     } finally {
       await context.close();
     }
