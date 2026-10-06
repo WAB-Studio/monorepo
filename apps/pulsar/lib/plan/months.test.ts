@@ -136,3 +136,38 @@ test("toDate: sums through the current month, a month without amount adds 0 plan
   });
   assert.deepEqual(toDate(rows), { planned: 720, reached: 150 });
 });
+
+test("monthRows: a month with no budget reads the rhythm; a budget wins, 0 included; no rhythm reads as before", () => {
+  const rows = (budgets: { month: string; amount: number }[], rhythm?: number | null) =>
+    monthRows({
+      openedOn: "2026-09-10",
+      horizon: "2026-12-01",
+      today: "2026-10-22",
+      budgets,
+      reached: new Map(),
+      rhythm,
+    }).map((row) => row.planned);
+  assert.deepEqual(rows([{ month: OCT, amount: 720 }], 300), [300, 720, 300]);
+  assert.deepEqual(rows([{ month: OCT, amount: 0 }], 300), [300, 0, 300]);
+  assert.deepEqual(rows([{ month: OCT, amount: 720 }]), [null, 720, null]);
+  assert.deepEqual(rows([], null), [null, null, null]);
+});
+
+test("monthLine: no budget reads the rhythm; a budget wins, 0 included; no rhythm reads as before", () => {
+  const line = (budget: { month: string; amount: number } | null, rhythm?: number | null) =>
+    monthLine({ month: OCT, today: "2026-10-10", budget, reached: 0, rhythm }).planned;
+  assert.equal(line(null, 300), 300);
+  assert.equal(line({ month: OCT, amount: 720 }, 300), 720);
+  assert.equal(line({ month: OCT, amount: 0 }, 300), 0);
+  assert.equal(line(null), null);
+  assert.equal(line(null, null), null);
+});
+
+test("monthLine: the pace rule fires on the rhythm from the 20th", () => {
+  const line = (today: string, reached: number) =>
+    monthLine({ month: OCT, today, budget: null, reached, rhythm: 720 });
+  assert.equal(line("2026-10-20", 431).underPace, true);
+  assert.equal(line("2026-10-20", 432).underPace, false);
+  assert.equal(line("2026-10-19", 0).underPace, false);
+  assert.equal(monthLine({ month: OCT, today: "2026-10-25", budget: null, reached: 0, rhythm: 0 }).underPace, false);
+});
