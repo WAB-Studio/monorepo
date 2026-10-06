@@ -2793,3 +2793,11 @@ branch could pass until it was restored.
 - `` sql`... substring(name from '\d+') ...` `` reaches Postgres as `'d+'`: the escape is dropped, the regex matches nothing,
   and every row sorts as `NULLS LAST`. Write `\\d` in embedded SQL.
 - Measured 2026-10-06: module 252's backfill probe P186 returned Cap. 1|Cap. 10|Cap. 2 (name order) until `\\d` replaced `\d`.
+
+## `armazon-estados.spec.ts` is red under `next dev` and racy under load
+
+- The skeleton test holds `/mes`'s RSC request and expects `main header[aria-hidden]`. The block shows only when the
+  «Mes» link's prefetch already put `loading` in the router cache. `next dev` serves no `loading` prefetch, so the test is
+  red 2/2 in every lane on every branch; it means nothing there. Run it against `next build && next start`, as CI does.
+- Measured 2026-10-06: CI went red at 1440 only on train 13; a prod build of the same commit was green 6/6, and a
+  prefetch delayed 2.5 s reproduced the red. The spec now awaits the prefetch's response before the click.
