@@ -9,9 +9,10 @@ import { undoFact } from "@/app/actions/facts";
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
 import { ShiftSheet, type ShiftSheetProps } from "@/components/month/shift-sheet";
-import { monthName, TaskSheet } from "@/components/plan/task-sheet";
+import { TaskSheet } from "@/components/plan/task-sheet";
 import { Button, Flex, IconButton, Mark, Panel, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
+import { monthName } from "@/lib/plan/month-name";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 
 export type TaskRowProps = {

@@ -921,3 +921,9 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   system's multiples of 4). Chips in a row sit 8 apart and wrap by chip; the seven weekday chips sit 4 apart
   (`ChipRow`, `tight`). A field pair sits 8 apart, two fields sharing the width, or the first sized by the pair when
   it is narrow, a quantity beside its unit (`FieldPair`). No screen spaces either with `Flex gap` or `style`.
+- **The plan's months, module 349** (2026-10-06, decided by the orchestrator):
+  - A task past the goal's end appears only under «después de tu final», never again in the month holding its hours.
+  - A month past the goal's last month with no rows is dropped.
+  - A goal with no measure draws no figure and no bar on the plan's months.
+  - «Añadir una tarea» opens the sheet with no «va a» hint.
+  - A plan that ends on the goal's last day reads «A este ritmo terminas el {date}, el día de tu final.», never «0 días antes».

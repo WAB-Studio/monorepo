@@ -3,19 +3,12 @@ import { getTranslations } from "next-intl/server";
 
 import { TaskRow, type TaskRowProps } from "@/components/month/task-row";
 import { Figure, Flex, Mark, Panel, Progress, Row, Section, Separator, Text } from "@/components/ui";
+import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import type { GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
-
-const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
-
-// «diciembre», or «diciembre de 2027» off this year: `task-sheet.tsx`'s own rule, which a server file cannot import.
-function monthName(month: string, thisYear: string): string {
-  const name = monthFormat.format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
-  return month.slice(0, 4) === thisYear ? name : `${name} de ${month.slice(0, 4)}`;
-}
 
 // Months drawn whole before the rest collapse: this one and the next.
 const WHOLE = 2;
@@ -142,7 +135,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
               </Flex>
             }
           >
-            {percent !== null ? <Progress percent={percent} /> : null}
+            {percent !== null ? <Progress percent={percent} size="thick" /> : null}
             <Flex direction="column">{month.items.map((item) => rowOf(item, month.month))}</Flex>
           </Section>
         );

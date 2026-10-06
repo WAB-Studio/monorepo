@@ -96,6 +96,18 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("a month's progress bar is 6 px tall", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 480, `${Number(thisYear) + 1}-${today.slice(5, 7)}-01`);
+      await seedTasks(db, personId, goalId, [["Una", 60]]);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        const bar = section(page, `${name(m0)} · en curso`).locator("span[aria-hidden]").first();
+        expect((await bar.boundingBox())!.height).toBe(6);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("a fixed task carries its pin; a free one does not", async ({ page, db, personId }) => {
       const goalId = await seedGoal(db, personId, 480, `${Number(thisYear) + 1}-${today.slice(5, 7)}-01`);
       await seedTasks(db, personId, goalId, [["Examen", 60, m0], ["Suelta", 60]]);
@@ -219,9 +231,11 @@ for (const width of [390, 1440]) {
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toHaveCount(0);
         await expect(page.getByText("después de tu final", { exact: true })).toHaveCount(0);
         // The end falls on the new last day: no day of slack, none late.
-        await expect(page.getByText(/^A este ritmo terminas el .*, 0 días antes de tu final\.$/)).toBeVisible();
+        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, el día de tu final\.$/u)).toBeVisible();
+        await expect(page.getByText(/0 días/)).toHaveCount(0);
         // The end falls on the new last day: no day of slack, none late.
-        await expect(page.getByText(/^A este ritmo terminas el .*, 0 días antes de tu final\.$/)).toBeVisible();
+        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, el día de tu final\.$/u)).toBeVisible();
+        await expect(page.getByText(/0 días/)).toHaveCount(0);
         const [moved] = await db<{ horizon: string }[]>`select to_char(horizon, 'YYYY-MM-DD') as horizon from goals.goals where id = ${goalId}`;
         expect(moved.horizon > late.horizon).toBe(true);
       } finally {

@@ -68,7 +68,8 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
   let late = false;
   if (unit && roadmap.state === "planned" && roadmap.end !== null) {
     const days = daysBetween(roadmap.end, roadmap.lastDay);
-    if (days >= 0) lead = t("roadmap.plan.finish", { date: dateLabel(roadmap.end), days });
+    if (days > 0) lead = t("roadmap.plan.finish", { date: dateLabel(roadmap.end), days });
+    else if (days === 0) lead = t("roadmap.plan.finishOnEnd", { date: dateLabel(roadmap.end) });
     else {
       late = true;
       lead = t("roadmap.pasaElFinal.finish", {
