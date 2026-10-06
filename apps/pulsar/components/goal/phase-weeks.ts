@@ -1,4 +1,5 @@
 import { daysBetween, horizonWeeksOf, weekIndexOf, weekSpan } from "@/lib/day/weeks";
+import { phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
 
 export { daysBetween };
 
@@ -24,4 +25,29 @@ export function weeksToPhaseSpan(
   toWeek: number,
 ): { startsOn: string; endsOn: string } {
   return weekSpan(openedOn, fromWeek, toWeek);
+}
+
+// The span the new-phase form opens on (RP-15): from the week after the last
+// phase, up to four weeks long, every week of it ending within the horizon —
+// so the default passes the form's own checks. `null` when not even one week
+// fits (the goal's partial last week never does): the form opens empty.
+export function defaultPhaseWeeks({
+  openedOn,
+  horizon,
+  phases,
+}: {
+  openedOn: string;
+  horizon: string;
+  phases: PhaseSpan[];
+}): { from: number; to: number } | null {
+  const lastEndsOn = phases.reduce<string | null>(
+    (latest, phase) => (latest === null || phase.endsOn > latest ? phase.endsOn : latest),
+    null,
+  );
+  const from = lastEndsOn ? weekIndexOf(openedOn, lastEndsOn) + 1 : 1;
+  const fits = (week: number) => phaseWithinHorizon(weekSpan(openedOn, from, week), horizon);
+  if (!fits(from)) return null;
+  let to = from;
+  while (to < from + 3 && fits(to + 1)) to += 1;
+  return { from, to };
 }

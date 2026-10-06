@@ -372,4 +372,38 @@ test.describe("the connections screen (RP-38)", () => {
       await context.close();
     }
   });
+
+  test("«Copiar» answers «Copiada.» under the row for a moment, then goes quiet", async ({ person, browser, baseURL }) => {
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      const copy = page.getByRole("button", { name: messages.connector.copyName });
+      await copy.click();
+      const line = page.getByRole("status").filter({ hasText: messages.connector.copied });
+      await expect(line).toBeVisible();
+      await expect(copy).toHaveText(messages.connector.copy);
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/mcp$/);
+      await expect(line).toHaveCount(0, { timeout: 4000 });
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("when the clipboard refuses, the same place says so and the label stays", async ({ person, browser, baseURL }) => {
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await page.evaluate(() => {
+        Object.defineProperty(navigator.clipboard, "writeText", {
+          configurable: true,
+          value: () => Promise.reject(new DOMException("denied", "NotAllowedError")),
+        });
+      });
+      const copy = page.getByRole("button", { name: messages.connector.copyName });
+      await copy.click();
+      await expect(page.getByRole("status").filter({ hasText: messages.connector.copyFailed })).toBeVisible();
+      await expect(page.getByText(messages.connector.copied)).toHaveCount(0);
+      await expect(copy).toHaveText(messages.connector.copy);
+    } finally {
+      await context.close();
+    }
+  });
 });

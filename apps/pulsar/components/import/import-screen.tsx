@@ -19,6 +19,7 @@ const KNOWN_ERRORS = new Set([
   "import.errors.unreadableType",
   "import.errors.noKey",
   "import.errors.cap",
+  "import.errors.blank",
   "import.errors.empty",
   "import.errors.modelFailed",
   "import.errors.modelInvalid",
@@ -37,6 +38,7 @@ function placement(failure: Failure) {
     case "import.errors.noKey":
     case "import.errors.cap":
       return { place: "top", template: true } as const;
+    case "import.errors.blank":
     case "import.errors.empty":
     case "import.errors.modelFailed":
     case "import.errors.modelInvalid":
@@ -116,6 +118,10 @@ export function ImportScreen() {
 
   function readText() {
     if (busy) return;
+    if (text.trim() === "") {
+      fail({ kind: "key", key: "import.errors.blank" });
+      return;
+    }
     const form = new FormData();
     form.set("text", text);
     void send(form, text, text);

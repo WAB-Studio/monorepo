@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -31,20 +32,49 @@ export type ConnectionRow = {
 
 type Created = { name: string; key: string };
 
+type CopyState = "idle" | "copied" | "failed";
+
+const COPIED_MS = 2000;
+
 function Copyable({ text, label }: { text: string; label: string }) {
   const t = useTranslations("connections");
+  const [state, setState] = useState<CopyState>("idle");
+
+  useEffect(() => {
+    if (state !== "copied") return;
+    const timer = setTimeout(() => setState("idle"), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [state]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setState("copied");
+    } catch {
+      setState("failed");
+    }
+  }
 
   return (
-    <Flex align="center" gap="3">
-      <CodeBlock>{text}</CodeBlock>
-      <Button
-        variant="outline"
-        tap={44}
-        aria-label={label}
-        onClick={() => void navigator.clipboard.writeText(text).catch(() => {})}
-      >
-        {t("connector.copy")}
-      </Button>
+    <Flex direction="column" gap="2">
+      <Flex align="center" gap="3">
+        <CodeBlock>{text}</CodeBlock>
+        <Button variant="outline" tap={44} aria-label={label} onClick={() => void copy()}>
+          {t("connector.copy")}
+        </Button>
+      </Flex>
+      {state === "idle" ? null : (
+        <Text as="p" role="status" aria-live="polite" tone={state === "copied" ? "accent" : "muted"}>
+          {state === "copied" ? (
+            <Flex as="span" align="center" gap="1">
+              <Check size={14} strokeWidth={2} aria-hidden />
+              {t("connector.copied")}
+            </Flex>
+          ) : (
+            t("connector.copyFailed")
+          )}
+        </Text>
+      )}
     </Flex>
   );
 }

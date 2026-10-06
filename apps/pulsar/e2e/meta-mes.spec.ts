@@ -185,7 +185,7 @@ test("a measure with no amount says so and offers to plan the month; no measure 
       await expect(visible(page, /llevas \d+ %|bajo el 60 %/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: `Planear ${monthName}`, exact: true })).toHaveAttribute(
         "href",
-        `/metas/${bare}/meses?planear=${today.slice(0, 7)}`,
+        `/metas/${bare}/meses?planear=${today.slice(0, 7)}&volver=${encodeURIComponent(`/metas/${bare}`)}`,
       );
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveAttribute(
         "href",

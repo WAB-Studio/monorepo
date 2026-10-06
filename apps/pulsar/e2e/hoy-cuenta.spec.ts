@@ -54,6 +54,19 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
   `;
   await fact(metId, monthlyMet ? firstOfMonth : plusDays(-1));
   await fact(metWeeklyId, weeklyMet ? week[0] : plusDays(-1));
+  // One-offs never count: two pending and one done leave «hechos» to the two commitments.
+  const oneOffIds: string[] = [];
+  for (const suffix of ["a", "b", "c"]) {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, day)
+      values (${person.id}, null, ${`Suelta ${suffix} ${stamp}`}, ${today}) returning id
+    `;
+    oneOffIds.push(row.id);
+  }
+  await db`
+    insert into goals.facts (user_id, commitment_id, one_off_id, goal_id, day, written_at)
+    values (${person.id}, null, ${oneOffIds[2]}, null, ${today}, now())
+  `;
 
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
@@ -99,7 +112,8 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
       const [{ count }] = await db<{ count: number }[]>`
         select count(*)::int as count from goals.facts where user_id = ${person.id} and day = ${today}
       `;
-      expect(count).toBe(3);
+      // Three taps (two daily, one quiet flexible) plus the done one-off's fact.
+      expect(count).toBe(4);
 
       await quiet.click();
       await expect(quiet).toContainText("cumplida este mes · 1 de 1");
@@ -112,6 +126,8 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     );
   } finally {
     await context.close();
+    await db`delete from goals.facts where one_off_id in ${db(oneOffIds)}`;
+    await db`delete from goals.one_offs where id in ${db(oneOffIds)}`;
     await db`delete from goals.goals where id = ${goal.id}`;
   }
 });

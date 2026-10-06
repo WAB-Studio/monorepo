@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import type { Translator } from "@/i18n/translator";
+import type { MessageKey, Translator } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
+import { formatQuantity, type TimeWords } from "@/lib/units/time";
 import { Button, Flex, SectionLabel, Text } from "@/components/ui";
 
 import { CommitmentRow } from "./retire-sheet";
@@ -49,18 +50,18 @@ function cadenceWords(cadence: Cadence, t: Translator): string {
 // What satisfies the commitment, in quiet: a tap, the quantity's own unit —
 // the person's own word, never resolved against a catalogue — or the
 // evidence threshold and source ("1 búsqueda · diccionario").
-function satisfactionWords(commitment: GoalCommitment, t: Translator): string {
+function satisfactionWords(commitment: GoalCommitment, t: Translator, words: TimeWords): string {
   switch (commitment.satisfiedBy.kind) {
     case "tap":
       return t("goal.satisfaction.tap");
     case "quantity":
-      return commitment.satisfiedBy.unit;
+      return formatQuantity(commitment.satisfiedBy.target, commitment.satisfiedBy.unit, words);
     case "evidence": {
       const { threshold, unit } = commitment.satisfiedBy;
       const labelKey = commitment.sourceLabelKey;
       const source = labelKey ? t(labelKey) : "";
-      const words = labelKey ? evidenceUnitWords({ labelKey, unit }, threshold, t) : unit;
-      return `${threshold} ${words} · ${source}`;
+      const unitWords = labelKey ? evidenceUnitWords({ labelKey, unit }, threshold, t) : unit;
+      return `${threshold} ${unitWords} · ${source}`;
     }
   }
 }
@@ -87,6 +88,19 @@ export async function CommitmentList({
   archived?: boolean;
 }) {
   const t = await getTranslations();
+  const units = await getTranslations("units");
+  // Server twin of `useTimeWords`: the unit is free text, so a word the
+  // catalogue lacks prints as typed.
+  const words: TimeWords = {
+    h: (h) => units("h", { h }),
+    min: (min) => units("min", { min }),
+    join: (h, min) => units("join", { h, min }),
+    unit: (unit, n) => {
+      const word = unit.trim().toLowerCase();
+      const key = `units.words.${word}` as MessageKey;
+      return /^\p{L}+$/u.test(word) && t.has(key) ? t(key, { count: n }) : unit;
+    },
+  };
   // A retired commitment stays in the list — never hidden (RP-13) — but it
   // no longer asks anything of the goal, so the count above it names only
   // what is still active, not the whole history the list itself keeps.
@@ -114,7 +128,7 @@ export async function CommitmentList({
                 {cadenceWords(commitment.cadence, t)}
               </Text>
               <Text as="span" variant="meta" tone="muted">
-                {satisfactionWords(commitment, t)}
+                {satisfactionWords(commitment, t, words)}
               </Text>
             </Flex>
           }

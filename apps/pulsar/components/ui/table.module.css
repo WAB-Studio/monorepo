@@ -194,6 +194,7 @@
 }
 
 .label {
+  padding-inline-end: 16px;
   font-family: var(--font-mono);
   font-size: var(--pulsar-text-meta-size);
   letter-spacing: var(--pulsar-text-measure-tracking);

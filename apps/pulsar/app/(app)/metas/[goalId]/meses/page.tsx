@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 
 import { MonthsScreen } from "@/components/month/months-screen";
+import { returnTo } from "@/lib/plan/return-to";
 import { getPerson } from "@/lib/session";
 
 // Static per route: no title reads a goal or costs a statement (RNP-01).
@@ -19,12 +20,18 @@ export default async function MonthsPage({
   searchParams,
 }: {
   params: Promise<{ goalId: string }>;
-  searchParams: Promise<{ planear?: string | string[] }>;
+  searchParams: Promise<{ planear?: string | string[]; volver?: string | string[] }>;
 }) {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
   const { goalId } = await params;
-  const { planear } = await searchParams;
-  return <MonthsScreen goalId={goalId} planning={typeof planear === "string" ? planear : null} />;
+  const { planear, volver } = await searchParams;
+  return (
+    <MonthsScreen
+      goalId={goalId}
+      planning={typeof planear === "string" ? planear : null}
+      returnPath={returnTo(typeof volver === "string" ? volver : null, goalId)}
+    />
+  );
 }

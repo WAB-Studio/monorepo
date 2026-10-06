@@ -865,3 +865,38 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
 - **`ConexionesTelefono.dc.html` and `HoyVacioEscritorio.dc.html` are the two screens redrawn on the system**, approved
   with it. Their words: «Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.»; a key's
   line «Creada hoy a las 12:18 · sin usar»; «Copiar» answers «Copiada.» beside a check.
+  A failed copy shows, in the same place, one quiet sentence: «No se pudo copiar. Mantén presionado el texto para copiarlo.» (decided 2026-10-06).
+- **Seven more, taken by the user the same day on the planner's questions** (the orchestrator's picks, «el resto de
+  recomendación»):
+  - The report on paper prints months only; RP-46 retired for **RP-49**.
+  - A done task's name can be edited; its estimate cannot, so past totals never move.
+  - The app is called **«Bitácora de metas»** everywhere a person reads it: the rail, the consent screen, the PDF, every
+    button. «pulsar» stays in the address alone.
+  - A goal's weeks count its partial last week: a goal that ends mid-week has 36 weeks when 35 are whole, and a phase may
+    take the 36th.
+  - «Aplazar un mes» (the old «Correr un mes») is offered on Hoy and on the goal too, while it is open.
+  - Hoy steps between days with labelled controls beside the date, «‹ ayer» and «mañana ›»; a bare ‹ means back
+    everywhere.
+  - A commitment in a goal that measures takes the goal's unit; there is no free unit field there.
+- **The plan is a roadmap, decided by the user 2026-10-06** («que vaya por cantidad de horas por mes y funcione como
+  roadmap, de esa manera todo se mueve proporcionalmente»). Drawn on the page «El plan por mes» (`RoadmapPlan`,
+  `RoadmapHoyMovido`, `RoadmapPasaElFinal`, `RoadmapSinRitmo`, `RoadmapFijar`) and approved by the user the same day; written
+  as RP-50 to RP-55, retiring RP-42 and RP-48. RP-28 stays: a month's own amount overrides the rhythm.
+  - A goal has a rhythm, hours per month, which one month may override. Its tasks are one ordered list, each with its
+    estimate. The app gives each task its month by filling each month's hours in order.
+  - The person may **fix** a task to a month (a real date: an exam, a delivery); the rest flows around it.
+  - **The plan moves by itself** whenever something changes — a month left short, an estimate, a new task, a month's
+    hours — and Hoy says so («tu plan se movió 2 semanas»). Nothing asks to be accepted.
+  - **A task that does not fit whole starts where it fits and goes on in the next month** («sigue en noviembre»); its
+    hours are split between the two.
+  - The end date is the plan's: «a este ritmo terminas en …», set against the goal's end.
+  - Built before wave 3 of the UX slice: the edit sheet and the plan's words wait for these boards.
+- **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
+  - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
+    on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
+  - A measure's minutes take two digits after hours: «1 h 05 min», never read as «15».
+  - A row's name wraps by words, never inside one; its trailing figure keeps one line and drops under the name when it
+    does not fit.
+  - One link style: accent, 15 / 500, no underline, underlined on hover and focus; never grey.
+  - A selected chip is the accent's soft fill with an accent border; the full accent fill is the act's button alone.
+

@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { TaskRow } from "@/components/month/task-row";
 import { Button, Face, Flex, Figure, Grid, Page, Panel, ScreenHeader, SectionLabel, Separator, Text } from "@/components/ui";
 import { owedAt, type MonthItem } from "@/lib/plan/carry";
+import { planHrefFrom } from "@/lib/plan/return-to";
 import { loadMonthAcross, type MonthAcrossGoal } from "@/lib/queries/month";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 
@@ -77,7 +78,7 @@ export async function MonthAcrossScreen() {
     const planLink = collapsed
       ? null
       : goal.line && goal.line.planned === null
-        ? { href: `/metas/${goal.id}/meses?planear=${seg}`, label: t("month.planMonth", { month: thisName }) }
+        ? { href: planHrefFrom(goal.id, seg, "/mes"), label: t("month.planMonth", { month: thisName }) }
         : goal.items.length === 0
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
           : null;

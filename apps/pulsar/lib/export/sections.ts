@@ -1,5 +1,7 @@
 import type { ReviewWeek } from "@/lib/day/types";
 
+import { shortMonth } from "@/lib/dates/short-month";
+
 import type { GoalReport } from "./report";
 
 export type Section = "month" | "toDate" | "phases" | "tasks" | "months";
@@ -45,17 +47,14 @@ export function monthsWithWeeks(goal: GoalReport): MonthWithWeeks[] {
   });
 }
 
-const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
 // «31 ago–6 sep 2026»: the year closes the span, and opens both ends when the
-// span crosses a year. The month is cut to three letters because ICU's own
-// short form is «sept».
+// span crosses a year.
 export function civilSpan(startsOn: string, endsOn: string): string {
   const [startYear, startMonth, startDay] = startsOn.split("-").map(Number);
   const [endYear, endMonth, endDay] = endsOn.split("-").map(Number);
-  if (startsOn === endsOn) return `${endDay} ${SHORT_MONTHS[endMonth - 1]} ${endYear}`;
-  const start = SHORT_MONTHS[startMonth - 1];
-  const end = SHORT_MONTHS[endMonth - 1];
+  if (startsOn === endsOn) return `${endDay} ${shortMonth(endsOn)} ${endYear}`;
+  const start = shortMonth(startsOn);
+  const end = shortMonth(endsOn);
   if (startYear !== endYear) return `${startDay} ${start} ${startYear}–${endDay} ${end} ${endYear}`;
   if (startMonth !== endMonth) return `${startDay} ${start}–${endDay} ${end} ${endYear}`;
   return `${startDay}–${endDay} ${end} ${endYear}`;

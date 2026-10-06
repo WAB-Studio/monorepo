@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     form = await request.formData();
   } catch {
-    return fail(422, "import.errors.empty");
+    return fail(422, "import.errors.blank");
   }
 
   const pasted = form.get("text");
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     input = { kind: "text", text: pasted };
     text = pasted;
   } else {
-    return fail(422, "import.errors.empty");
+    return fail(422, "import.errors.blank");
   }
 
   if (text !== null) {

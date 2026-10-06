@@ -191,9 +191,9 @@ test("at 1280 the week is a table: commitments down, days across, today's fact i
     }
     await expect(table.getByRole("rowheader", { name: "Sueltas" })).toBeVisible();
 
-    // Only this spec's person owns these rows: 3 declared of 4 on the day
-    // (the two commitments and the two one-offs; one commitment has no fact).
-    await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("3 de 4");
+    // Only this spec's person owns these rows: 1 declared of 2 on the day.
+    // The two commitments count; the one-offs never do.
+    await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("1 de 2");
     await expect(table.getByRole("rowheader", { name: "hechos" })).toBeVisible();
 
     // The table sits in one Panel card: a 1px border with a 14px radius.
