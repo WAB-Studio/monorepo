@@ -44,9 +44,9 @@ for (const width of [390, 1440]) {
     }
 
     const cases = [
-      { name: "first month", month: first, line: () => `Empieza aquí con 10 h y sigue en ${named(middle)}.`, trailing: "10 h de 25 h" },
-      { name: "middle month", month: middle, line: () => `Viene de ${named(first)} y sigue en ${named(last)}.`, trailing: "10 h de 25 h" },
-      { name: "last month", month: last, line: () => `Viene de ${named(middle)}.`, trailing: "5 h de 25 h" },
+      { name: "first month", month: first, line: () => `Empieza aquí con 10 h y sigue en ${named(middle)}.`, trailing: "10 de 25 h" },
+      { name: "middle month", month: middle, line: () => `Viene de ${named(first)} y sigue en ${named(last)}.`, trailing: "10 de 25 h" },
+      { name: "last month", month: last, line: () => `Viene de ${named(middle)}.`, trailing: "5 de 25 h" },
     ];
     for (const { name, month, line, trailing } of cases) {
       test(`the ${name}'s page reads the part's sentence under the name (RP-54)`, async ({ person, browser, baseURL, db }) => {
@@ -70,7 +70,7 @@ for (const width of [390, 1440]) {
       try {
         const panel = page.getByRole("heading", { name: `Meta partes ${stamp}` }).locator("xpath=../..");
         await expect(panel.getByText(`Empieza aquí con 10 h y sigue en ${named(middle)}.`, { exact: true })).toBeVisible();
-        await expect(panel.getByText("10 h de 25 h", { exact: true })).toBeVisible();
+        await expect(panel.getByText("10 de 25 h", { exact: true })).toBeVisible();
       } finally {
         await context.close();
       }
