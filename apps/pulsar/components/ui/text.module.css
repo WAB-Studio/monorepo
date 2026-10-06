@@ -43,6 +43,16 @@
   color: var(--pulsar-muted);
 }
 
+/* The quiet sentence: Archivo 13 / 1.5 in muted. Mono is for figures and dates. */
+.sentence.sentence {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.5;
+  color: var(--pulsar-muted);
+}
+
 .ink.ink {
   color: var(--pulsar-ink);
 }
