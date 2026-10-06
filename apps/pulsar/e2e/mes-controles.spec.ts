@@ -56,8 +56,8 @@ test("the goal's name in «Mes» is an ink heading link with no underline that o
         const cs = getComputedStyle(el);
         return { color: cs.color, ink, line: cs.textDecorationLine };
       });
-      expect(style.color, `ink at ${width}`).toBe(style.ink);
-      expect(style.line, `no underline at ${width}`).toBe("none");
+      expect.soft(style.color, `ink at ${width}`).toBe(style.ink);
+      expect.soft(style.line, `no underline at ${width}`).toBe("none");
     }
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -69,6 +69,7 @@ test("the goal's name in «Mes» is an ink heading link with no underline that o
     await page.goto(`/metas/${goal.id}/meses/${seg}`);
     await expect(page.getByRole("link", { name: /^Otra tarea de / })).toBeVisible();
     await expect(page.getByRole("link", { name: "Otra sub-tarea" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "de 10 h", exact: true })).toBeVisible();
     const sides = await page.evaluate(() =>
       [...document.querySelectorAll("main a, main button")]
         .filter((el) => (el as HTMLElement).offsetParent !== null)
