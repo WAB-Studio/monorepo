@@ -91,12 +91,13 @@ Dark, the same design inverted:
 
 ## The marks
 
-Three states, one shape — a 24 px circle at the head of the row:
+Four states, one shape — a 24 px circle at the head of the row:
 
 | state | mark |
 |---|---|
 | done, declared | filled accent, a `#FFFFFF` check inside (`#0F1317` on dark) |
 | done, by evidence | accent-soft fill, 1.5 px accent border, an accent check |
+| done in part | 1.5 px accent border, the lower half filled accent, no check — a quantity logged under its target; it does not count as done |
 | not done | 1.5 px border, nothing inside |
 
 - The two done marks differ so a day marked by another app never reads as one the person said they
@@ -239,6 +240,26 @@ Drawn 2026-10-05 on the pages they belong to, approved by the user the same day:
 | `ReporteNota.dc.html` | `/exportar`: the note whole under a carried task and its sub-task, set off by a thin left rule |
 | `ReporteImpresoNota.dc.html` | the same on A4 at 12 pt; a long note breaks across pages, never cut |
 
+### The critic's cut of trains 6 and 7 (RP-16, RP-46, RP-47)
+
+Drawn 2026-10-06 on the pages they belong to, approved by the user the same day: «confirma los diseños, me da igual».
+
+| board | what it holds |
+|---|---|
+| `HoyEnParte.dc.html` | Hoy: «1 de 3 min · 09:22 · lo dijiste tú» under the half-filled mark, beside a done and an empty row |
+| `HoyCuentaEnParte.dc.html` | the count with a partial row: «hechos 2 de 5 · 1 en parte»; the partial never adds to «hechos» |
+| `HoyTelefonoSinPedido.dc.html` | phone: a goal that asks nothing today has no section; its «este mes» line stays; asking goals first, in plan order |
+| `HoyTareaMesSubtarea.dc.html` | the next month task is a sub-task: «de <parent>» above its name; the estimate on one line |
+| `DiaPasadoEnParte.dc.html` | a past day with a partial row, the same mark as Hoy |
+| `DiaPasadoPasos.dc.html` | a past day: «‹ día anterior», «día siguiente ›», «volver a hoy»; the date is the title; no empty goal section; «Ese día no pedía nada» when nothing asked |
+| `SemanaEnParte.dc.html` | the phone week: a half dot; the footer «hechos 4 de 6 · 1 en parte»; the desktop cell takes the same half dot |
+| `ReporteTareas.dc.html` | `/exportar` phone: «4 metas · 1 terminada»; «este mes · octubre» on the first figure; «tareas de octubre» — carried first, then the month's own, done and not, sub-tasks indented, notes under every task; every date with its year |
+| `ReporteMesesSemanas.dc.html` | the months table with each week folded under the month of its Monday, indented and muted, spans with year |
+| `ReporteImpresoTareas.dc.html` | the same on A4 |
+| `ReporteMarcoEscritorio.dc.html` | redrawn at 1440: three columns beside the rail, the ended goal last with its date |
+| `ReporteMarcoEscritorio1024.dc.html` | at 1024: two columns; the column count follows the width the rail leaves; no overflow |
+| `ConexionesRevocar.dc.html` | «Revocar» opens a sheet: «¿Revocar «<key>»?», «Deja de funcionar en este momento. La IA que la usa ya no podrá leer ni anotar nada. No se puede deshacer.»; «Revocar» solid, «Dejarla» outline; an unused key reads «creada … · sin usar» |
+
 ## The boards that do not exist
 
 Say what is missing, so a gap nobody drew reads as a gap nobody needed.
@@ -309,6 +330,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Notes on tasks: dark, the desktop dialog, the create forms.** Dark is the token table's; from 1024 the note's sheet
   is the centred dialog every sheet already is; `TareaNueva` and the AI's paths draw nothing new. Decided 2026-10-05 by
   the coordinator with the boards' approval.
+
+- **The critic's cut: what draws no new board.** Evidence below its threshold stays `empty`: there is no partial for a
+  source. The page titles, the Mes link, the 360 controls, «sin monto», the row alignment, the `/metas` plan rows and
+  «nov–nov» each match the board they already had. Dark is the token table's; the desktop dialog is unchanged. Decided
+  2026-10-06 by the coordinator with the boards' approval.
 
 ## Decisions taken here
 
@@ -649,7 +675,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   grabado · 3 min · pide el número». An evidence row keeps its source and never says either; a quiet
   row met in its period says neither. Drawn on `HoyEscritorio.dc.html` and `HoyHechas.dc.html`
   since the first boards; decided 2026-09-30 by the user, module 100.
-- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty; «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.
+- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty (superseded 2026-10-06: the mark is «done in part», `HoyEnParte`); «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.
 - **The plan by month is built as the 21 boards of «El plan» draw it.** Approved by the user 2026-09-30.
 - **A time is written «12 h 30 min»** and stored in whole minutes (RP-35). Decided 2026-09-30 by the user.
 - **A done task adds its estimate to the measure** (RP-36), knowing the same hours may count twice if
@@ -771,3 +797,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
     one-off for it is written from Mes or the goal;
   - the report carries **this month's tasks**, done and not, under each goal, and folds the weeks into the months table.
     This changes RP-33: it is retired and succeeded.
+- **The critic's cut of trains 6 and 7, drawn.** The 13 boards above, approved by the user 2026-10-06: «confirma los
+  diseños, me da igual». What the coordinator chose while drawing stands: the partial never adds to «hechos» and is
+  named apart («· 1 en parte»); a past day steps both ways and keeps «volver a hoy»; a week sits under the month of its
+  Monday; the report is three columns at 1440 and two at 1024; the revoke sheet's words as drawn.
