@@ -30,10 +30,12 @@ function sum(tasks: Task[], pick: (task: Task) => number): number {
 /** The dashed-circle link that closes a list: «Otra tarea», or, indented as the children, «Otra sub-tarea». */
 function AddRow({ href, label, child }: { href: string; label: string; child?: boolean }) {
   return (
-    <Flex align="center" gap="3" minHeight="48px" ml={child ? "30px" : undefined}>
-      <Mark state="empty" dashed />
+    <Flex asChild align="center" gap="3" minHeight="48px" ml={child ? "30px" : undefined}>
       <Text asChild tone="accent">
-        <Link href={href}>{label}</Link>
+        <Link href={href}>
+          <Mark state="empty" dashed />
+          {label}
+        </Link>
       </Text>
     </Flex>
   );
@@ -219,9 +221,9 @@ export async function MonthDetail({
           <Flex align="baseline" gap="2">
             <Figure value={row.reached} unit={unit} />
             {open && !closed ? (
-              <Text asChild tone="accent">
+              <Button asChild tap={44} variant="ghost" tone="accent">
                 <Link href={`/metas/${goal.id}/meses?planear=${month}`}>{planned}</Link>
-              </Text>
+              </Button>
             ) : (
               <Text tone="secondary">{planned}</Text>
             )}

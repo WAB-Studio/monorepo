@@ -102,6 +102,17 @@
   overflow-wrap: anywhere;
 }
 
+/* A heading that is a link: the ink, no underline, the accent focus ring. */
+.link.link {
+  color: var(--pulsar-ink);
+  text-decoration: none;
+}
+
+.link.link:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+}
+
 @media print {
   .note.note {
     font-size: 12pt;

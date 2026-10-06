@@ -147,10 +147,12 @@ export async function MonthAcrossScreen() {
           <Text asChild variant="heading">
             <h2>
               <Flex asChild align="center" justify="between" gap="2" minHeight="48px">
-                <Link href={goalHref}>
-                  {goal.name}
-                  <ChevronRight size={16} aria-hidden />
-                </Link>
+                <Text asChild link>
+                  <Link href={goalHref}>
+                    {goal.name}
+                    <ChevronRight size={16} aria-hidden />
+                  </Link>
+                </Text>
               </Flex>
             </h2>
           </Text>
