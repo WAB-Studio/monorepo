@@ -10,6 +10,18 @@ export type CarriedReport = {
   children: { name: string; note: string | null; owes: number; hasAmount: boolean }[];
 };
 
+export type ReportTask = {
+  name: string;
+  from: string | null;
+  done: boolean;
+  doneOn: string | null;
+  estimate: number | null;
+  owes: number;
+  hasAmount: boolean;
+  note: string | null;
+  children: { name: string; done: boolean; doneOn: string | null; estimate: number | null; note: string | null }[];
+};
+
 export type GoalReport = {
   id: string;
   name: string;
@@ -19,6 +31,7 @@ export type GoalReport = {
   thisMonth: { planned: number | null; reached: number; underPace: boolean };
   toDate: { planned: number; reached: number };
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
+  tasks: ReportTask[];
   carried: CarriedReport[];
   months: (MonthRow & { carried: number | null })[];
   weeks: ReviewWeek[];

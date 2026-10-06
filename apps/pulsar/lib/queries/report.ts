@@ -6,8 +6,8 @@ import { phaseOn } from "@/lib/day/derive";
 import type { EvidenceDay } from "@/lib/day/types";
 import { dayBefore } from "@/lib/day/weeks";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
-import type { GoalReport, Report } from "@/lib/export/report";
-import { carryShare, monthList } from "@/lib/plan/carry";
+import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
+import { carryShare, monthList, type MonthItem } from "@/lib/plan/carry";
 import { monthOf, toDate } from "@/lib/plan/months";
 import {
   goalFigures,
@@ -58,11 +58,11 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
          from "goals"."month_budgets" b where b.goal_id = g.id) as budgets,
       (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-               ) order by o.created_at, o.id), '[]'::json)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o where o.goal_id = g.id) as tasks
     from "goals"."goals" g
     where g.archived_at is null
-    order by g.created_at, g.id
+    order by g.position, g.created_at, g.id
   `);
   return [...rows];
 }
@@ -85,6 +85,42 @@ async function queryReportEvidence(
   }
 
   return bySourceKey;
+}
+
+// What `monthList` hands «Mes», done and not (RP-46). A parent is done on its
+// last child's day; `owes` counts what is undone today.
+function toReportTask(item: MonthItem): ReportTask {
+  const leaf = item.children.length === 0;
+  const undone = item.children.filter((child) => child.doneOn === null);
+  const doneOn = !item.done
+    ? null
+    : leaf
+      ? item.task.doneOn
+      : item.children.reduce<string | null>(
+          (last, child) => (last === null || (child.doneOn ?? "") > last ? child.doneOn : last),
+          null,
+        );
+  return {
+    name: item.task.name,
+    from: item.carriedFrom,
+    done: item.done,
+    doneOn,
+    estimate: leaf ? item.task.estimate : null,
+    owes: leaf
+      ? item.task.doneOn === null
+        ? (item.task.estimate ?? 0)
+        : 0
+      : undone.reduce((sum, child) => sum + (child.estimate ?? 0), 0),
+    hasAmount: item.hasAmount,
+    note: item.task.note ?? null,
+    children: item.children.map((child) => ({
+      name: child.name,
+      done: child.doneOn !== null,
+      doneOn: child.doneOn,
+      estimate: child.estimate,
+      note: child.note ?? null,
+    })),
+  };
 }
 
 // The days `loadGoal` would have read: its own opening to its horizon.
@@ -155,6 +191,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         endsOn: phase.endsOn ?? dayBefore(row.goal.horizon),
         current: current?.id === phase.id,
       })),
+      tasks: monthList(figures.tasks, thisMonth, today).map(toReportTask),
       carried: monthList(figures.tasks, thisMonth, today)
         .filter((item) => item.carriedFrom !== null && !item.done)
         .map((item) => {
