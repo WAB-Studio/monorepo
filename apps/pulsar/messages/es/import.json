@@ -42,8 +42,11 @@
     "creating": "Creando…",
     "failed": "No se pudo crear el plan. Inténtalo otra vez.",
     "amountOf": "Cambiar el monto de {name}, {amount}",
-    "back": "volver al texto",
-    "backAria": "Volver al texto",
+    "place": "tu texto",
+    "sourceLabel": "tu texto",
+    "sourceFile": "leído de {name}",
+    "sourceFileAnon": "leído de un archivo",
+    "change": "Cambiar el texto",
     "repeated": "Ya tienes una meta abierta con este nombre. Quedó desmarcada: márcala si quieres otra.",
     "edit": {
       "title": "Cambiar el monto"

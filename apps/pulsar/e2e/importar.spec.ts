@@ -27,6 +27,20 @@ async function boxOf(locator: ReturnType<Page["locator"]>) {
 }
 
 test.describe("the import screen (RP-37)", () => {
+  test("the header's way back, «Volver a Metas», lands on /metas, and the page has one h1", async ({ person, browser, baseURL }) => {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas/importar");
+      await settled(page);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      await page.getByRole("link", { name: "Volver a Metas", exact: true }).click();
+      await expect(page).toHaveURL(/\/metas$/);
+    } finally {
+      await context.close();
+    }
+  });
+
   test("the privacy line is visible before any send, above «Leer el plan»", async ({ person, browser, baseURL }) => {
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
     try {

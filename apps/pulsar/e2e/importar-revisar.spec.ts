@@ -75,6 +75,9 @@ function noMeasureTemplate(): string {
   return `pulsar · plantilla 1\n\n# Trámites\nhorizonte: ${horizon}\n\n## Meses\n- ${first} · 3\n\n## Tareas\n- ${first} · 2 · Comprar tenis`;
 }
 
+// The header's way back: «Volver a {place}».
+const backName = `Volver a ${messages.review.place}`;
+
 const box = (page: Page, name: string | RegExp) => page.getByRole("checkbox", { name });
 
 test.describe("the review of an imported plan (RP-37, RP-35)", () => {
@@ -230,8 +233,9 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(box(page, /Elegir tutor/)).toBeChecked();
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 10 h` })).toHaveText("10 h");
 
-      await page.getByRole("link", { name: messages.review.back, exact: true }).click();
+      await page.getByRole("link", { name: backName, exact: true }).click();
       await expect(page).toHaveURL(/\/metas\/importar$/);
+      await expect(page.getByLabel(messages.textLabel)).toHaveValue(template());
     });
   });
 
@@ -240,7 +244,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toReview(page, template());
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 12 h` })).toHaveCount(1);
-      await expect(page.getByRole("link", { name: messages.review.backAria, exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: backName, exact: true })).toBeVisible();
       for (const checkbox of await page.getByRole("checkbox").all()) {
         expect(await checkbox.evaluate((el) => (el as HTMLInputElement).labels?.[0]?.textContent ?? "")).not.toContain("12 h");
       }
@@ -303,4 +307,58 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       );
     });
   }
+
+  for (const width of [360, 390, 1280, 1440]) {
+    test(`its header and its text hold at ${width}`, async ({ person, browser, baseURL }) => {
+      await asPerson(
+        { person, browser, baseURL },
+        async (page) => {
+          const text = template();
+          await toReview(page, text);
+
+          await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+          await expect(page.getByRole("link", { name: backName, exact: true })).toBeVisible();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+          const source = page.getByRole("textbox", { name: messages.review.sourceLabel, exact: true });
+          if (width >= 1024) {
+            await expect(source).toBeVisible();
+            await expect(source).toHaveValue(text);
+            await expect(page.getByRole("link", { name: messages.review.change, exact: true })).toBeVisible();
+            const left = (await source.boundingBox())!;
+            const right = (await page.getByRole("heading", { name: "IA aplicada" }).boundingBox())!;
+            expect(left.x + left.width).toBeLessThanOrEqual(right.x);
+            expect(Math.abs(left.y - right.y)).toBeLessThan(400);
+          } else {
+            await expect(source).toHaveCount(0);
+            await expect(page.getByRole("link", { name: messages.review.change, exact: true })).toHaveCount(0);
+          }
+        },
+        { width, height: 900 },
+      );
+    });
+  }
+
+  test("at 1440 two goals' cards sit side by side, and a file import shows its name where the text would be", async ({ person, browser, baseURL }) => {
+    const { horizon } = monthsFromToday();
+    const two = `${template()}\n\n# Trámites\nhorizonte: ${horizon}\n\n## Compromisos\n- Pagar la luz · cada día · toque`;
+    await asPerson(
+      { person, browser, baseURL },
+      async (page) => {
+        await toReview(page, two);
+        const first = (await page.getByRole("region", { name: "IA aplicada" }).boundingBox())!;
+        const second = (await page.getByRole("region", { name: "Trámites" }).boundingBox())!;
+        expect(Math.abs(first.y - second.y)).toBeLessThan(2);
+        expect(second.x).toBeGreaterThan(first.x + first.width - 1);
+
+        await page.goto("/metas/importar");
+        await page.getByLabel(messages.upload).setInputFiles({ name: "mi-plan.txt", mimeType: "text/plain", buffer: Buffer.from(template()) });
+        await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+        await settled(page);
+        await expect(page.getByText(messages.review.sourceFile.replace("{name}", "mi-plan.txt"), { exact: true })).toBeVisible();
+        await expect(page.getByRole("textbox", { name: messages.review.sourceLabel })).toHaveCount(0);
+      },
+      { width: 1440, height: 900 },
+    );
+  });
 });
