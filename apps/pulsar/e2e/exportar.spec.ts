@@ -18,8 +18,8 @@ import type postgres from "postgres";
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
 // Pages the two-goal seeded report takes on A4 with the carried notes
-// printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265).
-const A4_PAGES = 11;
+// printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265; 317 spaced the sections: 11 to 10).
+const A4_PAGES = 10;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {
@@ -1105,4 +1105,65 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
     }
   });
+});
+
+test.describe("the report's type and space (module 317)", () => {
+  for (const width of [360, 1280] as const) {
+    test(`at ${width} sentences are Archivo, figures stay mono and sections keep the space system`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const seeded = await seed(db, person);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 800 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+        const family = (text: string | RegExp) =>
+          page
+            .getByRole("main")
+            .getByText(text)
+            .first()
+            .evaluate((node) => getComputedStyle(node).fontFamily);
+        // The goal's measure line and the count under the title are sentences.
+        expect(await family(/^mide minutos · hasta el /)).not.toMatch(/mono/i);
+        expect(await family(/^\d+ metas?$/)).not.toMatch(/mono/i);
+        expect(await family(seeded.monthTask)).not.toMatch(/mono/i);
+        // «de 12 h»: the sentence is Archivo around a mono figure.
+        const planned = page.getByRole("main").getByText(/^de\s*12 h/).first();
+        expect(await planned.evaluate((node) => getComputedStyle(node).fontFamily)).not.toMatch(
+          /mono/i,
+        );
+        // A section's label sits 12 above its content; sections 32 apart.
+        const gaps = await page.evaluate(() => {
+          const labels = [...document.querySelectorAll("main section > *:first-child")]
+            .filter((node) => /^(este mes|hasta hoy|fases|tareas de|por mes)/.test(node.textContent ?? ""))
+            .map((node) => ({
+              label: node.getBoundingClientRect(),
+              next: node.nextElementSibling?.getBoundingClientRect() ?? null,
+              section: node.parentElement!.getBoundingClientRect(),
+              after: node.parentElement!.nextElementSibling?.getBoundingClientRect() ?? null,
+            }));
+          return labels.map((entry) => ({
+            inner: entry.next ? Math.round(entry.next.top - entry.label.bottom) : null,
+            outer: entry.after ? Math.round(entry.after.top - entry.section.bottom) : null,
+          }));
+        });
+        expect(gaps.length).toBeGreaterThan(1);
+        for (const gap of gaps) {
+          if (gap.inner !== null) expect(gap.inner).toBe(12);
+          if (gap.outer !== null) expect(gap.outer).toBe(32);
+        }
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
 });
