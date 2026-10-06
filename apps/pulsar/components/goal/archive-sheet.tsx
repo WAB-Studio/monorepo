@@ -66,7 +66,7 @@ export function ArchiveGoalAction({
         description={t("plan.archiveSheet.description")}
       >
         {error ? (
-          <Text as="p" tone="muted" variant="meta">
+          <Text as="p" tone="muted" variant="sentence">
             {t(error)}
           </Text>
         ) : null}
@@ -111,7 +111,7 @@ export function ReopenGoalButton({ goalId }: { goalId: string }) {
         {t("goal.detail.reopen")}
       </Button>
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" tone="muted" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

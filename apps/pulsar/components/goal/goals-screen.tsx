@@ -11,7 +11,7 @@ import {
   Panel,
   Row,
   ScreenHeader,
-  SectionLabel,
+  Section,
   Split,
   Text,
 } from "@/components/ui";
@@ -44,30 +44,22 @@ export async function GoalsScreen({
   if (open.length === 0 && ended.length === 0 && archived.length === 0) {
     return (
       <Page>
-        <ScreenHeader
-          eyebrow={t("goal.none.eyebrow")}
-          title={t("goal.none.title")}
-        />
-        <Text as="p" tone="secondary">
+        <ScreenHeader title={t("goal.none.title")} />
+        <Text as="p" variant="sentence" tone="secondary">
           {t("goal.none.body")}
         </Text>
         <Button asChild block>
           <Link href="/metas/nueva">{t("goal.none.action")}</Link>
         </Button>
-        <section>
-          <SectionLabel>{t("export.entry.section")}</SectionLabel>
-          <Flex direction="column" gap="10px">
-            <Button asChild variant="outline" block stack>
-              <Link href="/metas/importar">
-                {t("import.entry.title")}
-                <Text variant="meta">
-                  {t("import.entry.hint")}
-                </Text>
-              </Link>
-            </Button>
-            {connect}
-          </Flex>
-        </section>
+        <Section label={t("export.entry.section")}>
+          <Button asChild variant="outline" block stack>
+            <Link href="/metas/importar">
+              {t("import.entry.title")}
+              <Text variant="sentence">{t("import.entry.hint")}</Text>
+            </Link>
+          </Button>
+          {connect}
+        </Section>
       </Page>
     );
   }
@@ -121,7 +113,7 @@ export async function GoalsScreen({
         main={
           <>
             <Panel as="div">
-              <SectionLabel>{t("goal.list.openTitle")}</SectionLabel>
+              <Section label={t("goal.list.openTitle")}>
               <Flex
                 direction="column"
                 role="group"
@@ -133,6 +125,7 @@ export async function GoalsScreen({
                     href={`/metas/${goal.id}`}
                     name={goal.name}
                     meta={t("goal.list.untilShort", { date: lastDay(goal) })}
+                    metaVariant="sentence"
                     wideMeta={monthMeta(goal)}
                     wideTrailing={
                       goal.month ? (
@@ -148,11 +141,12 @@ export async function GoalsScreen({
               <Button asChild variant="outline" block>
                 <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
               </Button>
+              </Section>
             </Panel>
 
             {ended.length > 0 ? (
               <Panel>
-                <SectionLabel>{t("goal.list.endedTitle")}</SectionLabel>
+                <Section label={t("goal.list.endedTitle")}>
                 <Flex direction="column">
                   {ended.map((goal) => (
                     <Row
@@ -162,10 +156,12 @@ export async function GoalsScreen({
                       meta={t("goal.list.endedOnShort", {
                         date: civilDayMonthShort(dayBefore(goal.horizon)),
                       })}
+                      metaVariant="sentence"
                       trailing={chevron}
                     />
                   ))}
                 </Flex>
+                </Section>
               </Panel>
             ) : null}
           </>
@@ -173,7 +169,7 @@ export async function GoalsScreen({
         tail={
           archived.length > 0 ? (
             <Panel>
-              <SectionLabel>{t("goal.list.archivedTitle")}</SectionLabel>
+              <Section label={t("goal.list.archivedTitle")}>
               <Flex direction="column">
                 {archived.map((goal) => (
                   <Row
@@ -181,37 +177,34 @@ export async function GoalsScreen({
                     href={`/metas/${goal.id}`}
                     name={goal.name}
                     meta={archivedLine(goal)}
+                    metaVariant="sentence"
                     trailing={chevron}
                   />
                 ))}
               </Flex>
+              </Section>
             </Panel>
           ) : null
         }
         after={
           <Panel>
-            <SectionLabel>{t("export.entry.section")}</SectionLabel>
-            <Flex direction="column" gap="10px">
+            <Section label={t("export.entry.section")}>
               <Button asChild variant="outline" block stack>
                 <Link href="/metas/importar">
                   {t("import.entry.title")}
-                  <Text variant="meta">
-                    {t("import.entry.hint")}
-                  </Text>
+                  <Text variant="sentence">{t("import.entry.hint")}</Text>
                 </Link>
               </Button>
               {open.length + ended.length > 0 ? (
                 <Button asChild variant="outline" block stack>
                   <Link href="/exportar">
                     {t("export.entry.title")}
-                    <Text variant="meta">
-                      {t("export.entry.hint")}
-                    </Text>
+                    <Text variant="sentence">{t("export.entry.hint")}</Text>
                   </Link>
                 </Button>
               ) : null}
               {connect}
-            </Flex>
+            </Section>
           </Panel>
         }
       />

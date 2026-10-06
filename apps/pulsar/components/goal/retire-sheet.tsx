@@ -64,7 +64,7 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
       description={description}
     >
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" tone="muted" variant="sentence">
           {t(error)}
         </Text>
       ) : null}
