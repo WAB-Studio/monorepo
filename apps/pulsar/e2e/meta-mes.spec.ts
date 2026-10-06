@@ -338,7 +338,7 @@ test("a goal with no measure opens its months, its current month and the task fo
 
 // Calendar-bound as `mes.spec.ts`: «last month» is the month before today, so
 // the window to shift is always open.
-test("a goal whose last month carried over half offers the shift on its month block; accepting moves the plan and the line is gone; at half or archived there is none (RP-34)", async ({
+test("a goal whose last month carried over half offers the shift on its month block; accepting moves the plan and the line is gone; at half or archived there is none (RP-48)", async ({
   person,
   browser,
   baseURL,

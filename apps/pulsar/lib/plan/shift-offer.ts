@@ -1,15 +1,16 @@
 import { dayBefore } from "@/lib/day/weeks";
 import { carryShare, type Task } from "./carry";
 import { monthOf, nextMonth, type MonthBudget } from "./months";
-import { addMonths, shiftOffered, shiftPlan, type ShiftPlan } from "./shift";
+import { addMonths, monthAmount, shiftOffered, shiftPlan, type ShiftPlan } from "./shift";
 
-// RP-34 as every screen that offers the shift reads it: the month before
+// RP-48 as every screen that offers the shift reads it: the month before
 // today's, or null when it is not on offer. Whether the goal is open stays
 // the caller's check.
 export function shiftOfferNow({
   today,
   horizon,
   budgets,
+  months,
   phases,
   tasks,
   shifts,
@@ -17,6 +18,8 @@ export function shiftOfferNow({
   today: string;
   horizon: string;
   budgets: MonthBudget[];
+  // Each month's reached amount, RP-36 estimates included.
+  months: { month: string; reached: number }[];
   phases: { id: string; name: string; startsOn: string; endsOn: string | null }[];
   tasks: Task[];
   shifts: string[];
@@ -29,7 +32,16 @@ export function shiftOfferNow({
   const thisMonth = monthOf(today);
   const closedMonth = addMonths(thisMonth, -1);
   const share = carryShare(tasks, closedMonth);
-  if (share === null || !shiftOffered({ month: closedMonth, today, share, shifted: shifts })) {
+  if (
+    share === null ||
+    !shiftOffered({
+      month: closedMonth,
+      today,
+      share,
+      amount: monthAmount(closedMonth, budgets, months),
+      shifted: shifts,
+    })
+  ) {
     return null;
   }
   return {

@@ -43,6 +43,7 @@ function offer(patch: Partial<Parameters<typeof shiftOfferNow>[0]> = {}) {
     today: "2026-11-13",
     horizon: HORIZON,
     budgets,
+    months: [],
     phases,
     tasks: october(5),
     shifts: [],
@@ -104,5 +105,28 @@ test("a phase with no end is left out of the plan", () => {
   assert.deepEqual(
     result.plan.phases.map((phase) => phase.id),
     ["next"],
+  );
+});
+
+// October planned 420 min of tasks and 600 min of amount.
+const planned = [{ month: OCT, amount: 600 }, ...budgets];
+
+test("RP-48: a month at 255 % of its amount is not offered though a task is left", () => {
+  assert.equal(offer({ budgets: planned, months: [{ month: OCT, reached: 1530 }] }), null);
+});
+
+test("RP-48: a month at 40 % with more than half carried is offered", () => {
+  assert.ok(offer({ budgets: planned, months: [{ month: OCT, reached: 240 }] }));
+});
+
+test("RP-48: exactly 60 % is not under it, so not offered", () => {
+  assert.equal(offer({ budgets: planned, months: [{ month: OCT, reached: 360 }] }), null);
+  assert.ok(offer({ budgets: planned, months: [{ month: OCT, reached: 359 }] }));
+});
+
+test("RP-48: a month with no amount, or an amount of zero, follows the list rule alone", () => {
+  assert.ok(offer({ months: [{ month: OCT, reached: 99999 }] }));
+  assert.ok(
+    offer({ budgets: [{ month: OCT, amount: 0 }, ...budgets], months: [{ month: OCT, reached: 50 }] }),
   );
 });
