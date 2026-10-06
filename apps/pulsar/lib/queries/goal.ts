@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
+import { cache } from "react";
 import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
@@ -537,8 +538,12 @@ function toGoalSummary(row: GoalRow): GoalSummary {
  * 404 for one, the same way "no add-commitment button" reads on its own
  * screen. `listGoalsForMetas` below is `/metas`'s own query: it needs the
  * archived half too, to list under "Archivadas".
+ *
+ * `cache()`-wrapped: the layout's rail and the screen's `otherGoals` read it in
+ * one render, so a page pays this statement once (RNP-18). It takes no
+ * argument, so the one entry is the whole request's.
  */
-export async function listGoals(): Promise<GoalSummary[]> {
+export const listGoals = cache(async function listGoals(): Promise<GoalSummary[]> {
   const rows = await withGoalsDb((tx) =>
     tx.execute<GoalRow>(sql`
       select id, name, horizon, measure_name, measure_unit, archived_at
@@ -552,7 +557,7 @@ export async function listGoals(): Promise<GoalSummary[]> {
   // never `current_date`: an ended goal is refused like an archived one.
   const today = todayInZone();
   return rows.filter((row) => row.horizon > today).map(toGoalSummary);
-}
+});
 
 // An open goal's current month, as `/metas` draws it beside the goal: the
 // amount in its unit, or the tasks when it measures nothing. The amount folds
