@@ -93,9 +93,9 @@ export function WeekTableFace({
           detail: words ? t("week.flexible.detail", words) : undefined,
           cells: view.days.map((dayView) => {
             const slot = dayView.slots.find((s) => s.commitmentId === commitment.id);
-            // A flexible row marks the days it was done and leaves the rest
-            // quiet: no day of it was ever asked on its own.
-            if (!live(goalId, dayView.day) || !slot || (words && !slot.satisfied)) {
+            // A flexible row marks the days it was done or logged in part and
+            // leaves the rest quiet: no day of it was ever asked on its own.
+            if (!live(goalId, dayView.day) || !slot || (words && !slot.satisfied && !slot.partial)) {
               return mark(commitment.name, dayView.day, "none");
             }
             return mark(commitment.name, dayView.day, slotStatus(slot, dayView.day));
