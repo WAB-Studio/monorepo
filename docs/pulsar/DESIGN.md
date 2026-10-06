@@ -879,8 +879,9 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
     everywhere.
   - A commitment in a goal that measures takes the goal's unit; there is no free unit field there.
 - **The plan is a roadmap, decided by the user 2026-10-06** («que vaya por cantidad de horas por mes y funcione como
-  roadmap, de esa manera todo se mueve proporcionalmente»). Not yet drawn; RP-42, RP-48 and the SPEC stand until the boards
-  are approved.
+  roadmap, de esa manera todo se mueve proporcionalmente»). Drawn on the page «El plan por mes» (`RoadmapPlan`,
+  `RoadmapHoyMovido`, `RoadmapPasaElFinal`, `RoadmapSinRitmo`, `RoadmapFijar`) and approved by the user the same day; written
+  as RP-50 to RP-55, retiring RP-42 and RP-48. RP-28 stays: a month's own amount overrides the rhythm.
   - A goal has a rhythm, hours per month, which one month may override. Its tasks are one ordered list, each with its
     estimate. The app gives each task its month by filling each month's hours in order.
   - The person may **fix** a task to a month (a real date: an exam, a delivery); the rest flows around it.
@@ -890,3 +891,12 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
     hours are split between the two.
   - The end date is the plan's: «a este ritmo terminas en …», set against the goal's end.
   - Built before wave 3 of the UX slice: the edit sheet and the plan's words wait for these boards.
+- **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
+  - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
+    on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
+  - A measure's minutes take two digits after hours: «1 h 05 min», never read as «15».
+  - A row's name wraps by words, never inside one; its trailing figure keeps one line and drops under the name when it
+    does not fit.
+  - One link style: accent, 15 / 500, no underline, underlined on hover and focus; never grey.
+  - A selected chip is the accent's soft fill with an accent border; the full accent fill is the act's button alone.
+
