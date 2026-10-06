@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
-import { measureByWeek } from "@/lib/day/review";
+import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
@@ -376,6 +376,8 @@ export function goalFigures(input: {
   months: MonthRow[];
   month: GoalView["month"];
   weeks: ReviewWeek[];
+  // The week rule over any span, for a caller that splits a week.
+  totalInSpan: (startsOn: string, endsOn: string) => number;
 } {
   const { goal, phases, commitments, budgets, evidence, today } = input;
   // A one-off's fact carries no `commitment_id`, and no unit to feed the
@@ -442,7 +444,15 @@ export function goalFigures(input: {
     phases,
   });
 
-  return { tasks, measureTotal: declaredTotal + evidenceTotal, months, month, weeks };
+  return {
+    tasks,
+    measureTotal: declaredTotal + evidenceTotal,
+    months,
+    month,
+    weeks,
+    totalInSpan: (startsOn, endsOn) =>
+      totalInSpan(goal.measure_unit, measureFacts, evidenceDays, startsOn, endsOn),
+  };
 }
 
 /**

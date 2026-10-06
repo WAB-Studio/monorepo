@@ -304,6 +304,7 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
         ],
         months: [{ month: "2026-09-01", planned: 600, reached: 450, current: false, past: true, carried: 50 }],
         weeks: [],
+        weekSplits: [],
       },
     ],
   };
@@ -333,6 +334,7 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
     carried: [],
     months: [],
     weeks: [],
+    weekSplits: [],
   };
   const report: Report = {
     today: "2026-10-05",

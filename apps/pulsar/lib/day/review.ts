@@ -6,7 +6,7 @@ import { horizonWeeksOf, weekIndexOf, weekSpan } from "@/lib/day/weeks";
 // the span, once over the evidence days of the span, by `unit`. `unit: null`
 // means the goal has no measure yet, so the week's own total is `0` rather
 // than matching a fact or an evidence day that carries no unit of its own.
-function totalInSpan(
+export function totalInSpan(
   unit: string | null,
   facts: DeclaredFact[],
   evidence: EvidenceDay[],
