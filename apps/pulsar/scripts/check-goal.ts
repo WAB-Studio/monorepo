@@ -1213,8 +1213,7 @@ async function runEndedCheck(): Promise<void> {
 /**
  * Module 129: `loadGoal` reads the plan by month. A goal opened 2010-09-15
  * with a horizon of 2011-08-15, budgets for 2010-10 (720) and 2010-11 (0), one
- * declared fact of 300 in October, a parent with two sub-tasks, and a shifted
- * month, all seeded through the session pooler (the one door onto the
+ * declared fact of 300 in October, a parent with two sub-tasks, all seeded through the session pooler (the one door onto the
  * backdated `created_at` and onto rows the policies would refuse), read with
  * `today` pinned inside the span.
  */
@@ -1247,8 +1246,6 @@ async function runPlanMonthsCheck(): Promise<void> {
     await migrationDb`
       insert into goals.month_budgets (user_id, goal_id, month, amount)
       values (${person.id}, ${goalId}, '2010-10-01', 720), (${person.id}, ${goalId}, '2010-11-01', 0)`;
-    await migrationDb`
-      insert into goals.month_shifts (user_id, goal_id, month) values (${person.id}, ${goalId}, '2010-09-01')`;
     await migrationDb`
       insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
       values (${person.id}, ${commitment.commitmentId}, ${goalId}, '2010-10-05', 300)`;
@@ -1300,9 +1297,9 @@ async function runPlanMonthsCheck(): Promise<void> {
       `month = ${JSON.stringify(zero?.month)}`,
     );
     assert(
-      "RP-28: loadGoal returns the budgets, and the shifted month in shifts",
-      before.budgets.length === 2 && JSON.stringify(before.shifts) === JSON.stringify(["2010-09-01"]),
-      `budgets = ${JSON.stringify(before.budgets)}, shifts = ${JSON.stringify(before.shifts)}`,
+      "RP-28: loadGoal returns the budgets",
+      before.budgets.length === 2,
+      `budgets = ${JSON.stringify(before.budgets)}`,
     );
     assert(
       "RP-30: a parent and its two children come back in tasks, none done yet",

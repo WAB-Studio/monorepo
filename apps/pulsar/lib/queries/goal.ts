@@ -88,7 +88,6 @@ type GoalQueryRow = {
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
-  shifts: string[];
 };
 
 // A one-off of the goal; `done_on` is the day of its own fact, null while
@@ -183,8 +182,6 @@ export type GoalView = {
   // What the plan reads: the tasks, the amounts and the span, as of `today`.
   plan: PlanInput;
   roadmap: Roadmap;
-  // The months of this goal already shifted (RP-48).
-  shifts: string[];
 };
 
 // A one-off as the plan reads it. A row without `created_at` counts as made
@@ -216,8 +213,8 @@ export type GoalSummary = {
 };
 
 /**
- * One statement, seven subqueries: the goal row scoped by id, and every phase,
- * commitment, fact, month budget, one-off and month shift that name it — unfiltered by `retired_at` or by day, so
+ * One statement, six subqueries: the goal row scoped by id, and every phase,
+ * commitment, fact, month budget, one-off that name it — unfiltered by `retired_at` or by day, so
  * a goal's screen reads its whole history in the one round trip. RLS alone
  * narrows every row to the caller's own (RNP-05); `goalId` alone would let a
  * caller read a goal id they merely guessed, so `goal` still comes back
@@ -253,10 +250,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
                ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
-         where o.goal_id = ${goalId}) as tasks,
-      (select coalesce(json_agg(m.month order by m.month), '[]'::json)
-         from "goals"."month_shifts" m
-         where m.goal_id = ${goalId}) as shifts
+         where o.goal_id = ${goalId}) as tasks
   `);
 
   return row;
@@ -562,7 +556,6 @@ export async function loadGoal(
     planSeen: row.goal.plan_seen ?? null,
     plan,
     roadmap: fillPlan(plan),
-    shifts: row.shifts,
   };
 }
 

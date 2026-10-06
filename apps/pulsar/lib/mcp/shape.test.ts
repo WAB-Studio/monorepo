@@ -88,7 +88,6 @@ function goalView(unit: string | null): GoalView {
     planSeen: null,
     plan,
     roadmap: fillPlan(plan),
-    shifts: ["2026-09-01"],
   };
 }
 
@@ -98,7 +97,6 @@ function monthsIn(value: unknown, found: string[] = []): string[] {
   else if (typeof value === "object" && value !== null) {
     for (const [key, inner] of Object.entries(value)) {
       if (["month", "from", "carriedFrom"].includes(key) && typeof inner === "string") found.push(inner);
-      else if (key === "shifts" && Array.isArray(inner)) found.push(...(inner as string[]));
       else monthsIn(inner, found);
     }
   }
@@ -119,7 +117,6 @@ test("a goal's months read YYYY-MM, never the first of the month", () => {
     ["2026-09", "2026-10", "2026-11"],
   );
   assert.equal(shaped.thisMonth?.month, "2026-10");
-  assert.equal("shifts" in shaped, false);
   const months = monthsIn(shaped);
   assert.ok(months.length >= 6);
   for (const month of months) assert.match(month, /^\d{4}-\d{2}$/);
