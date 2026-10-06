@@ -145,7 +145,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run `npm install` at a lane's root when a workspace package landed after the lane was opened. The
   lane copied `node_modules` at birth, so the new package has no link and `typecheck` fails there
   while the main checkout and CI are clean. It is not a real red.
-- Run at most three suites at once. Nine GB of RAM holds three dev servers and three Chromiums.
+- Run at most four suites at once. Decided by the user 2026-10-05: 15 GB, 7 GB still free with three running.
+  Drop back to three when `free -g` shows under 2 GB available with four up.
 - Never run two agents that write `reading.word_texts` or spend `reading.model_spend` at once.
   `HARNESS_LANE` does not scope those tables: they are global, and two honest reports then
   contradict each other. See `docs/TRAPS.md`, "One database behind every harness lane".
@@ -262,10 +263,13 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   15 clients). CI and the lanes run on local stacks and do not count.
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
   boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
-- **Pulsar's `pulsar-e2e` is informative on a pull request to `integracion`, not blocking.** Decided by
-  the user 2026-10-05: each PR waited ~14 minutes of e2e in series before the next could merge. Merge on
-  `typecheck`, `lint`, `pulsar-unit`, `pulsar-policies` and `pulsar-checks`; read the e2e after and fix a
-  red on `integracion` before anything else. **`integracion` → `main` only with the whole suite green.**
+- **Pulsar's `pulsar-e2e` runs on the push only, never on a pull request.** Decided by the user 2026-10-05,
+  twice: the second time with the suite at ~2 min on the runner's stack. Merge on `typecheck`, `lint`,
+  `pulsar-unit`, `pulsar-policies` and `pulsar-checks`.
+- **Fire the suite on a train's branch before merging it:** `gh workflow run ci.yml --ref <branch>`, and merge only
+  when that run's `pulsar-e2e` is green. Measured 2026-10-05: it caught tren 4's rail duplicates after the merge and
+  tren 5's `week.today` before it. Fix a red on `integracion` before anything else. **`integracion` → `main` only
+  with the whole suite green.**
 - Ship modules that share no file as one train: one branch merging them, one PR, one CI run. A red spec
   names its module.
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
