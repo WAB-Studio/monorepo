@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { shortMonth } from "@/lib/dates/short-month";
 import { loadGoal } from "@/lib/queries/goal";
-import { Page, ScreenHeader, Table, Text, type TableRow } from "@/components/ui";
+import { Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
 
 // «21–27 sep», «31 ago–6 sep».
 function weekSpan(startsOn: string, endsOn: string): string {
@@ -37,9 +37,14 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
     return (
       <Page width="full">
         <ScreenHeader title={t("goal.review.title")} back={back} />
-        <Text as="p" tone="secondary">
-          {t("goal.review.noMeasure")}
-        </Text>
+        <Section as="div">
+          <Text as="p" variant="sentence">
+            {t("goal.review.noMeasure")}
+          </Text>
+          <div>
+            <TextLink href={`/metas/${goal.id}/compromisos/nuevo`}>{t("goal.commitments.add")}</TextLink>
+          </div>
+        </Section>
       </Page>
     );
   }
@@ -51,11 +56,13 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
     t("goal.review.columns.note"),
   ];
 
-  const rows: TableRow[] = goal.weeks.map((week) => {
+  // The phase is named where it starts, not on every week it spans.
+  const rows: TableRow[] = goal.weeks.map((week, index) => {
+    const phase = week.phaseName !== goal.weeks[index - 1]?.phaseName ? (week.phaseName ?? "") : "";
     const note = week.current ? t("goal.review.current") : "";
     return {
       key: String(week.index),
-      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, week.phaseName ?? "", note],
+      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, phase, note],
       note: note || undefined,
       detail: weekSpan(week.startsOn, week.endsOn),
     };
@@ -65,11 +72,10 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
 
   return (
     <Page width="full">
-      <ScreenHeader
-        title={t("goal.review.title")}
-        back={back}
-        meta={t("goal.review.measure", { unit: goal.measureUnit })}
-      />
+      <ScreenHeader title={t("goal.review.title")} back={back} />
+      <Text as="p" variant="sentence">
+        {t("goal.review.measure", { unit: goal.measureUnit })}
+      </Text>
       <Table
         caption={t("goal.review.caption")}
         columns={columns}
