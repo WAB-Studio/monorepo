@@ -128,7 +128,7 @@ test("the week's figure is named by its unit on Hoy, the goal and the review, an
 
     // The review: the unit heads the page, «total» the column, never the name.
     await page.goto(`/metas/${goal.id}/revision`);
-    await expect(page.locator("p", { hasText: new RegExp(`^${KM}$`) })).toHaveCount(1);
+    await expect(page.getByText(`mide en ${KM}`, { exact: true })).toHaveCount(1);
     await expect(page.locator("p", { hasText: first })).toHaveCount(0);
     const header = page.getByRole("columnheader").nth(1);
     await expect(header).toContainText("total");
