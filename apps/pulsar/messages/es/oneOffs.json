@@ -20,5 +20,20 @@
     "move": "Moverla",
     "stay": "Dejarla como está",
     "delete": "Borrarla"
+  },
+  "note": {
+    "open": "Escribir una nota en «{name}»",
+    "view": "Ver la nota de «{name}»",
+    "eyebrowFull": "nota · {goal} · {month}",
+    "eyebrowGoal": "nota · {goal}",
+    "eyebrowLoose": "nota",
+    "label": "nota",
+    "placeholder": "Lo que quieras recordar de esta tarea",
+    "count": "{count} de 2000",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "cancel": "Cancelar",
+    "remove": "quitar la nota",
+    "failed": "No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez."
   }
 }
