@@ -27,6 +27,7 @@ import {
   Notice,
   Page,
   Panel,
+  PanelGrid,
   ScreenHeader,
   Section,
   Sheet,
@@ -315,7 +316,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   );
 
   const review = (
-    <Flex direction="column" gap="6" maxWidth="640px">
+    <Flex direction="column" gap="6">
       <Text as="p" variant="sentence" tone="muted">
         {t("import.review.hint")}
       </Text>
@@ -340,7 +341,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         </Section>
       ) : null}
 
-      <Flex direction="column" gap="4">
+      <PanelGrid>
       {work.goals.map((goal, g) => {
         const at = goalPath(g);
         if (refused.has(`${at}.horizon`)) return null;
@@ -488,7 +489,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
           </Panel>
         );
       })}
-      </Flex>
+      </PanelGrid>
 
       {failure ? <Notice>{failure}</Notice> : null}
 
