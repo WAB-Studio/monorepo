@@ -4,7 +4,11 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  /* Gaps are margins, so a part that is absent leaves none behind:
+     back 4, eyebrow 6, title 12 to its line, 8 more under it to make the
+     32 the page's own gap leaves before the first section. */
+  gap: 0;
+  margin-block-end: 8px;
 }
 
 .back {
@@ -13,7 +17,7 @@
   align-items: center;
   gap: 6px;
   min-block-size: 48px;
-  margin: -8px 0 0 -12px;
+  margin: -8px 0 4px -12px;
   padding: 0 12px 0 8px;
   text-decoration: none;
   font-size: var(--pulsar-text-line-size);
@@ -33,6 +37,19 @@
 
 .eyebrow {
   max-inline-size: 100%;
+  margin-block-end: 6px;
+}
+
+.eyebrowLink {
+  color: var(--pulsar-accent);
+  font-size: var(--pulsar-text-line-size);
+  font-weight: var(--pulsar-text-name-weight);
+  text-decoration: none;
+}
+
+.eyebrowLink:hover,
+.eyebrowLink:focus-visible {
+  text-decoration: underline;
 }
 
 .line {
@@ -61,7 +78,7 @@
 }
 
 .meta.meta {
-  margin: 4px 0 0;
+  margin: 12px 0 0;
 }
 
 /* The same box as `.back` (48px, pulled up 8px), holding a block in its place. */
@@ -71,7 +88,7 @@
   align-items: center;
   inline-size: 120px;
   min-block-size: 48px;
-  margin: -8px 0 0;
+  margin: -8px 0 4px;
 }
 
 /* The title's own line box: its size times the 1.15 `Text` gives it. */
