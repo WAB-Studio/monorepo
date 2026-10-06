@@ -1452,7 +1452,6 @@ async function runMain(): Promise<void> {
   await runEndedCheck();
   await runPlanMonthsCheck();
   await runMetasOverlapCheck();
-  await runCommitmentUnitCheck();
 
   // The commitment that reads a source names it, by the catalogue's own label
   // key; one that reads nothing names none.
@@ -1471,6 +1470,8 @@ async function runMain(): Promise<void> {
     byKind("quantity").length > 0 && byKind("quantity").every((c) => c.sourceLabelKey === null),
     `quantity: ${JSON.stringify(byKind("quantity").map((c) => c.sourceLabelKey))}`,
   );
+
+  await runCommitmentUnitCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

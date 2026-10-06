@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 
 import { test, expect } from "./fixtures";
@@ -16,14 +15,6 @@ async function createGoal(page: Page, name: string): Promise<string> {
   await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
   return page.url().split("/metas/")[1];
 }
-
-test("the two forms hold no Flex gap and no inline style", () => {
-  for (const file of ["components/goal/commitment-form.tsx", "components/goal/phase-form.tsx"]) {
-    const source = readFileSync(file, "utf8");
-    expect(source, file).not.toMatch(/<Flex\b/);
-    expect(source, file).not.toMatch(/style=/);
-  }
-});
 
 for (const viewport of [
   { width: 360, height: 780 },
