@@ -28,12 +28,24 @@ export const goals = goalsSchema.table(
     // query filters on (`lib/queries/day.ts`, `lib/queries/week.ts`,
     // `lib/queries/goal.ts`'s own `listGoals`).
     archivedAt: timestamp({ withTimezone: true }),
+    // Units a month the person plans at (RP-52); null falls back to the pace the plan derives.
+    rhythm: integer(),
+    // The month whose shift notice the person dismissed (RP-53), a first-of-month date.
+    planSeen: date(),
   },
   (t) => [
     // A measure with no unit is not a measure. Both null or both set.
     check(
       "goals_measure_paired",
       sql`(${t.measureName} is null) = (${t.measureUnit} is null)`,
+    ),
+    check(
+      "goals_rhythm_range",
+      sql`${t.rhythm} is null or (${t.rhythm} between 1 and 1000000 and ${t.measureUnit} is not null)`,
+    ),
+    check(
+      "goals_plan_seen_first_day",
+      sql`${t.planSeen} is null or ${t.planSeen} = date_trunc('month', ${t.planSeen})::date`,
     ),
     // `authUid` is `(select auth.uid())`: evaluated once per query, not once per row.
     pgPolicy("goals_select_self", {

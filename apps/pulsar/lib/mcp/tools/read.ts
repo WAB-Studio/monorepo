@@ -4,7 +4,7 @@ import { z } from "zod";
 import { errorOf } from "@/lib/mcp/errors";
 import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
-import { monthList } from "@/lib/plan/carry";
+import { planMonthList } from "@/lib/plan/roadmap-read";
 import { loadDay } from "@/lib/queries/day";
 import { listGoalsForMetas, loadGoal } from "@/lib/queries/goal";
 import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
@@ -80,7 +80,7 @@ export function registerReadTools(server: McpServer): void {
         const view = await loadGoal(input.goal_id);
         if (view === null) return { error: "mcp.errors.goalNotFound" };
         const first = `${input.month}-01`;
-        const items = monthList(view.tasks, first, todayInZone());
+        const items = planMonthList(view.plan, first);
         return { value: shapeMonth({ goalId: view.id, month: first, unit: view.measureUnit, items }) };
       }),
   );

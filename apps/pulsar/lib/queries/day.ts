@@ -16,7 +16,9 @@ import type {
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
-import { estimateFacts, monthList, type Task } from "@/lib/plan/carry";
+import { estimateFacts, type Task } from "@/lib/plan/carry";
+import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
+import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { phasePositions } from "@/lib/day/row-phrases";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
@@ -56,6 +58,8 @@ type GoalRow = {
   created_at: string;
   measure_name: string | null;
   measure_unit: string | null;
+  rhythm: number | null;
+  plan_seen: string | null;
 };
 
 // `source_key` and `source_unit` ride in from the join to `evidence_sources`;
@@ -114,17 +118,8 @@ type DoneOneOffRow = {
   note: string | null;
 };
 
-type MonthTaskRow = {
-  goal_id: string;
-  id: string;
-  name: string;
-  estimate: number | null;
-  note: string | null;
-  parent_name: string | null;
-};
-
-// Every task of an open goal with its own done day, what `monthList` counts
-// the month's tasks from (the same rule `/metas` reads).
+// Every task of an open goal with its own done day: what the plan (`fillPlan`)
+// places the month's tasks from.
 type GoalTaskRow = {
   id: string;
   goal_id: string;
@@ -133,6 +128,10 @@ type GoalTaskRow = {
   planned_month: string | null;
   day: string | null;
   estimate: number | null;
+  note: string | null;
+  in_plan: boolean;
+  position: number;
+  created_at: string;
   done_on: string | null;
 };
 
@@ -142,6 +141,8 @@ export type MonthTask = {
   estimate: number | null;
   note: string | null;
   parentName: string | null;
+  // The hours the plan places in this month for the task: the part of a split one.
+  part: number;
 };
 
 // Every evidence commitment of a goal, retired ones included: the source keys
@@ -161,7 +162,6 @@ type GoalsQueryRow = {
   month_budgets: MonthBudgetRow[];
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
-  month_tasks: MonthTaskRow[];
   goal_tasks: GoalTaskRow[];
   dayless_count: number;
   measure_sources: MeasureSourceRow[];
@@ -256,7 +256,8 @@ async function queryGoalsRow(
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
-         where b.month = date_trunc('month', ${day}::date)::date) as month_budgets,
+         join "goals"."goals" g on g.id = b.goal_id and ${openGoal("g", day)}
+         where b.month >= (date_trunc('month', ${day}::date) - interval '1 month')::date) as month_budgets,
       (select coalesce(json_agg(to_jsonb(o) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.day <= ${day}::date
@@ -275,32 +276,6 @@ async function queryGoalsRow(
          join "goals"."facts" f on f.one_off_id = o.id
          where f.day = ${day}::date) as done_one_offs,
       (select coalesce(json_agg(jsonb_build_object(
-                 'goal_id', t.goal_id,
-                 'id', t.id,
-                 'name', t.name,
-                 'estimate', t.estimate,
-                 'note', t.note,
-                 'parent_name', t.parent_name
-               )), '[]'::json)
-         from (
-           select distinct on (coalesce(p.goal_id, o.goal_id))
-                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate, o.note, p.name as parent_name
-             from "goals"."one_offs" o
-             left join "goals"."one_offs" p on p.id = o.parent_id
-             join "goals"."goals" g on g.id = coalesce(p.goal_id, o.goal_id) and ${openGoal("g", day)}
-            where ${isToday}::boolean
-              and o.day is null
-              and coalesce(p.planned_month, o.planned_month) <= date_trunc('month', ${day}::date)::date
-              and (p.id is null or p.day is null)
-              and not exists (select 1 from "goals"."one_offs" k where k.parent_id = o.id)
-              and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
-            order by coalesce(p.goal_id, o.goal_id),
-                     coalesce(p.planned_month, o.planned_month),
-                     coalesce(p.position, o.position),
-                     o.position,
-                     o.id
-         ) t) as month_tasks,
-      (select coalesce(json_agg(jsonb_build_object(
                  'id', o.id,
                  'goal_id', o.goal_id,
                  'parent_id', o.parent_id,
@@ -308,6 +283,10 @@ async function queryGoalsRow(
                  'planned_month', o.planned_month,
                  'day', o.day,
                  'estimate', o.estimate,
+                 'note', o.note,
+                 'in_plan', o.in_plan,
+                 'position', o.position,
+                 'created_at', o.created_at,
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
                )), '[]'::json)
          from "goals"."one_offs" o
@@ -562,49 +541,104 @@ function monthLineOf(
       row.measure_sources.filter((source) => source.goal_id === goal.id),
       evidenceOutcome.bySourceKey,
     );
-    const budget = row.month_budgets.find((b) => b.goal_id === goal.id);
+    const budget = row.month_budgets.find((b) => b.goal_id === goal.id && b.month === month);
     lines[goal.id] = monthLine({
       month,
       today: day,
       budget: budget ? { month, amount: budget.amount } : null,
       reached: reachedByMonth({ unit, facts, evidence }).get(month) ?? 0,
+      rhythm: goal.rhythm,
     });
   }
   return lines;
 }
 
-// The month's tasks done of total per goal, counted the way `/metas` counts
-// them (`monthList`); a goal with none has no key.
-function monthTaskCountsOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, { done: number; total: number }> {
+// What `fillPlan` reads for one goal: every task it holds, the budgets of the
+// months from the previous one, and the goal's rhythm.
+function planInputOf(goal: GoalRow, row: GoalsQueryRow, day: string): PlanInput {
+  const tasks: PlanTask[] = row.goal_tasks
+    .filter((task) => task.goal_id === goal.id)
+    .map((task) => ({
+      id: task.id,
+      parentId: task.parent_id,
+      name: task.name,
+      plannedMonth: task.planned_month,
+      day: task.day,
+      estimate: task.estimate,
+      doneOn: task.done_on,
+      note: task.note,
+      inPlan: task.in_plan,
+      createdOn: civilDateInZone(new Date(task.created_at)),
+      position: task.position,
+    }));
+  return {
+    rhythm: goal.rhythm,
+    budgets: row.month_budgets
+      .filter((budget) => budget.goal_id === goal.id)
+      .map((budget) => ({ month: budget.month, amount: budget.amount })),
+    tasks,
+    openedOn: civilDateInZone(new Date(goal.created_at)),
+    horizon: goal.horizon,
+    today: day,
+  };
+}
+
+// The plan's list for the current month, per goal; a goal with none has no key.
+function monthItemsOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, PlanItem[]> {
   const month = monthOf(day);
-  const counts: Record<string, { done: number; total: number }> = {};
+  const lists: Record<string, PlanItem[]> = {};
   for (const goal of goals) {
-    const tasks: Task[] = row.goal_tasks
-      .filter((task) => task.goal_id === goal.id)
-      .map((task) => ({
-        id: task.id,
-        parentId: task.parent_id,
-        name: task.name,
-        plannedMonth: task.planned_month,
-        day: task.day,
-        estimate: task.estimate,
-        doneOn: task.done_on,
-      }));
-    const items = monthList(tasks, month, day);
-    if (items.length > 0) counts[goal.id] = { done: items.filter((item) => item.done).length, total: items.length };
+    const items = planMonthList(planInputOf(goal, row, day), month);
+    if (items.length > 0) lists[goal.id] = items;
+  }
+  return lists;
+}
+
+// The month's tasks done of total per goal, from the same list the screens read.
+function monthTaskCountsOf(lists: Record<string, PlanItem[]>): Record<string, { done: number; total: number }> {
+  const counts: Record<string, { done: number; total: number }> = {};
+  for (const [goalId, items] of Object.entries(lists)) {
+    counts[goalId] = { done: items.filter((item) => item.done).length, total: items.length };
   }
   return counts;
 }
 
-function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, MonthTask | null> {
+// The first undone leaf of the plan's list, carried first. A dated task is
+// Hoy's own one-off, never the next of the month.
+function monthTaskOf(goals: GoalRow[], lists: Record<string, PlanItem[]>): Record<string, MonthTask | null> {
   const tasks: Record<string, MonthTask | null> = {};
   for (const goal of goals) {
-    const next = row.month_tasks.find((task) => task.goal_id === goal.id);
-    tasks[goal.id] = next
-      ? { id: next.id, name: next.name, estimate: next.estimate, note: next.note, parentName: next.parent_name }
-      : null;
+    tasks[goal.id] = null;
+    for (const item of lists[goal.id] ?? []) {
+      if (item.done || item.task.day !== null) continue;
+      const leaf =
+        item.children.length === 0
+          ? item.task
+          : item.children
+              .filter((child) => child.doneOn === null)
+              .sort((a, b) => a.position - b.position)[0];
+      if (!leaf) continue;
+      tasks[goal.id] = {
+        id: leaf.id,
+        name: leaf.name,
+        estimate: leaf.estimate,
+        note: leaf.note ?? null,
+        parentName: item.children.length === 0 ? null : item.task.name,
+        part: item.part,
+      };
+      break;
+    }
   }
   return tasks;
+}
+
+// The notice of a month that closed short, today alone (RP-52, RP-53).
+function planNoticeOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, PlanNotice | null> {
+  const notices: Record<string, PlanNotice | null> = {};
+  for (const goal of goals) {
+    notices[goal.id] = planMoved({ ...planInputOf(goal, row, day), seen: goal.plan_seen });
+  }
+  return notices;
 }
 
 // The goal's measure from the Monday of `day` to `day`: the current row of
@@ -695,6 +729,8 @@ export async function loadDay(day: string): Promise<{
   monthTask: Record<string, MonthTask | null>;
   // Tasks of the month, done of total, for every goal that has any; today only.
   monthTaskCounts: Record<string, { done: number; total: number }>;
+  // Each open goal's notice that a closed month moved its end; today only, `{}` on any other day.
+  planNotice: Record<string, PlanNotice | null>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
@@ -745,6 +781,8 @@ export async function loadDay(day: string): Promise<{
   const evidence = toEvidenceByCommitment(row.commitments, dayEvidence);
   const goals = row.goals.filter((goal) => goal.horizon > day);
 
+  const monthItems = isToday ? monthItemsOf(goals, row, day) : null;
+
   const view = deriveDay({ commitments, phases, facts, evidence, day });
   const periodDone: Record<string, number> = {};
   for (const plan of commitments) {
@@ -782,8 +820,9 @@ export async function loadDay(day: string): Promise<{
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     monthLine: monthLineOf(goals, row, evidenceOutcome, day),
-    monthTask: isToday ? monthTaskOf(goals, row) : {},
-    monthTaskCounts: isToday ? monthTaskCountsOf(goals, row, day) : {},
+    monthTask: monthItems ? monthTaskOf(goals, monthItems) : {},
+    monthTaskCounts: monthItems ? monthTaskCountsOf(monthItems) : {},
+    planNotice: isToday ? planNoticeOf(goals, row, day) : {},
     commitments: row.commitments.map(toCommitmentInfo),
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  boolean,
   check,
   date,
   integer,
@@ -29,10 +30,12 @@ export const oneOffs = goalsSchema.table(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     // The plan's order among this person's own rows. A trigger fills it at insert when none is named; no UPDATE grant (RP-47).
     position: integer().notNull(),
-    // In the goal's measure unit (RP-30). No UPDATE grant: written once.
+    // In the goal's measure unit (RP-30). The sheet edits it (RP-55) until the task has a fact or children.
     estimate: integer(),
-    // A month instead of a day (RP-31); the shift is its one later write.
+    // The fixed month (RP-51): null when the plan places the task. Written at insert and by the sheet's fix and unfix.
     plannedMonth: date(),
+    // A task of the plan (RP-50), apart from a goal's suelta. A trigger sets it at insert when a month or a parent is named; no UPDATE grant.
+    inPlan: boolean().notNull().default(false),
     // One level deep (RP-30). No UPDATE grant: a sub-task never changes hands.
     parentId: uuid().references((): AnyPgColumn => oneOffs.id, { onDelete: "cascade" }),
     // Plain text a person writes and changes at any time (RP-45); null when empty, never "".
@@ -48,6 +51,9 @@ export const oneOffs = goalsSchema.table(
     check("one_offs_estimate_needs_goal", sql`${t.estimate} is null or ${t.goalId} is not null`),
     // A sub-task takes its parent's month.
     check("one_offs_child_has_no_month", sql`${t.parentId} is null or ${t.plannedMonth} is null`),
+    check("one_offs_in_plan_shape", sql`not ${t.inPlan} or ${t.goalId} is not null`),
+    check("one_offs_planned_month_in_plan", sql`${t.plannedMonth} is null or ${t.inPlan}`),
+    check("one_offs_child_in_plan", sql`${t.parentId} is null or ${t.inPlan}`),
     check("one_offs_not_own_parent", sql`${t.parentId} <> ${t.id}`),
     check(
       "one_offs_note_shape",
@@ -62,7 +68,7 @@ export const oneOffs = goalsSchema.table(
       to: authenticatedRole,
       using: sql`auth.uid() = ${t.userId}`,
     }),
-    // A sub-task hangs only off an own top-level one-off planned for a month
+    // A sub-task hangs only off an own top-level one-off in the plan
     // of the same goal, with no day, no estimate and no fact. Policies cannot
     // say row-to-row rules any other way; `p`'s alias keeps `${t.goalId}`
     // pointing at the new row, not at the parent.
@@ -71,7 +77,7 @@ export const oneOffs = goalsSchema.table(
       to: authenticatedRole,
       withCheck: sql`${authUid} = ${t.userId} and (${t.parentId} is null or exists (
         select 1 from "goals"."one_offs" p
-        where p.id = ${t.parentId} and p.parent_id is null and p.planned_month is not null
+        where p.id = ${t.parentId} and p.parent_id is null and p.in_plan
           and p.day is null and p.estimate is null and p.goal_id = ${t.goalId}
           and not exists (select 1 from "goals"."facts" f where f.one_off_id = p.id)
       ))`,

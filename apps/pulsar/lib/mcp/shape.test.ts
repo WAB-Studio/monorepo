@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Report } from "@/lib/export/report";
-import { monthList, type Task } from "@/lib/plan/carry";
+import type { Task } from "@/lib/plan/carry";
 import type { loadDay } from "@/lib/queries/day";
 import type { GoalView } from "@/lib/queries/goal";
+import { fillPlan, type PlanInput, type PlanTask } from "@/lib/plan/roadmap";
+import { planMonthList } from "@/lib/plan/roadmap-read";
 
 import { amountOf, shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "./shape";
 
@@ -18,7 +20,20 @@ const tasks: Task[] = [
   { id: ID(5), parentId: ID(3), name: "Resumir", plannedMonth: null, day: null, estimate: 100, doneOn: null },
 ];
 
+const planned = (list: Task[]): PlanTask[] =>
+  list.map((task, position) => ({ ...task, inPlan: false, position, createdOn: "2026-08-15" }));
+
+const planOf = (list: PlanTask[]): PlanInput => ({
+  rhythm: 600,
+  budgets: [],
+  tasks: list,
+  openedOn: "2026-08-15",
+  horizon: "2027-01-01",
+  today: "2026-10-05",
+});
+
 function goalView(unit: string | null): GoalView {
+  const plan = planOf(planned(tasks));
   return {
     id: ID(10),
     name: "Leer más",
@@ -68,7 +83,11 @@ function goalView(unit: string | null): GoalView {
       { month: "2026-11-01", planned: null, reached: 0, current: false, past: false },
     ],
     budgets: [],
-    tasks,
+    tasks: planned(tasks),
+    rhythm: 600,
+    planSeen: null,
+    plan,
+    roadmap: fillPlan(plan),
     shifts: ["2026-09-01"],
   };
 }
@@ -100,7 +119,7 @@ test("a goal's months read YYYY-MM, never the first of the month", () => {
     ["2026-09", "2026-10", "2026-11"],
   );
   assert.equal(shaped.thisMonth?.month, "2026-10");
-  assert.deepEqual(shaped.shifts, ["2026-09"]);
+  assert.equal("shifts" in shaped, false);
   const months = monthsIn(shaped);
   assert.ok(months.length >= 6);
   for (const month of months) assert.match(month, /^\d{4}-\d{2}$/);
@@ -141,11 +160,13 @@ test("a finished month's carried share is what its undone tasks left, floored", 
 test("a share floors: 2 carried of 3 planned is 66, never rounded to 67", () => {
   const view = goalView("minutos");
   view.months = [{ month: "2026-08-01", planned: 3, reached: 1, current: false, past: true }];
-  view.tasks = [
+  view.tasks = planned([
     { id: ID(40), parentId: null, name: "a", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: "2026-08-20" },
     { id: ID(41), parentId: null, name: "b", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: null },
     { id: ID(42), parentId: null, name: "c", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: null },
-  ];
+  ]);
+  view.tasks = view.tasks.map((task) => ({ ...task, createdOn: "2026-08-01" }));
+  view.plan = planOf(view.tasks);
   const [august] = shapeGoal(view).months;
   assert.equal(august.carried?.value, 2);
   assert.equal(august.carriedPercent, 66);
@@ -189,20 +210,45 @@ test("a shape is plain JSON: nothing is lost or made up by a round trip", () => 
   assert.deepEqual(JSON.parse(JSON.stringify(shaped)), shaped);
 });
 
-test("a month's list carries the carried tasks first, owing what the month opened with", () => {
-  const items = monthList(tasks, "2026-10-01", "2026-10-05");
+test("a month's list carries the carried tasks first, each with its part, its fixing and its neighbours", () => {
+  const input = planOf(planned(tasks));
+  const items = planMonthList(input, "2026-10-01");
   const shaped = shapeMonth({ goalId: ID(10), month: "2026-10-01", unit: "minutos", items });
   assert.equal(shaped.month, "2026-10");
   assert.deepEqual(
-    shaped.items.map((i) => [i.name, i.carriedFrom, i.owes.value, i.done]),
+    shaped.items.map((i) => [i.name, i.carriedFrom, i.part.value, i.fixed, i.done]),
     [
-      ["Capítulo 1", "2026-09", 300, false],
-      ["Parte 2", null, 300, false],
+      ["Capítulo 1", "2026-09", 300, true, false],
+      ["Parte 2", null, 100, true, false],
     ],
   );
-  assert.deepEqual(shaped.items[0].owes, { value: 300, unit: "minutos", text: "5 h" });
+  assert.deepEqual(shaped.items[0].part, { value: 300, unit: "minutos", text: "5 h" });
   assert.equal(shaped.items[1].children.length, 2);
   for (const month of monthsIn(shaped)) assert.match(month, /^\d{4}-\d{2}$/);
+});
+
+test("a split task reads its part, and where the rest sits, as YYYY-MM", () => {
+  const big: Task = { id: ID(50), parentId: null, name: "Tesis", plannedMonth: null, day: null, estimate: 900, doneOn: null };
+  const input = planOf(planned([big]).map((task) => ({ ...task, inPlan: true })));
+  const october = shapeMonth({ goalId: ID(10), month: "2026-10-01", unit: "minutos", items: planMonthList(input, "2026-10-01") });
+  const november = shapeMonth({ goalId: ID(10), month: "2026-11-01", unit: "minutos", items: planMonthList(input, "2026-11-01") });
+  assert.deepEqual([october.items[0].part.value, october.items[0].from, october.items[0].to, october.items[0].fixed], [600, null, "2026-11", false]);
+  assert.deepEqual([november.items[0].part.value, november.items[0].from, november.items[0].to], [300, "2026-10", null]);
+});
+
+test("a goal reads its rhythm, the plan's end and each task's month: fixed, or its first part's", () => {
+  const view = goalView("minutos");
+  const free: PlanTask = { id: ID(51), parentId: null, name: "Libre", plannedMonth: null, day: null, estimate: 700, doneOn: null, inPlan: true, createdOn: "2026-08-15", position: 9 };
+  view.tasks = [...view.tasks, free];
+  view.plan = planOf(view.tasks);
+  view.roadmap = fillPlan(view.plan);
+  const shaped = shapeGoal(view);
+  assert.deepEqual(shaped.rhythm, { value: 600, unit: "minutos", text: "10 h" });
+  assert.match(shaped.end ?? "", /^\d{4}-\d{2}-\d{2}$/);
+  const byName = new Map(shaped.tasks.map((task) => [task.name, task]));
+  assert.deepEqual([byName.get("Libre")?.month, byName.get("Libre")?.fixed], ["2026-11", false]);
+  assert.deepEqual([byName.get("Capítulo 1")?.month, byName.get("Capítulo 1")?.fixed], ["2026-10", true]);
+  assert.equal(byName.get("Parte 2")?.children[0].fixed, true);
 });
 
 test("the goal list keeps its three groups and each goal's measure", () => {
@@ -267,6 +313,7 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     periodDone: { [ID(12)]: 3 },
     monthTask: {},
     monthTaskCounts: {},
+    planNotice: {},
   };
   const shaped = shapeDay(loaded);
   assert.equal(shaped.day, "2026-10-05");

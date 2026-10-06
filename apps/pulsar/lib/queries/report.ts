@@ -7,8 +7,9 @@ import type { EvidenceDay } from "@/lib/day/types";
 import { dayBefore } from "@/lib/day/weeks";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
-import { carryShare, monthList, type MonthItem } from "@/lib/plan/carry";
 import { monthOf, toDate } from "@/lib/plan/months";
+import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
+import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import {
   goalFigures,
   type CommitmentRow,
@@ -28,7 +29,7 @@ type ReportRow = {
   commitments: CommitmentRow[];
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
-  tasks: TaskRow[];
+  tasks: (TaskRow & { in_plan: boolean; created_at: string; position: number })[];
 };
 
 // One statement over every goal not archived (RP-46). RLS narrows it to the
@@ -87,9 +88,42 @@ async function queryReportEvidence(
   return bySourceKey;
 }
 
-// What `monthList` hands «Mes», done and not (RP-46). A parent is done on its
+// The goal's plan, read the way `planMonthList` and `planShare` ask (RP-49).
+function planInputOf(row: ReportRow, today: string): PlanInput {
+  const tasks: PlanTask[] = row.tasks.map((task) => ({
+    id: task.id,
+    parentId: task.parent_id,
+    name: task.name,
+    plannedMonth: task.planned_month,
+    day: task.day,
+    estimate: task.estimate,
+    doneOn: task.done_on,
+    factId: task.fact_id ?? null,
+    note: task.note,
+    inPlan: task.in_plan,
+    createdOn: civilDateInZone(new Date(task.created_at)),
+    position: task.position,
+  }));
+  return {
+    rhythm: row.goal.rhythm ?? null,
+    budgets: row.budgets,
+    tasks,
+    openedOn: civilDateInZone(new Date(row.goal.created_at)),
+    horizon: row.goal.horizon,
+    today,
+  };
+}
+
+// False when neither the task nor any child carries an estimate.
+function hasAmountOf(item: PlanItem): boolean {
+  return item.children.length === 0
+    ? item.task.estimate !== null
+    : item.children.some((child) => child.estimate !== null);
+}
+
+// What the plan hands «Mes», done and not (RP-46). A parent is done on its
 // last child's day; `owes` counts what is undone today.
-function toReportTask(item: MonthItem): ReportTask {
+function toReportTask(item: PlanItem): ReportTask {
   const leaf = item.children.length === 0;
   const undone = item.children.filter((child) => child.doneOn === null);
   const doneOn = !item.done
@@ -111,7 +145,7 @@ function toReportTask(item: MonthItem): ReportTask {
         ? (item.task.estimate ?? 0)
         : 0
       : undone.reduce((sum, child) => sum + (child.estimate ?? 0), 0),
-    hasAmount: item.hasAmount,
+    hasAmount: hasAmountOf(item),
     note: item.task.note ?? null,
     children: item.children.map((child) => ({
       name: child.name,
@@ -172,6 +206,8 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       today,
     });
     const current = phaseOn(phases, today);
+    const planInput = planInputOf(row, today);
+    const monthItems = planMonthList(planInput, thisMonth);
 
     return {
       id: row.goal.id,
@@ -191,8 +227,8 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         endsOn: phase.endsOn ?? dayBefore(row.goal.horizon),
         current: current?.id === phase.id,
       })),
-      tasks: monthList(figures.tasks, thisMonth, today).map(toReportTask),
-      carried: monthList(figures.tasks, thisMonth, today)
+      tasks: monthItems.map(toReportTask),
+      carried: monthItems
         .filter((item) => item.carriedFrom !== null && !item.done)
         .map((item) => {
           // Only what is undone today: a child done this month owes nothing.
@@ -210,12 +246,12 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
             note: item.task.note ?? null,
             from: item.carriedFrom as string,
             owes: leaf ? (item.task.estimate ?? 0) : children.reduce((sum, c) => sum + c.owes, 0),
-            hasAmount: leaf ? item.task.estimate !== null : children.some((c) => c.hasAmount),
+            hasAmount: hasAmountOf(item),
             children,
           };
         }),
       months: figures.months.map((row) => {
-        const share = row.past ? carryShare(figures.tasks, row.month) : null;
+        const share = row.past ? planShare(planInput, row.month) : null;
         return {
           ...row,
           carried: share ? Math.floor((share.carried * 100) / share.planned) : null,

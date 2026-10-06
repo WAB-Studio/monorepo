@@ -1,4 +1,4 @@
-// Proves RP-39, RP-40 and RP-45 for the AI's notes at the door: every read
+// Proves RP-39, RP-56 and RP-45 for the AI's notes at the door: every read
 // that names a task carries its note, `create_task` takes one, and
 // `set_task_note` writes and replaces it but never empties it. Raw JSON-RPC
 // over HTTP to the lane's running server, as `route.ts` does.

@@ -1,4 +1,4 @@
-// Proves RP-39, RP-40 and RNP-05 at the seam: inside `actAs` every loader and
+// Proves RP-39, RP-56 and RNP-05 at the seam: inside `actAs` every loader and
 // act runs as the key's person, outside it nothing is anyone. `next/headers`
 // answers an empty cookie jar, so the cookie path can only ever say «nobody».
 // Statements are counted off the wire as `resolve.ts` does, `begin`/`commit`

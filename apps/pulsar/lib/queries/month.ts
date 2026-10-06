@@ -4,8 +4,10 @@ import { sql } from "drizzle-orm";
 
 import type { EvidenceDay } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
-import { estimateFacts, monthList, type MonthItem, type Task } from "@/lib/plan/carry";
+import { estimateFacts, type MonthItem } from "@/lib/plan/carry";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
+import { planMonthList } from "@/lib/plan/roadmap-read";
+import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import {
   evidenceDaysForMeasure,
   type CommitmentRow,
@@ -15,7 +17,7 @@ import {
 } from "@/lib/queries/goal";
 import { toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { TIME_ZONE, todayInZone } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 
 export type MonthAcrossGoal = {
   id: string;
@@ -23,9 +25,14 @@ export type MonthAcrossGoal = {
   unit: string | null;
   // Null when the goal measures nothing: its tasks draw with no amount.
   line: MonthLine | null;
-  items: MonthItem[];
+  items: MonthAcrossItem[];
   open: boolean;
 };
+
+// The screen's `MonthItem` plus what the plan says of the task: its part of
+// the month, where it comes from and goes on to, whether it is fixed.
+export type MonthAcrossItem = MonthItem &
+  Pick<PlanItem, "hours" | "part" | "from" | "to" | "fixed" | "endsOn" | "pastEnd">;
 
 export type MonthAcross = {
   month: string;
@@ -39,12 +46,15 @@ type Row = {
   commitments: CommitmentRow[];
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
-  tasks: TaskRow[];
+  tasks: PlanTaskRow[];
 };
 
+// What `to_jsonb(o)` already carries beyond the screens' `TaskRow`.
+type PlanTaskRow = TaskRow & { in_plan: boolean; created_at: string; position: number };
+
 // One statement over every goal open today. Facts are bounded in SQL to the
-// month so a past month never reaches the process; tasks are not, since a
-// carried task needs its whole history. RLS narrows it to the caller (RNP-05).
+// month so a past month never reaches the process; tasks and budgets are not,
+// since the plan fills from every task through every month of the goal. RLS narrows it to the caller (RNP-05).
 async function queryRows(tx: Transaction, month: string, today: string): Promise<Row[]> {
   const rows = await tx.execute<Row>(sql`
     select
@@ -67,7 +77,7 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
       (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                 order by b.month), '[]'::json)
          from "goals"."month_budgets" b
-         where b.goal_id = g.id and b.month = ${month}::date) as budgets,
+         where b.goal_id = g.id) as budgets,
       (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id),
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id
@@ -118,7 +128,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
   ]);
 
   const goals = rows.map((row): MonthAcrossGoal => {
-    const tasks: Task[] = row.tasks.map((task) => ({
+    const tasks: PlanTask[] = row.tasks.map((task) => ({
       id: task.id,
       parentId: task.parent_id,
       name: task.name,
@@ -128,7 +138,18 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       doneOn: task.done_on,
       factId: task.fact_id ?? null,
       note: task.note,
+      inPlan: task.in_plan,
+      createdOn: civilDateInZone(new Date(task.created_at)),
+      position: task.position,
     }));
+    const plan: PlanInput = {
+      rhythm: row.goal.rhythm ?? null,
+      budgets: row.budgets,
+      tasks,
+      openedOn: civilDateInZone(new Date(row.goal.created_at)),
+      horizon: row.goal.horizon,
+      today,
+    };
     const unit = row.goal.measure_unit;
 
     let line: MonthLine | null = null;
@@ -150,6 +171,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
         today,
         budget: row.budgets.find((budget) => budget.month === month) ?? null,
         reached,
+        rhythm: row.goal.rhythm ?? null,
       });
     }
 
@@ -158,7 +180,26 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       name: row.goal.name,
       unit,
       line,
-      items: monthList(tasks, month, today),
+      items: planMonthList(plan, month).map(
+        (item): MonthAcrossItem => ({
+          task: item.task,
+          children: item.children,
+          carriedFrom: item.carriedFrom,
+          owes: item.part,
+          hasAmount:
+            item.children.length === 0
+              ? item.task.estimate !== null
+              : item.children.some((child) => child.estimate !== null),
+          done: item.done,
+          hours: item.hours,
+          part: item.part,
+          from: item.from,
+          to: item.to,
+          fixed: item.fixed,
+          endsOn: item.endsOn,
+          pastEnd: item.pastEnd,
+        }),
+      ),
       open: true,
     };
   });

@@ -2,8 +2,10 @@ import { createTranslator } from "next-intl";
 
 import type { Cadence, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import type { Report } from "@/lib/export/report";
-import { carryShare, monthOfTask, type MonthItem, type Task } from "@/lib/plan/carry";
+import { monthOfTask } from "@/lib/plan/carry";
 import type { MonthLine } from "@/lib/plan/months";
+import type { PlanItem, PlanTask, Roadmap } from "@/lib/plan/roadmap";
+import { planShare } from "@/lib/plan/roadmap-read";
 import { civilDateInZone } from "@/lib/zone";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import type { loadDay } from "@/lib/queries/day";
@@ -54,6 +56,7 @@ export type ShapedTask = {
   id: string;
   name: string;
   month: string | null;
+  fixed: boolean;
   day: string | null;
   estimate: Amount | null;
   doneOn: string | null;
@@ -61,22 +64,50 @@ export type ShapedTask = {
   children: ShapedTask[];
 };
 
-function shapeTask(task: Task, unit: string | null, children: Task[], parent: Task | null): ShapedTask {
+// Where the plan sits each task: the month of its first part, and whether the
+// person (or the AI) fixed it there.
+type Placement = Map<string, { month: string; fixed: boolean }>;
+
+function placementOf(roadmap: Roadmap): Placement {
+  const placed: Placement = new Map();
+  for (const month of roadmap.months) {
+    for (const item of month.items) {
+      if (!placed.has(item.task.id)) placed.set(item.task.id, { month: month.month, fixed: item.fixed });
+    }
+  }
+  return placed;
+}
+
+function shapeTask(
+  task: PlanTask,
+  unit: string | null,
+  children: PlanTask[],
+  placed: Placement,
+  parent: { month: string | null; fixed: boolean } | null,
+): ShapedTask {
+  const own = placed.get(task.id);
+  const fixedMonth = monthOfTask(task);
+  const where =
+    parent ?? {
+      month: own?.month ?? fixedMonth,
+      fixed: own?.fixed ?? fixedMonth !== null,
+    };
   return {
     id: task.id,
     name: task.name,
-    month: monthOrNull(monthOfTask(task, parent)),
+    month: monthOrNull(where.month),
+    fixed: where.fixed,
     day: task.day,
     estimate: amountOrNull(task.estimate, unit),
     doneOn: task.doneOn,
     note: task.note ?? null,
-    children: children.map((child) => shapeTask(child, unit, [], task)),
+    children: children.map((child) => shapeTask(child, unit, [], placed, where)),
   };
 }
 
 // The flat rows as a tree; a sub-task whose parent is missing stays at the top
 // rather than vanish.
-function taskTree(tasks: Task[], unit: string | null): ShapedTask[] {
+function taskTree(tasks: PlanTask[], unit: string | null, placed: Placement): ShapedTask[] {
   const ids = new Set(tasks.map((task) => task.id));
   return tasks
     .filter((task) => task.parentId === null || !ids.has(task.parentId))
@@ -85,6 +116,7 @@ function taskTree(tasks: Task[], unit: string | null): ShapedTask[] {
         task,
         unit,
         tasks.filter((child) => child.parentId === task.id),
+        placed,
         null,
       ),
     );
@@ -169,9 +201,13 @@ export function shapeGoal(view: GoalView) {
       daysDone: commitment.factDayCount,
       evidenceSource: commitment.sourceLabelKey,
     })),
+    // The goal's units per month (RP-50); the AI reads it, never sets it (RP-56).
+    rhythm: amountOrNull(view.rhythm, unit),
+    // The day the plan's last task fills, null while it cannot say.
+    end: view.roadmap.end,
     months: view.months.map((row) => {
       // The screen reads a share for a finished month alone.
-      const share = row.past ? carryShare(view.tasks, firstOf(row.month)) : null;
+      const share = row.past ? planShare(view.plan, firstOf(row.month)) : null;
       return {
         month: monthKey(row.month),
         planned: amountOrNull(row.planned, unit),
@@ -182,24 +218,42 @@ export function shapeGoal(view: GoalView) {
         past: row.past,
       };
     }),
-    tasks: taskTree(view.tasks, unit),
+    tasks: taskTree(view.tasks, unit, placementOf(view.roadmap)),
     weeks: view.weeks.map((week) => shapeWeek(week, unit)),
-    shifts: view.shifts.map(monthKey),
   };
 }
 
-// One month's list as `monthList` returns it: carried tasks first, then the
-// month's own.
-export function shapeMonth(input: { goalId: string; month: string; unit: string | null; items: MonthItem[] }) {
+// One month's list as `planMonthList` returns it: carried tasks first, then
+// the month's own, each with its part of the task and where the rest sits.
+export function shapeMonth(input: { goalId: string; month: string; unit: string | null; items: PlanItem[] }) {
   const { unit } = input;
   return {
     goalId: input.goalId,
     month: monthKey(input.month),
     items: input.items.map((item) => ({
-      ...shapeTask(item.task, unit, item.children, null),
+      id: item.task.id,
+      name: item.task.name,
+      day: item.task.day,
+      estimate: amountOrNull(item.task.estimate, unit),
+      doneOn: item.task.doneOn,
+      note: item.task.note ?? null,
+      children: item.children.map((child) => ({
+        id: child.id,
+        name: child.name,
+        day: child.day,
+        estimate: amountOrNull(child.estimate, unit),
+        doneOn: child.doneOn,
+        note: child.note ?? null,
+      })),
+      part: amountOf(item.part, unit),
+      from: monthOrNull(item.from),
+      to: monthOrNull(item.to),
+      fixed: item.fixed,
       carriedFrom: monthOrNull(item.carriedFrom),
-      owes: amountOf(item.owes, unit),
-      hasAmount: item.hasAmount,
+      hasAmount:
+        item.children.length === 0
+          ? item.task.estimate !== null
+          : item.children.some((child) => child.estimate !== null),
       done: item.done,
     })),
   };

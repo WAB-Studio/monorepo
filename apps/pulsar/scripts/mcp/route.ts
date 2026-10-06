@@ -1,4 +1,4 @@
-// Proves RP-38, RP-39, RP-40, RNP-05, RNP-14 and RNP-15 at the door: raw
+// Proves RP-38, RP-39, RP-56, RNP-05, RNP-14 and RNP-15 at the door: raw
 // JSON-RPC over HTTP to the lane's running server (`PULSAR_BASE_URL`, else
 // :3200 + lane - 1), keys issued by `lib/people.ts`. The server's log is read
 // from `PULSAR_SERVER_LOG` (default `private/dev<port>.log`) for the two
@@ -18,6 +18,7 @@ import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type 
 import { todayInZone } from "@/lib/zone";
 
 import mcp from "../../messages/es/mcp.json";
+import roadmap from "../../messages/es/roadmap.json";
 
 const lane = Number(process.env.HARNESS_LANE ?? "1");
 const base = (process.env.PULSAR_BASE_URL ?? `http://localhost:${3200 + lane - 1}`).replace(/\/+$/, "");
@@ -152,6 +153,11 @@ test("tools/list lists the read and write tools and none that deletes or archive
   }
   assert.equal(names.length, 6 + 14, names.join(","));
   assert.deepEqual(names.filter((name) => /delete|archive|remove|undo|revoke/.test(name)), []);
+  for (const name of ["fix_task", "unfix_task"]) assert.ok(names.includes(name), `${name} missing`);
+  for (const name of ["accept_shift", "move_task_to_month"]) assert.ok(!names.includes(name), `${name} must be gone`);
+  const described = (name: string) => reply.result!.tools.find((entry: { name: string }) => entry.name === name) as unknown as { description: string };
+  assert.match(described("fix_task").description, /la tarea queda en ese mes; las demás se acomodan/);
+  assert.match(described("unfix_task").description, /las demás se acomodan/);
 });
 
 test("get_goal reads the subject's goal and refuses the intruder's as not found", async () => {
@@ -186,6 +192,60 @@ test("create_task, set_month_amount and complete_task write and read back throug
   assert.match(JSON.stringify(today.body), /por la puerta/);
   const facts = await admin`select id from goals.facts where one_off_id = ${taskId}`;
   assert.equal(facts.length, 1, "the task has no done fact");
+});
+
+test("fix_task fixes through the door, get_month reads it fixed and its part, unfix_task returns it to the plan", async () => {
+  const key = subject.key;
+  const monthAt = (delta: number) => {
+    const index = Number(todayInZone().slice(0, 4)) * 12 + Number(todayInZone().slice(5, 7)) - 1 + delta;
+    return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+  };
+  const [current, next] = [monthAt(0), monthAt(1)];
+  const horizon = new Date(`${todayInZone()}T12:00:00Z`);
+  horizon.setUTCDate(horizon.getUTCDate() + 120);
+
+  const made = await tool(key, "create_goal", { name: "el ritmo", horizon: horizon.toISOString().slice(0, 10) });
+  const goalId = made.body.goalId as string;
+  const commitment = await tool(key, "add_commitment", {
+    goal_id: goalId, name: "leer", cadence_kind: "daily", satisfaction: "quantity", target_quantity: 30, unit: "minutos",
+  });
+  assert.equal(commitment.isError, false, JSON.stringify(commitment.body));
+  await admin`update goals.goals set rhythm = 600 where id = ${goalId}`;
+
+  const big = await tool(key, "create_task", { name: "tesis", goal_id: goalId, estimate: 900, in_plan: true });
+  assert.equal(big.isError, false, JSON.stringify(big.body));
+  const bigId = big.body.oneOffId as string;
+  type Item = { name: string; part: { value: number }; from: string | null; to: string | null; fixed: boolean };
+  const items = async (month: string) => ((await tool(key, "get_month", { goal_id: goalId, month })).body.items as Item[]);
+  const brief = (item: Item | undefined) => item && [item.part.value, item.from, item.to, item.fixed];
+
+  assert.deepEqual(brief((await items(current))[0]), [600, null, next, false]);
+  assert.deepEqual(brief((await items(next))[0]), [300, current, null, false]);
+  const split = (await tool(key, "get_goal", { goal_id: goalId })).body as {
+    rhythm: { value: number }; end: string; tasks: { name: string; month: string; fixed: boolean }[];
+  };
+  assert.equal(split.rhythm.value, 600);
+  assert.match(split.end, /^\d{4}-\d{2}-\d{2}$/);
+  assert.deepEqual([split.tasks[0].month, split.tasks[0].fixed], [current, false]);
+
+  const later = monthAt(2);
+  const fixed = await tool(key, "fix_task", { one_off_id: bigId, month: later });
+  assert.equal(fixed.isError, false, JSON.stringify(fixed.body));
+  assert.deepEqual((await items(current)).map((item) => item.name), []);
+  assert.deepEqual(brief((await items(later))[0]), [900, null, null, true]);
+  const pinned = (await tool(key, "get_goal", { goal_id: goalId })).body as { tasks: { month: string; fixed: boolean }[]; rhythm: { value: number } };
+  assert.deepEqual([pinned.tasks[0].month, pinned.tasks[0].fixed, pinned.rhythm.value], [later, true, 600]);
+  const [{ rhythm }] = await admin`select rhythm from goals.goals where id = ${goalId}`;
+  assert.equal(rhythm, 600, "fixing never changes the goal's rhythm");
+
+  const unfixed = await tool(key, "unfix_task", { one_off_id: bigId });
+  assert.equal(unfixed.isError, false, JSON.stringify(unfixed.body));
+  assert.deepEqual(brief((await items(current))[0]), [600, null, next, false]);
+
+  assert.equal((await tool(key, "complete_task", { one_off_id: bigId })).isError, false);
+  const refused = await tool(key, "fix_task", { one_off_id: bigId, month: next });
+  assert.equal(refused.isError, true);
+  assert.deepEqual(refused.body, { key: "roadmap.errors.doneTask", message: roadmap.errors.doneTask });
 });
 
 test("tools that delete or archive answer a JSON-RPC error and the rows stand", async () => {
