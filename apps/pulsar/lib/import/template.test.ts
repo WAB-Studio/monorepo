@@ -205,3 +205,55 @@ test("a sub-task cannot follow a task across a section switch back to tasks", ()
 test("a sub-task cannot follow a task across another section", () => {
   assert.equal(errorOf(`${HEAD}## Tareas\n- 2026-10 · A\n## Meses\n  - c\n`).line, 9);
 });
+
+const DOC = readFileSync(new URL("../../../../docs/pulsar/PLANTILLA.md", import.meta.url), "utf8");
+const DOC_EXAMPLE = /```\n([\s\S]*?)\n```/.exec(DOC)![1];
+
+test("PLANTILLA.md's example, read from the file, carries the task's two-line note and the sub-task's", () => {
+  const result = parseTemplate(DOC_EXAMPLE);
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+  const [, tutor] = result.draft.goals[0].tasks;
+  assert.equal(tutor.note, "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar.");
+  assert.equal(tutor.children[0].note, "Comparar tres perfiles.");
+  assert.equal("note" in tutor.children[1], false);
+  assert.equal("note" in result.draft.goals[0].tasks[0], false);
+});
+
+test("a note repeats its line; a bare nota: is a blank line; the whole is trimmed; all blank is no note", () => {
+  const tasks = (body: string) => `${HEAD}## Tareas\n- 2026-10 · Tutor\n${body}\n`;
+  const noteOf = (body: string) => {
+    const result = parseTemplate(tasks(body));
+    assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+    return result.draft.goals[0].tasks[0].note;
+  };
+  assert.equal(noteOf("  nota: uno\n  nota:\n  nota: dos"), "uno\n\ndos");
+  assert.equal(noteOf("  nota:\n  nota:   uno  \n  nota:"), "uno");
+  assert.equal(noteOf("  nota:\n  nota:"), null);
+});
+
+test("a note of 2001 characters stops the read at its first nota: line; 2000 passes", () => {
+  // The two lines join with one line break: x repeated, a break, "más".
+  const tasks = (x: number) => `${HEAD}## Tareas\n- 2026-10 · Tutor\n  nota: ${"x".repeat(x)}\n  nota: más\n`;
+  assert.deepEqual(errorOf(tasks(1997)), { line: 8, expected: "  nota: texto, o     nota: texto" });
+  const ok = parseTemplate(tasks(1996));
+  assert.ok(ok.matched && "draft" in ok);
+  assert.equal(ok.draft.goals[0].tasks[0].note?.length, 2000);
+});
+
+test("nota: anywhere but under a task or a sub-task stops the read as out of form", () => {
+  const at = (body: string) => errorOf(`${HEAD}${body}\n`);
+  assert.equal(at("## Compromisos\n- x · cada día · toque\n  nota: a").line, 8);
+  assert.equal(at("## Meses\n  nota: a").line, 7);
+  assert.equal(at("## Tareas\n  nota: a").line, 7);
+  // A task's note comes before its sub-tasks; a four-space note needs a sub-task.
+  assert.equal(at("## Tareas\n- 2026-10 · T\n  - 1 h · c\n  nota: a").line, 9);
+  assert.equal(at("## Tareas\n- 2026-10 · T\n    nota: a").line, 8);
+  assert.equal(at("## Tareas\n- 2026-10 · T\n   nota: a").line, 8);
+  assert.equal(at("## Tareas\n- 2026-10 · T\nnota: a").line, 8);
+});
+
+test("a template with no nota: reads with no note key anywhere", () => {
+  const result = parseTemplate(`${HEAD}## Tareas\n- 2026-10 · T\n  - 1 h · c\n`);
+  assert.ok(result.matched && "draft" in result);
+  assert.equal(JSON.stringify(result.draft).includes("note"), false);
+});

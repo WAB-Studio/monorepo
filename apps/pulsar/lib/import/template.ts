@@ -25,6 +25,7 @@ const FORMS = {
   commitment: "- nombre · cadencia · toque o monto",
   task: "- AAAA-MM · nombre, o - AAAA-MM · monto · nombre",
   child: "  - nombre, o   - monto · nombre",
+  note: "  nota: texto, o     nota: texto",
 } as const;
 
 const SECTIONS = { "## Fases": "phases", "## Meses": "months", "## Compromisos": "commitments", "## Tareas": "tasks" } as const;
@@ -78,6 +79,8 @@ export function parseTemplate(text: string): TemplateResult {
   let section: Section | null = null;
   let lastTask: Task | null = null;
   let lastTaskPath = "";
+  // Where a `nota:` line may land: the task just read, or its latest sub-task.
+  let noteOwner: { depth: 2 | 4; into: { note?: string | null } } | null = null;
   let needsHorizon: { line: number } | null = null;
 
   for (let i = first + 1; i < lines.length; i++) {
@@ -96,9 +99,21 @@ export function parseTemplate(text: string): TemplateResult {
       needsHorizon = { line: n };
       section = null;
       lastTask = null;
+      noteOwner = null;
       continue;
     }
     if (!goal) return fail(n, FORMS.goal);
+
+    const note = /^( {2}| {4})nota:(?: (.*))?$/.exec(line);
+    if (note) {
+      const depth = note[1].length as 2 | 4;
+      if (section !== "tasks" || noteOwner === null || noteOwner.depth !== depth) return fail(n, FORMS.note);
+      const into = noteOwner.into;
+      into.note = into.note === undefined ? (note[2] ?? "") : `${into.note}\n${note[2] ?? ""}`;
+      const key = `${depth === 2 ? lastTaskPath : `${lastTaskPath}.children.${lastTask!.children.length - 1}`}.note`;
+      if (!spots.has(key)) spots.set(key, { line: n, expected: FORMS.note });
+      continue;
+    }
 
     if (section === null) {
       const horizon = /^horizonte: (\S+)$/.exec(line);
@@ -122,6 +137,7 @@ export function parseTemplate(text: string): TemplateResult {
       if (needsHorizon) return fail(needsHorizon.line, FORMS.horizon);
       section = next;
       lastTask = null;
+      noteOwner = null;
       continue;
     }
     if (section === null) return fail(n, needsHorizon ? FORMS.horizon : FORMS.section);
@@ -138,6 +154,7 @@ export function parseTemplate(text: string): TemplateResult {
       const index = lastTask.children.length;
       lastTask.children.push({ name: parts.length > 1 ? parts.slice(1).join(" · ").trim() : parts[0].trim(), estimate: amount });
       spots.set(`${lastTaskPath}.children.${index}`, { line: n, expected: FORMS.child });
+      noteOwner = { depth: 4, into: lastTask.children[index] };
       continue;
     }
 
@@ -182,6 +199,7 @@ export function parseTemplate(text: string): TemplateResult {
       };
       goal.tasks.push(task);
       lastTask = task;
+      noteOwner = { depth: 2, into: task };
       lastTaskPath = `${at}.tasks.${goal.tasks.length - 1}`;
       spot("tasks", FORMS.task);
     }
