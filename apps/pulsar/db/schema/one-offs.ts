@@ -27,6 +27,8 @@ export const oneOffs = goalsSchema.table(
     name: text().notNull(),
     day: date(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // The plan's order among this person's own rows. A trigger fills it at insert when none is named; no UPDATE grant (RP-47).
+    position: integer().notNull(),
     // In the goal's measure unit (RP-30). No UPDATE grant: written once.
     estimate: integer(),
     // A month instead of a day (RP-31); the shift is its one later write.
