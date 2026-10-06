@@ -56,15 +56,17 @@ export async function GoalsScreen({
         </Button>
         <section>
           <SectionLabel>{t("export.entry.section")}</SectionLabel>
-          <Button asChild variant="outline" block>
-            <Link href="/metas/importar">
-              {t("import.entry.title")}
-              <Text variant="meta" end>
-                {t("import.entry.hint")}
-              </Text>
-            </Link>
-          </Button>
-          {connect}
+          <Flex direction="column" gap="10px">
+            <Button asChild variant="outline" block stack>
+              <Link href="/metas/importar">
+                {t("import.entry.title")}
+                <Text variant="meta">
+                  {t("import.entry.hint")}
+                </Text>
+              </Link>
+            </Button>
+            {connect}
+          </Flex>
         </section>
       </Page>
     );
@@ -189,25 +191,27 @@ export async function GoalsScreen({
         after={
           <Panel>
             <SectionLabel>{t("export.entry.section")}</SectionLabel>
-            <Button asChild variant="outline" block>
-              <Link href="/metas/importar">
-                {t("import.entry.title")}
-                <Text variant="meta" end>
-                  {t("import.entry.hint")}
-                </Text>
-              </Link>
-            </Button>
-            {open.length + ended.length > 0 ? (
-              <Button asChild variant="outline" block>
-                <Link href="/exportar">
-                  {t("export.entry.title")}
-                  <Text variant="meta" end>
-                    {t("export.entry.hint")}
+            <Flex direction="column" gap="10px">
+              <Button asChild variant="outline" block stack>
+                <Link href="/metas/importar">
+                  {t("import.entry.title")}
+                  <Text variant="meta">
+                    {t("import.entry.hint")}
                   </Text>
                 </Link>
               </Button>
-            ) : null}
-            {connect}
+              {open.length + ended.length > 0 ? (
+                <Button asChild variant="outline" block stack>
+                  <Link href="/exportar">
+                    {t("export.entry.title")}
+                    <Text variant="meta">
+                      {t("export.entry.hint")}
+                    </Text>
+                  </Link>
+                </Button>
+              ) : null}
+              {connect}
+            </Flex>
           </Panel>
         }
       />

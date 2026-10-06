@@ -12,6 +12,7 @@ function goal(patch: Partial<GoalReport> = {}): GoalReport {
     endedOn: null,
     unit: "horas",
     thisMonth: { planned: 44, reached: 20, underPace: false },
+    tasks: [],
     toDate: { planned: 44, reached: 20 },
     phases: [{ aim: "Fundamentos", startsOn: "2026-10-01", endsOn: "2026-12-31", current: true }],
     carried: [{ name: "Tutor", note: null, from: "2026-10-01", owes: 12, hasAmount: true, children: [{ name: "Sesiones", note: null, owes: 6, hasAmount: true }] }],

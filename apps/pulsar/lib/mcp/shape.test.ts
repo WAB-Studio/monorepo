@@ -298,6 +298,7 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
         thisMonth: { planned: 750, reached: 120, underPace: true },
         toDate: { planned: 1350, reached: 570 },
         phases: [{ aim: "Arrancar", startsOn: "2026-08-17", endsOn: "2026-11-01", current: true }],
+        tasks: [],
         carried: [
           { name: "Capítulo 1", note: "Del libro azul", from: "2026-09-01", owes: 300, hasAmount: true, children: [{ name: "Leer", note: "Sin celular", owes: 300, hasAmount: true }] },
         ],
