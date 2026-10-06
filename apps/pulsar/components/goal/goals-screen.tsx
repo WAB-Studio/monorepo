@@ -64,6 +64,7 @@ export async function GoalsScreen({
               </Text>
             </Link>
           </Button>
+          {connect}
         </section>
       </Page>
     );

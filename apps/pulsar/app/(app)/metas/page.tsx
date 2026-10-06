@@ -1,5 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
+import { Button, Text } from "@/components/ui";
 import { GoalsScreen } from "@/components/goal/goals-screen";
 import { listGoalsForMetas } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
@@ -11,6 +14,21 @@ export default async function GoalsIndexPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
-  const { open, ended, archived } = await listGoalsForMetas();
-  return <GoalsScreen open={open} ended={ended} archived={archived} />;
+  const [{ open, ended, archived }, t] = await Promise.all([
+    listGoalsForMetas(),
+    getTranslations("connections.entry"),
+  ]);
+  const connect = (
+    <Button asChild variant="outline" block>
+      <Link href="/conexiones">
+        {t("title")}
+        <Text variant="meta" end>
+          {t("hint")}
+        </Text>
+      </Link>
+    </Button>
+  );
+  return (
+    <GoalsScreen open={open} ended={ended} archived={archived} connect={connect} />
+  );
 }
