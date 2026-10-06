@@ -201,7 +201,7 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 5».
 | `ReporteImpreso.dc.html` | the same page printed on A4: no nav, no button, black on white, «pulsar» and the date in the head |
 | `ReporteSinEvidencia.dc.html` | the source unreadable: one line at the top, each figure from it says «solo lo que dijiste tú» |
 | `ReporteVacio.dc.html` | no goal open: one line and the way back |
-| `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html` | `/exportar` inside the shell, built 2026-10-05 (module 217): the header with «Metas» as its way back, tabs and rail around it with Metas current; each goal's name an `h2`, with a 2px ink rule over it on the phone; from 1024 the goals are cards in three columns and «Descargar PDF» sits beside the title. The printed page is unchanged: no nav, no back |
+| `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html` | `/exportar` inside the shell, built 2026-10-05 (module 217): the header with «Metas» as its way back, tabs and rail around it with Metas current; each goal's name an `h2`, with a 2px ink rule over it on the phone; from 1024 the goals are cards in two columns (three were dropped 2026-10-06, see «Decisions of 2026-10-06») and «Descargar PDF» sits beside the title. The printed page is unchanged: no nav, no back |
 
 ### Page «Importar»
 
