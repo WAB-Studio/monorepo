@@ -39,8 +39,8 @@ export function Panel({
   );
 }
 
-// Cards side by side from 1024px, two columns, tops aligned; below, the
-// children stay the parent's own items.
-export function PanelGrid({ children }: { children: ReactNode }) {
-  return <div className={styles.grid}>{children}</div>;
+// Cards side by side from 1024px, tops aligned, two columns or three (the
+// report); below, the children stay the parent's own items.
+export function PanelGrid({ children, columns = 2 }: { children: ReactNode; columns?: 2 | 3 }) {
+  return <div className={columns === 3 ? `${styles.grid} ${styles.three}` : styles.grid}>{children}</div>;
 }
