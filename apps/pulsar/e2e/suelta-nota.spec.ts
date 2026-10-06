@@ -192,3 +192,41 @@ test("/sueltas draws two lines of the note under the name and its button; a row 
     await context.close();
   }
 });
+
+test("a refusal from the server keeps the sheet open, says so and keeps the typed text (RP-45)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const name = `Suelta que se borra ${stamp}`;
+  const [row] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, name) values (${person.id}, ${name}) returning id
+  `;
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 360, height: 740 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/sueltas");
+    await page.getByRole("button", { name: `Escribir una nota en «${name}»` }).click();
+    const sheet = page.getByRole("dialog");
+    const area = sheet.getByLabel("nota", { exact: true });
+    await area.fill("texto que no se pierde");
+
+    // The action answers {ok:false}: the row is gone by the time it saves.
+    await db`delete from goals.one_offs where id = ${row.id}`;
+    await sheet.getByRole("button", { name: "Guardar" }).click();
+
+    await expect(sheet.getByRole("alert")).toHaveText(
+      "No se pudo guardar. Tu texto sigue aquí; inténtalo otra vez.",
+    );
+    await expect(sheet).toBeVisible();
+    await expect(area).toHaveValue("texto que no se pierde");
+  } finally {
+    await context.close();
+  }
+});
