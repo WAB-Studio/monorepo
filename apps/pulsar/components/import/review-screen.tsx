@@ -432,6 +432,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     disabled={!goalOn}
                     onCheckedChange={(value) => toggle(path, value)}
                     name={task.name}
+                    note={task.note}
                     meta={
                       task.children.length > 0
                         ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
@@ -452,6 +453,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                       disabled={!taskOn}
                       onCheckedChange={(value) => toggle(childPath, value)}
                       name={child.name}
+                      note={child.note}
                       meta={strays.has(childPath) ? t("import.notices.estimateDropped") : undefined}
                       {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
                     />
