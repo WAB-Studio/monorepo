@@ -93,7 +93,7 @@ export function PhaseForm({
       return;
     }
 
-    const span = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data);
+    const span = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data, horizon);
     if (!phaseWithinHorizon(span, horizon)) {
       setError("plan.errors.phasePastHorizon");
       return;
