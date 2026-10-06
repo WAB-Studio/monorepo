@@ -12,6 +12,8 @@ import { after, before, test } from "node:test";
 
 import postgres from "postgres";
 
+import { normalized, proveOverlap, readWire, wrapPostgres, type DebugCall, type PostgresFactory } from "./wire";
+
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
   if (!raw) return 1;
@@ -39,8 +41,6 @@ function loadCookies(): StoredCookie[] {
   return state.cookies.map(({ name, value }) => ({ name, value }));
 }
 
-type DebugCall = { at: number; connection: number; query: string; parameters: unknown[] };
-type PostgresFactory = (url: string, options?: Record<string, unknown>) => unknown;
 
 const wireCalls: DebugCall[] = [];
 const STUB_QUANTITIES = [5, 3, 2];
@@ -84,47 +84,11 @@ function installStubs(cookies: StoredCookie[]): void {
     }
     if (request === "postgres") {
       const real = originalLoad(request, parent, isMain) as PostgresFactory;
-      const wrapped: PostgresFactory = (url, options) =>
-        real(url, {
-          ...options,
-          debug: (connection: number, query: string, parameters: unknown[]) => {
-            wireCalls.push({ at: Date.now(), connection, query, parameters });
-          },
-        });
+      const wrapped = wrapPostgres(real, (call) => wireCalls.push(call));
       return wrapped;
     }
     return originalLoad(request, parent, isMain);
   };
-}
-
-const TYPE_FETCH_QUERY_TEXT =
-  "select b.oid, b.typarray from pg_catalog.pg_type a left join pg_catalog.pg_type b " +
-  "on b.oid = a.typelem where a.typcategory = 'a' group by b.oid, b.typarray order by b.oid";
-
-function normalized(query: string): string {
-  return query.replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-type Wire = { applicationStatements: number; connections: number; overlap: boolean };
-
-// Application statements are what is left after each connection's bracket and
-// its first-use type fetch; two connections overlap when their windows do.
-function readWire(calls: DebugCall[]): Wire {
-  const byConnection = new Map<number, DebugCall[]>();
-  for (const call of calls) byConnection.set(call.connection, [...(byConnection.get(call.connection) ?? []), call]);
-  let applicationStatements = 0;
-  const windows: { start: number; end: number }[] = [];
-  for (const group of byConnection.values()) {
-    applicationStatements += group.filter((call) => {
-      const text = normalized(call.query);
-      return !text.startsWith("begin") && text !== "commit" && text !== "rollback" && text !== TYPE_FETCH_QUERY_TEXT;
-    }).length;
-    const times = group.map((call) => call.at);
-    windows.push({ start: Math.min(...times), end: Math.max(...times) });
-  }
-  const [a, b] = windows;
-  const overlap = windows.length === 2 && a.start <= b.end && b.start <= a.end;
-  return { applicationStatements, connections: byConnection.size, overlap };
 }
 
 function monthFrom(day: string, delta: number): string {
@@ -309,22 +273,26 @@ async function wireOfOneRead() {
   realReader = true;
   await loadMonthAcross(today);
   const before = wireCalls.length;
-  await loadMonthAcross(today);
-  realReader = false;
-  return wireCalls.slice(before);
+  let overlapped: true;
+  try {
+    overlapped = await proveOverlap(() => loadMonthAcross(today), { deadlineMs: 10_000 });
+  } finally {
+    realReader = false;
+  }
+  return { calls: wireCalls.slice(before), overlapped };
 }
 
 test("loadMonthAcross: four application statements in two overlapping transactions, four goals", async () => {
-  const calls = await wireOfOneRead();
+  const { calls, overlapped } = await wireOfOneRead();
   const wire = readWire(calls);
   console.log(`wire (4 goals): ${JSON.stringify(wire)}`);
   assert.equal(wire.connections, 2);
   assert.equal(wire.applicationStatements, 4);
-  assert.equal(wire.overlap, true);
+  assert.equal(overlapped, true);
 });
 
 test("loadMonthAcross: the reading statement bounds its days on both ends", async () => {
-  const calls = await wireOfOneRead();
+  const { calls } = await wireOfOneRead();
   const reading = calls.filter((call) => normalized(call.query).includes('"lookups"'));
   assert.equal(reading.length, 1);
   const bounds = /::date between \$(\d+) and \$(\d+)/.exec(normalized(reading[0].query));
@@ -343,9 +311,10 @@ test("loadMonthAcross: the same four statements with one goal", async () => {
     month.goals.map((goal) => goal.id).filter((id) => own().includes(id)),
     [aId],
   );
-  const wire = readWire(await wireOfOneRead());
+  const { calls, overlapped } = await wireOfOneRead();
+  const wire = readWire(calls);
   console.log(`wire (1 goal): ${JSON.stringify(wire)}`);
   assert.equal(wire.connections, 2);
   assert.equal(wire.applicationStatements, 4);
-  assert.equal(wire.overlap, true);
+  assert.equal(overlapped, true);
 });
