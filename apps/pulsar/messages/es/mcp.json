@@ -9,7 +9,8 @@
     "list_loose_one_offs": "Lista las tareas sueltas sin hacer: las que no tienen día y las que ya tienen un día por venir. Cada una dice a qué meta pertenece, si pertenece a alguna. No cambia nada.",
     "declare_fact": "Anota que la persona hizo un compromiso un día, con la cantidad cuando el compromiso mide una. El día va como AAAA-MM-DD y no puede pasar del límite que la app ya impone. Cuenta como si la persona lo hubiera marcado. Nunca borra.",
     "complete_task": "Marca una tarea como hecha hoy. Una tarea con sub-tareas se da por hecha cuando lo están todas; no se marca sola. Nunca borra.",
-    "create_task": "Crea una tarea: suelta, del mes con un tiempo estimado en la unidad de la meta, o una sub-tarea bajo una tarea del mes. El monto va como entero y el mes como AAAA-MM. Nunca borra.",
+    "create_task": "Crea una tarea: suelta, del mes con un tiempo estimado en la unidad de la meta, o una sub-tarea bajo una tarea del mes. Puede llevar una nota. El monto va como entero y el mes como AAAA-MM. Nunca borra.",
+    "set_task_note": "Escribe la nota de una tarea, hecha o no, o la reemplaza por una nueva: texto plano de hasta 2000 caracteres, con saltos de línea. Nunca la vacía: una nota en blanco se rechaza. Nunca borra.",
     "schedule_task": "Pone un día a una tarea suelta o del mes. El día va como AAAA-MM-DD y no puede ser anterior a hoy. Nunca borra.",
     "set_month_amount": "Fija cuánto se planea en un mes abierto de una meta que mide algo. El monto va como entero en la unidad de la meta y el mes como AAAA-MM. Un mes ya terminado no se cambia. Nunca borra.",
     "rename_goal": "Cambia el nombre de una meta. Nunca borra ni archiva.",
@@ -23,6 +24,7 @@
   },
   "errors": {
     "goalNotFound": "Esa meta no existe o no es de esta persona.",
+    "noteEmpty": "La nota no puede ir en blanco. Escribe el texto de la nota; solo la persona puede vaciarla.",
     "unknown": "No se pudo completar. Revisa los datos e inténtalo otra vez.",
     "unauthorized": "La llave no es válida o ya se revocó. Crea otra en Pulsar."
   }
