@@ -1,4 +1,5 @@
 export {
+  assertSuiteDatabase,
   applicationName,
   closeRun,
   openRun,
