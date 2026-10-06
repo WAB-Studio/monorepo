@@ -80,3 +80,13 @@
   justify-content: center;
   min-block-size: 100dvh;
 }
+
+/* From 1024 a button or link-button standing alone in the column is as wide as
+   its text, 160 at least, at the column's start; below, the column's stretch. */
+@media (min-width: 1024px) {
+  .page.page > :is(a, button) {
+    align-self: flex-start;
+    inline-size: fit-content;
+    min-inline-size: 160px;
+  }
+}

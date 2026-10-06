@@ -19,6 +19,7 @@ export function ScreenHeader({
   controls,
   actions,
   meta,
+  metaVariant = "meta",
 }: {
   title: string;
   back?: { href: string; place: string };
@@ -30,8 +31,9 @@ export function ScreenHeader({
   controls?: ReactNode;
   // Beside the title from 1024, under it below.
   actions?: ReactNode;
-  // One mono line under the title.
-  meta?: string;
+  // One line under the title: mono figures by default, the quiet sentence when it reads as one.
+  meta?: ReactNode;
+  metaVariant?: "meta" | "sentence";
 }) {
   const t = useTranslations("common");
   const eyebrowNode =
@@ -72,7 +74,7 @@ export function ScreenHeader({
         {actions ? <div className={styles.actions}>{actions}</div> : null}
       </div>
       {meta ? (
-        <Text as="p" variant="meta" tone="muted" className={styles.meta}>
+        <Text as="p" variant={metaVariant} tone="muted" className={styles.meta}>
           {meta}
         </Text>
       ) : null}
