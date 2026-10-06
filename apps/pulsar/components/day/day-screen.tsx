@@ -144,12 +144,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
 
   // The same count the Semana's cell for this day makes; nothing to say when
   // it counts nothing or when the all-ended card stands in for the goals.
-  const counted = tallyDay({
-    view,
-    goals: openGoals,
-    commitments,
-    oneOffFacts: doneOneOffs.map((oneOff) => ({ day, goalId: oneOff.goalId })),
-  });
+  const counted = tallyDay({ view, goals: openGoals, commitments });
   const tally =
     goals.length === 0 || lastEnded || counted.total === 0
       ? undefined
