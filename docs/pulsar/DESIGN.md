@@ -197,6 +197,7 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 5».
 | `ReporteImpreso.dc.html` | the same page printed on A4: no nav, no button, black on white, «pulsar» and the date in the head |
 | `ReporteSinEvidencia.dc.html` | the source unreadable: one line at the top, each figure from it says «solo lo que dijiste tú» |
 | `ReporteVacio.dc.html` | no goal open: one line and the way back |
+| `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html` | `/exportar` inside the shell, built 2026-10-05 (module 217): the header with «Metas» as its way back, tabs and rail around it with Metas current; each goal's name an `h2`, with a 2px ink rule over it on the phone; from 1024 the goals are cards in three columns and «Descargar PDF» sits beside the title. The printed page is unchanged: no nav, no back |
 
 ### Page «Importar»
 
@@ -280,8 +281,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   cover loading and failure. Approved 2026-09-30 by the user.
 - **A month of an ended or archived goal.** It reads and takes no task and no amount, as
   `MetaTerminada.dc.html` already does for commitments and phases; the layout does not change.
-- **The export and the import at 1280.** `/metas`, `/exportar` and the review sit in the 640 px column;
-  the layout does not change. Approved 2026-09-30 by the user.
+- **The export and the import at 1280.** `/metas` and the review sit in the 640 px column; the layout
+  does not change. `/exportar` no longer does: built 2026-10-05 (module 217) it takes the width the
+  rail leaves, as `ReporteMarcoEscritorio.dc.html` draws. Approved 2026-09-30 by the user.
 - **`/metas` after «Crear N metas».** It is the list `Exportar.dc.html` draws, with the new goals.
 - **A template read.** It is `ImportarRevisar.dc.html` with «leído con la plantilla, sin IA» in place of
   «leído por OpenAI».

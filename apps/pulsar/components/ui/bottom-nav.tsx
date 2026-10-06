@@ -84,8 +84,9 @@ export function BottomNav({
   const openGoal = goals.find(
     (goal) => pathname === `/metas/${goal.id}` || pathname.startsWith(`/metas/${goal.id}/`),
   );
-  // `/conexiones` hangs from Metas: no tab of its own, so it marks that one.
-  const onGoals = pathname.startsWith("/metas") || pathname.startsWith("/conexiones");
+  // `/conexiones` and `/exportar` hang from Metas: no tab of their own, so they mark that one.
+  const onGoals =
+    pathname.startsWith("/metas") || pathname.startsWith("/conexiones") || pathname.startsWith("/exportar");
 
   // The rail cuts a long name; hover and keyboard focus show it whole, beside
   // the link. Fixed, since the scrolling goal list would clip anything outside it.

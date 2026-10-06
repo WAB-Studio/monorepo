@@ -13,8 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: `${t("printBrand")} · ${civilDateShort(todayInZone())}` };
 }
 
-// Outside `app/(app)/` on purpose: neither the bottom nav nor `loading.tsx`
-// stands on the printed page, so this page runs its own gate (RP-33).
+// Inside the shell: the nav hides itself in print (`print.module.css`) and the
+// skeleton never prints, so the paper stays as `ReporteImpreso.dc.html` draws it.
 export default async function ExportPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");
