@@ -121,6 +121,8 @@
     "title": "este mes",
     "markTask": "Marcar hecha: {name}",
     "of": "de",
+    "tasksOf": "{total, plural, one {de # tarea} other {de # tareas}}",
+    "tasksAfterFigure": "· {done} de {total, plural, one {# tarea} other {# tareas}}",
     "parent": "de {name}",
     "pace": "día {day} ·",
     "paceUnder": ", bajo el {threshold} %"

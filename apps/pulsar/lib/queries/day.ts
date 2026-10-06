@@ -16,7 +16,7 @@ import type {
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
-import { estimateFacts, type Task } from "@/lib/plan/carry";
+import { estimateFacts, monthList, type Task } from "@/lib/plan/carry";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { phasePositions } from "@/lib/day/row-phrases";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
@@ -123,6 +123,19 @@ type MonthTaskRow = {
   parent_name: string | null;
 };
 
+// Every task of an open goal with its own done day, what `monthList` counts
+// the month's tasks from (the same rule `/metas` reads).
+type GoalTaskRow = {
+  id: string;
+  goal_id: string;
+  parent_id: string | null;
+  name: string;
+  planned_month: string | null;
+  day: string | null;
+  estimate: number | null;
+  done_on: string | null;
+};
+
 export type MonthTask = {
   id: string;
   name: string;
@@ -149,6 +162,7 @@ type GoalsQueryRow = {
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
   month_tasks: MonthTaskRow[];
+  goal_tasks: GoalTaskRow[];
   dayless_count: number;
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
@@ -286,6 +300,19 @@ async function queryGoalsRow(
                      o.position,
                      o.id
          ) t) as month_tasks,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'id', o.id,
+                 'goal_id', o.goal_id,
+                 'parent_id', o.parent_id,
+                 'name', o.name,
+                 'planned_month', o.planned_month,
+                 'day', o.day,
+                 'estimate', o.estimate,
+                 'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
+               )), '[]'::json)
+         from "goals"."one_offs" o
+         join "goals"."goals" g on g.id = o.goal_id and ${openGoal("g", day)}
+         where ${isToday}::boolean) as goal_tasks,
       (select count(*)::int
          from "goals"."one_offs" o
          where o.day is null
@@ -546,6 +573,29 @@ function monthLineOf(
   return lines;
 }
 
+// The month's tasks done of total per goal, counted the way `/metas` counts
+// them (`monthList`); a goal with none has no key.
+function monthTaskCountsOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, { done: number; total: number }> {
+  const month = monthOf(day);
+  const counts: Record<string, { done: number; total: number }> = {};
+  for (const goal of goals) {
+    const tasks: Task[] = row.goal_tasks
+      .filter((task) => task.goal_id === goal.id)
+      .map((task) => ({
+        id: task.id,
+        parentId: task.parent_id,
+        name: task.name,
+        plannedMonth: task.planned_month,
+        day: task.day,
+        estimate: task.estimate,
+        doneOn: task.done_on,
+      }));
+    const items = monthList(tasks, month, day);
+    if (items.length > 0) counts[goal.id] = { done: items.filter((item) => item.done).length, total: items.length };
+  }
+  return counts;
+}
+
 function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, MonthTask | null> {
   const tasks: Record<string, MonthTask | null> = {};
   for (const goal of goals) {
@@ -643,6 +693,8 @@ export async function loadDay(day: string): Promise<{
   // Each open goal's next undone leaf of the month, carried first; read on
   // today alone, `{}` on any other day.
   monthTask: Record<string, MonthTask | null>;
+  // Tasks of the month, done of total, for every goal that has any; today only.
+  monthTaskCounts: Record<string, { done: number; total: number }>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
@@ -731,6 +783,7 @@ export async function loadDay(day: string): Promise<{
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     monthLine: monthLineOf(goals, row, evidenceOutcome, day),
     monthTask: isToday ? monthTaskOf(goals, row) : {},
+    monthTaskCounts: isToday ? monthTaskCountsOf(goals, row, day) : {},
     commitments: row.commitments.map(toCommitmentInfo),
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),

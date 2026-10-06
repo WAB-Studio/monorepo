@@ -186,8 +186,8 @@ test("Hoy draws the goal's next task of the month under its line, completes it, 
       await expect(line(firstName).getByText("4 h", { exact: true })).toBeVisible();
       // Only the next one of the goal, never the second.
       await expect(mark(secondName)).toHaveCount(0);
-      // A goal with no amount draws no line and no task.
-      await expect(mark(bareTask)).toHaveCount(0);
+      // A goal with tasks but no amount still has its line and next task.
+      await expect(mark(bareTask)).toHaveCount(1);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size.width);
     }
 
@@ -202,7 +202,9 @@ test("Hoy draws the goal's next task of the month under its line, completes it, 
 
     await mark(secondName).click();
     await expect(mark(secondName)).toHaveCount(0, { timeout: 5000 });
-    await expect(page.getByRole("button", { name: /^Marcar hecha: / })).toHaveCount(0);
+    // Only the amountless goal's own task is left.
+    await expect(page.getByRole("button", { name: /^Marcar hecha: / })).toHaveCount(1);
+    await expect(mark(bareTask)).toHaveCount(1);
 
     // Never on a past day.
     const [again] = await db<{ id: string }[]>`

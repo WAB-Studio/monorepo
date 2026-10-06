@@ -69,3 +69,9 @@ test("a fraction that is not whole minutes, and anything else, is null", () => {
     assert.equal(parseTime(t), null, t);
   }
 });
+
+test("a quantity's unit word is the one the caller agrees with the number", () => {
+  const agreeing = { ...words, unit: (unit: string, n: number) => (unit === "lecciones" && n === 1 ? "lección" : unit) };
+  assert.equal(formatQuantity(1, "lecciones", agreeing), "1 lección");
+  assert.equal(formatQuantity(2, "lecciones", agreeing), "2 lecciones");
+});

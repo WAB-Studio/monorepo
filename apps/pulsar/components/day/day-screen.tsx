@@ -353,20 +353,44 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const figures = goals.filter((goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined);
 
   // Drawn inside `goalless`, so only on today (RP-28), never on a past day.
-  // A goal with no amount this month draws nothing.
+  // A goal with no amount and no task this month draws nothing; one with
+  // tasks draws its line measured or not.
   const monthGoals = goals.filter(
-    (goal) => goal.measureUnit !== null && loaded.monthLine[goal.id]?.planned != null,
+    (goal) =>
+      (goal.measureUnit !== null && loaded.monthLine[goal.id]?.planned != null) ||
+      loaded.monthTaskCounts[goal.id] !== undefined,
   );
 
   // The same two lines on the phone block and in the desktop card: reached
   // «de» planned, and from the 20th the pace in ink, never an alarm.
   const monthLines = (goal: (typeof goals)[number]) => {
     const line = loaded.monthLine[goal.id];
-    const planned = line.planned as number;
+    const planned = line?.planned ?? null;
+    const counts = loaded.monthTaskCounts[goal.id];
     const task = loaded.monthTask[goal.id];
     return (
       <>
-        {line.underPace ? (
+        {line === undefined || planned === null ? (
+          // No amount planned: the reached figure when the goal measures,
+          // then its tasks done of total (a measureless goal reads only those).
+          <Flex align="baseline" gap="2" wrap="wrap">
+            {line !== undefined ? (
+              <>
+                <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
+                <Text variant="meta" tone="muted">
+                  {t("day.monthLine.tasksAfterFigure", { done: counts.done, total: counts.total })}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Figure value={counts.done} variant="meta" />
+                <Text variant="meta" tone="muted">
+                  {t("day.monthLine.tasksOf", { total: counts.total })}
+                </Text>
+              </>
+            )}
+          </Flex>
+        ) : line.underPace ? (
           <Text as="p" variant="meta">
             {t("day.monthLine.pace", { day: Number(day.slice(8, 10)) })}{" "}
             <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />{" "}
@@ -387,7 +411,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             oneOffId={task.id}
             name={task.name}
             estimate={task.estimate}
-            unit={goal.measureUnit as string}
+            unit={goal.measureUnit ?? ""}
             parentName={task.parentName}
             note={task.note}
             noteEyebrow={noteEyebrow(goal.id)}
@@ -405,7 +429,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {figures.map((goal) => (
         <Panel as="div" key={goal.id}>
           <Face on="desktop">
-            <SectionLabel>{isTimeUnit(goal.measureUnit) ? goal.name : goal.measureUnit}</SectionLabel>
+            <SectionLabel>{goal.name}</SectionLabel>
             <Flex align="baseline" gap="2">
               <Figure value={weekMeasure[goal.id]} unit={isTimeUnit(goal.measureUnit) ? goal.measureUnit ?? undefined : undefined} />
               <Text variant="meta" tone="muted">
