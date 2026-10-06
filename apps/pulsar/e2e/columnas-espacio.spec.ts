@@ -102,3 +102,33 @@ for (const width of widths) {
     }
   });
 }
+
+for (const width of widths) {
+  // The Split's row gap keeps the aside's two parts apart; each part spaces its
+  // own children (the card spec above) and never reaches across it.
+  test(`at ${width} a goal's two aside parts stand 16 apart`, async ({ person, browser, db }) => {
+    const horizon = civilDateToDate(todayInZone());
+    horizon.setUTCDate(horizon.getUTCDate() + 120);
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon)
+      values (${person.id}, ${`Meta aside ${width}`}, ${dateToCivilDate(horizon)}) returning id
+    `;
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+      values (${person.id}, ${goal.id}, 'Tocar', 'daily', 'tap')
+    `;
+    const context = await browser.newContext({ storageState: person.sessionFile });
+    try {
+      const page = await context.newPage();
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/metas/${goal.id}`);
+      const gap = await page.locator("main").evaluate((main) => {
+        const part = (name: string) => main.querySelector(`[class*="split-module"][class$="__${name}"]`)!;
+        return part("after").getBoundingClientRect().top - part("before").getBoundingClientRect().bottom;
+      });
+      expect(gap).toBeCloseTo(16, 0);
+    } finally {
+      await context.close();
+    }
+  });
+}

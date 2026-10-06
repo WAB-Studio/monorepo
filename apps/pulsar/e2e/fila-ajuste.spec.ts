@@ -75,7 +75,7 @@ test("on Meta at 360 a commitment's «conversaciones» sits whole on one line an
     const dropped = await place(/^Autoconversacionesdiarias/, /^4 microconversacionesdiarias$/);
     expect([dropped.below, dropped.oneLine]).toEqual([true, true]);
     const stays = await place(/^Conversaciones de práctica/, /^15 conversaciones$/);
-    expect(stays.beside).toBe(true);
+    expect([stays.beside, stays.oneLine]).toEqual([true, true]);
 
     const overflowing = await page.evaluate(() =>
       Array.from(document.querySelectorAll("button, a"))

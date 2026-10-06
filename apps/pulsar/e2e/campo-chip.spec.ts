@@ -29,6 +29,16 @@ test("a field label is Archivo 13 and a selected cadence chip is not the primary
     submit.evaluate((el) => getComputedStyle(el).backgroundColor),
   ]);
   expect(chipFill).not.toBe(buttonFill);
+  // The selected chip wears the soft accent token itself.
+  const soft = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.background = "var(--pulsar-accent-soft)";
+    document.body.append(probe);
+    const fill = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return fill;
+  });
+  expect(chipFill).toBe(soft);
 
   // The hint, where a form has one, leaves 20 px before the next control.
   await page.goto(goalUrl.replace(/\/metas\/.*/, "/conexiones"));
@@ -40,4 +50,19 @@ test("a field label is Archivo 13 and a selected cadence chip is not the primary
   });
   expect(gap).not.toBeNull();
   expect(gap!).toBeGreaterThanOrEqual(20);
+});
+
+// A field's and a text area's label leave 8 px before their control.
+test("a field label and a text area label hold 8 px before their control", async ({ page }) => {
+  const gap = async (control: string) =>
+    page.locator(control).first().evaluate((el) => {
+      const label = (el as HTMLInputElement).labels![0];
+      return el.getBoundingClientRect().top - label.getBoundingClientRect().bottom;
+    });
+  await page.goto("/metas/nueva");
+  expect(await gap("input")).toBeGreaterThanOrEqual(8);
+  expect(await gap("input")).toBeLessThan(10);
+  await page.goto("/metas/importar");
+  expect(await gap("textarea")).toBeGreaterThanOrEqual(8);
+  expect(await gap("textarea")).toBeLessThan(10);
 });
