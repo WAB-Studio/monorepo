@@ -2810,3 +2810,16 @@ branch could pass until it was restored.
 - Every local probe registered its own clean document, so nothing caught it before production. Measured 2026-10-06 by the
   user's first connection from claude.ai (module 200), fixed in module 287: ignore unknown grants, require the code grant.
 - Fetch the real document before trusting a schema that parses someone else's metadata.
+
+## A migration on the local stack reaches every lane
+
+- Every lane and every suite shares one local Postgres. A migration a roadmap lane applies changes the database under the
+  UX lanes too, whose branches know nothing of it.
+- Measured 2026-10-06: 0013 added `one_offs_in_plan_shape` (`not in_plan or (goal_id is not null and day is null)`). The
+  plan wrote that check; nothing built allowed it. `scheduleOneOff` already gives a month task a day, so four `check:plan`
+  tests and a UX lane's `suelta-nota` seed went red with 23514, and the migration's own worker never ran `check:plan`.
+- Grep every writer of a table (actions, seeds, probe fixtures) before adding a check to it. A check the plan names is a
+  claim about today's rows and acts; prove it against them.
+- Run every `check:*` that writes the table before applying the migration locally, not after.
+- A constraint changed after a local apply is altered by hand (`DROP CONSTRAINT` + `ADD CONSTRAINT`) in the same words as
+  the edited SQL, schema and snapshot. Drizzle will not re-run the file.
