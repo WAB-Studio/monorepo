@@ -161,17 +161,17 @@ test.describe("the connections screen (RP-38)", () => {
       expect((await mcp(baseURL!, key)).status()).toBe(200);
       await page.reload();
       await expect(page.getByText(messages.row.neverUsed)).toHaveCount(0);
-      await expect(page.getByText(/usada hoy \d\d:\d\d$/)).toBeVisible();
+      await expect(page.getByText(/usada hoy a las \d\d:\d\d$/)).toBeVisible();
 
       await confirmRevoke(page);
-      await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
+      await expect(page.getByText(/^Revocada el .* · ya no entra$/)).toBeVisible();
       await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
       expect((await mcp(baseURL!, key)).status()).toBe(401);
 
       // Still listed after a reload: a revoked key is never deleted.
       await page.reload();
       await expect(page.getByText(NAME, { exact: true })).toBeVisible();
-      await expect(page.getByText(/^revocada el /)).toBeVisible();
+      await expect(page.getByText(/^Revocada el /)).toBeVisible();
     } finally {
       await context.close();
     }
@@ -228,11 +228,11 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
       await expect(page.getByText("Claude", { exact: true })).toBeVisible();
-      await expect(page.getByText(/^conectada el 1 mar 2026 · usada el 2 mar 2026 \d\d:\d\d$/)).toBeVisible();
+      await expect(page.getByText(/^Conectada el 1 mar 2026 · usada el 2 mar 2026 \d\d:\d\d$/)).toBeVisible();
       await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
 
       await confirmRevoke(page);
-      await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
+      await expect(page.getByText(/^Revocada el .* · ya no entra$/)).toBeVisible();
       await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
       const [row] = await db`select revoked_at from goals.access_tokens where user_id = ${person.id}`;
       expect(row.revoked_at).not.toBeNull();
@@ -252,7 +252,7 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await db`update goals.access_tokens set revoked_at = now() where user_id = ${person.id}`;
       await confirmRevoke(page);
-      await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
+      await expect(page.getByText(/^Revocada el .* · ya no entra$/)).toBeVisible();
       await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
       await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
     } finally {
@@ -308,8 +308,15 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await create(page, NAME);
       await page.getByRole("button", { name: messages.created.done }).click();
-      await expect(page.getByText(/^creada hoy \d\d:\d\d · sin usar$/)).toBeVisible();
+      await expect(page.getByText(/^Creada hoy a las \d\d:\d\d · sin usar$/)).toBeVisible();
       expect(await page.locator("main").innerText()).not.toContain("usada sin usar");
+      // 318: a key's row is a row (56 px, padded), and the header carries no second eyebrow over the title.
+      const row = page.getByText(NAME, { exact: true }).locator("xpath=ancestor::div[2]");
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(56);
+      await expect(page.locator("main > header > div")).toHaveCount(1);
+      await expect(
+        page.getByText("Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.", { exact: true }),
+      ).toBeVisible();
     } finally {
       await context.close();
     }
@@ -366,8 +373,8 @@ test.describe("the connections screen (RP-38)", () => {
     await seed(db, person, { kind: "personal", name: "Revocada", created: "2025-01-02T15:00:00Z", revoked: "2026-02-03T15:00:00Z" });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
-      await expect(page.getByText(/^creada el 5 oct 2025 · usada el 31 dic 2025 \d\d:\d\d$/)).toBeVisible();
-      await expect(page.getByText("revocada el 3 feb 2026 · ya no entra", { exact: true })).toBeVisible();
+      await expect(page.getByText(/^Creada el 5 oct 2025 · usada el 31 dic 2025 \d\d:\d\d$/)).toBeVisible();
+      await expect(page.getByText("Revocada el 3 feb 2026 · ya no entra", { exact: true })).toBeVisible();
     } finally {
       await context.close();
     }

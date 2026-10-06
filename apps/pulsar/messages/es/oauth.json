@@ -1,6 +1,6 @@
 {
-  "eyebrow": "pulsar · permiso",
-  "title": "{client} quiere entrar a tu bitácora",
+  "eyebrow": "Bitácora de metas · permiso",
+  "title": "{client} quiere entrar a tu Bitácora de metas",
   "mayLabel": "podrá",
   "may": {
     "read": "leer tus metas, meses, tareas e informe",
@@ -20,7 +20,7 @@
   "footer": "entraste como {email} · lo revocas cuando quieras en Metas › Conectar una IA",
   "signedOut": {
     "title": "Entra para continuar",
-    "body": "{client} pidió entrar a tu bitácora. Entra con tu correo y vuelves aquí para decir que sí o que no.",
+    "body": "{client} pidió entrar a tu Bitácora de metas. Entra con tu correo y vuelves aquí para decir que sí o que no.",
     "emailLabel": "tu correo",
     "emailPlaceholder": "nombre@correo.com",
     "send": "Enviarme el enlace",
@@ -29,7 +29,7 @@
   "invalid": {
     "title": "Este pedido no es válido",
     "body": "La aplicación que te trajo aquí no se identificó bien. No se dio ningún permiso. Vuelve a conectarla desde claude.ai.",
-    "home": "Ir a pulsar"
+    "home": "Ir a Bitácora de metas"
   },
   "errors": {
     "invalid": "La solicitud no es válida.",

@@ -3,9 +3,8 @@
     "title": "Conectar una IA",
     "hint": "Claude lee y reorganiza tus metas"
   },
-  "eyebrow": "la ia",
   "title": "Conectar una IA",
-  "intro": "Deja que Claude lea tus metas, anote lo hecho y reorganice tus meses. Nunca borra ni archiva.",
+  "intro": "Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.",
   "sections": {
     "first": "una llave para claude code",
     "keys": "llaves",
@@ -26,17 +25,17 @@
     "copyFailed": "No se pudo copiar. Mantén presionado el texto para copiarlo."
   },
   "row": {
-    "metaUsed": "creada {created} · usada {used}",
-    "metaUnused": "creada {created} · sin usar",
+    "metaUsed": "Creada {created} · usada {used}",
+    "metaUnused": "Creada {created} · sin usar",
     "neverUsed": "sin usar",
-    "today": "hoy",
+    "today": "hoy a las",
     "on": "el {date}",
-    "revokedMeta": "revocada el {date} · ya no entra",
+    "revokedMeta": "Revocada el {date} · ya no entra",
     "revoke": "Revocar"
   },
   "oauth": {
-    "metaUsed": "conectada {created} · usada {used}",
-    "metaUnused": "conectada {created} · sin usar"
+    "metaUsed": "Conectada {created} · usada {used}",
+    "metaUnused": "Conectada {created} · sin usar"
   },
   "revokeSheet": {
     "keyLabel": "revocar la llave",

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { sendSignInLink, type SendSignInLinkResult } from "@/app/actions/account";
-import { Button, Field, Page, Separator, Text } from "@/components/ui";
+import { Button, Field, Page, ScreenHeader, Separator, Text } from "@/components/ui";
 
 type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"];
 
@@ -36,7 +36,7 @@ function FailureNotice({ title, body }: { title: string; body?: string }) {
         {title}
       </Text>
       {body ? (
-        <Text as="p" tone="muted">
+        <Text as="p" variant="sentence" tone="muted">
           {body}
         </Text>
       ) : null}
@@ -46,6 +46,7 @@ function FailureNotice({ title, body }: { title: string; body?: string }) {
 
 function EntrarForm() {
   const t = useTranslations("account");
+  const appName = useTranslations("common")("appName");
   const params = useSearchParams();
   const linkError = readLinkError(params.get("error"));
   const next = params.get("next") ?? undefined;
@@ -61,19 +62,18 @@ function EntrarForm() {
 
   if (state.kind === "sent") {
     return (
-      <Page>
-        <Text as="p" variant="title">
-          {t("title")}
-        </Text>
+      <Page alone middle>
+        <ScreenHeader title={t("title")} eyebrow={appName} />
         <Text as="p">{t("sent")}</Text>
       </Page>
     );
   }
 
   return (
-    <Page>
-      <Text as="p" variant="title">
-        {t("title")}
+    <Page alone middle>
+      <ScreenHeader title={t("title")} eyebrow={appName} />
+      <Text as="p" variant="sentence" tone="muted">
+        {t("lead")}
       </Text>
 
       {/* Shown until the person's own next attempt replaces it with the

@@ -1,4 +1,4 @@
-import { MarkList, SectionLabel, Text } from "@/components/ui";
+import { MarkList, Section, Text } from "@/components/ui";
 
 export function ConsentList({
   label,
@@ -12,9 +12,8 @@ export function ConsentList({
   tone?: "muted";
 }) {
   return (
-    <section>
-      <SectionLabel>{label}</SectionLabel>
+    <Section label={label}>
       <MarkList mark={mark} items={items.map((item) => ({ key: item, node: <Text tone={tone}>{item}</Text> }))} />
-    </section>
+    </Section>
   );
 }
