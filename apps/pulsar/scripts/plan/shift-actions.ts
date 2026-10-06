@@ -42,7 +42,7 @@ function loadCookies(): StoredCookie[] {
 
 const revalidated: string[] = [];
 
-type WireCall = { connection: number; query: string };
+type WireCall = { connection: number; query: string; parameters: unknown[] };
 let wire: WireCall[] | null = null;
 // A request with no cookie: the one way to reach the signed-out guard.
 let signedOut = false;
@@ -69,8 +69,8 @@ function installStubs(cookies: StoredCookie[]): void {
       const wrapped: PostgresFactory = (url, options) =>
         real(url, {
           ...options,
-          debug: (connection: number, query: string) => {
-            wire?.push({ connection, query });
+          debug: (connection: number, query: string, parameters: unknown[]) => {
+            wire?.push({ connection, query, parameters });
           },
         });
       return Object.assign(wrapped, real);
@@ -489,4 +489,32 @@ test("acceptShift: a phase of another goal named by the client never moves", asy
   } as Parameters<typeof acceptShift>[0]);
   assert.equal(result.ok, true);
   assert.deepEqual(await snapshot(other.goalId), untouched);
+});
+
+test("acceptShift: the tasks reach the plan in position order, not creation order", async () => {
+  const { goalId } = await buildGoal("RP-47 fixture: orden del plan", 0, [21, 23]);
+  const [{ top }] = await sql<{ top: number }[]>`
+    select coalesce(max(position), 0)::int as top from goals.one_offs where user_id = ${personId}`;
+  // Created first, planned last: position order is the reverse of created_at.
+  async function task(name: string, position: number): Promise<string> {
+    const [row] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate, position)
+      values (${personId}, ${goalId}, ${name}, ${`${current}-01`}, 1, ${position}) returning id`;
+    return row.id;
+  }
+  const late = await task("creada primero, al final del plan", top + 2);
+  const early = await task("creada después, al inicio del plan", top + 1);
+
+  wire = [];
+  let calls: WireCall[];
+  try {
+    assert.equal((await acceptShift({ goalId, month: closed })).ok, true);
+  } finally {
+    calls = wire;
+    wire = null;
+  }
+  const update = calls.find((c) => /update "goals"\."one_offs"/i.test(c.query));
+  assert.ok(update, "the action moved the tasks with one update");
+  const sent = (JSON.parse(String(update.parameters[0])) as { id: string }[]).map((t) => t.id);
+  assert.deepEqual(sent, [early, late]);
 });

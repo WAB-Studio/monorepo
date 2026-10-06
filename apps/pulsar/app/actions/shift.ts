@@ -73,7 +73,7 @@ export async function acceptShift(input: AcceptShiftInput): Promise<AcceptShiftR
              from "goals"."phases" p where p.goal_id = ${goalId}) as phases,
           (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                      'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-                   ) order by o.created_at, o.id), '[]'::json)
+                   ) order by o.position, o.created_at, o.id), '[]'::json)
              from "goals"."one_offs" o where o.goal_id = ${goalId}) as tasks,
           (select coalesce(json_agg(m.month order by m.month), '[]'::json)
              from "goals"."month_shifts" m where m.goal_id = ${goalId}) as shifts
