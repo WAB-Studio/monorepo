@@ -7,6 +7,7 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, SectionLabel, Separator, Text } from "@/components/ui";
 import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
 import { nextMonth } from "@/lib/plan/months";
+import { planHrefFrom } from "@/lib/plan/return-to";
 import { monthAmount, shiftOffered, shiftPlan } from "@/lib/plan/shift";
 import { listGoals, loadGoal, type GoalSummary, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
@@ -53,11 +54,14 @@ export async function MonthDetail({
   goal,
   goals,
   month,
+  from,
   heading,
 }: {
   goal: GoalView;
   goals: GoalSummary[];
   month: string;
+  // The path the sheet returns to; the month page itself by default.
+  from?: string;
   heading?: boolean;
 }) {
   const mes = `${month}-01`;
@@ -228,7 +232,7 @@ export async function MonthDetail({
             <Figure value={row.reached} unit={unit} />
             {open && !closed ? (
               <Button asChild tap={44} variant="ghost" tone="accent">
-                <Link href={`/metas/${goal.id}/meses?planear=${month}`}>{planned}</Link>
+                <Link href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>{planned}</Link>
               </Button>
             ) : (
               <Text tone="secondary">{planned}</Text>

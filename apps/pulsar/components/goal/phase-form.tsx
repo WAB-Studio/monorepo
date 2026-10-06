@@ -22,8 +22,8 @@ export type PhaseFormProps = {
   // A goal names one horizon (RP-11); a phase past it is refused here first,
   // then again, authoritative, inside `addPhase`'s own transaction.
   horizon: string;
-  defaultFromWeek: number;
-  defaultToWeek: number;
+  defaultFromWeek: number | null;
+  defaultToWeek: number | null;
   // Every phase the goal already has, spans alone: what the overlap refusal
   // checks against before the request ever reaches the server.
   existingPhases: PhaseSpan[];
@@ -57,8 +57,8 @@ export function PhaseForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [aim, setAim] = useState("");
-  const [fromWeek, setFromWeek] = useState(String(defaultFromWeek));
-  const [toWeek, setToWeek] = useState(String(defaultToWeek));
+  const [fromWeek, setFromWeek] = useState(defaultFromWeek === null ? "" : String(defaultFromWeek));
+  const [toWeek, setToWeek] = useState(defaultToWeek === null ? "" : String(defaultToWeek));
   const [error, setError] = useState<MessageKey | null>(null);
 
   function handleSubmit() {

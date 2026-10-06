@@ -122,7 +122,7 @@ test("each open goal draws its month: the line, the carried task first, the task
     await expect(pagesBlock.getByText(`en ${label(thisMonth)} · sin monto este mes`)).toBeVisible();
     await expect(pagesBlock.getByRole("link", { name: `Planear ${label(thisMonth)}` })).toHaveAttribute(
       "href",
-      `/metas/${pages}/meses?planear=${seg}`,
+      `/metas/${pages}/meses?planear=${seg}&volver=${encodeURIComponent("/mes")}`,
     );
 
     const bareBlock = page.locator("section", { has: page.getByRole("heading", { name: `Mudanza ${stamp}` }) });
