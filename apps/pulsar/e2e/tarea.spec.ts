@@ -398,9 +398,9 @@ test("«Otra sub-tarea» closes each open parent's children and is offered under
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
       const child = (await page.getByText(`Hijo abierto ${stamp}`).boundingBox())!;
-      const row = (await link.first().evaluate((el) => el.parentElement!.getBoundingClientRect()))!;
+      const row = (await link.first().evaluate((el) => el.getBoundingClientRect()))!;
       expect(row.height).toBeGreaterThanOrEqual(48);
-      const circle = (await link.first().evaluate((el) => el.previousElementSibling!.getBoundingClientRect()))!;
+      const circle = (await link.first().evaluate((el) => el.querySelector("[data-state]")!.getBoundingClientRect()))!;
       const mark = (await page.locator("[data-done]").first().boundingBox())!;
       expect(circle.x - mark.x).toBeGreaterThanOrEqual(30);
       expect(row.y).toBeGreaterThan(child.y);
