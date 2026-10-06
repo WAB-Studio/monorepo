@@ -361,7 +361,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   that cycled three ways.
 - **The tap floor is 48 px, with two named exceptions**: the mark, 24 px inside its 56 px row, and
   the theme control at 44. Both clear RNP-07's 32.
-- **A field's label takes the section label's type** — 11 px mono, uppercase, 0.14 em, muted — and
+- **Superseded 2026-10-06 by the user: a field's label is Archivo 13, not mono caps** (see «Decisions of 2026-10-06,
+  after the UX review»). Was: **a field's label takes the section label's type** — 11 px mono, uppercase, 0.14 em, muted — and
   has no type of its own. It is what `MetaNueva.dc.html`, `HoyCantidad.dc.html` and
   `CompromisoNuevo.dc.html` already draw; written down 2026-09-22 so it reads as a decision rather
   than a coincidence.
@@ -824,3 +825,28 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
     board draws it; it repeats the measured card's order minus the week figure. Decided by the orchestrator 2026-10-06
     (module 283).
 - **«Correr un mes» is offered only when the month also fell short of its amount** (RP-48, succeeding RP-34).
+
+## Decisions of 2026-10-06, after the UX review
+
+Taken by the user 2026-10-06 («todo sí») on the two UX critics' reports, `private/reportes/ux-2026-10-06-{a,b}.md`.
+The user's words: «textos todos pegados, no se entiende la mayoría, la estructura no es tan buena».
+
+- **Space lives in the primitives, never in a screen.** A `Section` primitive carries its label→content gap and the
+  gap to the next section; Split's columns space their children; a field's hint keeps air before the next control.
+  A screen that needs a gap of its own is reaching past `components/ui`.
+- **Content stops at about 1200 px wide on desktop.** A block button never runs the width of the column; a link
+  button and a `<button>` side by side are one width rule.
+- **Mono is for figures and dates only.** Every sentence — a hint, an explanation, a refusal, an empty state, a note
+  — is Archivo, in muted. A new quiet-sentence variant of `Text` carries it; `variant="meta"` keeps figures and dates.
+  This is the Type section's «a figure in mono, a sentence in Archivo», which the screens had drifted from.
+- **A field's label is Archivo 13 / 500, in ink secondary**, never the section label's mono caps. Two labels must
+  never read as two headings. Reverses the 2026-09-22 rule above.
+- **Tapping a task's or a suelta's name opens an edit sheet**: name, estimate and month, with «Borrar» at its foot.
+  The mark still marks done. Tapping a name never offers deletion first.
+- **«hechos N de M» on Hoy counts commitments only**, the dots the week shows. Sueltas are not in it.
+- **The plan's words are plain.** «arrastró», «correr un mes», «debe», «umbral», «toque» give way to plain Spanish
+  («quedó pendiente», «aplazar un mes», «falta»). The exact words are drawn on the boards first. Behaviour is
+  unchanged, so no code is retired.
+- **The report folds its weeks under their month on screen; on paper it prints months only.**
+- **A phase is still chosen by week numbers, with the dates beside them, live, and the valid range stated.**
+
