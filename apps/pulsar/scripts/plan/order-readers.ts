@@ -1,8 +1,10 @@
 // Drives the readers' plan order (RP-47, module 254): rows planted in ONE
 // statement share `created_at`, so only `position` can put them in order. The
-// names run against the positions so a name sort fails too. The session `harness:mint-session` left standing, `server-only`,
-// `next/headers` and `next/cache` stubbed before the first `@/` import.
+// names run against the positions and the ids against both, so a name or uuid sort fails too. Runs on the session
+// `harness:mint-session` left standing, with `server-only`, `next/headers` and
+// `next/cache` stubbed before the first `@/` import.
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
@@ -63,6 +65,12 @@ const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max:
 
 const LOADS = 20;
 
+// Ids drawn highest first: plan order is the reverse of uuid order, so a read
+// that falls back to `id` cannot pass by luck.
+function descendingIds(count: number): string[] {
+  return Array.from({ length: count }, () => randomUUID()).sort().reverse();
+}
+
 let goalId: string;
 let today: string;
 const taskIds: string[] = [];
@@ -97,23 +105,27 @@ before(async () => {
   userId = owner.user_id;
   const thisMonth = `${today.slice(0, 7)}-01`;
   const horizon = `${monthFrom(today, 2)}-01`;
+  const [goalFirst, goalSecond] = descendingIds(2);
   const pair = await sql<{ id: string; name: string }[]>`
-    insert into goals.goals (user_id, name, horizon, position)
-    values (${userId}, 'RP-47 Alfa', ${horizon}, 900002), (${userId}, 'RP-47 Zeta', ${horizon}, 900001)
+    insert into goals.goals (id, user_id, name, horizon, position)
+    values (${goalSecond}, ${userId}, 'RP-47 Alfa', ${horizon}, 900002),
+           (${goalFirst}, ${userId}, 'RP-47 Zeta', ${horizon}, 900001)
     returning id, name`;
   firstInPlan = pair.find((row) => row.name === "RP-47 Zeta")!.id;
   secondInPlan = pair.find((row) => row.name === "RP-47 Alfa")!.id;
+  const [t1, t2, t3] = descendingIds(3);
   const tasks = await sql<{ id: string; position: number }[]>`
-    insert into goals.one_offs (user_id, goal_id, name, planned_month, position)
-    values (${userId}, ${goalId}, 'RP-47 X', ${thisMonth}, 3),
-           (${userId}, ${goalId}, 'RP-47 Z', ${thisMonth}, 1),
-           (${userId}, ${goalId}, 'RP-47 Y', ${thisMonth}, 2)
+    insert into goals.one_offs (id, user_id, goal_id, name, planned_month, position)
+    values (${t3}, ${userId}, ${goalId}, 'RP-47 X', ${thisMonth}, 3),
+           (${t1}, ${userId}, ${goalId}, 'RP-47 Z', ${thisMonth}, 1),
+           (${t2}, ${userId}, ${goalId}, 'RP-47 Y', ${thisMonth}, 2)
     returning id, position`;
   taskIds.push(...tasks.sort((a, b) => a.position - b.position).map((row) => row.id));
+  const [c1, c2] = descendingIds(2);
   const commitments = await sql<{ id: string; position: number }[]>`
-    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, position)
-    values (${userId}, ${goalId}, 'RP-47 c-Z', 'daily', 'tap', 2),
-           (${userId}, ${goalId}, 'RP-47 c-A', 'daily', 'tap', 1)
+    insert into goals.commitments (id, user_id, goal_id, name, cadence_kind, satisfaction, position)
+    values (${c2}, ${userId}, ${goalId}, 'RP-47 c-Z', 'daily', 'tap', 2),
+           (${c1}, ${userId}, ${goalId}, 'RP-47 c-A', 'daily', 'tap', 1)
     returning id, position`;
   commitmentIds.push(...commitments.sort((a, b) => a.position - b.position).map((row) => row.id));
 });
