@@ -1211,7 +1211,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   assert(
     "P111",
     oneOffs ===
-      "DELETE INSERT(day,estimate,goal_id,id,name,note,parent_id,planned_month,user_id) SELECT UPDATE(day,note,planned_month)",
+      "DELETE INSERT(day,estimate,goal_id,id,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,note,planned_month)",
     `one_offs: authenticated = ${oneOffs || "none"}`,
   );
 
@@ -2099,6 +2099,97 @@ async function checkTaskNote(): Promise<void> {
   await sql.end();
 }
 
+// RP-47: the plan's order is written at insert by a trigger and no act changes it.
+async function checkPlanOrder(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, intruder);
+      await tx`insert into goals.goals (user_id, name, horizon, position) values (${intruder}, 'ajena', '2027-12-31', 40)`;
+      await tx`insert into goals.one_offs (user_id, name, position) values (${intruder}, 'ajena', 40)`;
+
+      await enterUserContext(tx, subject);
+      const [g1] = await tx<{ id: string; position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'uno', '2027-12-31') returning id, position`;
+      const [g2] = await tx<{ id: string; position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'dos', '2027-12-31') returning id, position`;
+      assert(
+        "P174",
+        g1.position === 1 && g2.position === 2,
+        `goals with no position land at max + 1 per person, got ${g1.position}, ${g2.position}`,
+      );
+
+      const [named] = await tx<{ position: number }[]>`
+        insert into goals.goals (user_id, name, horizon, position) values (${subject}, 'tres', '2027-12-31', 10) returning position`;
+      assert("P175", named.position === 10, `an insert naming a position keeps it, got ${named.position}`);
+
+      const [after] = await tx<{ position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'cuatro', '2027-12-31') returning position`;
+      assert("P176", after.position === 11, `max + 1 after a named position, got ${after.position}`);
+
+      const [o1] = await tx<{ id: string; position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'a') returning id, position`;
+      assert("P177", o1.position === 1, `intruder's one-off at 40 does not move my max, got ${o1.position}`);
+
+      const many = await tx<{ name: string; position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'b'), (${subject}, 'c') returning name, position`;
+      assert(
+        "P178",
+        many.map((r) => r.position).join() === "2,3",
+        `one statement, two rows, takes consecutive positions, got ${many.map((r) => r.position).join()}`,
+      );
+
+      const [c1] = await tx<{ id: string; position: number }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${g1.id}, 'diario', 'daily', 'tap') returning id, position`;
+      const [c2] = await tx<{ position: number }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${g1.id}, 'otro', 'daily', 'tap') returning position`;
+      assert("P179", c1.position === 1 && c2.position === 2, `commitments fill too, got ${c1.position}, ${c2.position}`);
+
+      const same = await tx<{ name: string; position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'Cap. 2'), (${subject}, 'Cap. 1') returning name, position`;
+      assert(
+        "P180",
+        same[0].position < same[1].position,
+        `an insert orders by arrival, never by name, got ${same.map((r) => `${r.name}=${r.position}`).join()}`,
+      );
+
+      const moveGoal = await attempt(tx, (sp) => sp`update goals.goals set position = 99 where id = ${g1.id}`);
+      assert("P181", moveGoal.code === "42501", `update goals.position, sqlstate = ${moveGoal.code ?? "none"}`);
+      const moveOne = await attempt(tx, (sp) => sp`update goals.one_offs set position = 99 where id = ${o1.id}`);
+      assert("P182", moveOne.code === "42501", `update one_offs.position, sqlstate = ${moveOne.code ?? "none"}`);
+      const moveCommitment = await attempt(tx, (sp) => sp`update goals.commitments set position = 99 where id = ${c1.id}`);
+      assert("P183", moveCommitment.code === "42501", `update commitments.position, sqlstate = ${moveCommitment.code ?? "none"}`);
+
+      const [{ nulls }] = await tx<{ nulls: number }[]>`
+        select (select count(*) from goals.goals where position is null)
+             + (select count(*) from goals.one_offs where position is null)
+             + (select count(*) from goals.commitments where position is null) as nulls`;
+      assert("P184", Number(nulls) === 0, `no row without a position, got ${nulls}`);
+
+      await tx`select set_config('role', 'anon', true)`;
+      const anonInsert = await attempt(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, name, position) values (${subject}, 'anon', 5)`,
+      );
+      assert("P185", anonInsert.code === "42501", `anon insert naming position, sqlstate = ${anonInsert.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2122,6 +2213,7 @@ async function main(): Promise<void> {
   await checkPlanByMonth();
   await checkAiDoor();
   await checkTaskNote();
+  await checkPlanOrder();
 
   if (failed) process.exit(1);
 }

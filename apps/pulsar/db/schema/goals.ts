@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, date, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, date, integer, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { goalsSchema } from "./_schema";
@@ -20,6 +20,8 @@ export const goals = goalsSchema.table(
     measureName: text(),
     measureUnit: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // The plan's order among this person's own rows. A trigger fills it at insert when none is named; no UPDATE grant (RP-47).
+    position: integer().notNull(),
     // Null while the goal is open. Set once, by `archiveGoal`, and cleared
     // once, by `reopenGoal` (RP-24) — never a second state beyond "set" and
     // "null": archiving is not a history, only a switch every open-goals
