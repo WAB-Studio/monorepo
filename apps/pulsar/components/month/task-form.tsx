@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { createOneOff } from "@/app/actions/one-offs";
 import { isTimeUnit, formatQuantity, type TimeWords } from "@/lib/units/time";
 import { createOneOffSchema } from "@/lib/validation/one-off";
-import { Button, Chip, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
+import { Button, Chip, Field, Flex, Page, ScreenHeader, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const WHOLE = /^\d+$/;
@@ -48,6 +48,8 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
   const [single, setSingle] = useState("");
   const [withChildren, setWithChildren] = useState(false);
   const [error, setError] = useState<MessageKey | null>(null);
+  // The field a refusal belongs to; it reads there, under its control.
+  const [refused, setRefused] = useState<"name" | "amount">("amount");
 
   const timed = isTimeUnit(unit);
   const measured = unit !== null;
@@ -85,12 +87,17 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
         })
       : null;
 
+  function refuse(key: MessageKey) {
+    setRefused(key === "month.task.nameEmpty" ? "name" : "amount");
+    setError(key);
+  }
+
   function handleSubmit() {
     if (pending) return;
     setError(null);
 
     if (typeof typed === "string") {
-      setError(typed);
+      refuse(typed);
       return;
     }
     const estimate = typed !== null && Number.isNaN(typed) ? Number.NaN : typed;
@@ -100,7 +107,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
         : { name, day: null, goalId, plannedMonth: month, estimate },
     );
     if (!parsed.success) {
-      setError(taskError(messageKey(parsed.error.issues[0].message)));
+      refuse(taskError(messageKey(parsed.error.issues[0].message)));
       return;
     }
 
@@ -111,7 +118,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
           router.push(!parent && withChildren ? `${monthHref}/tarea/nueva?padre=${result.oneOffId}` : monthHref);
           router.refresh();
         } else {
-          setError(taskError(result.error));
+          refuse(taskError(result.error));
         }
       });
     });
@@ -122,21 +129,19 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
       <ScreenHeader
         title={parent ? t("month.task.sub.title") : t("month.task.title", { month: monthName })}
         back={{ href: monthHref, place: monthName }}
-        eyebrow={
-          <SectionLabel>
-            {t(parent ? "month.task.sub.eyebrow" : "month.task.eyebrow", {
-              goal: goalName,
-              parent: parent?.name ?? "",
-              month: monthName,
-            })}
-          </SectionLabel>
-        }
+        eyebrow={t(parent ? "month.task.sub.eyebrow" : "month.task.eyebrow", {
+          goal: goalName,
+          parent: parent?.name ?? "",
+          month: monthName,
+        })}
       />
 
       <Field
         label={t("month.task.nameLabel")}
         value={name}
         onChange={(event) => setName(event.target.value)}
+        invalid={error !== null && refused === "name"}
+        hint={error !== null && refused === "name" ? t(error) : undefined}
         autoFocus
       />
 
@@ -162,6 +167,8 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
             value={minutes}
             onChange={(event) => setMinutes(event.target.value)}
             suffix={t("month.task.minutesUnit")}
+            invalid={error !== null && refused === "amount"}
+            hint={error !== null && refused === "amount" ? t(error) : undefined}
           />
         </Flex>
       ) : null}
@@ -174,17 +181,19 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
           step={1}
           value={single}
           onChange={(event) => setSingle(event.target.value)}
+          invalid={error !== null && refused === "amount"}
+          hint={error !== null && refused === "amount" ? t(error) : undefined}
         />
       ) : null}
 
       {sumLine ? (
-        <Text as="p" variant="meta" tone="muted">
+        <Text as="p" variant="sentence">
           {sumLine}
         </Text>
       ) : null}
 
       {!measured ? (
-        <Text as="p" variant="meta" tone="muted">
+        <Text as="p" variant="sentence">
           {t("month.task.noMeasure")}
         </Text>
       ) : null}
@@ -199,16 +208,10 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
           >
             {t("month.task.withChildren")}
           </Chip>
-          <Text as="p" variant="meta" tone="muted" id="task-with-children-hint">
+          <Text as="p" variant="sentence" id="task-with-children-hint">
             {t(measured ? "month.task.withChildrenHint" : "month.task.withChildrenHintNoMeasure")}
           </Text>
         </Flex>
-      ) : null}
-
-      {error ? (
-        <Text as="p" tone="muted" variant="meta">
-          {t(error)}
-        </Text>
       ) : null}
 
       <Button block tap={52} onClick={handleSubmit} disabled={pending}>

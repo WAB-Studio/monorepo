@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { ShiftProposal, TaskRow } from "@/components/month/task-row";
 import { MonthsList } from "@/components/month/months-screen";
-import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, SectionLabel, Separator, Text } from "@/components/ui";
+import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
 import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
 import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
@@ -79,6 +80,8 @@ export async function MonthDetail({
   const name = monthLabel(mes);
   const unit = goal.measureUnit;
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
+  // The `<fig>` tags of the month catalogue: each figure of a mixed line in mono.
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
   const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
@@ -102,17 +105,18 @@ export async function MonthDetail({
   const planned =
     row.planned === null ? t("month.noPlan") : t("month.months.of", { planned: say(row.planned) });
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
-  let note: string | null = null;
+  let note: ReactNode = null;
   if (closed) {
     note = share
-      ? t("month.list.closedLine", {
+      ? t.rich("month.list.closedLine", {
           share: Math.floor((share.carried * 100) / share.planned),
           owed: say(share.carried),
           planned: say(share.planned),
+          ...fig,
         })
       : null;
   } else if (doneInMonth > 0) {
-    note = t("month.list.includesDone", { done: say(doneInMonth) });
+    note = t.rich("month.list.includesDone", { done: say(doneInMonth), ...fig });
   }
 
   function item(entry: MonthItem) {
@@ -125,13 +129,13 @@ export async function MonthDetail({
     const isParent = children.length > 0;
     const owes = entry.carriedFrom !== null ? entry.owes : isParent ? childTotal : (task.estimate ?? 0);
 
-    let meta: string | undefined;
+    let meta: ReactNode;
     if (entry.carriedFrom !== null) {
       meta = entry.hasAmount
-        ? t("month.list.owes", { month: monthLabel(entry.carriedFrom), owes: say(entry.owes) })
+        ? t.rich("month.list.owes", { month: monthLabel(entry.carriedFrom), owes: say(entry.owes), ...fig })
         : t("month.list.fromMonth", { month: monthLabel(entry.carriedFrom) });
     } else if (isParent) {
-      meta = childTotal > 0 ? t("month.list.doneOf", { done: say(childDone), total: say(childTotal) }) : undefined;
+      meta = childTotal > 0 ? t.rich("month.list.doneOf", { done: say(childDone), total: say(childTotal), ...fig }) : undefined;
     } else if (closed && !entry.done) {
       meta = t("month.list.staysIn", { month: monthLabel(nextMonth(mes)) });
     }
@@ -219,68 +223,67 @@ export async function MonthDetail({
   );
 
   return (
-    <Flex direction="column" gap="5" maxWidth="720px">
+    <Flex direction="column" gap={{ initial: "6", md: "7" }} maxWidth="720px">
       {heading ? (
         <Text asChild variant="title">
           <h2>{capitalised(name)}</h2>
         </Text>
       ) : null}
       {unit ? (
-        <Flex direction="column" gap="1">
-          <SectionLabel>{label}</SectionLabel>
+        <Section label={label} as="div">
           <Flex align="baseline" gap="2">
             <Figure value={row.reached} unit={unit} />
             {open && !closed ? (
-              <Button asChild tap={44} variant="ghost" tone="accent">
-                <Link href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>{planned}</Link>
-              </Button>
+              <TextLink href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>
+                {planned}
+              </TextLink>
             ) : (
               <Text tone="secondary">{planned}</Text>
             )}
           </Flex>
           {note ? (
-            <Text as="p" variant="meta" tone="muted">
+            <Text as="p" variant="sentence">
               {note}
             </Text>
           ) : null}
-        </Flex>
+        </Section>
       ) : (
-        <Text as="p" tone="secondary">
+        <Text as="p" variant="sentence">
           {t("month.list.noMeasure")}
         </Text>
       )}
       <Separator />
 
       {carriedMonths.map((from) => (
-        <Flex key={from} direction="column">
-          <SectionLabel>{t("month.list.fromMonth", { month: monthLabel(from) })}</SectionLabel>
+        <Section key={from} as="div" label={t("month.list.fromMonth", { month: monthLabel(from) })}>
           {carried.filter((entry) => entry.carriedFrom === from).map(item)}
-        </Flex>
+        </Section>
       ))}
 
       {empty && open && !closed ? (
-        <Flex direction="column" gap="3" align="start">
-          <SectionLabel>{t("month.list.tasks")}</SectionLabel>
-          <Text as="p" tone="secondary">
+        <Section as="div" label={t("month.list.tasks")}>
+          <Text as="p" variant="sentence">
             {t(unit ? "month.list.empty" : "month.list.emptyNoMeasure", { month: capitalised(name) })}
           </Text>
-          <Button asChild>
+          <Button asChild block>
             <Link href={addHref}>{t("month.list.emptyAction")}</Link>
           </Button>
-        </Flex>
+        </Section>
       ) : null}
 
       {own.length > 0 || (empty && (!open || closed)) ? (
-        <Flex direction="column">
-          <SectionLabel>
-            {closed || !unit || ownPlanned === 0
+        <Section
+          as="div"
+          label={
+            closed || !unit || ownPlanned === 0
               ? t("month.list.tasks")
               : carried.length > 0
                 ? t("month.list.ownMonth", { month: name, planned: say(ownPlanned) })
-                : t("month.list.tasksPlanned", { planned: say(ownPlanned) })}
-          </SectionLabel>
+                : t("month.list.tasksPlanned", { planned: say(ownPlanned) })
+          }
+        >
           {own.map(item)}
-        </Flex>
+        </Section>
       ) : null}
 
       {open && !closed && !empty ? (
@@ -288,7 +291,7 @@ export async function MonthDetail({
       ) : null}
 
       {closed ? (
-        <Text as="p" variant="meta" tone="muted">
+        <Text as="p" variant="sentence">
           {t("month.list.closedNote")}
         </Text>
       ) : null}
@@ -329,15 +332,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
       <ScreenHeader
         title={capitalised(monthLabel(mes))}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
-        eyebrow={
-          <Button asChild tap={44} variant="ghost">
-            <Link href={`/metas/${goal.id}/meses`}>
-              <Text variant="meta" tone="accent">
-                {t("month.list.allMonths")}
-              </Text>
-            </Link>
-          </Button>
-        }
+        eyebrow={<TextLink href={`/metas/${goal.id}/meses`}>{t("month.list.allMonths")}</TextLink>}
       />
       <ListDetail
         show="detail"

@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { acceptShift } from "@/app/actions/shift";
 import { shiftRows } from "@/lib/plan/shift-rows";
 import type { ShiftPlan } from "@/lib/plan/shift";
-import { Button, Flex, SectionLabel, Sheet, SheetActions, Text } from "@/components/ui";
+import { Button, Flex, Section, Sheet, SheetActions, Text } from "@/components/ui";
 
 export type ShiftSheetProps = {
   goalId: string;
@@ -71,48 +71,52 @@ export function ShiftSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} label={goalName} title={t("month.shift.title")}>
-      <Flex direction="column" gap="3">
-        <SectionLabel>{t("month.shift.movesTitle")}</SectionLabel>
-        {rows.budgets ? (
-          <Line
-            name={t("month.shift.budgets", { from: rows.budgets.from, to: rows.budgets.to })}
-            detail={t("month.shift.budgetsDetail", { from: rows.budgets.from, next: rows.budgets.next })}
-          />
-        ) : null}
-        {rows.tasks ? (
-          <Line
-            name={t("month.shift.tasks", { count: rows.tasks.count })}
-            detail={t("month.shift.tasksDetail", { month: rows.tasks.month })}
-          />
-        ) : null}
-        {rows.phases.map((phase) => (
-          <Line
-            key={phase.name}
-            name={t("month.shift.phase", { name: phase.name })}
-            detail={t("month.shift.phaseDetail", { from: phase.from, to: phase.to })}
-          />
-        ))}
-        {rows.end ? (
-          <Line
-            name={t("month.shift.end")}
-            detail={t("month.shift.endDetail", { from: rows.end.from, to: rows.end.to })}
-          />
+      <Flex direction="column" gap={{ initial: "6", md: "7" }}>
+        <Section as="div" label={t("month.shift.movesTitle")}>
+          {rows.budgets ? (
+            <Line
+              name={t("month.shift.budgets", { from: rows.budgets.from, to: rows.budgets.to })}
+              detail={t("month.shift.budgetsDetail", { from: rows.budgets.from, next: rows.budgets.next })}
+            />
+          ) : null}
+          {rows.tasks ? (
+            <Line
+              name={t("month.shift.tasks", { count: rows.tasks.count })}
+              detail={t("month.shift.tasksDetail", { month: rows.tasks.month })}
+            />
+          ) : null}
+          {rows.phases.map((phase) => (
+            <Line
+              key={phase.name}
+              name={t("month.shift.phase", { name: phase.name })}
+              detail={t("month.shift.phaseDetail", { from: phase.from, to: phase.to })}
+            />
+          ))}
+          {rows.end ? (
+            <Line
+              name={t("month.shift.end")}
+              detail={t("month.shift.endDetail", { from: rows.end.from, to: rows.end.to })}
+            />
+          ) : null}
+        </Section>
+
+        {stays ? (
+          <Section as="div" label={t("month.shift.staysTitle")}>
+          {currentPhase !== null ? <Line name={t("month.shift.currentPhase")} detail={currentPhase} /> : null}
+          {hasDoneTasks ? (
+            <Line name={t("month.shift.doneTasks")} detail={t("month.shift.doneTasksDetail")} />
+          ) : null}
+          {otherGoals.length > 0 ? (
+            <Line name={t("month.shift.otherGoals")} detail={otherGoals.join(", ")} />
+          ) : null}
+          </Section>
         ) : null}
 
-        {stays ? <SectionLabel>{t("month.shift.staysTitle")}</SectionLabel> : null}
-        {currentPhase !== null ? <Line name={t("month.shift.currentPhase")} detail={currentPhase} /> : null}
-        {hasDoneTasks ? (
-          <Line name={t("month.shift.doneTasks")} detail={t("month.shift.doneTasksDetail")} />
-        ) : null}
-        {otherGoals.length > 0 ? (
-          <Line name={t("month.shift.otherGoals")} detail={otherGoals.join(", ")} />
-        ) : null}
-
-        <Text as="p" variant="meta" tone="muted">
+        <Text as="p" variant="sentence">
           {t("month.shift.nextKeeps", { month: rows.emptied })}
         </Text>
         {error ? (
-          <Text as="p" variant="meta" role="alert">
+          <Text as="p" variant="sentence" role="alert">
             {error}
           </Text>
         ) : null}
