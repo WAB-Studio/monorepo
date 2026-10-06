@@ -89,3 +89,21 @@
     border-block-start: 0;
   }
 }
+
+/* A task's note: 13px, whole, line breaks kept, a 2px hairline rule at its
+   left. Paper sets it at 12pt and wraps a long word rather than overflow. */
+.note.note {
+  margin: 0;
+  padding-inline-start: 10px;
+  border-inline-start: 2px solid var(--pulsar-line);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+@media print {
+  .note.note {
+    font-size: 12pt;
+  }
+}

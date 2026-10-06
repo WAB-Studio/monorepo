@@ -17,8 +17,9 @@ import type postgres from "postgres";
 // `ReporteVacio.dc.html` (module 131, RP-33, RP-35): `/exportar` is a page the
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
-// Pages the two-goal seeded report takes on A4, measured under the fix.
-const A4_PAGES = 7;
+// Pages the two-goal seeded report takes on A4 with the carried notes
+// printed, measured by `pdfinfo` on 2026-10-05 (module 248).
+const A4_PAGES = 9;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {
@@ -33,7 +34,18 @@ type Seed = {
   taskName: string;
   childName: string;
   phaseName: string;
+  taskNote: string;
+  childNote: string;
 };
+
+// Three lines for the carried task, 2000 characters for its sub-task.
+const TASK_NOTE = "Primera línea de la nota\nSegunda línea de la nota\nTercera línea de la nota";
+const CHILD_NOTE = Array.from(
+  { length: 400 },
+  (_, i) => `n${String(i).padStart(3, "0")}`,
+)
+  .join(" ")
+  .slice(0, 2000);
 
 // A goal in minutes: 90 declared today against a 12 h month amount, a phase,
 // and a task planned last month that nobody did, so it carries into this one.
@@ -70,15 +82,15 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
     values (${person.id}, ${goal.id}, ${commitment.id}, ${today}::date, 90)
   `;
   const [task] = await db<{ id: string }[]>`
-    insert into goals.one_offs (user_id, goal_id, name, planned_month)
-    values (${person.id}, ${goal.id}, ${taskName}, (${monthStart}::date - interval '1 month')::date)
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, note)
+    values (${person.id}, ${goal.id}, ${taskName}, (${monthStart}::date - interval '1 month')::date, ${TASK_NOTE})
     returning id
   `;
   await db`
-    insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
-    values (${person.id}, ${goal.id}, ${task.id}, ${childName}, 45)
+    insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate, note)
+    values (${person.id}, ${goal.id}, ${task.id}, ${childName}, 45, ${CHILD_NOTE})
   `;
-  return { goalId: goal.id, name, taskName, childName, phaseName };
+  return { goalId: goal.id, name, taskName, childName, phaseName, taskNote: TASK_NOTE, childNote: CHILD_NOTE };
 }
 
 test.describe("the report page (RP-33, RP-35)", () => {
@@ -112,6 +124,16 @@ test.describe("the report page (RP-33, RP-35)", () => {
       await expect(seen("12 h").first()).toBeVisible();
       await expect(seen(seeded.taskName)).toHaveCount(1);
       await expect(seen(seeded.childName)).toHaveCount(1);
+      // RP-45: the notes under the carried task and its sub-task, whole.
+      await expect(
+        page.getByRole("main").getByText("Segunda línea de la nota"),
+      ).toHaveCount(1);
+      await expect(
+        page.getByRole("main").getByText(seeded.childNote, { exact: true }),
+      ).toHaveCount(1);
+      await expect(
+        page.getByRole("main").getByText("Segunda línea de la nota"),
+      ).toHaveCSS("white-space", "pre-line");
       await expect(seen(seeded.phaseName)).toHaveCount(1);
       await expect(seen("Tu plan")).toHaveCount(1);
       await expect(seen("1 meta abierta")).toHaveCount(1);
@@ -204,6 +226,18 @@ test.describe("the report page (RP-33, RP-35)", () => {
       expect(text).toContain(seeded.name);
       expect(text).toContain("1 h 30 min");
       expect(text).not.toContain("Descargar PDF");
+      // RP-45: both notes whole, line breaks kept, none wider than the sheet.
+      expect(text).toContain(seeded.taskNote);
+      expect(text).toContain("n000 n001");
+      expect(text).toContain("n399");
+      const widest = await page.evaluate(() =>
+        Math.max(
+          ...Array.from(document.querySelectorAll("main p")).map(
+            (node) => node.getBoundingClientRect().right,
+          ),
+        ) - document.documentElement.clientWidth,
+      );
+      expect(widest, "no note overflows the A4 width").toBeLessThanOrEqual(0);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -651,7 +685,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-33, RP-35)",
         type: "a4-pages",
         description: String(pages),
       });
-      expect(pages).toBeLessThanOrEqual(A4_PAGES);
+      expect(pages).toBe(A4_PAGES);
       // Page 1 holds the head and the first goal's name with its first section.
       expect(onFirst).toContain("Tu plan");
       expect(onFirst).toMatch(/Meta exportada \d+/);
