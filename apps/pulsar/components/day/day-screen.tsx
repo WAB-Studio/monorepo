@@ -349,7 +349,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     </>
   );
 
-  // One card per open goal that has a measure; a goal without one draws none.
+  // One card per open goal that has a measure; the rest get one only for «este mes».
   const figures = goals.filter((goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined);
 
   // Drawn inside `goalless`, so only on today (RP-28), never on a past day.
@@ -452,6 +452,17 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           </Face>
         </Panel>
       ))}
+      {monthGoals
+        .filter((goal) => !figures.includes(goal))
+        .map((goal) => (
+          <Panel as="div" key={goal.id}>
+            <Face on="desktop">
+              <SectionLabel>{goal.name}</SectionLabel>
+              <SectionLabel>{t("day.monthLine.title")}</SectionLabel>
+              {monthLines(goal)}
+            </Face>
+          </Panel>
+        ))}
       {monthGoals.length > 0 ? (
         <Face on="phone">
           <Panel as="div">

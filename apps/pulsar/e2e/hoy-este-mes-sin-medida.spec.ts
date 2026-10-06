@@ -78,6 +78,17 @@ test("a goal with no measure shows «N de M tareas» and its next task in «este
     await expect(runningLine).toContainText(/5\s*kilómetros\s*· 1 de 2 tareas/);
     await expect(runningLine.getByRole("button", { name: `Marcar hecha: Pendiente ${stamp}` })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+
+    // At 1280 the same goal has its card: the goal's name, its tasks and its next task.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const card = page
+      .locator("div")
+      .filter({ has: page.getByText(moving, { exact: true }).locator("visible=true") })
+      .filter({ hasText: "de 3 tareas" })
+      .last();
+    await expect(card).toContainText(/1\s*de 3 tareas/);
+    await expect(card.getByRole("button", { name: `Marcar hecha: Siguiente ${stamp}` }).locator("visible=true")).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where id in (${movingId}, ${runningId}) and user_id = ${person.id}`;

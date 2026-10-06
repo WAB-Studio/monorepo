@@ -818,4 +818,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **Every goal with tasks this month has its «este mes» line on Hoy, measured or not**, as `HoyTelefonoSinPedido.dc.html`
   already draws «Mudanza · 1 de 3 tareas». A goal with no measure reads its tasks done of total; its next task follows as
   `HoyTareaMesSubtarea.dc.html` draws it.
+  - On the phone the goal's name sits over its figures, not beside them as the board's one row does: a long name and
+    «1 de 3 tareas» do not share 328 px. Decided by the orchestrator 2026-10-06 (module 283).
+  - From 1024 a goal with no week card gets a side card of its own: its name, «Este mes», then the same lines. No
+    board draws it; it repeats the measured card's order minus the week figure. Decided by the orchestrator 2026-10-06
+    (module 283).
 - **«Correr un mes» is offered only when the month also fell short of its amount** (RP-48, succeeding RP-34).
