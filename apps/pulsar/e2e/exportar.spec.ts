@@ -681,7 +681,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
         }
         weeks += 1;
         // «31 ago–6 sep 2026» starts in its first month; «5–11 oct 2026» in its only one.
-        const span = /^sem \d+ · (\d+)(?: ([a-z]{3}))?(?: \d{4})?–\d+ ([a-z]{3}) \d{4}/.exec(row);
+        const span = /^sem \d+ · (\d+)(?: ([a-z]{3}))?(?: \d{4})?(?:–\d+ ([a-z]{3}))? \d{4}/.exec(row);
         expect(span, row).not.toBeNull();
         const startAbbreviation = span![2] ?? span![3];
         expect(abbreviations[months.indexOf(owner)], row).toBe(startAbbreviation);
@@ -792,7 +792,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
       ];
       const marks = new RegExp(
-        `(?<month>(?:${months.join("|")}) \\d{4})|sem \\d+ · (?<day>\\d+)(?: (?<first>[a-z]{3}))?(?: \\d{4})?–\\d+ (?<last>[a-z]{3}) \\d{4}`,
+        `(?<month>(?:${months.join("|")}) \\d{4})|sem \\d+ · (?<day>\\d+)(?: (?<first>[a-z]{3}))?(?: \\d{4})?(?:–\\d+ (?<last>[a-z]{3}))? \\d{4}`,
         "g",
       );
       let owner = "";
@@ -816,7 +816,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       // A week's span never breaks: every «sem N ·» opening carries its closing year on its own line.
       const opened = all.split("\n").filter((line) => /sem \d+ ·/.test(line));
       expect(opened.length).toBeGreaterThan(0);
-      for (const line of opened) expect(line).toMatch(/sem \d+ · .*–.* \d{4}/);
+      for (const line of opened) expect(line).toMatch(/sem \d+ · .*\d{4}/);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
@@ -1088,7 +1088,10 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       await page.goto("/exportar");
       await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
       await expect(page.getByText("hasta hoy", { exact: true })).toBeVisible();
-      await expect(page.getByRole("main")).not.toContainText(/\bde 0\b/);
+      // The block's own text: «de» and the figure may share no space in the DOM.
+      const block = page.getByText("hasta hoy", { exact: true }).locator("xpath=..");
+      await expect(block).toContainText("50 min");
+      await expect(block).not.toContainText(/de\s*0/);
 
       await page.emulateMedia({ media: "print" });
       const file = resolve(process.cwd(), "private/export-pdf", `281-${seeded.goalId}.pdf`);
@@ -1096,7 +1099,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       writeFileSync(file, await page.pdf({ format: "A4" }));
       const text = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" });
       expect(text.toLowerCase()).toContain("hasta hoy");
-      expect(text.replace(/\s+/g, " ")).not.toMatch(/\bde 0\b/);
+      expect(text.replace(/\s+/g, " ")).not.toMatch(/\bde\s*0/);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
