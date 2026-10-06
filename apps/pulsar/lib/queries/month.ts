@@ -42,7 +42,7 @@ export type MonthAcross = {
 };
 
 type Row = {
-  goal: GoalRow & { rhythm: number | null };
+  goal: GoalRow;
   commitments: CommitmentRow[];
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
@@ -143,7 +143,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       position: task.position,
     }));
     const plan: PlanInput = {
-      rhythm: row.goal.rhythm,
+      rhythm: row.goal.rhythm ?? null,
       budgets: row.budgets,
       tasks,
       openedOn: civilDateInZone(new Date(row.goal.created_at)),
@@ -171,7 +171,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
         today,
         budget: row.budgets.find((budget) => budget.month === month) ?? null,
         reached,
-        rhythm: row.goal.rhythm,
+        rhythm: row.goal.rhythm ?? null,
       });
     }
 

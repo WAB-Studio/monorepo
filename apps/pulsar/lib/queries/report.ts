@@ -24,7 +24,7 @@ import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 // One row per open goal, each carrying what `queryGoalRow` (`goal.ts`) reads
 // for a single one.
 type ReportRow = {
-  goal: GoalRow & { rhythm: number | null };
+  goal: GoalRow;
   phases: PhaseRow[];
   commitments: CommitmentRow[];
   facts: FactRow[];
@@ -105,7 +105,7 @@ function planInputOf(row: ReportRow, today: string): PlanInput {
     position: task.position,
   }));
   return {
-    rhythm: row.goal.rhythm,
+    rhythm: row.goal.rhythm ?? null,
     budgets: row.budgets,
     tasks,
     openedOn: civilDateInZone(new Date(row.goal.created_at)),

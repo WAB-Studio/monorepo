@@ -176,3 +176,25 @@ test("planMoved: a goal with no rhythm reads nothing even when fixed work was ca
   assert.equal(planMoved({ ...input(tasks, { rhythm: null }), seen: null }), null);
   assert.notEqual(planMoved({ ...input(tasks), seen: null }), null);
 });
+
+test("planShare: a task created today and fixed to a closed month counts in that month's share", () => {
+  const tasks = [
+    task("kept", { plannedMonth: SEP, estimate: 6, doneOn: "2026-09-10", createdOn: "2026-10-20" }),
+    task("owed", { plannedMonth: SEP, estimate: 4, createdOn: "2026-10-20" }),
+    task("loose", { estimate: 8, createdOn: "2026-10-20" }),
+  ];
+  const share = planShare(input(tasks, { today: "2026-10-20" }), SEP);
+  assert.deepEqual(share, { carried: 4, planned: 10 });
+  assert.deepEqual(share, carryShare(tasks, SEP));
+});
+
+test("planMoved: a goal opened in the closed month still reads its notice", () => {
+  const notice = planMoved({ ...input(septemberHalf(), { openedOn: "2026-09-15" }), seen: null });
+  assert.equal(notice?.closedMonth, SEP);
+});
+
+test("rhythmToMeet: a total that is no multiple of the step rounds up to the step that holds it", () => {
+  const tasks = [task("hundred", { estimate: 100 })];
+  const tight = input(tasks, { rhythm: 60, today: "2026-10-15", horizon: NOV });
+  assert.equal(rhythmToMeet(tight, 60), 120);
+});

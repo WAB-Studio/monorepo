@@ -111,9 +111,11 @@ export function fillPlan(input: PlanInput): Roadmap {
   const lastDay = dayBefore(horizon);
   const amounts = (month: string) => amountOf(month, input);
 
-  // What the reading day sees: nothing created later, nothing done later.
+  // What the reading day sees: nothing created later, nothing done later. A task fixed to
+  // a month (or a child of one) belongs to that month whenever it was created.
+  const fixedIds = new Set(input.tasks.filter((task) => task.parentId === null && monthOfTask(task) !== null).map((task) => task.id));
   const visible = input.tasks
-    .filter((task) => task.createdOn <= today)
+    .filter((task) => task.createdOn <= today || fixedIds.has(task.parentId ?? task.id))
     .map((task) => (task.doneOn !== null && task.doneOn > doneBy ? { ...task, doneOn: null } : task));
 
   const roomTaken = new Map<string, number>();

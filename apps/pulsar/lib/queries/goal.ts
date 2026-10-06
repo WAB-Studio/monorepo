@@ -410,7 +410,6 @@ export function goalFigures(input: {
 }): {
   tasks: PlanTask[];
   plan: PlanInput;
-  roadmap: Roadmap;
   measureTotal: number;
   months: MonthRow[];
   month: GoalView["month"];
@@ -480,7 +479,6 @@ export function goalFigures(input: {
   return {
     tasks,
     plan,
-    roadmap: fillPlan(plan),
     measureTotal: declaredTotal + evidenceTotal,
     months,
     month,
@@ -531,7 +529,7 @@ export async function loadGoal(
   const commitments = row.commitments.map((commitment) =>
     toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
   );
-  const { tasks, plan, roadmap, measureTotal, months, month: currentMonth, weeks } = goalFigures({
+  const { tasks, plan, measureTotal, months, month: currentMonth, weeks } = goalFigures({
     goal: row.goal,
     phases,
     commitments: row.commitments,
@@ -563,7 +561,7 @@ export async function loadGoal(
     rhythm: row.goal.rhythm ?? null,
     planSeen: row.goal.plan_seen ?? null,
     plan,
-    roadmap,
+    roadmap: fillPlan(plan),
     shifts: row.shifts,
   };
 }

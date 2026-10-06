@@ -108,6 +108,7 @@ let archivedId: string;
 let endedId: string;
 let dId: string;
 let fId: string;
+let gId: string;
 let loadMonthAcross: typeof import("@/lib/queries/month").loadMonthAcross;
 let archiveGoal: typeof import("@/app/actions/plan").archiveGoal;
 
@@ -207,6 +208,16 @@ before(async () => {
     insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
     values (${owner.user_id}, ${fId}, 'RP-50 fixture: partida', 15, true),
            (${owner.user_id}, ${fId}, 'RP-50 fixture: pequeña', 4, true)`;
+
+  // G holds a parent fixed to this month whose children are only partly estimated.
+  gId = (await goal("RP-50 fixture: G", "minutos")).goalId;
+  const [mixed] = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month)
+    values (${owner.user_id}, ${gId}, 'RP-50 fixture: mixta', ${monthStart}) returning id`;
+  await sql`
+    insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
+    values (${owner.user_id}, ${gId}, 'RP-50 fixture: mixta con monto', ${mixed.id}, 3),
+           (${owner.user_id}, ${gId}, 'RP-50 fixture: mixta sin monto', ${mixed.id}, null)`;
 
   const archived = await archiveGoal({ goalId: archivedId });
   if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
@@ -342,6 +353,13 @@ test("loadMonthAcross: a split task lists with its part, and the line carries th
   );
   assert.equal(f.items[0].owes, 10);
   assert.equal(f.items[0].hasAmount, true);
+});
+
+test("loadMonthAcross: a fixed parent reads fixed, and an amount on any child is an amount", async () => {
+  const g = (await loadMonthAcross(today)).goals.find((goal) => goal.id === gId)!;
+  const item = g.items.find((entry) => entry.task.name === "RP-50 fixture: mixta")!;
+  assert.equal(item.fixed, true);
+  assert.equal(item.hasAmount, true);
 });
 
 test("loadMonthAcross: the plan's reading still takes two transactions and four statements", async () => {

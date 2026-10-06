@@ -311,3 +311,24 @@ test("nothing undone reads empty with no end", () => {
   assert.equal(roadmap.state, "empty");
   assert.equal(roadmap.end, null);
 });
+
+test("a task fixed to the current month is not carried; one fixed to the month before is", () => {
+  const roadmap = plan([
+    task("now", { estimate: 3, plannedMonth: OCT }),
+    task("past", { estimate: 3, plannedMonth: SEP }),
+  ]);
+  assert.equal(partIn(roadmap, OCT, "now").carriedFrom, null);
+  assert.equal(partIn(roadmap, OCT, "past").carriedFrom, SEP);
+});
+
+test("a task fixed to a month is present whenever it was created; an unfixed one is not", () => {
+  const roadmap = plan([
+    task("fixed", { estimate: 3, plannedMonth: OCT, createdOn: "2026-10-16" }),
+    task("child-parent", { plannedMonth: NOV, createdOn: "2026-10-16" }),
+    task("child", { parentId: "child-parent", estimate: 2, createdOn: "2026-10-16" }),
+    task("loose", { estimate: 3, createdOn: "2026-10-16" }),
+  ]);
+  assert.deepEqual(parts(roadmap, "fixed"), [[OCT, 3]]);
+  assert.deepEqual(parts(roadmap, "child-parent"), [[NOV, 2]]);
+  assert.deepEqual(parts(roadmap, "loose"), []);
+});

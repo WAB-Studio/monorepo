@@ -2731,10 +2731,11 @@ async function runMonthTaskCheck(): Promise<void> {
     day: string | null,
     createdAt: string,
     estimate: number | null = null,
+    note: string | null = null,
   ): Promise<string> {
     const [row] = await db<{ id: string }[]>`
-      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, created_at)
-      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate},
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, note, created_at)
+      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate}, ${note},
               ${createdAt}::timestamptz)
       returning id
     `;
@@ -2759,22 +2760,35 @@ async function runMonthTaskCheck(): Promise<void> {
     const own = await seed("month-task own", month, null, null, "2020-01-03T00:00:00Z", 90);
     const parent = await seed("month-task carried parent", previous, null, null, "2020-01-04T00:00:00Z");
     const first = await seed("month-task child 1", null, parent, null, "2020-01-05T00:00:00Z", 30);
-    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45);
+    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45, "month-task note");
+    const third = await seed("month-task child 3", null, parent, null, "2020-01-07T00:00:00Z", 15);
     await finish(first);
 
     const nextOf = async () => (await loadDay(today)).monthTask[goal.id];
     const carried = await nextOf();
     assert(
       "the carried parent's undone child is the goal's next task, before the month's own and any dated one-off",
-      carried?.id === second && carried.name === "month-task child 2" && carried.estimate === 45,
+      carried?.id === second &&
+        carried.name === "month-task child 2" &&
+        carried.estimate === 45 &&
+        carried.note === "month-task note" &&
+        carried.parentName === "month-task carried parent",
       `monthTask = ${JSON.stringify(carried)}`,
     );
 
     await finish(second);
+    const afterSecond = await nextOf();
+    assert(
+      "the next undone child follows in plan order, a parent's name riding with it and no note of its own",
+      afterSecond?.id === third && afterSecond.note === null && afterSecond.parentName === "month-task carried parent",
+      `monthTask = ${JSON.stringify(afterSecond)}`,
+    );
+
+    await finish(third);
     const ownNext = await nextOf();
     assert(
       "with the carried child done the month's own task is next, and a task of the month after never is",
-      ownNext?.id === own && ownNext.estimate === 90,
+      ownNext?.id === own && ownNext.estimate === 90 && ownNext.parentName === null,
       `monthTask = ${JSON.stringify(ownNext)}`,
     );
 
