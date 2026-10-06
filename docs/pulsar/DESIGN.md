@@ -865,3 +865,17 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
 - **`ConexionesTelefono.dc.html` and `HoyVacioEscritorio.dc.html` are the two screens redrawn on the system**, approved
   with it. Their words: «Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.»; a key's
   line «Creada hoy a las 12:18 · sin usar»; «Copiar» answers «Copiada.» beside a check.
+- **Seven more, taken by the user the same day on the planner's questions** (the orchestrator's picks, «el resto de
+  recomendación»):
+  - The report on paper prints months only; RP-46 retired for **RP-49**.
+  - A done task's name can be edited; its estimate cannot, so past totals never move.
+  - The app is called **«Bitácora de metas»** everywhere a person reads it: the rail, the consent screen, the PDF, every
+    button. «pulsar» stays in the address alone.
+  - A goal's weeks count its partial last week: a goal that ends mid-week has 36 weeks when 35 are whole, and a phase may
+    take the 36th.
+  - «Aplazar un mes» (the old «Correr un mes») is offered on Hoy and on the goal too, while it is open.
+  - Hoy steps between days with labelled controls beside the date, «‹ ayer» and «mañana ›»; a bare ‹ means back
+    everywhere.
+  - A commitment in a goal that measures takes the goal's unit; there is no free unit field there.
+- **Open: a task's month.** The user asked on 2026-10-06 for the plan to work «por cantidad de horas por mes … como
+  roadmap … todo se mueve proporcionalmente». RP-42 stands until that is drawn and decided.
