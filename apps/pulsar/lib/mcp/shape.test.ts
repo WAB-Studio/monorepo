@@ -267,6 +267,7 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     periodDone: { [ID(12)]: 3 },
     monthTask: {},
     monthTaskCounts: {},
+    planNotice: {},
   };
   const shaped = shapeDay(loaded);
   assert.equal(shaped.day, "2026-10-05");

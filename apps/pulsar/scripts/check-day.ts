@@ -2393,6 +2393,7 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runMonthLineCheck();
   await runMonthTaskCheck();
   await runPastWeekCheck();
+  await runPlanReadCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -2869,6 +2870,104 @@ async function runPastWeekCheck(): Promise<void> {
   } finally {
     if (ids.length > 0) {
       await db`delete from goals.goals where id in ${db(ids)} and user_id = ${person.id}`;
+    }
+    await db.end();
+  }
+}
+
+// Module 341 (RP-50, RP-52, RP-53, RNP-03): Hoy reads the plan. A 30-hour task
+// at a rhythm of 10 is split across three months and gives its first part;
+// last month closed with 5 done of its 10, so the end moved and the notice
+// says so, once, today alone, until `plan_seen` reaches the closed month.
+async function runPlanReadCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { monthOf } = await import("@/lib/plan/months");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runPlanReadCheck: no verified session");
+  const userId = person.id;
+  const today = todayInZone();
+  const closed = monthOf(addDays(monthOf(today), -1));
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+
+  async function seedGoal(name: string, rhythm: number | null): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${userId}, ${name}, '2099-12-31'::date, 'hours', 'hours', ${rhythm},
+              '2020-01-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalIds.push(row.id);
+    return row.id;
+  }
+  async function seedTask(goal: string, name: string, estimate: number, createdAt: string): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, created_at)
+      values (${userId}, ${goal}, ${name}, ${estimate}, true, ${createdAt}::timestamptz)
+      returning id
+    `;
+    return row.id;
+  }
+
+  try {
+    const goal = await seedGoal("plan-read probe", 10);
+    const small = await seedTask(goal, "plan-read done in the closed month", 5, "2020-01-01T00:00:00Z");
+    const big = await seedTask(goal, "plan-read split", 30, "2020-01-02T00:00:00Z");
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day) values (${userId}, ${goal}, ${small}, ${closed}::date)
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount) values (${userId}, ${goal}, ${closed}::date, 12)
+    `;
+    const loose = await seedGoal("plan-read no rhythm", null);
+
+    const loaded = await loadDay(today);
+    const next = loaded.monthTask[goal];
+    assert(
+      "a split task is the next task and gives this month's part, not its whole estimate",
+      next?.id === big && next.part === 10 && next.estimate === 30,
+      `monthTask = ${JSON.stringify(next)}`,
+    );
+    const counts = loaded.monthTaskCounts[goal];
+    assert(
+      "the month's counts come from the plan: the split task, none done",
+      counts?.done === 0 && counts.total === 1,
+      `monthTaskCounts = ${JSON.stringify(counts)}`,
+    );
+    assert("the month line plans the rhythm", loaded.monthLine[goal]?.planned === 10, JSON.stringify(loaded.monthLine[goal]));
+
+    const notice = loaded.planNotice[goal];
+    assert(
+      "a month that closed short reads a notice with the closed month, what was done and the amount its own budget set",
+      notice !== null &&
+        notice.closedMonth === closed &&
+        notice.closedDone === 5 &&
+        notice.closedAmount === 12 &&
+        notice.movedDays > 0,
+      `planNotice = ${JSON.stringify(notice)}`,
+    );
+    assert(
+      "a goal with no rhythm reads no notice",
+      loaded.planNotice[loose] === null,
+      `planNotice = ${JSON.stringify(loaded.planNotice[loose])}`,
+    );
+    const past = await loadDay(addDays(today, -1));
+    assert("a past day reads no notice", Object.keys(past.planNotice).length === 0, JSON.stringify(past.planNotice));
+
+    await db`update goals.goals set plan_seen = ${closed}::date where id = ${goal}`;
+    const seen = await loadDay(today);
+    assert("once plan_seen reaches the closed month the notice is gone", seen.planNotice[goal] === null, JSON.stringify(seen.planNotice[goal]));
+
+    await loadDay(today);
+    const start = wireCalls.length;
+    const { overlap } = await withOverlap(() => loadDay(today));
+    reportRun("plan-read", wireCalls.slice(start), true, overlap);
+  } finally {
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
     }
     await db.end();
   }
