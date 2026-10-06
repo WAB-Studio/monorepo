@@ -477,3 +477,35 @@ test("a goal that measures nothing: a sub-task under another person's parent is 
     await sql`delete from goals.goals where id = ${foreignGoal.id} and user_id = ${member.id}`;
   }
 });
+
+test("createGoal: an empty name and a malformed horizon are refused with their own keys and write no goal", async () => {
+  const plan = await import("@/app/actions/plan");
+  const named = async () =>
+    (await sql`select count(*)::int as n from goals.goals where name = 'RP-11 horizonte roto'`)[0].n;
+
+  assert.deepEqual(await plan.createGoal({ name: "   ", horizon: `${monthFrom(today, 2)}-01` }), {
+    ok: false,
+    error: "plan.errors.nameEmpty",
+  });
+  assert.deepEqual(await plan.createGoal({ name: "RP-11 horizonte roto", horizon: "no-es-fecha" }), {
+    ok: false,
+    error: "plan.errors.horizonInvalid",
+  });
+
+  assert.equal(await named(), 0);
+});
+
+test("deleteOneOff: a one-off carrying its own fact is refused as oneOffHasFact, and the row and its fact stay", async () => {
+  const id = await created({ name: "RP-22 borrar con su hecho", day: today });
+  const done = await call("completeOneOff", { oneOffId: id });
+  assert.equal(done.ok, true, JSON.stringify(done));
+  assert.equal(await factsOf(id), 1);
+
+  const refused = await call("deleteOneOff", { oneOffId: id });
+  assert.deepEqual(refused, { ok: false, error: "day.errors.oneOffHasFact" });
+
+  const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from goals.one_offs where id = ${id}`;
+  assert.equal(n, 1);
+  assert.equal(await factsOf(id), 1);
+  await sql`delete from goals.one_offs where id = ${id}`;
+});

@@ -1410,6 +1410,24 @@ async function runMain(): Promise<void> {
   await runPlanMonthsCheck();
   await runMetasOverlapCheck();
 
+  // The commitment that reads a source names it, by the catalogue's own label
+  // key; one that reads nothing names none.
+  const catalogue = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const [source] = await catalogue<{ label_key: string }[]>`
+    select label_key from goals.evidence_sources where key = 'reading_lookups'`;
+  await catalogue.end();
+  const byKind = (kind: "evidence" | "quantity") => cold.commitments.filter((c) => c.satisfiedBy.kind === kind);
+  assert(
+    "a commitment satisfied by evidence carries its source's label key",
+    byKind("evidence").length > 0 && byKind("evidence").every((c) => c.sourceLabelKey === source.label_key),
+    `evidence: ${JSON.stringify(byKind("evidence").map((c) => c.sourceLabelKey))}, catalogue says ${source.label_key}`,
+  );
+  assert(
+    "a commitment that reads no source carries no label key",
+    byKind("quantity").length > 0 && byKind("quantity").every((c) => c.sourceLabelKey === null),
+    `quantity: ${JSON.stringify(byKind("quantity").map((c) => c.sourceLabelKey))}`,
+  );
+
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
   process.exit(failed ? 1 : 0);
