@@ -1,7 +1,13 @@
+import type { MessageKey } from "@/i18n/translator";
 import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
 import { dayWords } from "@/lib/day/day-words";
 
 export type DayNames = { weekdays: string[]; months: string[] };
+
+type Translate = (key: MessageKey, values: Record<string, string | number>) => string;
+
+// A phrase that has a `…Far` twin in the catalogue.
+export type DayPhraseKey = MessageKey extends infer K ? (K extends `${infer Base}Far` ? Base : never) : never;
 
 // The parts a phrase names a day with: `far` says the month is in them, so the
 // caller reads the `…Far` catalogue key.
@@ -20,8 +26,8 @@ export function farDayParts(day: string, today: string, names: DayNames) {
 // `key` names the phrase without its month; a day outside the week of `today`
 // reads `${key}Far` instead.
 export function dayPhrase(
-  translate: (key: string, values: Record<string, string | number>) => string,
-  key: string,
+  translate: Translate,
+  key: DayPhraseKey,
   day: string,
   today: string,
   names: DayNames,
@@ -34,7 +40,7 @@ export function dayPhrase(
 // Hoy's «terminó» line for a goal whose last day was `lastDay`: «ayer» the day
 // after, the named day later, with its month once it falls outside the week.
 export function endedPhrase(
-  translate: (key: string, values: Record<string, string | number>) => string,
+  translate: Translate,
   goal: string,
   lastDay: string,
   today: string,

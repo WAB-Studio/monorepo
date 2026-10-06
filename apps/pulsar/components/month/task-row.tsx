@@ -10,6 +10,7 @@ import { completeOneOff } from "@/app/actions/one-offs";
 import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
 import { ShiftSheet, type ShiftSheetProps } from "@/components/month/shift-sheet";
 import { Button, Flex, Mark, Panel, Row, Text } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type TaskRowProps = {
   oneOffId: string;
@@ -45,10 +46,10 @@ export function TaskRow({
   const t = useTranslations();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  function run(act: () => Promise<{ ok: boolean; error?: string }>) {
+  function run(act: () => Promise<{ ok: boolean; error?: MessageKey }>) {
     if (pending) return;
     setError(null);
     startTransition(() => {

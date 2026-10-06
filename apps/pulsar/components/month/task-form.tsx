@@ -9,11 +9,12 @@ import { createOneOff } from "@/app/actions/one-offs";
 import { isTimeUnit, formatQuantity, type TimeWords } from "@/lib/units/time";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { Button, Chip, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const WHOLE = /^\d+$/;
 
 // The shared one-off schema speaks Hoy's field; a month task names its own.
-function taskError(key: string): string {
+function taskError(key: MessageKey): MessageKey {
   return key === "day.errors.oneOffNameEmpty" ? "month.task.nameEmpty" : key;
 }
 
@@ -46,7 +47,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
   const [minutes, setMinutes] = useState("");
   const [single, setSingle] = useState("");
   const [withChildren, setWithChildren] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   const timed = isTimeUnit(unit);
   const measured = unit !== null;
@@ -55,7 +56,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
 
   // Minutes (or the unit's own count) typed so far; null while blank, NaN for
   // a value that is not a whole number, a message key for minutes past 59.
-  function typedAmount(): number | string | null {
+  function typedAmount(): number | MessageKey | null {
     if (!asksAmount) return null;
     if (!timed) {
       const text = single.trim();
@@ -99,7 +100,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
         : { name, day: null, goalId, plannedMonth: month, estimate },
     );
     if (!parsed.success) {
-      setError(taskError(parsed.error.issues[0].message));
+      setError(taskError(messageKey(parsed.error.issues[0].message)));
       return;
     }
 

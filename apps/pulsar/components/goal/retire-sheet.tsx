@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { retireCommitment } from "@/app/actions/plan";
 import { Button, Row, Sheet, SheetActions, Text } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type RetireSheetProps = {
   open: boolean;
@@ -32,7 +33,7 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   const description =
     factDayCount > 0

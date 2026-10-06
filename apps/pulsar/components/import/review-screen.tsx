@@ -32,6 +32,7 @@ import {
   SheetActions,
   Text,
 } from "@/components/ui";
+import { messageKey } from "@/i18n/translator";
 
 type Goal = ImportDraft["goals"][number];
 type Commitment = Goal["commitments"][number];
@@ -227,7 +228,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       case "import.errors.quantityNoMeasure":
         return t("import.review.blocked.quantityNoMeasure");
       default:
-        return t(key);
+        return t(messageKey(key));
     }
   }
 
@@ -523,7 +524,7 @@ function AmountSheet({
     }
     const parsed = (editing.schema === "month" ? monthAmount : taskEstimate).safeParse(typed);
     if (!parsed.success) {
-      setError(t(parsed.error.issues[0].message));
+      setError(t(messageKey(parsed.error.issues[0].message)));
       return;
     }
     onSave(typed);

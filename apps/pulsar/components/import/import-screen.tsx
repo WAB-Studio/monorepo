@@ -7,6 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { readSource, saveDraft } from "@/lib/import/draft-store";
 import type { ImportDraft } from "@/lib/import/draft";
 import { Button, CodeBlock, FilePick, Flex, Notice, Page, SectionLabel, Text, TextArea } from "@/components/ui";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -25,7 +26,7 @@ const KNOWN_ERRORS = new Set([
 
 type Failure =
   | { kind: "templateLine"; line: number; expected: string; text: string }
-  | { kind: "key"; key: string; values?: Record<string, string> };
+  | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
 const subscribeNothing = () => () => {};
 
@@ -102,7 +103,7 @@ export function ImportScreen() {
           text: source.split("\n")[body.line - 1] ?? "",
         });
       } else if (body?.error && KNOWN_ERRORS.has(body.error)) {
-        fail({ kind: "key", key: body.error });
+        fail({ kind: "key", key: messageKey(body.error) });
       } else {
         fail({ kind: "key", key: "import.errors.modelFailed" });
       }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { type Translator } from "@/i18n/translator";
 
 import {
   ArchiveGoalAction,
@@ -38,7 +39,7 @@ import {
   Text,
 } from "@/components/ui";
 
-import { CommitmentList, countWord, type Translator } from "./commitment-list";
+import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";

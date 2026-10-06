@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { renameGoal } from "@/app/actions/plan";
 import { renameGoalSchema } from "@/lib/validation/plan";
 import { Button, Field, Sheet, SheetActions, Text } from "@/components/ui";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type RenameGoalActionProps = {
   goalId: string;
@@ -29,7 +30,7 @@ export function RenameGoalAction({ goalId, name, variant = "ghost" }: RenameGoal
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(name);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   function openSheet() {
     setValue(name);
@@ -42,7 +43,7 @@ export function RenameGoalAction({ goalId, name, variant = "ghost" }: RenameGoal
 
     const parsed = renameGoalSchema.safeParse({ goalId, name: value });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      setError(messageKey(parsed.error.issues[0].message));
       return;
     }
 

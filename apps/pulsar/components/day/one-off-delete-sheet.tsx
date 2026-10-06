@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { deleteOneOff } from "@/app/actions/one-offs";
 import { Button, Sheet, SheetActions, Text } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type OneOffDeleteSheetProps = {
   open: boolean;
@@ -27,7 +28,7 @@ export function OneOffDeleteSheet({ open, onOpenChange, oneOffId, name }: OneOff
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   async function handleDelete() {
     if (pending) return;

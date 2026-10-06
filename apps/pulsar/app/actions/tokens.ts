@@ -12,11 +12,12 @@ import {
   type CreateTokenInput,
   type RevokeTokenInput,
 } from "@/lib/validation/token";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type CreateAccessTokenResult =
   | { ok: true; id: string; key: string; hint: string }
-  | { ok: false; error: string };
-export type RevokeAccessTokenResult = { ok: true } | { ok: false; error: string };
+  | { ok: false; error: MessageKey };
+export type RevokeAccessTokenResult = { ok: true } | { ok: false; error: MessageKey };
 
 class NamedError extends Error {}
 
@@ -30,7 +31,7 @@ class NamedError extends Error {}
  */
 export async function createAccessToken(input: CreateTokenInput): Promise<CreateAccessTokenResult> {
   const parsed = createTokenSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "connections.errors.signedOut" };
@@ -48,7 +49,7 @@ export async function createAccessToken(input: CreateTokenInput): Promise<Create
     revalidatePath("/conexiones");
     return { ok: true, ...issued };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 }
@@ -60,7 +61,7 @@ export async function createAccessToken(input: CreateTokenInput): Promise<Create
  */
 export async function revokeAccessToken(input: RevokeTokenInput): Promise<RevokeAccessTokenResult> {
   const parsed = revokeTokenSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "connections.errors.signedOut" };

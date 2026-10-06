@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
+import { type Translator } from "@/i18n/translator";
 import { Flex, IconButton, Page, ScreenHeader, Text } from "@/components/ui";
 import { dayPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref } from "@/lib/day/week-href";
@@ -14,7 +15,6 @@ import { EndedLine } from "./ended-line";
 import { endedLastDay } from "./week-progress";
 import { WeekTableFace } from "./week-table-face";
 
-type Translate = Awaited<ReturnType<typeof getTranslations>>;
 
 // The day number alone when both ends of the range share a month
 // (`Semana.dc.html`'s own "Del 21 al 27"), the month's short name added where
@@ -25,7 +25,7 @@ function formatRangeEnd(day: string, monthNames: string[], withMonth: boolean): 
   return withMonth ? `${dayNumber} ${monthNames[Number(month) - 1]}` : dayNumber;
 }
 
-function formatWeekRange(start: string, end: string, t: Translate): string {
+function formatWeekRange(start: string, end: string, t: Translator): string {
   const monthNames = t.raw("week.monthShort") as string[];
   const sameMonth = start.slice(0, 7) === end.slice(0, 7);
   return t("week.range", {
@@ -35,7 +35,7 @@ function formatWeekRange(start: string, end: string, t: Translate): string {
 }
 
 // The week's distance from today, said the way `SemanaPasada.dc.html` heads it.
-function eyebrowFor(monday: string, thisMonday: string, firstMonday: string | null, t: Translate): string {
+function eyebrowFor(monday: string, thisMonday: string, firstMonday: string | null, t: Translator): string {
   if (monday === thisMonday) return t("week.eyebrow.this");
   const month = (t.raw("day.monthLong") as string[])[Number(monday.slice(5, 7)) - 1];
   if (monday === firstMonday) return t("week.eyebrow.first", { month });

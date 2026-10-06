@@ -11,6 +11,7 @@ import { useTimeWords } from "@/components/ui/figure";
 import { Mark, Row, Text, type MarkState } from "@/components/ui";
 
 import { QuantitySheet } from "./quantity-sheet";
+import { type MessageKey } from "@/i18n/translator";
 
 export type DayRowKind = "tap" | "quantity" | "evidence";
 
@@ -92,7 +93,7 @@ export function DayRow({
   const t = useTranslations();
   const words = useTimeWords();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const tappable = kind !== "evidence";
