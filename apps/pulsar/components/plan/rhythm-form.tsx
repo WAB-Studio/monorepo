@@ -9,6 +9,7 @@ import { Button, Chip, ChipRow, Field, SheetActions, Text } from "@/components/u
 import { useTimeWords } from "@/components/ui/figure";
 import { daysBetween } from "@/lib/day/weeks";
 import { fillPlan, type PlanInput } from "@/lib/plan/roadmap";
+import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import { formatQuantity, isTimeUnit, parseTime } from "@/lib/units/time";
 import { setRhythmSchema } from "@/lib/validation/rhythm";
@@ -17,8 +18,6 @@ import { messageKey } from "@/i18n/translator";
 
 // Minutes a month: the three offers a time measure shows.
 const OFFERS = [480, 720, 1200];
-
-const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
 /**
  * `RoadmapSinRitmo`'s field group (RP-50), shared by the first rhythm and by
@@ -71,12 +70,12 @@ export function RhythmForm({
   const checked = setRhythmSchema.safeParse({ goalId, amount: amount ?? Number.NaN });
   const filled = checked.success ? fillPlan({ ...plan, rhythm: amount }) : null;
   const end = filled?.end ?? null;
-  const total = filled
-    ? [...filled.months.flatMap((month) => month.items), ...filled.unplaced].reduce(
-        (sum, item) => sum + item.hours,
-        0,
-      )
-    : 0;
+  // A task split across months sits in each of them: count it once.
+  const hoursOf = new Map<string, number>();
+  for (const item of filled ? [...filled.months.flatMap((month) => month.items), ...filled.unplaced] : []) {
+    hoursOf.set(item.task.id, item.hours);
+  }
+  const total = [...hoursOf.values()].reduce((sum, hours) => sum + hours, 0);
 
   let hint: string | null = null;
   if (amount !== null && end !== null && filled) {
@@ -97,7 +96,7 @@ export function RhythmForm({
       hint = t("roadmap.sinRitmo.preview", {
         hours: formatQuantity(amount, unit, words),
         total: formatQuantity(total, unit, words),
-        month: monthFormat.format(new Date(`${monthOf(end)}T12:00:00Z`)),
+        month: monthName(monthOf(end), String(new Date().getFullYear())),
       });
     }
   }

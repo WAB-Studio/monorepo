@@ -220,6 +220,41 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("a task that starts inside the span reads its part in its month; only what falls after the end sits under «después de tu final», and opens its sheet", async ({ page, db, personId }) => {
+      // Two months of 8 h, then a 20 h task after a 6 h one: 2 h here, 8 h next, 10 h past the end.
+      const goalId = await seedGoal(db, personId, 480, m2);
+      await seedTasks(db, personId, goalId, [["Primera", 360], ["Larga", 1200]]);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        const first = section(page, `${name(m0)} · en curso`);
+        await expect(first.getByText(`Empieza aquí con 2 h y sigue en ${name(m1)}.`)).toBeVisible();
+        const second = section(page, name(m1));
+        await expect(second.getByText("Larga", { exact: true })).toBeVisible();
+        await expect(second.getByText("8 de 20 h", { exact: true })).toBeVisible();
+        const past = section(page, "después de tu final");
+        await expect(past.getByText("1 tarea · 10 h", { exact: true })).toBeVisible();
+        await past.getByText("Larga", { exact: true }).click();
+        await expect(page.getByRole("dialog").getByLabel("Nombre")).toHaveValue("Larga");
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("a task with no estimate reads «sin estimar» as its trailing", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 480, `${Number(thisYear) + 1}-${today.slice(5, 7)}-01`);
+      await seedTasks(db, personId, goalId, [["Con cálculo", 60]]);
+      await db`
+        insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan)
+        values (${personId}, ${goalId}, 'Sin cálculo', null, 9, true)
+      `;
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await expect(page.getByText("sin estimar", { exact: true })).toHaveCount(1);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("«Subir el ritmo» opens the rhythm sheet prefilled with the rhythm that meets the end", async ({ page, db, personId }) => {
       const late = await seedLate();
       const goalId = await seedGoal(db, personId, 480, late.horizon);

@@ -10,6 +10,7 @@
     "startsHere": "Empieza aquí con {hours} y sigue en {month}.",
     "comesFrom": "Viene de {month}.",
     "part": "{part} de {total}",
+    "unestimated": "sin estimar",
     "fixedIn": "Fijada en {month}",
     "range": "{from} a {to}",
     "summary": "{count, plural, one {# tarea} other {# tareas}} · {hours}",

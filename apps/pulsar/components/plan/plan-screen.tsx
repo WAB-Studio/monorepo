@@ -118,7 +118,13 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
                   <div key={item.task.id}>
                     <Flex justify="between" gap="3" align="center" py="3">
                       <Text variant="name">{item.task.name}</Text>
-                      <Figure variant="meta" value={item.hours} unit={unit} />
+                      {item.task.estimate === null && item.children.length === 0 ? (
+                        <Text variant="meta" tone="muted">
+                          {t("roadmap.plan.unestimated")}
+                        </Text>
+                      ) : (
+                        <Figure variant="meta" value={item.hours} unit={unit} />
+                      )}
                     </Flex>
                     <Separator />
                   </div>
