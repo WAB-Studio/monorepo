@@ -2,10 +2,10 @@
 // `shift-actions.ts` drives `acceptShift`: the action imported as a plain
 // async function, `server-only`, `next/headers` and `next/cache` stubbed before
 // the first `@/` import, the cookie `harness:mint-session` left standing as the
-// session, and the pool's wire read for the statement count. "Today" is pinned
-// to 2026-09-30 by stubbing `@/lib/zone`: the template's example plans from
-// 2026-10 on. Rows are read back through the pooler, and as a second person
-// under the `authenticated` role.
+// session, and the pool's wire read for the statement count. Every date is
+// built from the real `todayInZone()`: the template's example plans from this
+// month to twelve months out, so the suite never goes stale. Rows are read back
+// through the pooler, and as a second person under the `authenticated` role.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
@@ -13,8 +13,6 @@ import { resolve } from "node:path";
 import { after, before, test } from "node:test";
 
 import postgres from "postgres";
-
-const TODAY = "2026-09-30";
 
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
@@ -61,10 +59,6 @@ function installStubs(cookies: StoredCookie[]): void {
     if (request === "next/cache") {
       return { revalidatePath: (path: string) => void revalidated.push(path) };
     }
-    if (request === "@/lib/zone") {
-      const real = originalLoad(request, parent, isMain) as Record<string, unknown>;
-      return { ...real, todayInZone: () => TODAY };
-    }
     // `db/client.ts` is the only `@/` importer of `postgres` before any test
     // body runs; its pool is the one every statement of the action leaves on.
     if (request === "postgres") {
@@ -83,6 +77,7 @@ function installStubs(cookies: StoredCookie[]): void {
 }
 
 let confirmImport: typeof import("@/app/actions/import").confirmImport;
+let todayInZone: typeof import("@/lib/zone").todayInZone;
 let parseTemplate: typeof import("@/lib/import/template").parseTemplate;
 type Draft = import("@/lib/import/draft").ImportDraft;
 
@@ -96,30 +91,56 @@ const goalIds: string[] = [];
 let personId: string;
 let otherId: string;
 
-// `docs/pulsar/PLANTILLA.md`'s example, verbatim.
-const EXAMPLE = `pulsar · plantilla 1
+// Calendar helpers on `YYYY-MM` and `YYYY-MM-DD` strings, by midday UTC.
+function addMonths(month: string, delta: number): string {
+  const [year, m] = month.split("-").map(Number);
+  const index = year * 12 + (m - 1) + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
+function shiftDay(day: string, delta: number): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
+}
+
+let TODAY: string;
+// This month and the months the fixtures name, all relative to `TODAY`.
+let M0: string;
+let M1: string;
+let M2: string;
+let M3: string;
+let M6: string;
+let M12: string;
+let M14: string;
+let EXAMPLE: string;
+
+// `docs/pulsar/PLANTILLA.md`'s example, its dates moved to follow today.
+function exampleText(): string {
+  return `pulsar · plantilla 1
 
 # IA aplicada
-horizonte: 2027-10-01
+horizonte: ${M12}-01
 medida: horas de estudio · minutos
 
 ## Fases
-- 2026-10-01 a 2026-12-31 · Evals y harness
+- ${M0}-01 a ${shiftDay(`${M3}-01`, -1)} · Evals y harness
 
 ## Meses
-- 2026-10 · 12 h
-- 2026-11 · 20 h
+- ${M0} · 12 h
+- ${M1} · 20 h
 
 ## Compromisos
 - Tema técnico · martes y jueves · 2 h
 - Inglés pasivo · cada día · toque
 
 ## Tareas
-- 2026-10 · 4 h · Leer AI Engineering cap. 1–4
-- 2026-10 · Tutor
+- ${M0} · 4 h · Leer AI Engineering cap. 1–4
+- ${M0} · Tutor
   - 1 h · Elegir tutor
   - 6 h · Sesiones 1–4
 `;
+}
 
 function draftOf(text: string): Draft {
   const parsed = parseTemplate(text);
@@ -132,17 +153,17 @@ function fourGoals(): string {
   const goals = [1, 2, 3, 4].map(
     (n) => `
 # RP-37 fixture: meta ${n}
-horizonte: 2027-10-01
+horizonte: ${M12}-01
 medida: horas de estudio · minutos
 
 ## Fases
-- 2026-10-01 a 2026-12-31 · Primera
-- 2027-01-01 a 2027-03-31 · Segunda
+- ${M0}-01 a ${shiftDay(`${M3}-01`, -1)} · Primera
+- ${M3}-01 a ${shiftDay(`${M6}-01`, -1)} · Segunda
 
 ## Meses
-- 2026-10 · 12 h
-- 2026-11 · 20 h
-- 2026-12 · 1,5 h
+- ${M0} · 12 h
+- ${M1} · 20 h
+- ${M2} · 1,5 h
 
 ## Compromisos
 - Tema técnico ${n} · martes y jueves · 2 h
@@ -150,13 +171,13 @@ medida: horas de estudio · minutos
 - Repaso ${n} · 3 veces por semana · 30 min
 
 ## Tareas
-- 2026-10 · 4 h · Leer ${n}
-- 2026-10 · 2 h · Escribir ${n}
-- 2026-11 · Tutor ${n}
+- ${M0} · 4 h · Leer ${n}
+- ${M0} · 2 h · Escribir ${n}
+- ${M1} · Tutor ${n}
   - 1 h · Elegir
   - 6 h · Sesiones
   - 2 h · Cierre
-- 2026-11 · Otro ${n}
+- ${M1} · Otro ${n}
   - 1 h · Uno
 `,
   );
@@ -198,6 +219,11 @@ before(async () => {
   installStubs(loadCookies());
   ({ confirmImport } = await import("@/app/actions/import"));
   ({ parseTemplate } = await import("@/lib/import/template"));
+  ({ todayInZone } = await import("@/lib/zone"));
+  TODAY = todayInZone();
+  M0 = TODAY.slice(0, 7);
+  [M1, M2, M3, M6, M12, M14] = [1, 2, 3, 6, 12, 14].map((n) => addMonths(M0, n));
+  EXAMPLE = exampleText();
   const { getPerson } = await import("@/lib/session");
   const person = await getPerson();
   if (!person) throw new Error("no settled session — mint-session.ts's cookie did not verify");
@@ -232,7 +258,7 @@ test("confirmImport: the template's example writes its goal and every row reads 
   assert.deepEqual({ ...goal }, {
     user_id: personId,
     name: "IA aplicada",
-    horizon: "2027-10-01",
+    horizon: `${M12}-01`,
     measure_name: "horas de estudio",
     measure_unit: "minutos",
     archived_at: null,
@@ -240,14 +266,14 @@ test("confirmImport: the template's example writes its goal and every row reads 
 
   const phases = await sql`
     select aim, starts_on::text as s, ends_on::text as e from goals.phases where goal_id = ${goalId}`;
-  assert.deepEqual(phases.map((p) => ({ ...p })), [{ aim: "Evals y harness", s: "2026-10-01", e: "2026-12-31" }]);
+  assert.deepEqual(phases.map((p) => ({ ...p })), [{ aim: "Evals y harness", s: `${M0}-01`, e: shiftDay(`${M3}-01`, -1) }]);
 
   // Minutes (RP-35): 12 h and 20 h.
   const months = await sql`
     select month::text as month, amount from goals.month_budgets where goal_id = ${goalId} order by month`;
   assert.deepEqual(months.map((m) => ({ ...m })), [
-    { month: "2026-10-01", amount: 720 },
-    { month: "2026-11-01", amount: 1200 },
+    { month: `${M0}-01`, amount: 720 },
+    { month: `${M1}-01`, amount: 1200 },
   ]);
 
   const commitments = await sql`
@@ -266,9 +292,9 @@ test("confirmImport: the template's example writes its goal and every row reads 
     tasks.map((t) => [t.name, t.parent_id === null ? null : t.parent_id === tutor.id ? "Tutor" : "?", t.estimate, t.planned_month, t.day]),
     [
       ["Elegir tutor", "Tutor", 60, null, null],
-      ["Leer AI Engineering cap. 1–4", null, 240, "2026-10-01", null],
+      ["Leer AI Engineering cap. 1–4", null, 240, `${M0}-01`, null],
       ["Sesiones 1–4", "Tutor", 360, null, null],
-      ["Tutor", null, null, "2026-10-01", null],
+      ["Tutor", null, null, `${M0}-01`, null],
     ],
   );
 });
@@ -292,14 +318,14 @@ test("confirmImport: a four-goal draft pays the same number of statements as the
 });
 
 test("confirmImport: a month outside the goal's span is refused with its key and path, and writes nothing", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: fuera de plazo").replace("- 2026-11 · 20 h", "- 2028-01 · 20 h"));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: fuera de plazo").replace(`- ${M1} · 20 h`, `- ${M14} · 20 h`));
   const result = await confirmImport(draft);
   assert.deepEqual(result, { ok: false, error: "import.errors.monthAfterEnd", at: "goals.0.months.1" });
   assert.equal(await countGoals("RP-37 fixture: fuera de plazo"), 0);
 });
 
 test("confirmImport: a goal whose end already passed is refused whole", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: pasada").replace("2027-10-01", "2026-09-30"));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: pasada").replace(`${M12}-01`, TODAY));
   const result = await confirmImport(draft);
   assert.deepEqual(result, { ok: false, error: "import.errors.horizonPast", at: "goals.0.horizon" });
   assert.equal(await countGoals("RP-37 fixture: pasada"), 0);
@@ -350,7 +376,17 @@ test("confirmImport: a commitment the table refuses leaves no goal behind", asyn
   // A daily commitment with a count passes the form's schema and meets
   // `commitments_n_for_counted_kinds` at the commitments insert, after the goals.
   draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], cadenceN: 3 };
-  await assert.rejects(() => confirmImport(draft));
+  // The table's own refusal, not any throw: a check violation naming the constraint.
+  const { pgCode } = await import("@/lib/db-error");
+  await assert.rejects(
+    () => confirmImport(draft),
+    (error: unknown) => {
+      assert.equal(pgCode(error), "23514");
+      const cause = (error as { cause?: { constraint_name?: string } }).cause;
+      assert.equal(cause?.constraint_name, "commitments_n_for_counted_kinds");
+      return true;
+    },
+  );
   assert.equal(await countGoals(name), 0);
 });
 

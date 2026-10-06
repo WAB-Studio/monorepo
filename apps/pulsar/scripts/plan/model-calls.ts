@@ -6,7 +6,7 @@
 // The pooler reads rows back and deletes every call the file created.
 import assert from "node:assert/strict";
 import Module from "node:module";
-import { after, before, test } from "node:test";
+import { after, before, beforeEach, test } from "node:test";
 
 import postgres from "postgres";
 
@@ -85,25 +85,56 @@ after(async () => {
   await sql.end();
 });
 
+// Every test starts from zero calls for both persons and ends owning only the
+// rows it claimed, so none depends on what an earlier one left.
+beforeEach(async () => {
+  await sql`delete from goals.model_calls where user_id in ${sql([first.id, second.id])} and model = 'RNP-13 fixture'`;
+  claimed.length = 0;
+});
+
+async function claim(who: Person, source: "paste" | "file" = "paste"): Promise<{ id: string } | null> {
+  current = who;
+  const call = await claimModelCall("RNP-13 fixture", source);
+  if (call) claimed.push(call.id);
+  return call;
+}
+
 test("claimModelCall: the cap is 10; ten claims land and the eleventh answers null", async () => {
   assert.equal(cap, 10);
-  current = first;
-  for (let i = 0; i < 10; i++) {
-    const call = await claimModelCall("RNP-13 fixture", "paste");
-    assert.ok(call, `claim ${i + 1} landed`);
-    claimed.push(call.id);
-  }
-  assert.equal(await claimModelCall("RNP-13 fixture", "paste"), null);
+  for (let i = 0; i < 10; i++) assert.ok(await claim(first), `claim ${i + 1} landed`);
+  assert.equal(await claim(first), null);
 });
 
 test("claimModelCall: a second person still claims after the first hit the cap", async () => {
-  current = second;
-  const call = await claimModelCall("RNP-13 fixture", "file");
-  assert.ok(call);
-  claimed.push(call.id);
+  for (let i = 0; i < 10; i++) await claim(first);
+  assert.equal(await claim(first), null);
+  assert.ok(await claim(second, "file"));
+});
+
+test("claimModelCall: a call dated yesterday does not count against today's cap (RNP-13, per day)", async () => {
+  const yesterday = new Date(`${today}T12:00:00Z`);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const yesterdayDay = yesterday.toISOString().slice(0, 10);
+  // `day` is not insertable by the app's role; the pooler plants the past.
+  const planted = await sql<{ id: string }[]>`
+    insert into goals.model_calls (user_id, model, source, day)
+    select ${first.id}, 'RNP-13 fixture', 'paste', ${yesterdayDay}::date from generate_series(1, 10)
+    returning id`;
+  claimed.push(...planted.map((row) => row.id));
+  assert.equal(planted.length, 10);
+
+  const todays = await claim(first);
+  assert.ok(todays, "ten calls from yesterday leave today's cap untouched");
+  const [row] = await sql<{ day: string }[]>`select day::text as day from goals.model_calls where id = ${todays.id}`;
+  assert.equal(row.day, today);
+  // And today's own count still stops at the cap: nine more land, the next does not.
+  for (let i = 0; i < 9; i++) assert.ok(await claim(first), `today's claim ${i + 2} landed`);
+  assert.equal(await claim(first), null);
 });
 
 test("claimModelCall: rows read back under their owner, the zone's day, source and no outcome", async () => {
+  for (let i = 0; i < 10; i++) await claim(first);
+  await claim(second, "file");
   const rows = await sql<{ userId: string; day: string; source: string; outcome: string | null }[]>`
     select user_id as "userId", day::text as day, source, outcome
     from goals.model_calls where id in ${sql(claimed)}`;
@@ -118,17 +149,21 @@ test("claimModelCall: rows read back under their owner, the zone's day, source a
 });
 
 test("settleModelCall: writes the tokens and the outcome on the person's own row", async () => {
-  current = first;
-  assert.equal(await settleModelCall(claimed[0], { inputTokens: 120, outputTokens: 45, outcome: "ok" }), true);
+  const call = await claim(first);
+  assert.ok(call);
+  assert.equal(await settleModelCall(call.id, { inputTokens: 120, outputTokens: 45, outcome: "ok" }), true);
   const [row] = await sql<{ i: number; o: number; outcome: string }[]>`
-    select input_tokens as i, output_tokens as o, outcome from goals.model_calls where id = ${claimed[0]}`;
+    select input_tokens as i, output_tokens as o, outcome from goals.model_calls where id = ${call.id}`;
   assert.deepEqual(row, { i: 120, o: 45, outcome: "ok" });
 });
 
 test("settleModelCall: another person's settle of that row touches 0 rows", async () => {
+  const call = await claim(first);
+  assert.ok(call);
+  assert.equal(await settleModelCall(call.id, { inputTokens: 120, outputTokens: 45, outcome: "ok" }), true);
   current = second;
-  assert.equal(await settleModelCall(claimed[0], { inputTokens: 1, outputTokens: 2, outcome: "failed" }), false);
+  assert.equal(await settleModelCall(call.id, { inputTokens: 1, outputTokens: 2, outcome: "failed" }), false);
   const [row] = await sql<{ i: number; o: number; outcome: string }[]>`
-    select input_tokens as i, output_tokens as o, outcome from goals.model_calls where id = ${claimed[0]}`;
+    select input_tokens as i, output_tokens as o, outcome from goals.model_calls where id = ${call.id}`;
   assert.deepEqual(row, { i: 120, o: 45, outcome: "ok" });
 });
