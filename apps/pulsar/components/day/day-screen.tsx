@@ -19,6 +19,7 @@ import { EmptyDay } from "./empty-day";
 import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import { NewOneOff } from "./new-one-off";
+import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
 
 
@@ -324,6 +325,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const monthLines = (goal: (typeof goals)[number]) => {
     const line = loaded.monthLine[goal.id];
     const planned = line.planned as number;
+    const task = loaded.monthTask[goal.id];
     return (
       <>
         <Flex align="baseline" gap="2" wrap="wrap">
@@ -340,6 +342,15 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               threshold: 60,
             })}
           </Text>
+        ) : null}
+        {task ? (
+          <MonthTaskLine
+            key={task.id}
+            oneOffId={task.id}
+            name={task.name}
+            estimate={task.estimate}
+            unit={goal.measureUnit as string}
+          />
         ) : null}
       </>
     );

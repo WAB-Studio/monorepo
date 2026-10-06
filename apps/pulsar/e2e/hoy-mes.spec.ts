@@ -118,3 +118,101 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
+
+// `HoyTareaMes.dc.html` (module 177, RP-31): under «este mes» each goal's line
+// is followed by its next task of the month, its estimate and a mark that
+// completes it; the next one takes its place.
+test("Hoy draws the goal's next task of the month under its line, completes it, and draws none on a past day", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const today = todayInZone();
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const goalName = `Meta tarea ${stamp}`;
+  const bareName = `Meta tarea sin monto ${stamp}`;
+  const firstName = `Primera ${stamp}`;
+  const secondName = `Segunda ${stamp}`;
+  const bareTask = `Huérfana ${stamp}`;
+
+  const seedGoal = async (name: string, budget: number | null) => {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${name}, ${plusDays(90)}, 'minutos', 'minutos', now() - interval '40 days')
+      returning id
+    `;
+    if (budget !== null) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${monthStart}::date, ${budget})
+      `;
+    }
+    return goal.id;
+  };
+  const task = (goalId: string, name: string, estimate: number) => db`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${person.id}, ${goalId}, ${name}, ${monthStart}::date, ${estimate})
+  `;
+
+  const goalId = await seedGoal(goalName, 720);
+  await task(goalId, firstName, 240);
+  await task(goalId, secondName, 60);
+  const bareId = await seedGoal(bareName, null);
+  await task(bareId, bareTask, 30);
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    const mark = (name: string) =>
+      page.getByRole("button", { name: `Marcar hecha: ${name}` }).locator("visible=true");
+    // The task's own line: the mark's button, the name and the estimate at the end.
+    const line = (name: string) => mark(name).locator("xpath=..");
+
+    for (const size of [
+      { width: 360, height: 740 },
+      { width: 1280, height: 800 },
+    ]) {
+      await page.setViewportSize(size);
+      await page.goto("/");
+      await expect(page.locator("main")).toHaveCount(1);
+      await expect(mark(firstName)).toHaveCount(1);
+      await expect(line(firstName).getByText(firstName, { exact: true })).toBeVisible();
+      await expect(line(firstName).getByText("4 h", { exact: true })).toBeVisible();
+      // Only the next one of the goal, never the second.
+      await expect(mark(secondName)).toHaveCount(0);
+      // A goal with no amount draws no line and no task.
+      await expect(mark(bareTask)).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size.width);
+    }
+
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto("/");
+    const started = Date.now();
+    await mark(firstName).click();
+    await expect(mark(secondName)).toHaveCount(1, { timeout: 5000 });
+    expect(Date.now() - started).toBeLessThan(5000);
+    await expect(mark(firstName)).toHaveCount(0);
+    await expect(line(secondName).getByText("1 h", { exact: true })).toBeVisible();
+
+    await mark(secondName).click();
+    await expect(mark(secondName)).toHaveCount(0, { timeout: 5000 });
+    await expect(page.getByRole("button", { name: /^Marcar hecha: / })).toHaveCount(0);
+
+    // Never on a past day.
+    const [again] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${person.id}, ${goalId}, ${`Tercera ${stamp}`}, ${monthStart}::date, 240) returning id
+    `;
+    expect(again.id).toBeTruthy();
+    await page.goto("/");
+    await expect(mark(`Tercera ${stamp}`)).toHaveCount(1);
+    await page.goto(`/dia/${plusDays(-1)}`);
+    await expect(page.locator("main")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /^Marcar hecha: / })).toHaveCount(0);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
