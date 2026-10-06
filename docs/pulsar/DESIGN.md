@@ -908,6 +908,10 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   selected for a task that holds a month.
 - **`RoadmapFijar` picks the month with chips** (2026-10-06, decided by the orchestrator): «Fijarla en» opens a row of
   month chips, one selected, instead of a select; no select primitive exists in `components/ui`.
+- **The plan's notice on Hoy** (2026-10-06, decided by the orchestrator). A move under 7 days reads in days
+  (`RoadmapHoyMovidoDias`: «se movió 3 días», and no sentence about the rest running behind); from 7 days it reads in
+  whole weeks, rounded (`RoadmapHoyMovido`: «se movió 2 semanas»). With several goals the notices stack at the top of
+  Hoy, above the goal sections, each naming its goal. A move of 0 days draws none.
 - **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
   - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
     on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».

@@ -20,6 +20,7 @@ import { EvidenceNote } from "./evidence-note";
 import { NewOneOff } from "./new-one-off";
 import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
+import { PlanNotice } from "./plan-notice";
 
 
 // Goes through `Date` and back rather than subtracting on the string: a
@@ -410,6 +411,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             estimate={task.estimate}
             unit={goal.measureUnit ?? ""}
             parentName={task.parentName}
+            part={task.part}
             note={task.note}
             noteEyebrow={noteEyebrow(goal.id)}
           />
@@ -507,6 +509,28 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     </>
   );
 
+  const monthNames = t.raw("day.monthLong") as string[];
+  const notices = past
+    ? null
+    : goals.map((goal) => {
+        const notice = loaded.planNotice[goal.id];
+        if (!notice) return null;
+        const end = civilDateToDate(notice.end);
+        return (
+          <PlanNotice
+            key={goal.id}
+            goalId={goal.id}
+            goalName={goal.name}
+            unit={goal.measureUnit ?? ""}
+            notice={notice}
+            closedMonthName={monthNames[Number(notice.closedMonth.slice(5, 7)) - 1]}
+            nextMonthName={monthNames[Number(notice.closedMonth.slice(5, 7)) % 12]}
+            endDay={end.getUTCDate()}
+            endMonthName={monthNames[end.getUTCMonth()]}
+          />
+        );
+      });
+
   return (
     <Page width="full">
       {past ? (
@@ -540,7 +564,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <EvidenceNote text={past ? t("day.unreadableEvidencePast") : t("day.unreadableEvidence")} />
       ) : null}
 
-      <Split main={goalsMain} after={goalless} even={past} />
+      <Split main={<>{notices}{goalsMain}</>} after={goalless} even={past} />
     </Page>
   );
 }

@@ -29,6 +29,7 @@
     "seePlan": "Ver el plan",
     "dismiss": "Entendido",
     "next": "Siguiente del plan · {hours}",
+    "endDate": "{day} de {month}",
     "titleDays": "Tu plan de {goal} se movió {days, plural, one {# día} other {# días}}",
     "bodyShort": "{month} cerró con {done} de {amount}. Lo que faltó pasó a {next}. Ahora terminas el {date}."
   },
