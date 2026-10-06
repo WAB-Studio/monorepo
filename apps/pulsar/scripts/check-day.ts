@@ -2426,32 +2426,32 @@ async function runEndedThisWeekCheck(): Promise<void> {
     const ended = (await loadDay("2010-06-10")).endedThisWeek;
     const seeded = ended.filter((goal) => goal.name.startsWith("ended-week"));
     assert(
-      "endedThisWeek lists the goals whose last day fell this week, most recent first, with the last day",
+      "endedThisWeek lists the goals whose last day fell this week, in plan order, with the last day",
       JSON.stringify(seeded) ===
         JSON.stringify([
-          { id: tuesday, name: "ended-week last day tuesday", lastDay: "2010-06-08" },
           { id: monday, name: "ended-week last day monday", lastDay: "2010-06-07" },
+          { id: tuesday, name: "ended-week last day tuesday", lastDay: "2010-06-08" },
         ]),
       `endedThisWeek = ${JSON.stringify(seeded)}; the previous week's goal ${previousWeek} must be absent`,
     );
     const sunday = (await loadDay("2010-06-13")).endedThisWeek.filter((goal) => goal.name.startsWith("ended-week"));
     assert(
       "endedThisWeek on the Sunday holds the whole week's endings, the goal open on Thursday included",
-      sunday.length === 3 && sunday[0].lastDay === "2010-06-10",
+      sunday.length === 3 && sunday.some((goal) => goal.lastDay === "2010-06-10"),
       `endedThisWeek on Sunday = ${JSON.stringify(sunday)}`,
     );
 
     // A fixed week (Mon 2010-08-02): endings on Monday, Tuesday and Thursday
-    // read from its Friday, in horizon-descending order, and none from before.
+    // read from its Friday, in plan order, and none from before.
     const before = await seedGoal("fixed-week before", "2010-08-02");
     const fixedMon = await seedGoal("fixed-week mon", "2010-08-03");
     const fixedTue = await seedGoal("fixed-week tue", "2010-08-04");
     const fixedThu = await seedGoal("fixed-week thu", "2010-08-06");
     const fixed = (await loadDay("2010-08-06")).endedThisWeek.filter((goal) => goal.name.startsWith("fixed-week"));
     assert(
-      "endedThisWeek from a Friday holds the Thursday, Tuesday and Monday endings in horizon-descending order, none from the week before",
+      "endedThisWeek from a Friday holds the Thursday, Tuesday and Monday endings in plan order, none from the week before",
       JSON.stringify(fixed.map((goal) => [goal.id, goal.lastDay])) ===
-        JSON.stringify([[fixedThu, "2010-08-05"], [fixedTue, "2010-08-03"], [fixedMon, "2010-08-02"]]),
+        JSON.stringify([[fixedMon, "2010-08-02"], [fixedTue, "2010-08-03"], [fixedThu, "2010-08-05"]]),
       `endedThisWeek = ${JSON.stringify(fixed)}; the previous week's goal ${before} must be absent`,
     );
   } finally {

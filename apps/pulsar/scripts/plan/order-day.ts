@@ -217,3 +217,18 @@ test("loadDay: today's one-offs and a goal's commitments read in plan order, tie
     ["RP-47 hábito a", "RP-47 hábito b", "RP-47 hábito empate", "RP-47 hábito empate 2"],
   );
 });
+
+test("loadDay: the goals ended this week read in plan order, against their horizon order", async () => {
+  // Fixed week (Mon 2010-09-06) viewed on its Friday; the earlier ending holds the earlier plan slot,
+  // so `horizon desc` would flip the two.
+  await sql`
+    insert into goals.goals (id, user_id, name, horizon, position)
+    values (${id(5101)}, ${userId}, 'RP-47 terminada primera', '2010-09-07', ${base + 70}),
+           (${id(5102)}, ${userId}, 'RP-47 terminada segunda', '2010-09-09', ${base + 71})`;
+  goalIds.push(id(5101), id(5102));
+  const { loadDay } = await import("@/lib/queries/day");
+  const names = (await loadDay("2010-09-10")).endedThisWeek
+    .map((g) => g.name)
+    .filter((n) => n.startsWith("RP-47 terminada"));
+  assert.deepEqual(names, ["RP-47 terminada primera", "RP-47 terminada segunda"]);
+});
