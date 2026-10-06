@@ -142,6 +142,22 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("a goal with no rhythm draws no pin on any row, and its sheet still holds «Fijarla en» (RP-51)", async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const { goalId } = await seedGoal(db, person.id, stamp, null);
+      const name = `Tarea sin ritmo ${stamp}`;
+      await seedTask(db, person.id, goalId, name, 60, thisMonth);
+      const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/meses/${seg(thisMonth)}`);
+      try {
+        await expect(nameButton(page, name)).toBeVisible();
+        await expect(page.getByText("Fijada en")).toHaveCount(0);
+        await nameButton(page, name).click();
+        await expect(page.getByRole("dialog").getByRole("radio", { name: "Fijarla en" })).toHaveAttribute("aria-checked", "true");
+      } finally {
+        await context.close();
+      }
+    });
+
     test("a done task's sheet offers its name alone (RP-55)", async ({ person, browser, baseURL, db }) => {
       const stamp = Date.now();
       const { goalId } = await seedGoal(db, person.id, stamp, null);

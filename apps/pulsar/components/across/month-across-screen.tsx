@@ -98,6 +98,7 @@ export async function MonthAcrossScreen() {
       planMonth: planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null,
       months: task.parentId === null ? openMonths : [],
       canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),
+      fixedMonth: task.plannedMonth?.slice(0, 7) ?? null,
     });
 
     function item(entry: MonthAcrossItem) {
@@ -146,7 +147,7 @@ export async function MonthAcrossScreen() {
                   }
                 : undefined
             }
-            fixedMonth={task.plannedMonth?.slice(0, 7)}
+            fixedMonth={goal.plan.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined}
             sheet={sheetOf(task, children)}
           />
           {children.map((child) => (

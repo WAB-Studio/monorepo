@@ -107,8 +107,7 @@ test("the mark still completes in one tap and the name opens the task's sheet, n
   try {
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}/meses/${seg}`);
-    // The row's button also reads its pin: «Fijada en …».
-    await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+    await page.getByRole("button", { name, exact: true }).click();
     await expect(page.getByRole("dialog").getByRole("heading", { name })).toBeVisible();
     await expect(page.getByRole("dialog")).not.toContainText("¿Borrarla?");
     await page.keyboard.press("Escape");

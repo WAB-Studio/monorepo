@@ -35,7 +35,7 @@ export type TaskRowProps = {
   // RP-54: the hours this month holds of a task that runs over several; `from`
   // and `to` are the months it comes from and goes on in, "YYYY-MM" or null.
   part?: { part: number; hours: number; from: string | null; to: string | null };
-  // "YYYY-MM" the task is fixed to (RP-51).
+  // "YYYY-MM" the task is fixed to against a rhythm (RP-51); absent, no pin is drawn.
   fixedMonth?: string;
   // What the task's sheet reads besides the row's own props (RP-55).
   sheet: {
@@ -46,6 +46,8 @@ export type TaskRowProps = {
     planMonth: string | null;
     months: string[];
     canDelete: boolean;
+    // "YYYY-MM" the task holds, pinned against a plan or not.
+    fixedMonth: string | null;
   };
 };
 
@@ -214,7 +216,7 @@ export function TaskRow({
         name={name}
         estimate={sheet.estimate}
         unit={sheet.unit}
-        fixedMonth={fixedMonth ?? null}
+        fixedMonth={sheet.fixedMonth}
         planMonth={sheet.planMonth}
         months={sheet.months}
         done={done}

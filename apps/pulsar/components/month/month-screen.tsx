@@ -129,7 +129,10 @@ export async function MonthDetail({
     planMonth: goal.roadmap.state === "planned" ? (planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null) : null,
     months: task.parentId === null ? openMonths : [],
     canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),
+    fixedMonth: task.plannedMonth?.slice(0, 7) ?? null,
   });
+  // A pin means something only against a plan.
+  const pinOf = (task: Task) => (goal.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined);
 
   function item(entry: MonthItem) {
     const { task, children } = entry;
@@ -175,7 +178,7 @@ export async function MonthDetail({
           trailing={unit && owes > 0 ? say(owes) : undefined}
           note={task.note}
           noteEyebrow={noteEyebrow}
-          fixedMonth={task.plannedMonth?.slice(0, 7)}
+          fixedMonth={pinOf(task)}
           sheet={sheetOf(task, children)}
         />
         {children.map((child) => (

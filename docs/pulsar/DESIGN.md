@@ -902,6 +902,12 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - «Septiembre cerró con 6 h de 12 h» counts the estimates of the tasks done that month, never the measure reached:
     what is missing is exactly what moved.
   - A one-off with no goal is renamed from the same sheet: **RP-57**.
+- **A pin means something only against a plan** (2026-10-06, decided by the orchestrator). A row draws the pin and «Fijada en …»
+  only when its goal has a rhythm and the task holds a month. A goal with no rhythm draws none on any row: every task
+  of it has a month and pinning all of them says nothing. The task's sheet still shows «Mes» there, with «Fijarla en»
+  selected for a task that holds a month.
+- **`RoadmapFijar` picks the month with chips** (2026-10-06, decided by the orchestrator): «Fijarla en» opens a row of
+  month chips, one selected, instead of a select; no select primitive exists in `components/ui`.
 - **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
   - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
     on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
