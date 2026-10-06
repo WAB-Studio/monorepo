@@ -2,7 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { TaskRow, type TaskRowProps } from "@/components/month/task-row";
-import { Figure, Flex, Mark, Progress, Row, Section, Separator, Text } from "@/components/ui";
+import { Flex, Progress, Row, Section } from "@/components/ui";
 import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
@@ -32,16 +32,36 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
   const { roadmap } = goal;
   const lastMonth = monthOf(roadmap.lastDay);
 
-  const pastEnd = new Map<string, PlanItem>();
+  // A past-end task keeps the parts that fall inside the span in their month; only what
+  // falls after the end is listed under «después de tu final», once per task.
+  const pastEnd = new Map<string, PlanItem & { month: string }>();
   for (const month of roadmap.months) {
-    for (const item of month.items) if (item.pastEnd && !pastEnd.has(item.task.id)) pastEnd.set(item.task.id, item);
+    if (month.month <= lastMonth) continue;
+    for (const item of month.items) {
+      if (!item.pastEnd) continue;
+      const seen = pastEnd.get(item.task.id);
+      pastEnd.set(
+        item.task.id,
+        seen ? { ...seen, part: seen.part + item.part } : { ...item, month: month.month, from: null, to: null },
+      );
+    }
   }
   const months = roadmap.months
-    .map((month) => ({ ...month, items: month.items.filter((item) => !item.pastEnd) }))
+    .map((month) => ({
+      ...month,
+      items: month.items.filter((item) => !item.pastEnd || month.month <= lastMonth),
+    }))
     .filter((month) => month.items.length > 0 || month.month <= lastMonth);
 
   const openMonths = openMonthsOf(goal.plan);
   const pinned = goal.rhythm !== null;
+
+  function trailingOf(own: PlanItem["task"], kids: PlanItem["children"], part: number) {
+    if (!unit) return undefined;
+    if (part > 0) return say(part);
+    if (own.estimate === null && kids.length === 0) return t("roadmap.plan.unestimated");
+    return own.parentId !== null && own.estimate ? say(own.estimate) : undefined;
+  }
 
   function rowOf(item: PlanItem, month: string) {
     const { task, children } = item;
@@ -70,7 +90,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
           done={item.done}
           parent={parent}
           meta={item.carriedFrom !== null ? t("month.list.fromMonth", { month: monthName(item.carriedFrom, thisYear) }) : undefined}
-          trailing={unit && item.part > 0 ? say(item.part) : undefined}
+          trailing={trailingOf(task, children, item.part)}
           note={task.note}
           part={split ? { part: item.part, hours: item.hours, from: item.from, to: item.to } : undefined}
           fixedMonth={pinned ? task.plannedMonth?.slice(0, 7) : undefined}
@@ -84,7 +104,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
             factId={child.factId ?? null}
             done={child.doneOn !== null}
             child
-            trailing={unit && child.estimate ? say(child.estimate) : undefined}
+            trailing={trailingOf(child, [], 0)}
             note={child.note}
             sheet={sheetOf(child, [])}
           />
@@ -114,7 +134,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
   for (const month of rest) for (const item of month.items) restItems.set(item.task.id, item);
   const restHours = rest.reduce((total, month) => total + month.items.reduce((sum, item) => sum + item.part, 0), 0);
   const pastItems = [...pastEnd.values()];
-  const pastHours = pastItems.reduce((total, item) => total + item.hours, 0);
+  const pastHours = pastItems.reduce((total, item) => total + item.part, 0);
 
   return (
     <>
@@ -174,20 +194,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
             </Flex>
           }
         >
-          <div>
-            {pastItems.map((item) => (
-              <div key={item.task.id}>
-                <Flex align="center" justify="between" gap="3" py="3">
-                  <Flex align="center" gap="3">
-                    <Mark state="empty" dashed />
-                    <Text variant="name">{item.task.name}</Text>
-                  </Flex>
-                  {unit ? <Figure variant="meta" value={item.hours} unit={unit} /> : null}
-                </Flex>
-                <Separator />
-              </div>
-            ))}
-          </div>
+          <Flex direction="column">{pastItems.map((item) => rowOf(item, item.month))}</Flex>
         </Section>
       ) : null}
     </>

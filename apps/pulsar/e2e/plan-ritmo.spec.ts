@@ -108,6 +108,33 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("the hint counts a split task once and names the year when it is not this one", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, null);
+      await db`update goals.one_offs set estimate = 270 where goal_id = ${goalId} and name in ('Tarea 1', 'Tarea 2', 'Tarea 3')`;
+      await db`delete from goals.one_offs where goal_id = ${goalId} and name in ('Tarea 4', 'Tarea 5')`;
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByPlaceholder("otra").fill("1");
+        let end = monthOf(today);
+        for (let i = 0; i < 13; i++) end = nextMonth(end);
+        const spoken = `${monthFormat.format(new Date(`${end}T12:00:00Z`))}${end.slice(0, 4) === today.slice(0, 4) ? "" : ` de ${end.slice(0, 4)}`}`;
+        await expect(page.getByText(`Con 1 h al mes, tus 13 h 30 min de tareas terminan en ${spoken}.`, { exact: false })).toBeVisible();
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("a task with no estimate reads «sin estimar» in the list of tasks without a month", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, null);
+      await db`update goals.one_offs set estimate = null where goal_id = ${goalId} and name = 'Tarea 1'`;
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await expect(page.getByText("sin estimar", { exact: true })).toHaveCount(1);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("«Armar el plan» saves the rhythm and the lead names the end", async ({ page, db, personId }) => {
       const goalId = await seedGoal(db, personId, null);
       try {
