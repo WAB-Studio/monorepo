@@ -21,6 +21,7 @@ export function MonthTaskLine({
   name,
   estimate,
   parentName,
+  part,
   unit,
   note,
   noteEyebrow,
@@ -31,6 +32,8 @@ export function MonthTaskLine({
   // The task is a sub-task: its parent's name rides above its own
   // (`HoyTareaMesSubtarea.dc.html`).
   parentName: string | null;
+  // The hours the plan puts in this month for the task (`roadmap.hoyMovido.next`).
+  part: number | null;
   unit: string;
   // Its button is drawn, never its text (`HoyNota`).
   note: string | null;
@@ -87,6 +90,11 @@ export function MonthTaskLine({
             </Text>
           ) : null}
           <Text variant="name">{name}</Text>
+          {part !== null ? (
+            <Text variant="sentence">
+              {t("roadmap.hoyMovido.next", { hours: formatQuantity(part, unit, words) })}
+            </Text>
+          ) : null}
         </Flex>
         {estimate !== null ? (
           <Flex flexShrink="0" pt="2">
