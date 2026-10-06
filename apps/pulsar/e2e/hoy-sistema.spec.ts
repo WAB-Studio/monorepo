@@ -37,7 +37,7 @@ async function seedGoal(db: postgres.Sql, personId: string, name: string, tasks:
   return goal.id;
 }
 
-test("at 360 the marks of «este mes» stand on the day's rows' edge and its goal groups are a section apart", async ({
+test("at 360 the marks of «este mes» stand on the day's rows' edge", async ({
   person,
   browser,
   baseURL,
@@ -73,12 +73,34 @@ test("at 360 the marks of «este mes» stand on the day's rows' edge and its goa
     expect(await edge(`Marcar hecha: Tarea A ${stamp}`)).toBeCloseTo(rowEdge, 0);
     expect(await edge(`Marcar hecha: Tarea B ${stamp}`)).toBeCloseTo(rowEdge, 0);
 
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
+test("at 360 the goal groups of «este mes» stand a section apart", async ({ person, browser, baseURL, db }) => {
+  const stamp = Date.now();
+  const first = `Primera ${stamp}`;
+  const second = `Segunda ${stamp}`;
+  await seedGoal(db, person.id, first, [`Tarea A ${stamp}`]);
+  await seedGoal(db, person.id, second, [`Tarea B ${stamp}`]);
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 360, height: 740 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/");
+    const block = page.locator("section").filter({ hasText: "este mes" }).locator("visible=true").last();
+    await expect(block.getByRole("button", { name: `Marcar hecha: Tarea A ${stamp}` })).toBeVisible();
     const a = (await block.getByText(first, { exact: true }).boundingBox())!;
     const b = (await block.getByText(second, { exact: true }).boundingBox())!;
     const taskA = (await block.getByRole("button", { name: `Marcar hecha: Tarea A ${stamp}` }).boundingBox())!;
-    // The ghost button's own margin takes a few px of the 32 the group gap sets.
-    expect(b.y - (taskA.y + taskA.height)).toBeGreaterThanOrEqual(24);
     expect(a.y).toBeLessThan(b.y);
+    // The ghost button's own margin takes a few px of the 32 the group gap sets.
+    expect(b.y - (taskA.y + taskA.height)).toBeGreaterThanOrEqual(28);
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
