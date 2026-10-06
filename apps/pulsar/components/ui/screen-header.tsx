@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { SectionLabel } from "./section-label";
 import { Skeleton } from "./skeleton";
 import { Text } from "./text";
 import styles from "./screen-header.module.css";
@@ -14,19 +15,32 @@ export function ScreenHeader({
   title,
   back,
   eyebrow,
+  eyebrowHref,
   actions,
   meta,
 }: {
   title: string;
   back?: { href: string; place: string };
-  // A section label, or an accent link, between the way back and the title.
+  // A string is drawn in the one eyebrow style. A node is drawn as given.
   eyebrow?: ReactNode;
+  // Makes a string eyebrow an accent link.
+  eyebrowHref?: string;
   // Beside the title from 1024, under it below.
   actions?: ReactNode;
   // One mono line under the title.
   meta?: string;
 }) {
   const t = useTranslations("common");
+  const eyebrowNode =
+    typeof eyebrow !== "string" ? (
+      eyebrow
+    ) : !eyebrow ? null : eyebrowHref ? (
+      <Link href={eyebrowHref} className={styles.eyebrowLink}>
+        {eyebrow}
+      </Link>
+    ) : (
+      <SectionLabel>{eyebrow}</SectionLabel>
+    );
 
   return (
     <header className={styles.header}>
@@ -40,7 +54,7 @@ export function ScreenHeader({
           <span>{back.place}</span>
         </Link>
       ) : null}
-      {eyebrow ? <div className={styles.eyebrow}>{eyebrow}</div> : null}
+      {eyebrowNode ? <div className={styles.eyebrow}>{eyebrowNode}</div> : null}
       <div className={styles.line}>
         <Text asChild variant="title">
           <h1 className={styles.title}>{title}</h1>

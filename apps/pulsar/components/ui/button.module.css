@@ -49,8 +49,18 @@
   min-block-size: 52px;
 }
 
-.block.block {
-  inline-size: 100%;
+/* Full width on the phone; from 1024 a block button is sized to its text,
+   160 at least, wherever it sits (a sheet's actions row included). */
+@media (max-width: 1023px) {
+  .block.block {
+    inline-size: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .block.block {
+    min-inline-size: 160px;
+  }
 }
 
 /* A label with its hint under it: the height follows the two lines, the hint
