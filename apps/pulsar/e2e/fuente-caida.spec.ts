@@ -160,7 +160,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
         await expect(
           visible("solo lo que dijiste tú · no pudimos leer el diccionario de lectura"),
         ).toHaveCount(1);
-        await expect(visible("de 12")).toHaveCount(1);
+        await expect(visible("5 de 12")).toHaveCount(1);
         // The month block prints the bare figure; the total beside «mide en» keeps its unit.
         await expect(visible("5")).toHaveCount(1);
         await expect(page.getByText(/llevas \d+ %|bajo el 60 %/).locator("visible=true")).toHaveCount(0);

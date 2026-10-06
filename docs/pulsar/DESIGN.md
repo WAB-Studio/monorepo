@@ -921,3 +921,8 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   system's multiples of 4). Chips in a row sit 8 apart and wrap by chip; the seven weekday chips sit 4 apart
   (`ChipRow`, `tight`). A field pair sits 8 apart, two fields sharing the width, or the first sized by the pair when
   it is narrow, a quantity beside its unit (`FieldPair`). No screen spaces either with `Flex gap` or `style`.
+
+- **`MetaVerPlan`, states the board does not draw** (2026-10-06, decided by the orchestrator).
+  - A goal with no rhythm: the row's first line reads «Armar el plan», with no second line; it still links to the plan.
+  - A goal with no task in the plan: no «el plan» section.
+  - The plan's end carries the year only when it is not the current year, as the rest of the screen does.

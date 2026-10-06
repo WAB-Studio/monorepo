@@ -83,11 +83,11 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await addQuantityCommitment(page, goalId, measureName, unit, 5);
 
     // The way in (`Meta.dc.html` draws none, the coordinator's own decision):
-    // a ghost link under the measure figure, only once the goal has one.
+    // a text link (the one accent link style) under the measure figure, only once the goal has one.
     await page.goto(`/metas/${goalId}`);
     const wayIn = page.getByRole("link", { name: "Ver por semana" });
     await expect(wayIn).toBeVisible();
-    await expect(wayIn).toHaveClass(/\bghost\b/);
+    await expect(wayIn).toHaveClass(/text-link/);
     await expect(wayIn).toHaveAttribute("href", `/metas/${goalId}/revision`);
 
     const id = await commitmentId(db, personId, measureName);

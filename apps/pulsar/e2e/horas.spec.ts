@@ -44,9 +44,12 @@ test("a time row reads in hours and minutes, a page row as written; the partial 
   const stamp = Date.now();
   const timeName = `Horas tiempo ${stamp}`;
   const pagesName = `Horas páginas ${stamp}`;
+  // A goal's first quantity sets its unit and the next ones take it (361), so
+  // each unit lives in its own goal.
   const goalId = await createGoal(page, `Meta horas ${stamp}`);
+  const pagesGoalId = await createGoal(page, `Meta páginas ${stamp}`);
   await addQuantityCommitment(page, goalId, timeName, 90, "minutos");
-  await addQuantityCommitment(page, goalId, pagesName, 12, "páginas");
+  await addQuantityCommitment(page, pagesGoalId, pagesName, 12, "páginas");
 
   try {
     await page.setViewportSize({ width: 360, height: 800 });
@@ -101,5 +104,6 @@ test("a time row reads in hours and minutes, a page row as written; the partial 
     await expect(pagesRow).toContainText("12 páginas");
   } finally {
     await deleteGoal(db, personId, goalId);
+    await deleteGoal(db, personId, pagesGoalId);
   }
 });
