@@ -226,7 +226,7 @@ test("with no session, Hoy and Semana land on /entrar (RP-18)", async ({ browser
   }
 });
 
-test("/entrar names the app, says what happens next, and sits in the centred column at 1280 (318)", async ({
+test("/entrar names the app and sits in the centred column at 1280 (318)", async ({
   browser,
   baseURL,
 }) => {
@@ -238,7 +238,6 @@ test("/entrar names the app, says what happens next, and sits in the centred col
     const title = page.getByRole("heading", { level: 1, name: account.title });
     await expect(title).toBeVisible();
     await expect(page.getByText("Bitácora de metas", { exact: true })).toBeVisible();
-    await expect(page.getByText(account.lead, { exact: true })).toBeVisible();
     expect((await title.boundingBox())!.x).toBeGreaterThanOrEqual(300);
   } finally {
     await context.close();

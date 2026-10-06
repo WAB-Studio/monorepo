@@ -1,6 +1,5 @@
 {
   "title": "Entrar",
-  "lead": "Te mandamos un enlace al correo; al abrirlo, entras.",
   "emailLabel": "Correo electrónico",
   "action": "Enviar enlace",
   "sending": "Enviando…",

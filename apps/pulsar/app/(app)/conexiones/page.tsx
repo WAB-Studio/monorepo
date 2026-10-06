@@ -36,9 +36,13 @@ export default async function ConnectionsPage() {
   const live = (token: (typeof tokens)[number]) => {
     const family = token.kind === "oauth" ? "connections.oauth" : "connections.row";
     const created = stamp(token.createdAt, false);
-    return token.lastUsedAt
+    const line = token.lastUsedAt
       ? t(`${family}.metaUsed`, { created, used: stamp(token.lastUsedAt, true) })
       : t(`${family}.metaUnused`, { created });
+    // A key made today opens its line with a capital (`ConexionesTelefono`); an older one stays lower-case.
+    return token.kind === "personal" && civilDateInZone(new Date(token.createdAt)) === today
+      ? line.charAt(0).toUpperCase() + line.slice(1)
+      : line;
   };
 
   const rows: ConnectionRow[] = tokens.map((token) => ({

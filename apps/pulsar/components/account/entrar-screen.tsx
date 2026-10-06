@@ -72,9 +72,6 @@ function EntrarForm() {
   return (
     <Page alone middle>
       <ScreenHeader title={t("title")} eyebrow={appName} />
-      <Text as="p" variant="sentence" tone="muted">
-        {t("lead")}
-      </Text>
 
       {/* Shown until the person's own next attempt replaces it with the
           send's own verdict — a stale link failure has nothing left to say

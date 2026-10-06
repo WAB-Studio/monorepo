@@ -25,17 +25,17 @@
     "copyFailed": "No se pudo copiar. Mantén presionado el texto para copiarlo."
   },
   "row": {
-    "metaUsed": "Creada {created} · usada {used}",
-    "metaUnused": "Creada {created} · sin usar",
+    "metaUsed": "creada {created} · usada {used}",
+    "metaUnused": "creada {created} · sin usar",
     "neverUsed": "sin usar",
     "today": "hoy a las",
     "on": "el {date}",
-    "revokedMeta": "Revocada el {date} · ya no entra",
+    "revokedMeta": "revocada el {date} · ya no entra",
     "revoke": "Revocar"
   },
   "oauth": {
-    "metaUsed": "Conectada {created} · usada {used}",
-    "metaUnused": "Conectada {created} · sin usar"
+    "metaUsed": "conectada {created} · usada {used}",
+    "metaUnused": "conectada {created} · sin usar"
   },
   "revokeSheet": {
     "keyLabel": "revocar la llave",
