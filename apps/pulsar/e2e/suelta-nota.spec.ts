@@ -102,10 +102,14 @@ test("Hoy draws the note's button on a one-off, pending or done, never its text;
     await expect(emptied.locator(GREEN)).toHaveCount(0);
 
     // The mark lands in one tap and the done row takes it back in one tap.
-    await page.getByRole("button", { name: "Marcar como hecho", exact: true }).first().waitFor();
-    await page.getByRole("button", { name: `Marcar como hecho`, exact: true }).first().click();
+    // The pending row's own mark: the innermost div holding its note button.
+    const ownRow = page
+      .locator("div")
+      .filter({ has: page.getByRole("button", { name: `Escribir una nota en «${pendingName}»` }) })
+      .last();
+    await ownRow.getByRole("button", { name: "Marcar como hecho", exact: true }).click();
     await expect
-      .poll(async () => (await db`select 1 from goals.facts where one_off_id in (${pending.id}, ${(await db<{ id: string }[]>`select id from goals.one_offs where name = ${bareName}`)[0].id})`).length)
+      .poll(async () => (await db`select 1 from goals.facts where one_off_id = ${pending.id}`).length)
       .toBe(1);
     await page.getByRole("button", { name: `Deshacer: ${doneName}` }).click();
     await expect(page.getByRole("button", { name: `Ver la nota de «${doneName}»` })).toBeVisible();
@@ -286,13 +290,15 @@ test("Hoy's «este mes» line draws the next task's note button; writing it read
     await expect(page.getByText("la nota de la línea")).toBeVisible();
 
     await page.goto("/");
+    const secondMark = page
+      .getByRole("button", { name: `Marcar hecha: ${secondName}` })
+      .locator("visible=true");
+    await expect(secondMark).toHaveCount(0);
     await page
       .getByRole("button", { name: `Marcar hecha: ${firstName}` })
       .locator("visible=true")
       .click();
-    await expect(
-      page.getByRole("button", { name: `Marcar hecha: ${secondName}` }).locator("visible=true"),
-    ).toHaveCount(1, { timeout: 5000 });
+    await expect(secondMark).toHaveCount(1, { timeout: 5000 });
     expect((await db`select 1 from goals.facts where one_off_id = ${first.id}`).length).toBe(1);
   } finally {
     await context.close();
