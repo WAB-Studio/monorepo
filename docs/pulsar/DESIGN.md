@@ -804,3 +804,16 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   diseños, me da igual». What the coordinator chose while drawing stands: the partial never adds to «hechos» and is
   named apart («· 1 en parte»); a past day steps both ways and keeps «volver a hoy»; a week sits under the month of its
   Monday; the report is three columns at 1440 and two at 1024; the revoke sheet's words as drawn.
+
+## Decisions of 2026-10-06, after the critic of train 13
+
+- **The report has two columns from 1024, never three.** At 1440 three columns gave 299 px cards and the months table
+  (334 px) ran out of them. `ReporteMarcoEscritorio.dc.html` (three columns) is superseded on this point; the 1024 board's
+  two columns hold at every desktop width.
+- **A week that crosses two months is split in the report's months table.** Each month holds the days of that week that
+  fall in it, so the weeks under a month add up to the month. The split week shows under both months with its own span
+  («sem 5 · 28–30 sep 2026», «sem 5 · 1–4 oct 2026»).
+- **Every goal with tasks this month has its «este mes» line on Hoy, measured or not**, as `HoyTelefonoSinPedido.dc.html`
+  already draws «Mudanza · 1 de 3 tareas». A goal with no measure reads its tasks done of total; its next task follows as
+  `HoyTareaMesSubtarea.dc.html` draws it.
+- **«Correr un mes» is offered only when the month also fell short of its amount** (RP-48, succeeding RP-34).
