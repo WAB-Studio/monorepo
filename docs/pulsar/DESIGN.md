@@ -850,3 +850,18 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
 - **The report folds its weeks under their month on screen; on paper it prints months only.**
 - **A phase is still chosen by week numbers, with the dates beside them, live, and the valid range stated.**
 
+- **The space system, approved by the user 2026-10-06 on `SistemaEspacio.dc.html`.** Every gap is a multiple of 4.
+  - Header: date → title 6; title → lead 12; header → first section 32.
+  - Section: label → content 12; section → section 32, 40 from 1024. A row pads 12 above and below, 56 tall at least.
+  - Field: label → control 8; control → hint or refusal 6; hint → next control 20.
+  - Width from 1024: content up to 1200, centred in what the rail leaves; a one-column screen (a form, an empty state)
+    up to 640. Cards in a column stand 16 apart, from the column's gap, never a card's margin.
+  - Buttons: full width and stacked 12 apart on the phone; from 1024 sized to their text, 160 at least, in a row, the
+    primary first. A link shaped as a button follows the same rule as a `<button>`.
+- **The type roles, approved the same day on `SistemaTipo.dc.html`:** title; section label (mono 11 caps, one per
+  section, names a group); field label (Archivo 13 / 500, ink secondary); name (Archivo 16 / 500); quiet sentence
+  (Archivo 13 / 1.5, muted: hints, refusals, empty states, notes); figure and date (mono 12); measure (mono 26, its unit
+  13 beside it, never wrapped). A unit never breaks from its number.
+- **`ConexionesTelefono.dc.html` and `HoyVacioEscritorio.dc.html` are the two screens redrawn on the system**, approved
+  with it. Their words: «Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.»; a key's
+  line «Creada hoy a las 12:18 · sin usar»; «Copiar» answers «Copiada.» beside a check.
