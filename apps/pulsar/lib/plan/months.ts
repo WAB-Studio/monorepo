@@ -80,9 +80,10 @@ export function monthLine(input: {
   today: string;
   budget: MonthBudget | null;
   reached: number;
+  rhythm?: number | null;
 }): MonthLine {
-  const { month, today, budget, reached } = input;
-  const planned = budget === null ? null : budget.amount;
+  const { month, today, budget, reached, rhythm } = input;
+  const planned = budget?.amount ?? rhythm ?? null;
   const underPace =
     month === monthOf(today) &&
     Number(today.slice(8, 10)) >= PACE_FROM_DAY &&
@@ -92,19 +93,21 @@ export function monthLine(input: {
   return { planned, reached, underPace };
 }
 
-// Every month of the span, a month with nothing included (RP-16).
+// Every month of the span, a month with nothing included (RP-16). A month
+// with no budget of its own plans the goal's rhythm (RP-50).
 export function monthRows(input: {
   openedOn: string;
   horizon: string;
   today: string;
   budgets: MonthBudget[];
   reached: Map<string, number>;
+  rhythm?: number | null;
 }): MonthRow[] {
-  const { openedOn, horizon, today, budgets, reached } = input;
+  const { openedOn, horizon, today, budgets, reached, rhythm } = input;
   const thisMonth = monthOf(today);
   return monthsOfSpan(openedOn, horizon).map((month) => ({
     month,
-    planned: budgets.find((budget) => budget.month === month)?.amount ?? null,
+    planned: budgets.find((budget) => budget.month === month)?.amount ?? rhythm ?? null,
     reached: reached.get(month) ?? 0,
     current: month === thisMonth,
     past: month < thisMonth,
