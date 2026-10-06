@@ -269,8 +269,14 @@ jobs:
     # The suite is about two minutes; `playwright install --with-deps` alone
     # took eight on 2026-09-30, when apt was slow.
     timeout-minutes: 30
+    # Each shard owns a runner and so a stack and a database of its own; the
+    # lane stays 8 in all four. `pulsar-e2e-report` merges what they leave.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     concurrency:
-      group: pulsar-e2e-${{ github.ref }}
+      group: pulsar-e2e-${{ github.ref }}-${{ matrix.shard }}
       cancel-in-progress: true
     env:
       HARNESS_LANE: 8
@@ -341,39 +347,84 @@ jobs:
       # run, mints and seeds lane 8's person under it — no typed address, no
       # email sent (RNP-09) — and its teardown drops every identity and closes
       # the run.
-      - name: Run the e2e suite, caida and fuente projects included
+      - name: Run shard ${{ matrix.shard }} of 4, caida and fuente projects included
         env:
           PULSAR_DOWN_BASE_URL: http://localhost:3217
           PULSAR_FAULT_BASE_URL: http://localhost:3227
-        run: npm run check:e2e -w apps/pulsar
+        run: npm run check:e2e -w apps/pulsar -- --shard=${{ matrix.shard }}/4 --reporter=blob,list
+
+      - name: Upload the blob report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pulsar-blob-${{ matrix.shard }}
+          path: apps/pulsar/blob-report
+          retention-days: 3
 
       - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: pulsar-log
+          name: pulsar-log-${{ matrix.shard }}
           path: /tmp/pulsar.log
 
       - name: Upload the down server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: pulsar-down-log
+          name: pulsar-down-log-${{ matrix.shard }}
           path: /tmp/pulsar-down.log
 
       - name: Upload the fault server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: pulsar-fault-log
+          name: pulsar-fault-log-${{ matrix.shard }}
           path: /tmp/pulsar-fault.log
 
       - name: Upload the Playwright artefacts
         if: failure()
         uses: actions/upload-artifact@v5
         with:
-          name: pulsar-playwright-results
+          name: pulsar-playwright-results-${{ matrix.shard }}
           path: apps/pulsar/private/playwright-results
+
+  # One check name for the suite: red when any shard is, green when all are.
+  # `always()` so a red shard still gets its report merged.
+  pulsar-e2e-report:
+    runs-on: ubuntu-latest
+    needs: pulsar-e2e
+    if: always() && github.event_name != 'pull_request'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: pulsar-blob-*
+          path: apps/pulsar/all-blobs
+          merge-multiple: true
+
+      - name: Merge the shards' reports
+        run: npx playwright merge-reports --reporter html,list ./all-blobs
+        working-directory: apps/pulsar
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: pulsar-e2e-report
+          path: apps/pulsar/playwright-report
+
+      - name: Fail when a shard failed
+        if: needs.pulsar-e2e.result != 'success'
+        run: |
+          echo "pulsar-e2e: ${{ needs.pulsar-e2e.result }}"
+          exit 1
 
   # `check:day`, `check:goal`, `check:goal-actions` and `check:plan` under one harness run of
   # their own (`scripts/harness/checks-run.ts`), never `pulsar-e2e`'s person:
