@@ -119,9 +119,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 ## Parallel tracks
 
-- Lane 1 is this checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`. Lanes 2 to 5 may run
-  e2e specs; lanes 6 and up take only work with no e2e (docs, words, pure functions, `check:*`).
-  Decided by the user 2026-10-05. The cap is RAM and the shared Auth, not the lane count.
+- Lane 1 is this checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`. Lanes 2 to 6 may run
+  e2e specs; lanes 7 and up take only work with no e2e (docs, words, pure functions, `check:*`).
+  Decided by the user 2026-10-05, raised from four to five lanes 2026-10-06. The cap is RAM and the shared Auth, not the lane count.
 - A lane's port comes from its app: finances on :300<n-1>, reading on :310<n-1>. They never collide.
 - Run an app's npm scripts from its own directory, `apps/orbit`, or from the root with `-w apps/orbit`.
 - Open a lane: `scripts/worktree.sh <lane> <branch> [base] [--app <name>]`. It costs 4 seconds.
@@ -147,8 +147,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run `npm install` at a lane's root when a workspace package landed after the lane was opened. The
   lane copied `node_modules` at birth, so the new package has no link and `typecheck` fails there
   while the main checkout and CI are clean. It is not a real red.
-- Run at most four suites at once. Decided by the user 2026-10-05: 15 GB, 7 GB still free with three running.
-  Drop back to three when `free -g` shows under 2 GB available with four up.
+- Run at most five suites at once. Decided by the user 2026-10-05 (four) and 2026-10-06 (five): 15 GB, 7 GB still
+  free with three running. Drop back one when `free -g` shows under 2 GB available.
 - Never run two agents that write `reading.word_texts` or spend `reading.model_spend` at once.
   `HARNESS_LANE` does not scope those tables: they are global, and two honest reports then
   contradict each other. See `docs/TRAPS.md`, "One database behind every harness lane".
