@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
@@ -64,6 +65,10 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   const { view, evidence, goals } = week;
 
   const thisMonday = weekOf(today)[0];
+  // A week before the first goal's has nothing to read: land on the first.
+  if (week.firstMonday !== null && view.start < week.firstMonday) {
+    redirect(stepHref(week.firstMonday, thisMonday) ?? "/semana");
+  }
   const past = view.start !== thisMonday;
   const steps = weekSteps({ monday: view.start, thisMonday, firstMonday: week.firstMonday });
   const prev = stepHref(steps.prev, thisMonday);
