@@ -230,3 +230,71 @@ test("a refusal from the server keeps the sheet open, says so and keeps the type
     await context.close();
   }
 });
+
+test("Hoy's «este mes» line draws the next task's note button; writing it reads on the month list; the mark lands in one tap (RP-45)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalName = `Meta mes nota ${stamp}`;
+  const firstName = `Primera nota ${stamp}`;
+  const secondName = `Segunda nota ${stamp}`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${goalName}, ${plusDays(90)}, 'minutos', 'minutos', now() - interval '40 days')
+    returning id
+  `;
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${goal.id}, ${thisMonth}::date, 720)
+  `;
+  const task = (name: string, estimate: number) => db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${person.id}, ${goal.id}, ${name}, ${thisMonth}::date, ${estimate}) returning id
+  `;
+  const [first] = await task(firstName, 240);
+  await task(secondName, 60);
+
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 360, height: 740 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/");
+    const button = (label: string, name: string) =>
+      page.getByRole("button", { name: `${label} «${name}»` }).locator("visible=true");
+
+    const bare = button("Escribir una nota en", firstName);
+    await expect(bare).toHaveCount(1);
+    await expect(bare.locator(GREEN)).toHaveCount(0);
+
+    await bare.click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toContainText(`nota · ${goalName}`);
+    await sheet.getByLabel("nota", { exact: true }).fill("la nota de la línea");
+    await sheet.getByRole("button", { name: "Guardar" }).click();
+    await expect(sheet).toBeHidden();
+    expect(await noteOf(db, first.id)).toBe("la nota de la línea");
+    await expect(button("Ver la nota de", firstName).locator(GREEN)).toHaveCount(1);
+    await expect(page.getByText("la nota de la línea")).toHaveCount(0);
+
+    await page.goto(`/metas/${goal.id}/meses/${seg}`);
+    await expect(page.getByText("la nota de la línea")).toBeVisible();
+
+    await page.goto("/");
+    await page
+      .getByRole("button", { name: `Marcar hecha: ${firstName}` })
+      .locator("visible=true")
+      .click();
+    await expect(
+      page.getByRole("button", { name: `Marcar hecha: ${secondName}` }).locator("visible=true"),
+    ).toHaveCount(1, { timeout: 5000 });
+    expect((await db`select 1 from goals.facts where one_off_id = ${first.id}`).length).toBe(1);
+  } finally {
+    await context.close();
+  }
+});
