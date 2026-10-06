@@ -67,7 +67,7 @@ async function quantity(db: postgres.Sql, person: Person, goalId: string, minute
 const seen = (page: Page, text: string) => page.getByText(text, { exact: true }).locator("visible=true");
 const visible = (page: Page, text: RegExp) => page.getByText(text).locator("visible=true");
 
-test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, and the two «Ver por» links share a line (RP-23, RNP-17)", async ({
+test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, and the two «Ver por» links stack on one edge (RP-23, RNP-17)", async ({
   person,
   browser,
   baseURL,
@@ -86,8 +86,9 @@ test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, an
       await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
       const month = (await page.getByRole("link", { name: "Ver por mes", exact: true }).boundingBox())!;
       const week = (await page.getByRole("link", { name: "Ver por semana", exact: true }).boundingBox())!;
-      expect(Math.abs(month.y - week.y)).toBeLessThan(2);
-      expect(week.x).toBeGreaterThan(month.x);
+      // Text links stack in their Section, 12 apart, on one left edge.
+      expect(Math.abs(month.x - week.x)).toBeLessThan(2);
+      expect(week.y).toBeGreaterThanOrEqual(month.y + month.height);
     }
     await page.getByRole("link", { name: "Volver a Metas" }).click();
     await expect(page).toHaveURL(/\/metas$/);
@@ -127,9 +128,9 @@ test("the goal says the month's amount, moves with a done task, and links to its
       await page.goto(`/metas/${goalId}`);
       await expect(seen(page, monthName)).toHaveCount(1);
       // The total and the month's reached figure both say 6 h 30 min.
-      // From the 20th the month's «de 12 h» sits inside the pace line.
+      // The month line is one sentence; from the 20th the pace line replaces it.
       await expect(seen(page, "6 h 30 min")).toHaveCount(2);
-      await expect(seen(page, "de 12 h")).toHaveCount(late ? 0 : 1);
+      await expect(seen(page, "6 h 30 min de 12 h")).toHaveCount(late ? 0 : 1);
       await expect(seen(page, line(54, "6 h 30 min"))).toHaveCount(1);
 
       await db`
@@ -144,7 +145,7 @@ test("the goal says the month's amount, moves with a done task, and links to its
       await expect(visible(page, /bajo el 60 %/)).toHaveCount(late ? 1 : 0);
       await expect(visible(page, /llevas \d+ %/)).toHaveCount(late ? 0 : 1);
       if (late) await expect(visible(page, /\d+ %/).filter({ hasNotText: /60 %/ })).toHaveCount(0);
-      await expect(seen(page, "sin monto planeado")).toHaveCount(0);
+      await expect(visible(page, /sin monto planeado/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: `Planear ${monthName}` })).toHaveCount(0);
 
       const months = page.getByRole("link", { name: "Ver por mes", exact: true });
@@ -180,7 +181,7 @@ test("a measure with no amount says so and offers to plan the month; no measure 
       await page.goto(`/metas/${bare}`);
       await expect(seen(page, monthName)).toHaveCount(1);
       await expect(seen(page, "1 h 40 min")).toHaveCount(2);
-      await expect(seen(page, "sin monto planeado")).toHaveCount(1);
+      await expect(visible(page, /sin monto planeado/)).toHaveCount(1);
       // No amount, so no percentage and no pace, whatever the day.
       await expect(visible(page, /llevas \d+ %|bajo el 60 %/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: `Planear ${monthName}`, exact: true })).toHaveAttribute(
@@ -203,7 +204,7 @@ test("a measure with no amount says so and offers to plan the month; no measure 
         "href",
         `/metas/${noMeasure}/meses`,
       );
-      await expect(seen(page, "sin monto planeado")).toHaveCount(0);
+      await expect(visible(page, /sin monto planeado/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: /^Planear /})).toHaveCount(0);
     }
   } finally {
@@ -229,10 +230,10 @@ test("a month budgeted at zero shows its figure and months link, but no bar and 
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/metas/${zero}`);
       await expect(seen(page, monthName)).toHaveCount(1);
-      await expect(seen(page, "de 0 min")).toHaveCount(1);
+      await expect(seen(page, "1 h 30 min de 0 min")).toHaveCount(1);
       await expect(page.locator("span[aria-hidden][class] > span[style*=\"inline-size\"]")).toHaveCount(0);
       await expect(visible(page, /llevas \d+ %|bajo el 60 %/)).toHaveCount(0);
-      await expect(seen(page, "sin monto planeado")).toHaveCount(0);
+      await expect(visible(page, /sin monto planeado/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveAttribute(
         "href",
         `/metas/${zero}/meses`,
@@ -269,12 +270,12 @@ test("an archived or ended goal reads its month and offers no way to plan it (RP
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/metas/${archived}`);
       await expect(seen(page, "5 h")).toHaveCount(2);
-      await expect(seen(page, "de 12 h")).toHaveCount(late ? 0 : 1);
+      await expect(seen(page, "5 h de 12 h")).toHaveCount(late ? 0 : 1);
       if (late) await expect(seen(page, `día ${day} · 5 h de 12 h, bajo el 60 %`)).toHaveCount(1);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toBeVisible();
 
       await page.goto(`/metas/${archivedBare}`);
-      await expect(seen(page, "sin monto planeado")).toHaveCount(1);
+      await expect(visible(page, /sin monto planeado/)).toHaveCount(1);
       await expect(page.getByRole("link", { name: /^Planear /})).toHaveCount(0);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toBeVisible();
 
@@ -282,7 +283,7 @@ test("an archived or ended goal reads its month and offers no way to plan it (RP
       await expect(page.getByText(/^terminó el /)).toBeVisible();
       await expect(page.getByRole("link", { name: /^Planear /})).toHaveCount(0);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveCount(day === 1 ? 0 : 1);
-      await expect(seen(page, "sin monto planeado")).toHaveCount(day === 1 ? 0 : 1);
+      await expect(visible(page, /sin monto planeado/)).toHaveCount(day === 1 ? 0 : 1);
     }
   } finally {
     await context.close();
