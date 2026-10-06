@@ -912,6 +912,13 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   (`RoadmapHoyMovidoDias`: «se movió 3 días», and no sentence about the rest running behind); from 7 days it reads in
   whole weeks, rounded (`RoadmapHoyMovido`: «se movió 2 semanas»). With several goals the notices stack at the top of
   Hoy, above the goal sections, each naming its goal. A move of 0 days draws none.
+- **A phase is written in weeks and reads its dates**, decided by the user 2026-10-06 after the wave-2 review. The
+  phase form shows live, under the weeks, the days they cover («del lunes 5 de octubre al domingo 8 de noviembre») and
+  the last week the goal allows, as «Mover el final» does. No schema change. Board still to draw.
+- **An imported phase that starts before its goal is cut to week 1**, decided by the user 2026-10-06. The import's
+  review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board still to draw.
+- **The goal at 1024 draws its phases on a full-width row under the two columns** (2026-10-06, decided by the
+  orchestrator): a 260 px phases column broke an aim into one word per line.
 - **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
   - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
     on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
