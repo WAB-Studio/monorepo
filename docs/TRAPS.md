@@ -2801,3 +2801,12 @@ branch could pass until it was restored.
   red 2/2 in every lane on every branch; it means nothing there. Run it against `next build && next start`, as CI does.
 - Measured 2026-10-06: CI went red at 1440 only on train 13; a prod build of the same commit was green 6/6, and a
   prefetch delayed 2.5 s reproduced the red. The spec now awaits the prefetch's response before the click.
+
+## claude.ai's client metadata lists a grant pulsar does not offer
+
+- `https://claude.ai/oauth/mcp-oauth-client-metadata` declares `grant_types` with a third entry,
+  `urn:ietf:params:oauth:grant-type:jwt-bearer`. A schema that takes `z.enum` of the grants it serves refuses the whole
+  document, and `/oauth/autorizar` reads «Este pedido no es válido» on the first real connection.
+- Every local probe registered its own clean document, so nothing caught it before production. Measured 2026-10-06 by the
+  user's first connection from claude.ai (module 200), fixed in module 287: ignore unknown grants, require the code grant.
+- Fetch the real document before trusting a schema that parses someone else's metadata.
