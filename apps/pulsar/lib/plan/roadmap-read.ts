@@ -152,3 +152,22 @@ export function rhythmToMeet(input: PlanInput, step: number): number | null {
   }
   return high * step;
 }
+
+// The month the plan would give a task if it were not fixed; null while the plan places nothing for it.
+export function planMonthOf(input: PlanInput, taskId: string): string | null {
+  const tasks = input.tasks.map((task) => (task.id === taskId ? { ...task, plannedMonth: null } : task));
+  const plan = fillPlan({ ...input, tasks });
+  return plan.months.find((m) => m.items.some((item) => item.task.id === taskId))?.month ?? null;
+}
+
+// "YYYY-MM" of every month a task can still be fixed to: from this one to the goal's last.
+export function openMonthsOf(input: Pick<PlanInput, "openedOn" | "horizon" | "today">): string[] {
+  if (input.horizon <= input.today) return [];
+  const last = monthOf(dayBefore(input.horizon));
+  const first = monthOf(input.openedOn) > monthOf(input.today) ? monthOf(input.openedOn) : monthOf(input.today);
+  const months: string[] = [];
+  for (let month = first; month <= last && months.length < 240; month = nextMonth(month)) {
+    months.push(month.slice(0, 7));
+  }
+  return months;
+}

@@ -5,9 +5,10 @@ import { getTranslations } from "next-intl/server";
 
 import { TaskRow } from "@/components/month/task-row";
 import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
-import { owedAt, type MonthItem } from "@/lib/plan/carry";
+import { owedAt } from "@/lib/plan/carry";
 import { planHrefFrom } from "@/lib/plan/return-to";
-import { loadMonthAcross, type MonthAcrossGoal } from "@/lib/queries/month";
+import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
+import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 
 function sum(values: number[]): number {
@@ -88,7 +89,19 @@ export async function MonthAcrossScreen() {
 
     const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: thisName });
 
-    function item(entry: MonthItem) {
+    const openMonths = openMonthsOf(goal.plan);
+    const sheetOf = (task: MonthAcrossItem["task"], kids: MonthAcrossItem["children"]) => ({
+      goalId: goal.id,
+      goalName: goal.name,
+      unit,
+      estimate: task.estimate,
+      planMonth: planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null,
+      months: task.parentId === null ? openMonths : [],
+      canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),
+      fixedMonth: task.plannedMonth?.slice(0, 7) ?? null,
+    });
+
+    function item(entry: MonthAcrossItem) {
       const { task, children } = entry;
       const childTotal = sum(children.map((child) => child.estimate ?? 0));
       const childDone = sum(children.filter((child) => child.doneOn !== null).map((child) => child.estimate ?? 0));
@@ -124,6 +137,18 @@ export async function MonthAcrossScreen() {
             markLabel={t("month.across.mark", { name: task.name })}
             note={task.note}
             noteEyebrow={noteEyebrow}
+            part={
+              entry.from !== null || entry.to !== null
+                ? {
+                    part: entry.part,
+                    hours: entry.hours,
+                    from: entry.from?.slice(0, 7) ?? null,
+                    to: entry.to?.slice(0, 7) ?? null,
+                  }
+                : undefined
+            }
+            fixedMonth={goal.plan.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined}
+            sheet={sheetOf(task, children)}
           />
           {children.map((child) => (
             <TaskRow
@@ -137,6 +162,7 @@ export async function MonthAcrossScreen() {
               markLabel={t("month.across.mark", { name: child.name })}
               note={child.note}
               noteEyebrow={noteEyebrow}
+              sheet={sheetOf(child, [])}
             />
           ))}
         </Flex>
