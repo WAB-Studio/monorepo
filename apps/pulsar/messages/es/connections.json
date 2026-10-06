@@ -21,7 +21,9 @@
   "connector": {
     "note": "Agrega un conector con esta dirección y entra con tu correo.",
     "copy": "Copiar",
-    "copyName": "Copiar la dirección"
+    "copyName": "Copiar la dirección",
+    "copied": "Copiada.",
+    "copyFailed": "No se pudo copiar. Mantén presionado el texto para copiarlo."
   },
   "row": {
     "metaUsed": "creada {created} · usada {used}",

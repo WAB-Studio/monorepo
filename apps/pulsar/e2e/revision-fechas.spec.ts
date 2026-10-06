@@ -13,7 +13,8 @@ function dayAfter(day: string, days: number): string {
 const format = new Intl.DateTimeFormat("es", { day: "numeric", month: "short", timeZone: "UTC" });
 
 function range(from: string, to: string): string {
-  return format.formatRange(civilDateToDate(from), civilDateToDate(to));
+  // ICU writes «sept» and spaces a cross-month dash; the screen writes «sep» and «28 sep–4 oct» (RP-17).
+  return format.formatRange(civilDateToDate(from), civilDateToDate(to)).replaceAll("sept", "sep").replace(/\s+–\s+/, "–");
 }
 
 // The Wednesday of the week two Mondays back, so the review holds three
