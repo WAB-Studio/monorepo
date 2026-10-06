@@ -1,5 +1,5 @@
 // Drives `confirmImport` (`app/actions/import.ts`, RP-37) the way
-// `shift-actions.ts` drives `acceptShift`: the action imported as a plain
+// `budget-actions.ts` drives its actions: the action imported as a plain
 // async function, `server-only`, `next/headers` and `next/cache` stubbed before
 // the first `@/` import, the cookie `harness:mint-session` left standing as the
 // session, and the pool's wire read for the statement count. Every date is
