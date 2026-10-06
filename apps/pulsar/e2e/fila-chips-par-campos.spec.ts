@@ -54,6 +54,38 @@ for (const viewport of [
       expect(Math.round(unit!.x - (quantity!.x + quantity!.width))).toBe(8);
     });
 
+    test("a long unbreakable unit beside the quantity never widens the page", async ({ page, db, personId }) => {
+      const unit = "kilometros".repeat(8);
+      const [goal] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+        values (${personId}, ${`Meta unidad larga ${Date.now()}`}, (now() + interval '90 days')::date, 'recorrido', ${unit})
+        returning id
+      `;
+      try {
+        await page.goto(`/metas/${goal.id}/compromisos/nuevo`);
+        await page.getByRole("button", { name: "un número", exact: true }).click();
+        await expect(page.getByTestId("commitment-unit")).toHaveText(unit);
+        const view = page.viewportSize()!.width;
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(view);
+        const long = (await page.getByTestId("commitment-unit").boundingBox())!;
+        expect(long.x + long.width).toBeLessThanOrEqual(view);
+      } finally {
+        await db`delete from goals.goals where id = ${goal.id} and user_id = ${personId}`;
+      }
+    });
+
+    test("the cadence chips wrap inside the page at 360 and none leaves it", async ({ page }) => {
+      const goalId = await createGoal(page, `Meta chips ${Date.now()}`);
+      await page.goto(`/metas/${goalId}/compromisos/nuevo`);
+      const first = (await page.getByRole("button", { name: "todos los días", exact: true }).boundingBox())!;
+      const last = (await page.getByRole("button", { name: "N al mes", exact: true }).boundingBox())!;
+      const view = page.viewportSize()!.width;
+      expect(last.x + last.width).toBeLessThanOrEqual(view);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(view);
+      // Five chips are wider than the phone's line: the last stands on a row below the first.
+      if (view < 500) expect(last.y).toBeGreaterThan(first.y + first.height - 1);
+    });
+
     test("the phase weeks share the width evenly, 8 apart", async ({ page }) => {
       const goalId = await createGoal(page, `Meta fases ${Date.now()}`);
       await page.goto(`/metas/${goalId}/fases/nueva`);

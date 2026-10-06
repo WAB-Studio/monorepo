@@ -1,3 +1,5 @@
+import type { Locator } from "@playwright/test";
+
 import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
@@ -6,6 +8,20 @@ import { todayInZone } from "@/lib/zone";
 // `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado` (module 139, RP-30,
 // RP-31, RP-32): one month of a goal, its carried tasks first. Calendar-bound
 // as 135: the seeded «last month» is always the month before today.
+
+// A mixed line: its sentence in Archivo, each figure (a span) in mono.
+async function expectFigures(line: Locator, figures: string[]) {
+  const set = await line.evaluate((el) => ({
+    line: getComputedStyle(el).fontFamily,
+    spans: Array.from(el.querySelectorAll("span")).map((span) => ({
+      text: span.textContent,
+      family: getComputedStyle(span).fontFamily,
+    })),
+  }));
+  expect(set.line).not.toMatch(/mono/i);
+  expect(set.spans.map((span) => span.text)).toEqual(figures);
+  for (const span of set.spans) expect(span.family).toMatch(/mono/i);
+}
 
 const NAMES = [
   "enero",
@@ -133,6 +149,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(page.locator("[data-state=declared]")).toHaveCount(2);
     await expect(parentRow).toContainText(`Padre ${stamp}`);
     await expect(page.getByText("incluye 3 h de tareas hechas")).toBeVisible();
+    await expectFigures(page.getByText("incluye 3 h de tareas hechas"), ["3 h"]);
 
     // Undone again with no reload: the done child is the one to take back.
     await page.getByRole("button", { name: `Deshacer: Hijo pendiente ${stamp}` }).click();
@@ -142,6 +159,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     await page.goto(`/metas/${goalId}/meses/${seg(lastMonth)}`);
     await expect(page.getByText("cerrado", { exact: true })).toBeVisible();
     await expect(page.getByText("cerrado · se arrastró 75 % · 3 h de 4 h")).toBeVisible();
+    await expectFigures(page.getByText("cerrado · se arrastró 75 % · 3 h de 4 h"), ["75 %", "3 h", "4 h"]);
     await expect(page.getByText("Un mes cerrado no toma tareas nuevas.")).toBeVisible();
     await expect(page.getByRole("link", { name: /Otra tarea|Escribir una tarea/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Escribir una tarea/ })).toHaveCount(0);

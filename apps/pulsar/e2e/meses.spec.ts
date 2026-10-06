@@ -200,6 +200,8 @@ test("?planear= opens the sheet on that month and ignores a month outside the sp
 
     // Nothing is planned anywhere: the empty face names the way in.
     await expect(page.getByText(/^Ningún mes tiene monto/)).toBeVisible();
+    // A sentence, never a figure: Archivo, not mono.
+    expect(await page.getByText(/^Ningún mes tiene monto/).evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
     await page.getByRole("link", { name: `Planear ${label(thisMonth)}` }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
   } finally {

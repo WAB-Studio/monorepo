@@ -34,11 +34,6 @@
   border-radius: 10px;
 }
 
-/* A child row: its box starts 30px in and ends where the parent's does. */
-.indent {
-  inline-size: calc(100% - 30px);
-  margin-inline-start: 30px;
-}
 
 /* A row carries no fill and no ring, so disabled is the ink alone. */
 .row:disabled {

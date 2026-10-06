@@ -88,6 +88,8 @@ test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, an
       const week = (await page.getByRole("link", { name: "Ver por semana", exact: true }).boundingBox())!;
       expect(Math.abs(month.y - week.y)).toBeLessThan(2);
       expect(week.x).toBeGreaterThan(month.x);
+      // One row gap apart, the links' own boxes touching no one else's.
+      expect(Math.round(week.x - (month.x + month.width))).toBe(16);
     }
     await page.getByRole("link", { name: "Volver a Metas" }).click();
     await expect(page).toHaveURL(/\/metas$/);
