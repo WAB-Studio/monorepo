@@ -13,10 +13,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // `RoadmapPlan` / `RoadmapSinRitmo` (RP-50, RP-53): the auth gate alone;
 // `PlanScreen` owns the fetch.
-export default async function PlanPage({ params }: { params: Promise<{ goalId: string }> }) {
+export default async function PlanPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ goalId: string }>;
+  searchParams: Promise<{ todo?: string | string[] }>;
+}) {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
   const { goalId } = await params;
-  return <PlanScreen goalId={goalId} />;
+  const { todo } = await searchParams;
+  return <PlanScreen goalId={goalId} all={todo === "1"} />;
 }

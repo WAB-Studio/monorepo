@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { AddTask, PlanEnd } from "@/components/plan/plan-end";
+import { PlanMonths } from "@/components/plan/plan-months";
 import { RhythmForm } from "@/components/plan/rhythm-form";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import {
@@ -15,8 +17,10 @@ import {
   TextLink,
 } from "@/components/ui";
 import { daysBetween } from "@/lib/day/weeks";
+import { openMonthsOf, rhythmToMeet } from "@/lib/plan/roadmap-read";
 import { loadGoal } from "@/lib/queries/goal";
-import { formatQuantity, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
+import { civilDateLabel, civilDateToDate, dateToCivilDate } from "@/lib/zone";
 
 // «20 de marzo de 2027»: the lead names the year the plan ends in.
 const dateFormat = new Intl.DateTimeFormat("es-CO", {
@@ -30,15 +34,21 @@ function dateLabel(day: string): string {
   return dateFormat.format(new Date(`${day}T12:00:00Z`));
 }
 
+function dayAfter(day: string): string {
+  const date = civilDateToDate(day);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return dateToCivilDate(date);
+}
+
 // Rows of the unplaced tasks drawn before «Y n más».
 const SHOWN = 3;
 
 /**
- * `RoadmapPlan` / `RoadmapSinRitmo` / `RoadmapSinMedida` (RP-50, RP-53): the
- * goal's plan, from `loadGoal`'s `roadmap`. The months list is the slot module
- * 349 fills between the rhythm row and the way to the month record.
+ * `RoadmapPlan` / `RoadmapSinRitmo` / `RoadmapSinMedida` / `RoadmapPasaElFinal`
+ * (RP-50, RP-53): the goal's plan, from `loadGoal`'s `roadmap`. `all` draws every
+ * month whole (`?todo=1`).
  */
-export async function PlanScreen({ goalId }: { goalId: string }) {
+export async function PlanScreen({ goalId, all = false }: { goalId: string; all?: boolean }) {
   const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
@@ -55,9 +65,18 @@ export async function PlanScreen({ goalId }: { goalId: string }) {
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
 
   let lead: string | null = null;
+  let late = false;
   if (unit && roadmap.state === "planned" && roadmap.end !== null) {
     const days = daysBetween(roadmap.end, roadmap.lastDay);
     if (days >= 0) lead = t("roadmap.plan.finish", { date: dateLabel(roadmap.end), days });
+    else {
+      late = true;
+      lead = t("roadmap.pasaElFinal.finish", {
+        date: dateLabel(roadmap.end),
+        weeks: Math.ceil(-days / 7),
+        end: civilDateLabel(roadmap.lastDay),
+      });
+    }
   }
   if (unit && roadmap.state === "noRhythm") lead = t("roadmap.sinRitmo.intro");
   if (!unit) lead = t("roadmap.plan.noMeasure");
@@ -129,6 +148,21 @@ export async function PlanScreen({ goalId }: { goalId: string }) {
             ) : null}
           </Flex>
         </Panel>
+      ) : null}
+      {late && open && unit && roadmap.end !== null ? (
+        <PlanEnd
+          goalId={goal.id}
+          goalName={goal.name}
+          unit={unit}
+          plan={plan}
+          meets={rhythmToMeet(plan, isTimeUnit(unit) ? 60 : 1)}
+          planEnd={roadmap.end}
+          moveTo={dayAfter(roadmap.end)}
+        />
+      ) : null}
+      {!unit || roadmap.state === "planned" ? <PlanMonths goal={goal} all={all} /> : null}
+      {open ? (
+        <AddTask goalId={goal.id} goalName={goal.name} unit={unit} months={openMonthsOf(plan)} />
       ) : null}
       <Section as="div">
         <Separator />

@@ -123,7 +123,12 @@ export function TaskRow({
         <span>{lines.map((line, index) => <span key={index}>{line}</span>)}</span>
       </Flex>
     ) : (lines[0] as ReactNode);
-  const shownTrailing = part ? t("roadmap.plan.part", { part: say(part.part), total: say(part.hours) }) : trailing;
+  // «7 de 30 h»: the unit is said once, on the total, when the part is one bare figure of it.
+  const totalSaid = part ? say(part.hours) : "";
+  const partSaid = part ? say(part.part) : "";
+  const unitTail = /\s\p{L}+$/u.exec(totalSaid)?.[0];
+  const partBare = unitTail && partSaid.endsWith(unitTail) && partSaid.split(" ").length === 2 && totalSaid.split(" ").length === 2 ? partSaid.slice(0, -unitTail.length) : partSaid;
+  const shownTrailing = part ? t("roadmap.plan.part", { part: partBare, total: totalSaid }) : trailing;
 
   const trail = shownTrailing ? (
     <Text variant="meta" tone="muted">
