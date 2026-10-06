@@ -7,7 +7,7 @@ UPDATE "goals"."one_offs" SET "in_plan" = true WHERE "planned_month" IS NOT NULL
 --> statement-breakpoint
 ALTER TABLE "goals"."goals" ADD CONSTRAINT "goals_rhythm_range" CHECK ("goals"."goals"."rhythm" is null or ("goals"."goals"."rhythm" between 1 and 1000000 and "goals"."goals"."measure_unit" is not null));--> statement-breakpoint
 ALTER TABLE "goals"."goals" ADD CONSTRAINT "goals_plan_seen_first_day" CHECK ("goals"."goals"."plan_seen" is null or "goals"."goals"."plan_seen" = date_trunc('month', "goals"."goals"."plan_seen")::date);--> statement-breakpoint
-ALTER TABLE "goals"."one_offs" ADD CONSTRAINT "one_offs_in_plan_shape" CHECK (not "goals"."one_offs"."in_plan" or ("goals"."one_offs"."goal_id" is not null and "goals"."one_offs"."day" is null));--> statement-breakpoint
+ALTER TABLE "goals"."one_offs" ADD CONSTRAINT "one_offs_in_plan_shape" CHECK (not "goals"."one_offs"."in_plan" or "goals"."one_offs"."goal_id" is not null);--> statement-breakpoint
 ALTER TABLE "goals"."one_offs" ADD CONSTRAINT "one_offs_planned_month_in_plan" CHECK ("goals"."one_offs"."planned_month" is null or "goals"."one_offs"."in_plan");--> statement-breakpoint
 ALTER TABLE "goals"."one_offs" ADD CONSTRAINT "one_offs_child_in_plan" CHECK ("goals"."one_offs"."parent_id" is null or "goals"."one_offs"."in_plan");--> statement-breakpoint
 ALTER POLICY "one_offs_insert_self" ON "goals"."one_offs" TO authenticated WITH CHECK ((select auth.uid()) = "goals"."one_offs"."user_id" and ("goals"."one_offs"."parent_id" is null or exists (

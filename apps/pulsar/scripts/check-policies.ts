@@ -2335,12 +2335,13 @@ async function checkRoadmapSchema(): Promise<void> {
       );
       assert("P194", underSuelta.code === "42501", `sub-task under a suelta, sqlstate = ${underSuelta.code ?? "none"}`);
 
-      const dayInPlan = await attemptRows<{ id: string }>(
+      // A plan task may take a day (scheduleOneOff); only a goalless one is out of the plan.
+      const goallessInPlan = await attemptRows<{ id: string }>(
         tx,
-        (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, day, in_plan)
-          values (${subject}, ${measured.id}, 'con dia', ${dayAfter(todayInZone(), 2)}, true) returning id`,
+        (sp) => sp`insert into goals.one_offs (user_id, name, in_plan)
+          values (${subject}, 'sin meta', true) returning id`,
       );
-      assert("P195", dayInPlan.code === "23514", `in_plan with a day, sqlstate = ${dayInPlan.code ?? "none"}`);
+      assert("P195", goallessInPlan.code === "23514", `in_plan with no goal, sqlstate = ${goallessInPlan.code ?? "none"}`);
 
       const [done] = await tx<{ id: string }[]>`
         insert into goals.one_offs (user_id, goal_id, name, planned_month)

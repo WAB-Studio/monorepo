@@ -761,7 +761,7 @@
         },
         "one_offs_in_plan_shape": {
           "name": "one_offs_in_plan_shape",
-          "value": "not \"goals\".\"one_offs\".\"in_plan\" or (\"goals\".\"one_offs\".\"goal_id\" is not null and \"goals\".\"one_offs\".\"day\" is null)"
+          "value": "not \"goals\".\"one_offs\".\"in_plan\" or \"goals\".\"one_offs\".\"goal_id\" is not null"
         },
         "one_offs_planned_month_in_plan": {
           "name": "one_offs_planned_month_in_plan",
