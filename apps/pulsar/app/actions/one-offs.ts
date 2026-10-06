@@ -13,6 +13,8 @@ import {
   createOneOffSchema,
   completeOneOffSchema,
   deleteOneOffSchema,
+  editTaskSchema,
+  fixTaskSchema,
   moveTaskSchema,
   scheduleOneOffSchema,
   setOneOffNoteSchema,
@@ -22,6 +24,8 @@ import {
   type CompleteOneOffInput,
   type DeleteOneOffInput,
   type MoveTaskInput,
+  type EditTaskInput,
+  type FixTaskInput,
 } from "@/lib/validation/one-off";
 
 import { declareFact, type DeclareFactResult } from "./facts";
@@ -33,6 +37,8 @@ export type ScheduleOneOffResult = { ok: true } | { ok: false; error: MessageKey
 export type DeleteOneOffResult = { ok: true } | { ok: false; error: MessageKey };
 export type SetOneOffNoteResult = { ok: true } | { ok: false; error: MessageKey };
 export type MoveTaskResult = { ok: true } | { ok: false; error: MessageKey };
+export type EditTaskResult = { ok: true } | { ok: false; error: MessageKey };
+export type FixTaskResult = EditTaskResult;
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -55,9 +61,9 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { name, day, estimate, plannedMonth, parentId, note } = parsed.data;
+  const { name, day, estimate, plannedMonth, parentId, note, inPlan } = parsed.data;
   // A plain one-off of a goal keeps RP-20's rules; a month's task obeys the goal's plan.
-  const isTask = plannedMonth != null || estimate != null || parentId != null;
+  const isTask = plannedMonth != null || estimate != null || parentId != null || inPlan === true;
 
   try {
     const written = await withGoalsDb(async (tx) => {
@@ -145,11 +151,11 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
       // "Drizzle's insert builder names every column"): `id` and `created_at`
       // are left off, and the grant does not even list `created_at`.
       const [inserted] = await tx.execute<{ id: string }>(sql`
-        insert into ${oneOffs} (user_id, goal_id, name, day, estimate, planned_month, parent_id, note)
+        insert into ${oneOffs} (user_id, goal_id, name, day, estimate, planned_month, parent_id, note, in_plan)
         values (
           ${person.id}, ${goalId}, ${name}, ${day}, ${estimate ?? null},
           ${plannedMonth != null ? monthStart(plannedMonth) : null}, ${parentId ?? null},
-          ${note ?? null}
+          ${note ?? null}, ${inPlan === true}
         )
         returning id
       `);
@@ -319,29 +325,35 @@ export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneO
   }
 }
 
-/**
- * Moves an undone month task, with its sub-tasks, to another open month of
- * its goal's span (RP-42). Sub-tasks carry no month and follow the parent's
- * row. The row is read first only to name the refusal; the UPDATE repeats
- * `day is null` and writes 0 rows if a day landed in between, reported as
- * `oneOffHasFact`.
- */
-export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskResult> {
-  const parsed = moveTaskSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+type TaskWrite = {
+  oneOffId: string;
+  name?: string;
+  estimate?: number | null;
+  month?: string | null;
+};
 
+/**
+ * The one write behind `editTask` and `fixTask` (RP-51, RP-55, RP-57). The
+ * row is read first only to name the refusal; the UPDATE is the act. A fact
+ * or a child landing in between makes `one_offs_guard_day` return 0 rows for
+ * an estimate or a month, reported as `doneTask`. A one-off of no goal takes
+ * its name alone.
+ */
+async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { oneOffId, month } = parsed.data;
+  const { oneOffId, name, estimate, month } = input;
+  const touchesEstimate = estimate !== undefined;
+  const touchesMonth = month !== undefined;
 
   try {
-    const moved = await withGoalsDb(async (tx) => {
+    const written = await withGoalsDb(async (tx) => {
       const [row] = await tx
         .select({
           goalId: oneOffs.goalId,
           parentId: oneOffs.parentId,
-          day: oneOffs.day,
+          inPlan: oneOffs.inPlan,
           plannedMonth: oneOffs.plannedMonth,
           // Itself or any child; `${oneOffs}.id`, never `${oneOffs.id}` (see scheduleOneOff).
           hasFact: sql<boolean>`exists (
@@ -349,54 +361,101 @@ export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskRes
             where f.one_off_id = ${oneOffs}.id
               or f.one_off_id in (select c.id from ${oneOffs} c where c.parent_id = ${oneOffs}.id)
           )`,
+          hasChildren: sql<boolean>`exists (select 1 from ${oneOffs} c where c.parent_id = ${oneOffs}.id)`,
           horizon: goals.horizon,
           archivedAt: goals.archivedAt,
+          measureUnit: goals.measureUnit,
           createdAt: goals.createdAt,
         })
         .from(oneOffs)
         .leftJoin(goals, eq(goals.id, oneOffs.goalId))
         .where(eq(oneOffs.id, oneOffId));
       if (!row) throw new NamedError("plan.errors.notFound");
-      if (
-        row.parentId !== null ||
-        row.plannedMonth === null ||
-        row.goalId === null ||
-        row.horizon === null ||
-        row.createdAt === null
-      ) {
-        throw new NamedError("month.errors.invalid");
-      }
-      if (row.day !== null || row.hasFact) throw new NamedError("day.errors.oneOffHasFact");
-      if (isClosed({ horizon: row.horizon, archivedAt: row.archivedAt })) {
-        throw new NamedError("month.errors.closed");
-      }
-      if (
-        monthOutsideSpan({
-          month,
-          openedOn: civilDateInZone(row.createdAt),
-          horizon: row.horizon,
-        })
-      ) {
-        throw new NamedError("month.errors.outsideSpan");
-      }
-      if (month < todayInZone().slice(0, 7)) throw new NamedError("month.errors.monthClosed");
 
+      if (row.goalId === null) {
+        // A suelta (RP-57): a name, done or not, and nothing else.
+        if (estimate != null) throw new NamedError("month.errors.noMeasure");
+        if (touchesMonth) throw new NamedError("month.errors.invalid");
+      } else {
+        if (!row.inPlan || row.horizon === null || row.createdAt === null) {
+          throw new NamedError("month.errors.invalid");
+        }
+        if (touchesEstimate || touchesMonth) {
+          if (row.hasFact) throw new NamedError("roadmap.errors.doneTask");
+          if (touchesMonth && row.parentId !== null) throw new NamedError("roadmap.errors.subTaskMonth");
+          if (isClosed({ horizon: row.horizon, archivedAt: row.archivedAt })) {
+            throw new NamedError("month.errors.closed");
+          }
+          if (estimate != null) {
+            if (row.hasChildren) throw new NamedError("month.errors.invalid");
+            if (row.measureUnit === null) throw new NamedError("month.errors.noMeasure");
+          }
+          if (month != null) {
+            if (
+              monthOutsideSpan({
+                month,
+                openedOn: civilDateInZone(row.createdAt),
+                horizon: row.horizon,
+              })
+            ) {
+              throw new NamedError("roadmap.errors.monthOutsideSpan");
+            }
+            if (month < todayInZone().slice(0, 7)) throw new NamedError("roadmap.errors.monthEnded");
+          }
+        }
+      }
+
+      const set: Partial<typeof oneOffs.$inferInsert> = {};
+      if (name !== undefined) set.name = name;
+      if (touchesEstimate) set.estimate = estimate;
+      if (touchesMonth) set.plannedMonth = month === null ? null : monthStart(month);
       const updated = await tx
         .update(oneOffs)
-        .set({ plannedMonth: monthStart(month) })
-        .where(and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id), isNull(oneOffs.day)))
+        .set(set)
+        .where(and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id)))
         .returning({ id: oneOffs.id });
-      if (updated.length === 0) throw new NamedError("day.errors.oneOffHasFact");
-      return { goalId: row.goalId, from: row.plannedMonth.slice(0, 7) };
+      if (updated.length === 0) {
+        throw new NamedError(touchesEstimate || touchesMonth ? "roadmap.errors.doneTask" : "plan.errors.notFound");
+      }
+      return { goalId: row.goalId };
     });
 
-    revalidatePath(`/metas/${moved.goalId}/meses/${moved.from}`);
-    revalidatePath(`/metas/${moved.goalId}/meses/${month}`);
+    revalidatePath("/");
+    revalidatePath("/sueltas");
+    if (written.goalId !== null) {
+      revalidatePath("/mes");
+      revalidatePath(`/metas/${written.goalId}`, "layout");
+    }
     return { ok: true };
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
+}
+
+/**
+ * The sheet's one act (RP-55, RP-57): name, estimate and month of a plan
+ * task, or the name of a suelta. Absent leaves a field; `month: null`
+ * returns the task to the plan.
+ */
+export async function editTask(input: EditTaskInput): Promise<EditTaskResult> {
+  const parsed = editTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  return writeTask(parsed.data);
+}
+
+/** The month half of `editTask`, for the AI (RP-51): fixes, or unfixes with `null`. */
+export async function fixTask(input: FixTaskInput): Promise<FixTaskResult> {
+  const parsed = fixTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  return writeTask(parsed.data);
+}
+
+/** Fixes a task to a month. Stays for the MCP until 355 deletes it. */
+export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskResult> {
+  const parsed = moveTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  return writeTask(parsed.data);
 }
 
 /**
