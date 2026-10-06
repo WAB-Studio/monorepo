@@ -15,6 +15,8 @@ Un plan escrito así se lee en la app, sin IA y sin tope (RP-37). Cualquier otro
 - Cadencia: `cada día`, `lunes y jueves` (días separados por coma o «y»), `3 veces por semana`, `cada 2 días`, `2 veces al mes`.
 - Tarea: `- AAAA-MM · <nombre>` o `- AAAA-MM · <monto> · <nombre>`.
 - Sub-tarea: una línea `- ` con exactamente dos espacios antes, justo bajo su tarea: `  - <nombre>` o `  - <monto> · <nombre>`.
+- Nota: una línea `nota: <texto>` justo bajo su tarea, con dos espacios antes, o bajo su sub-tarea, con cuatro. La de una tarea va antes de sus sub-tareas.
+- Una nota de varias líneas repite la línea: cada `nota:` es una línea de la nota, y `nota:` sola es una línea en blanco. El texto va tal cual; la nota entera se recorta en ambos extremos y, toda en blanco, no es nota. Máximo 2000 caracteres: más detiene la lectura en su primera línea `nota:`. Una `nota:` en otro lugar detiene la lectura como línea fuera de forma. El encabezado no cambia: una plantilla sin `nota:` se lee como antes.
 - Monto: con una medida en minutos, `12 h`, `1,5 h`, `12 h 30 min` o `90 min`, y se guarda en minutos; con cualquier otra unidad, un número entero.
 - Una línea que no sigue la forma detiene la lectura y se dice cuál era y qué se esperaba.
 
@@ -41,6 +43,9 @@ medida: horas de estudio · minutos
 ## Tareas
 - 2026-10 · 4 h · Leer AI Engineering cap. 1–4
 - 2026-10 · Tutor
+  nota: Preguntar por la tarifa por hora.
+  nota: Pedir una clase de prueba antes de pagar.
   - 1 h · Elegir tutor
+    nota: Comparar tres perfiles.
   - 6 h · Sesiones 1–4
 ```

@@ -110,6 +110,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-25** — A goal's horizon can be moved from the goal. Its facts, weeks and phases keep reading as they did, and a horizon never ends before a phase does. Asked for by the user 2026-09-28, to keep «Se puede mover después» true.
 - [x] **RP-21** — A one-off with no day is not lost. It waits in a list of its own, off the day's screen, and is given a day whenever the person wants one. A one-off written for a later day waits in the same list, with its date, and can be moved, done or deleted there.
 - [x] **RP-27** — A goal past its end says the day it ended and is listed apart among the goals. Its commitments leave the day. Through the Sunday of the week it ended in, the day and the week still name it with the day it ended and a way to open it; after that it leaves both. It can be archived or have its end moved. Nothing is deleted. Decided by the user 2026-09-30, succeeding RP-26.
+- [ ] **RP-45** — A task — a month task, a sub-task or a one-off — holds an optional note the person writes and changes at any time, done or not: plain text of at most 2000 characters, line breaks kept, no formatting, never stored empty (emptied, it has none). The month's lists and «lo que espera» (`/sueltas`) show it; Hoy shows only that one exists and opens it. The template carries it as `nota:` lines (`docs/pulsar/PLANTILLA.md`) and an import writes it; the model import proposes none. A connected AI reads it, writes it and replaces it (RP-40), and never empties it. The PDF (RP-33) prints it under carried tasks only. It is not the line a fact carries (RP-04). Decided by the user 2026-10-05.
 
 #### The plan by month
 
@@ -205,7 +206,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 | **Goal** | A name, a horizon, one measure, and the phases it passes through. |
 | **Commitment** | What counts, how often, and what satisfies it — a tap, a quantity, or evidence over a threshold. |
 | **Fact** | Something that happened: its day, the moment it was written, its source, an optional quantity, an optional line. |
-| **One-off** | Something to do once: a name, a day when it has one, and a goal when it belongs to one. |
+| **One-off** | Something to do once: a name, a day when it has one, a goal when it belongs to one, and a note when the person writes one. |
 | **Month budget** | A planned amount for one goal in one calendar month, in the goal's measure unit. |
 | **Access key** | A key a person creates for an AI assistant, or an authorization they grant one. Stored as its fingerprint; revoked, never deleted. |
 | **Evidence** | Rows another app owns, read under the person's own identity and never copied. A source declares where they live and what one row is worth. |
