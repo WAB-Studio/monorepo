@@ -91,7 +91,7 @@ export function ScheduleSheet({
         error={dateError}
       />
       {otherError ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" tone="muted" variant="sentence">
           {t(otherError)}
         </Text>
       ) : null}
@@ -104,7 +104,7 @@ export function ScheduleSheet({
         </Button>
       </SheetActions>
       <Button tap={44} variant="ghost" onClick={onDelete} disabled={pending}>
-        <Text variant="meta" tone="muted">
+        <Text variant="sentence" tone="muted">
           {t("oneOffs.schedule.delete")}
         </Text>
       </Button>

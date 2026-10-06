@@ -4,7 +4,7 @@
   "scheduledGroupOne": "{count} programada",
   "scheduledGroupMany": "{count} programadas",
   "fromGoal": "de {goal}",
-  "whenWithGoal": "{when} · de {goal}",
+  "whenWithGoal": "<fig>{when}</fig> · de {goal}",
   "when": "{weekday} {day}",
   "whenFar": "{weekday} {day} de {month}",
   "markLabel": "Dar por hecha: {name}",
