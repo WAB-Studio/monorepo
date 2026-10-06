@@ -38,12 +38,6 @@
   font-weight: 400;
 }
 
-.choice.selected {
-  background: var(--pulsar-accent-soft);
-  border-color: var(--pulsar-accent);
-  color: var(--pulsar-ink);
-}
-
 /* One of seven in a row. At 360px the page leaves a 320px column, so seven of
    these take 308 and the row that holds them has 12px to spend on gaps: 2px
    between chips, and no more. Never shrinks below its floor — a row with a
@@ -55,12 +49,13 @@
   padding: 0;
 }
 
-/* Selected is the accent filled, the way a declared mark is: the difference is
-   fill, never hue (docs/pulsar/DESIGN.md "The marks"). */
-.selected {
-  background: var(--pulsar-accent);
+/* Selected is the soft accent fill with a 1px accent ring, never the solid
+   fill a primary button wears (docs/pulsar/DESIGN.md "SistemaPiezas"). */
+.chip.selected {
+  background: var(--pulsar-accent-soft);
   border-color: var(--pulsar-accent);
-  color: var(--pulsar-on-accent);
+  color: var(--pulsar-ink);
+  font-weight: 500;
 }
 
 /* docs/pulsar/DESIGN.md "Type": a quantity offered in a chip is still a figure. */
