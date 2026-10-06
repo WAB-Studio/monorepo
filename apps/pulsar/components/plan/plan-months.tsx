@@ -2,7 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { TaskRow, type TaskRowProps } from "@/components/month/task-row";
-import { Figure, Flex, Mark, Panel, Progress, Row, Section, Separator, Text } from "@/components/ui";
+import { Figure, Flex, Mark, Progress, Row, Section, Separator, Text } from "@/components/ui";
 import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
@@ -156,14 +156,13 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
             </Flex>
           }
         >
-          <Panel as="div" bordered>
-            <Row
-              href={`/metas/${goal.id}/plan?todo=1`}
-              name={t("roadmap.plan.seeRest")}
-              trailing={<ChevronRight size={20} aria-hidden />}
-              rule={false}
-            />
-          </Panel>
+          <Row
+            card
+            href={`/metas/${goal.id}/plan?todo=1`}
+            name={t("roadmap.plan.seeRest")}
+            trailing={<ChevronRight size={20} aria-hidden />}
+            rule={false}
+          />
         </Section>
       ) : null}
       {pastItems.length > 0 ? (

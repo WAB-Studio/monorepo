@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { monthOf, nextMonth } from "@/lib/plan/months";
@@ -16,6 +16,15 @@ const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UT
 // Five tasks of 4 h: 20 h, so 12 h a month ends next month and 20 h this one.
 const THIS_MONTH = monthFormat.format(new Date(`${monthOf(today)}T12:00:00Z`));
 const NEXT_MONTH = monthFormat.format(new Date(`${nextMonth(monthOf(today))}T12:00:00Z`));
+
+// A white bordered card: 1px line, radius 10 (`Row card`), never `Panel bordered`.
+async function expectCard(row: Locator) {
+  const box = await row.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { border: style.borderTopWidth, radius: style.borderTopLeftRadius };
+  });
+  expect(box).toEqual({ border: "1px", radius: "10px" });
+}
 
 async function seedGoal(db: postgres.Sql, personId: string, rhythm: number | null) {
   const [goal] = await db<{ id: string }[]>`
@@ -118,7 +127,10 @@ for (const width of [390, 1440]) {
       try {
         await page.goto(`/metas/${goalId}/plan`);
         const before = await planned(page).innerText();
-        await page.getByRole("button", { name: "Cambiar", exact: true }).click();
+        const row = page.getByRole("button", { name: "Ritmo 12 h al mes" });
+        await expectCard(row);
+        await expect(row.getByText("Cambiar", { exact: true })).toBeVisible();
+        await row.click();
         const sheet = page.getByRole("dialog");
         await expect(sheet.getByRole("heading", { name: "¿Cuántas horas al mes?" })).toBeVisible();
         await expect(sheet.getByRole("radio", { name: "12 h" })).toHaveAttribute("aria-checked", "true");

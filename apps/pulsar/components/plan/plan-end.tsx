@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -7,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { moveHorizon } from "@/app/actions/plan";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { TaskSheet } from "@/components/plan/task-sheet";
-import { Button, Flex, Panel, Text } from "@/components/ui";
+import { Button, Flex, Row, Text } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import { type MessageKey } from "@/i18n/translator";
 import type { PlanInput } from "@/lib/plan/roadmap";
@@ -57,37 +58,31 @@ export function PlanEnd({
   return (
     <Flex direction="column" gap="3">
       {unit && meets !== null ? (
-        <Panel as="div" bordered>
-          <Flex direction="column" gap="1" align="start">
-            <RhythmSheet
-              goalId={goalId}
-              goalName={goalName}
-              unit={unit}
-              plan={plan}
-              initial={meets}
-              trigger={t("roadmap.pasaElFinal.raise")}
-            />
-            <Text as="p" variant="sentence">
-              {t("roadmap.pasaElFinal.raiseHint", { hours: formatQuantity(meets, unit, words) })}
-            </Text>
-          </Flex>
-        </Panel>
+        <RhythmSheet
+          goalId={goalId}
+          goalName={goalName}
+          unit={unit}
+          plan={plan}
+          initial={meets}
+          name={t("roadmap.pasaElFinal.raise")}
+          meta={t("roadmap.pasaElFinal.raiseHint", { hours: formatQuantity(meets, unit, words) })}
+        />
       ) : null}
-      <Panel as="div" bordered>
-        <Flex direction="column" gap="1" align="start">
-          <Button variant="ghost" tone="accent" tap={44} onClick={move} disabled={pending}>
-            {t("roadmap.pasaElFinal.moveEnd")}
-          </Button>
-          <Text as="p" variant="sentence">
-            {t("roadmap.pasaElFinal.moveEndHint", { date: civilDateLabel(planEnd) })}
-          </Text>
-          {error ? (
-            <Text as="p" variant="sentence" role="alert">
-              {t(error)}
-            </Text>
-          ) : null}
-        </Flex>
-      </Panel>
+      <Row
+        card
+        rule={false}
+        name={t("roadmap.pasaElFinal.moveEnd")}
+        meta={t("roadmap.pasaElFinal.moveEndHint", { date: civilDateLabel(planEnd) })}
+        metaVariant="sentence"
+        trailing={<ChevronRight size={20} aria-hidden />}
+        onClick={move}
+        disabled={pending}
+      />
+      {error ? (
+        <Text as="p" variant="sentence" role="alert">
+          {t(error)}
+        </Text>
+      ) : null}
       <Text as="p" variant="sentence">
         {t("roadmap.pasaElFinal.removeTasks")}
       </Text>
