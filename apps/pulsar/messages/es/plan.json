@@ -31,7 +31,6 @@
   "phaseForm": {
     "title": "Fase nueva",
     "aimLabel": "qué busca",
-    "weeksLabel": "qué semanas",
     "fromLabel": "desde la semana",
     "toLabel": "hasta la semana",
     "submit": "Añadirla"

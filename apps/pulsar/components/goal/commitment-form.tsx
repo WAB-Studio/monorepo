@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { addCommitment } from "@/app/actions/plan";
 import { addCommitmentSchema, type AddCommitmentInput } from "@/lib/validation/plan";
-import { Button, Chip, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
+import { Button, Chip, Field, Flex, Page, ScreenHeader, Section, Text } from "@/components/ui";
 import { messageKey, type MessageKey, type SourceKey } from "@/i18n/translator";
 
 export type CommitmentFormProps = {
@@ -31,6 +31,19 @@ const SATISFACTION_KINDS = ["tap", "quantity", "evidence"] as const;
 type SatisfactionKind = (typeof SATISFACTION_KINDS)[number];
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+
+// Which control a refusal belongs to, by the message the schema carries: the
+// ring and the sentence land there, never in a line far from it.
+const NAME_ERRORS: MessageKey[] = ["plan.errors.nameEmpty", "plan.errors.nameTooLong"];
+const WEEKDAY_ERRORS: MessageKey[] = ["plan.errors.weekdaysEmpty", "plan.errors.weekdayInvalid"];
+const COUNT_ERRORS: MessageKey[] = [
+  "plan.errors.timesPerWeekInvalid",
+  "plan.errors.everyNDaysInvalid",
+  "plan.errors.timesPerMonthInvalid",
+];
+const QUANTITY_ERRORS: MessageKey[] = ["plan.errors.targetQuantityInvalid"];
+const UNIT_ERRORS: MessageKey[] = ["plan.errors.unitEmpty", "plan.errors.unitTooLong"];
+const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
 
 /**
  * `CompromisoNuevo.dc.html` (RP-12): what it is, how often, what gives it for
@@ -111,6 +124,15 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
 
   const trimmedUnit = unit.trim();
 
+  const refusal = (keys: MessageKey[]) => (error && keys.includes(error) ? t(error) : undefined);
+  const nameRefusal = refusal(NAME_ERRORS);
+  const weekdaysRefusal = refusal(WEEKDAY_ERRORS);
+  const countRefusal = refusal(COUNT_ERRORS);
+  const quantityRefusal = refusal(QUANTITY_ERRORS);
+  const unitRefusal = refusal(UNIT_ERRORS);
+  const thresholdRefusal = refusal(THRESHOLD_ERRORS);
+  const ownedRefusal = [nameRefusal, weekdaysRefusal, countRefusal, quantityRefusal, unitRefusal, thresholdRefusal].some(Boolean);
+
   return (
     <Page>
       <ScreenHeader title={t("plan.commitmentForm.title")} back={{ href: `/metas/${goalId}`, place: goalName }} />
@@ -119,139 +141,154 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
         label={t("plan.commitmentForm.whatLabel")}
         value={name}
         onChange={(event) => setName(event.target.value)}
+        invalid={nameRefusal !== undefined}
+        hint={nameRefusal}
       />
 
-      <section>
-        <Flex direction="column" gap="3">
-          <SectionLabel>{t("plan.commitmentForm.whenLabel")}</SectionLabel>
-          <Flex gap="2" wrap="wrap">
-            {CADENCE_KINDS.map((kind) => (
-              <Chip key={kind} selected={cadenceKind === kind} onClick={() => setCadenceKind(kind)}>
-                {t(`plan.commitmentForm.cadence.${kind}`)}
-              </Chip>
-            ))}
-          </Flex>
-
-          {cadenceKind === "weekdays" ? (
-            <Flex gap="1">
-              {WEEKDAYS.map((day) => (
-                <Chip
-                  key={day}
-                  shape="day"
-                  mono
-                  selected={weekdays.includes(day)}
-                  onClick={() => toggleWeekday(day)}
-                >
-                  {weekdayShort[day - 1]}
-                </Chip>
-              ))}
-            </Flex>
-          ) : null}
-
-          {cadenceKind === "times_per_week" ? (
-            <Field
-              label={t("plan.commitmentForm.timesPerWeekLabel")}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={cadenceN}
-              onChange={(event) => setCadenceN(event.target.value)}
-            />
-          ) : null}
-
-          {cadenceKind === "every_n_days" ? (
-            <Field
-              label={t("plan.commitmentForm.everyNDaysLabel")}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={cadenceN}
-              onChange={(event) => setCadenceN(event.target.value)}
-            />
-          ) : null}
-
-          {cadenceKind === "times_per_month" ? (
-            <Field
-              label={t("plan.commitmentForm.timesPerMonthLabel")}
-              hint={t("plan.commitmentForm.timesPerMonthHint")}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={31}
-              step={1}
-              value={cadenceN}
-              onChange={(event) => setCadenceN(event.target.value)}
-            />
-          ) : null}
+      <Section label={t("plan.commitmentForm.whenLabel")}>
+        <Flex gap="2" wrap="wrap">
+          {CADENCE_KINDS.map((kind) => (
+            <Chip key={kind} selected={cadenceKind === kind} onClick={() => setCadenceKind(kind)}>
+              {t(`plan.commitmentForm.cadence.${kind}`)}
+            </Chip>
+          ))}
         </Flex>
-      </section>
 
-      <section>
-        <Flex direction="column" gap="3">
-          <SectionLabel>{t("plan.commitmentForm.doneByLabel")}</SectionLabel>
-          <Flex gap="2" wrap="wrap">
-            {SATISFACTION_KINDS.filter((kind) => kind !== "evidence" || sources.length > 0).map((kind) => (
-              <Chip key={kind} selected={satisfaction === kind} onClick={() => setSatisfaction(kind)}>
-                {t(`plan.commitmentForm.satisfaction.${kind}`)}
+        {cadenceKind === "weekdays" ? (
+          <Flex gap="1">
+            {WEEKDAYS.map((day) => (
+              <Chip
+                key={day}
+                shape="day"
+                mono
+                selected={weekdays.includes(day)}
+                onClick={() => toggleWeekday(day)}
+              >
+                {weekdayShort[day - 1]}
               </Chip>
             ))}
           </Flex>
+        ) : null}
+        {weekdaysRefusal ? (
+          <Text as="p" tone="ink" variant="sentence">
+            {weekdaysRefusal}
+          </Text>
+        ) : null}
 
-          {satisfaction === "quantity" ? (
-            <>
-              <Flex gap="2">
-                <Field
-                  label={t("plan.commitmentForm.quantityLabel")}
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  step={1}
-                  value={targetQuantity}
-                  onChange={(event) => setTargetQuantity(event.target.value)}
-                  style={{ maxWidth: 88 }}
-                />
-                <Field
-                  label={t("plan.commitmentForm.unitLabel")}
-                  value={unit}
-                  onChange={(event) => setUnit(event.target.value)}
-                  style={{ flex: 1 }}
-                />
-              </Flex>
-              {!hasMeasure && trimmedUnit.length > 0 ? (
-                <Text as="p" variant="meta" tone="muted">
-                  {t("plan.commitmentForm.noMeasureYet", { unit: trimmedUnit })}
-                </Text>
-              ) : null}
-            </>
-          ) : null}
+        {cadenceKind === "times_per_week" ? (
+          <Field
+            label={t("plan.commitmentForm.timesPerWeekLabel")}
+            invalid={countRefusal !== undefined}
+            hint={countRefusal}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={cadenceN}
+            onChange={(event) => setCadenceN(event.target.value)}
+          />
+        ) : null}
 
-          {satisfaction === "evidence" ? (
-            <>
-              <Flex gap="2" wrap="wrap">
-                {sources.map((source) => (
-                  <Chip key={source.key} selected={sourceKey === source.key} onClick={() => setSourceKey(source.key)}>
-                    {t(source.labelKey)}
-                  </Chip>
-                ))}
-              </Flex>
+        {cadenceKind === "every_n_days" ? (
+          <Field
+            label={t("plan.commitmentForm.everyNDaysLabel")}
+            invalid={countRefusal !== undefined}
+            hint={countRefusal}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={cadenceN}
+            onChange={(event) => setCadenceN(event.target.value)}
+          />
+        ) : null}
+
+        {cadenceKind === "times_per_month" ? (
+          <Field
+            label={t("plan.commitmentForm.timesPerMonthLabel")}
+            invalid={countRefusal !== undefined}
+            hint={countRefusal ?? t("plan.commitmentForm.timesPerMonthHint")}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={31}
+            step={1}
+            value={cadenceN}
+            onChange={(event) => setCadenceN(event.target.value)}
+          />
+        ) : null}
+      </Section>
+
+      <Section label={t("plan.commitmentForm.doneByLabel")}>
+        <Flex gap="2" wrap="wrap">
+          {SATISFACTION_KINDS.filter((kind) => kind !== "evidence" || sources.length > 0).map((kind) => (
+            <Chip key={kind} selected={satisfaction === kind} onClick={() => setSatisfaction(kind)}>
+              {t(`plan.commitmentForm.satisfaction.${kind}`)}
+            </Chip>
+          ))}
+        </Flex>
+
+        {satisfaction === "quantity" ? (
+          <>
+            <Flex gap="2">
               <Field
-                label={t("plan.commitmentForm.thresholdLabel")}
+                label={t("plan.commitmentForm.quantityLabel")}
                 type="number"
                 inputMode="numeric"
                 min={1}
                 step={1}
-                value={threshold}
-                onChange={(event) => setThreshold(event.target.value)}
+                value={targetQuantity}
+                onChange={(event) => setTargetQuantity(event.target.value)}
+                invalid={quantityRefusal !== undefined}
+                style={{ maxWidth: 88 }}
               />
-            </>
-          ) : null}
-        </Flex>
-      </section>
+              <Field
+                label={t("plan.commitmentForm.unitLabel")}
+                value={unit}
+                onChange={(event) => setUnit(event.target.value)}
+                invalid={unitRefusal !== undefined}
+                style={{ flex: 1 }}
+              />
+            </Flex>
+            {quantityRefusal || unitRefusal ? (
+              <Text as="p" tone="ink" variant="sentence">
+                {quantityRefusal ?? unitRefusal}
+              </Text>
+            ) : null}
+            {!hasMeasure && trimmedUnit.length > 0 ? (
+              <Text as="p" variant="sentence" tone="muted">
+                {t("plan.commitmentForm.noMeasureYet", { unit: trimmedUnit })}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
 
-      {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        {satisfaction === "evidence" ? (
+          <>
+            <Flex gap="2" wrap="wrap">
+              {sources.map((source) => (
+                <Chip key={source.key} selected={sourceKey === source.key} onClick={() => setSourceKey(source.key)}>
+                  {t(source.labelKey)}
+                </Chip>
+              ))}
+            </Flex>
+            <Field
+              label={t("plan.commitmentForm.thresholdLabel")}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={threshold}
+              onChange={(event) => setThreshold(event.target.value)}
+              invalid={thresholdRefusal !== undefined}
+              hint={thresholdRefusal}
+            />
+          </>
+        ) : null}
+      </Section>
+
+      {error && !ownedRefusal ? (
+        <Text as="p" tone="ink" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

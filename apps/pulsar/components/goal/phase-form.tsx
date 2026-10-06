@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { addPhase } from "@/app/actions/plan";
 import { addPhaseSchema, phasesOverlap, phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
-import { Button, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
+import { Button, Field, Flex, Page, ScreenHeader, Section, Text } from "@/components/ui";
 
 import { weeksToPhaseSpan } from "./phase-weeks";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -33,6 +33,16 @@ export type PhaseFormProps = {
 // same ample, arbitrary ceiling `cadenceN` takes in `lib/validation/plan.ts`,
 // so a mistyped digit reads as a message instead of reaching date arithmetic.
 const weekSchema = z.coerce.number().int().positive().max(2_600);
+
+const AIM_ERRORS: MessageKey[] = ["plan.errors.aimEmpty", "plan.errors.aimTooLong"];
+const WEEK_ERRORS: MessageKey[] = [
+  "plan.errors.weekInvalid",
+  "plan.errors.phaseBackwards",
+  "plan.errors.phasePastHorizon",
+  "plan.errors.phaseOverlap",
+  "plan.errors.startsOnInvalid",
+  "plan.errors.endsOnInvalid",
+];
 
 /**
  * `/metas/[goalId]/fases/nueva`, `CompromisoNuevo.dc.html`'s own shape (RP-15,
@@ -60,6 +70,13 @@ export function PhaseForm({
   const [fromWeek, setFromWeek] = useState(defaultFromWeek === null ? "" : String(defaultFromWeek));
   const [toWeek, setToWeek] = useState(defaultToWeek === null ? "" : String(defaultToWeek));
   const [error, setError] = useState<MessageKey | null>(null);
+
+  // A refusal reads at the field it is about, with its ring. The two week
+  // fields share one sentence under the pair: a half-width hint would break
+  // it into four lines.
+  const aimRefusal = error && AIM_ERRORS.includes(error) ? t(error) : undefined;
+  const weeksRefusal = error && WEEK_ERRORS.includes(error) ? t(error) : undefined;
+  const otherRefusal = error && !aimRefusal && !weeksRefusal ? t(error) : undefined;
 
   function handleSubmit() {
     if (pending) return;
@@ -112,37 +129,43 @@ export function PhaseForm({
         label={t("plan.phaseForm.aimLabel")}
         value={aim}
         onChange={(event) => setAim(event.target.value)}
+        invalid={aimRefusal !== undefined}
+        hint={aimRefusal}
       />
 
-      <section>
-        <Flex direction="column" gap="3">
-          <SectionLabel>{t("plan.phaseForm.weeksLabel")}</SectionLabel>
-          <Flex gap="2">
-            <Field
-              label={t("plan.phaseForm.fromLabel")}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={fromWeek}
-              onChange={(event) => setFromWeek(event.target.value)}
-            />
-            <Field
-              label={t("plan.phaseForm.toLabel")}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={toWeek}
-              onChange={(event) => setToWeek(event.target.value)}
-            />
-          </Flex>
+      <Section as="div">
+        <Flex gap="2">
+          <Field
+            label={t("plan.phaseForm.fromLabel")}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={fromWeek}
+            onChange={(event) => setFromWeek(event.target.value)}
+            invalid={weeksRefusal !== undefined}
+          />
+          <Field
+            label={t("plan.phaseForm.toLabel")}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={toWeek}
+            onChange={(event) => setToWeek(event.target.value)}
+            invalid={weeksRefusal !== undefined}
+          />
         </Flex>
-      </section>
+        {weeksRefusal ? (
+          <Text as="p" tone="ink" variant="sentence">
+            {weeksRefusal}
+          </Text>
+        ) : null}
+      </Section>
 
-      {error ? (
-        <Text as="p" tone="muted" variant="meta">
-          {t(error)}
+      {otherRefusal ? (
+        <Text as="p" tone="ink" variant="sentence">
+          {otherRefusal}
         </Text>
       ) : null}
 
