@@ -15,14 +15,17 @@ function redirectUriAcceptable(value: string): boolean {
   return url.protocol === "http:" && LOOPBACK.has(url.hostname);
 }
 
-const GRANT_TYPES = ["authorization_code", "refresh_token"] as const;
-
 // An RFC 7591 §2 body; fields the server does not keep are dropped.
 export const registrationSchema = z.object({
   client_name: z.string().min(1).max(80),
   redirect_uris: z.array(z.string().refine(redirectUriAcceptable)).min(1).max(5),
   token_endpoint_auth_method: z.literal("none").optional(),
-  grant_types: z.array(z.enum(GRANT_TYPES)).optional(),
+  // A grant the server does not offer is ignored, never refused: claude.ai's
+  // metadata document also lists `jwt-bearer`. Only the code grant is required.
+  grant_types: z
+    .array(z.string())
+    .refine((grants) => grants.includes("authorization_code"))
+    .optional(),
 });
 
 export type Registration = z.infer<typeof registrationSchema>;
