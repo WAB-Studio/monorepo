@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
-import { Button, Face, Flex, IconButton, Text, ThemeToggle } from "@/components/ui";
+import { Button, Face, Flex, IconButton, ScreenHeader, Text, ThemeToggle } from "@/components/ui";
 
 type HeaderLink = { href: string; label: string };
 
-// The day's own header (`Hoy.dc.html`, `DiaPasado.dc.html`): a step back to
-// the day before, then the date. Today carries its title under that line and
-// the light/dark control beside it (RNP-08): docs/pulsar/DESIGN.md
-// "Decisions taken here" puts it here and nowhere else — there is no
-// `/cuenta` screen in this app. A past day's date is its whole title, and
+// The day's own header (`ArmazonEncabezado.dc.html` case 4,
+// `DiaPasadoEscritorio.dc.html`): the shared `ScreenHeader`, its eyebrow line
+// holding the step back to the day before. Today's title is its `h1`, with the
+// date on that line and the light/dark control at its end (RNP-08):
+// docs/pulsar/DESIGN.md "Decisions taken here" puts it here and nowhere else —
+// there is no `/cuenta` screen in this app. A past day's date is its `h1`, and
 // «volver a hoy» takes the control's place.
 export function DayHeader({
   date,
@@ -35,23 +36,23 @@ export function DayHeader({
   // One quiet line per goal that ended this week, under the title.
   ended?: { id: string; text: string; href: string; see: string; seeLabel: string }[];
 }) {
-  return (
-    <>
-      <Flex justify="between" align="center" gap="2">
-        <Flex align="center" gap="1">
-          {back ? (
-            <IconButton asChild tap={44} variant="ghost">
-              <Link href={back.href} aria-label={back.label}>
-                <ChevronLeft size={20} aria-hidden />
-              </Link>
-            </IconButton>
-          ) : limitNote ? (
-            <Flex width="14px" flexShrink="0" aria-hidden />
-          ) : null}
+  const eyebrow = (
+    <Flex justify="between" align="center" gap="2">
+      <Flex align="center" gap="5">
+        {back ? (
+          <IconButton asChild tap={44} variant="ghost">
+            <Link href={back.href} aria-label={back.label}>
+              <ChevronLeft size={20} aria-hidden />
+            </Link>
+          </IconButton>
+        ) : limitNote ? (
+          <Flex width="14px" flexShrink="0" aria-hidden />
+        ) : null}
+        {title ? (
           <Text as="p" variant="meta" tone="muted">
             {date}
           </Text>
-        </Flex>
+        ) : null}
         {toToday ? (
           <Button asChild tap={44} variant="ghost">
             <Link href={toToday.href}>
@@ -61,25 +62,21 @@ export function DayHeader({
             </Link>
           </Button>
         ) : null}
-        {theme ? (
-          <Face on="phone">
-            <ThemeToggle toLightLabel={theme.toLightLabel} toDarkLabel={theme.toDarkLabel} />
-          </Face>
-        ) : null}
       </Flex>
+      {theme ? (
+        <Face on="phone">
+          <ThemeToggle toLightLabel={theme.toLightLabel} toDarkLabel={theme.toDarkLabel} />
+        </Face>
+      ) : null}
+    </Flex>
+  );
+
+  return (
+    <>
+      <ScreenHeader title={title ?? date} eyebrow={eyebrow} meta={tally} />
       {limitNote ? (
         <Text as="p" variant="meta" tone="muted">
           {limitNote}
-        </Text>
-      ) : null}
-      {title ? (
-        <Text as="p" variant="title">
-          {title}
-        </Text>
-      ) : null}
-      {tally ? (
-        <Text as="p" variant="meta" tone="muted">
-          {tally}
         </Text>
       ) : null}
       {ended?.map((line) => (

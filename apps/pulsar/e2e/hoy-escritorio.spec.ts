@@ -116,6 +116,9 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     // A goal with no measure draws no card of its own.
     await expect(page.getByText("esta semana", { exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1, name: "Hoy" })).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;

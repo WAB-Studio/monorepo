@@ -287,3 +287,47 @@ test("/dia/<today> is Hoy itself (RP-06)", async ({ page }) => {
   await page.waitForURL((url) => url.pathname === "/");
   await expect(page.getByRole("link", { name: "Ver ayer" })).toBeVisible();
 });
+
+// `DiaPasadoEscritorio.dc.html`: the date is the one `h1`, «volver a hoy» is the
+// way back, and from 1024 the goals share the width the rail leaves in two
+// equal columns, so no column narrows as the screen widens.
+for (const width of [360, 390, 1280, 1440]) {
+  test(`at ${width} a past day has one h1, its way back lands on Hoy and its columns hold (RP-06, RNP-16)`, async ({
+    page,
+    db,
+    personId,
+  }) => {
+    const stamp = Date.now();
+    const first = await seedGoal(db, personId, { name: `Primera ${stamp}`, kind: "tap" });
+    const second = await seedGoal(db, personId, { name: `Segunda ${stamp}`, kind: "tap" });
+    try {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/dia/${pastDay(1)}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      const date = civilDateToDate(pastDay(1));
+      const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(`${weekday} ${date.getUTCDate()}`);
+
+      if (width >= 1024) {
+        const columns = async () =>
+          page.locator("main section").evaluateAll((nodes) =>
+            nodes.map((node) => node.getBoundingClientRect().width),
+          );
+        const widths = await columns();
+        expect(widths.length).toBeGreaterThanOrEqual(2);
+        await page.setViewportSize({ width: 1024, height: 900 });
+        const atLimit = await columns();
+        // Each column at this width is at least as wide as at 1024.
+        expect(Math.min(...widths)).toBeGreaterThanOrEqual(Math.min(...atLimit));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
+      }
+
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByRole("link", { name: "volver a hoy" }).click();
+      await page.waitForURL((url) => url.pathname === "/");
+    } finally {
+      await deleteGoal(db, personId, first.goalId);
+      await deleteGoal(db, personId, second.goalId);
+    }
+  });
+}

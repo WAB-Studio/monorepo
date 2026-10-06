@@ -13,6 +13,8 @@ test("the theme control, used once, survives a reload with no flash of the other
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Cambiar a modo oscuro" })).toBeVisible();
 
   // No choice made yet: opens in the system's mode (RNP-08's own second
   // half), never a face `applyTheme` had to write first. `<html>` also

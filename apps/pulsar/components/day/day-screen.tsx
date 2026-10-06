@@ -441,7 +441,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   );
 
   return (
-    <Page width={past ? undefined : "full"}>
+    <Page width="full">
       {past ? (
         <DayHeader
           date={dateLabel(day, t)}
@@ -469,7 +469,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <EvidenceNote text={past ? t("day.unreadableEvidencePast") : t("day.unreadableEvidence")} />
       ) : null}
 
-      <Split main={goalsMain} after={goalless} />
+      <Split main={goalsMain} after={goalless} even={past} />
     </Page>
   );
 }

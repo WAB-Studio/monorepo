@@ -68,6 +68,7 @@ async function open(page: Page, path = "/"): Promise<void> {
   await page.goto(path);
   await expect(page.locator("main :is(h1, p, a, button, input)").first()).toBeVisible();
   await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.getByRole("heading", { level: 1, name: "Hoy" })).toHaveCount(1);
 }
 
 test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ browser, baseURL, person, db }) => {
