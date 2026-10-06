@@ -165,7 +165,7 @@ export type GoalView = {
   months: MonthRow[];
   budgets: MonthBudget[];
   tasks: Task[];
-  // The months of this goal already shifted (RP-34).
+  // The months of this goal already shifted (RP-48).
   shifts: string[];
 };
 

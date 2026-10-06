@@ -54,21 +54,21 @@ test("addMonths: calendar months, clamped to the last day of the target month", 
 
 test("shiftOffered: October with 44 planned and 23 carried is offered on 5 November, not on 5 December", () => {
   const share = { carried: 23, planned: 44 };
-  assert.equal(shiftOffered({ month: OCT, today: "2026-11-05", share, shifted: [] }), true);
-  assert.equal(shiftOffered({ month: OCT, today: "2026-12-05", share, shifted: [] }), false);
-  assert.equal(shiftOffered({ month: OCT, today: "2026-10-31", share, shifted: [] }), false);
+  assert.equal(shiftOffered({ month: OCT, today: "2026-11-05", share, amount: { planned: null, reached: 0 }, shifted: [] }), true);
+  assert.equal(shiftOffered({ month: OCT, today: "2026-12-05", share, amount: { planned: null, reached: 0 }, shifted: [] }), false);
+  assert.equal(shiftOffered({ month: OCT, today: "2026-10-31", share, amount: { planned: null, reached: 0 }, shifted: [] }), false);
 });
 
 test("shiftOffered: exactly half does not offer (22 * 2 = 44), nor does nothing planned", () => {
   const today = "2026-11-05";
-  assert.equal(shiftOffered({ month: OCT, today, share: { carried: 22, planned: 44 }, shifted: [] }), false);
-  assert.equal(shiftOffered({ month: OCT, today, share: null, shifted: [] }), false);
+  assert.equal(shiftOffered({ month: OCT, today, share: { carried: 22, planned: 44 }, amount: { planned: null, reached: 0 }, shifted: [] }), false);
+  assert.equal(shiftOffered({ month: OCT, today, share: null, amount: { planned: null, reached: 0 }, shifted: [] }), false);
 });
 
 test("shiftOffered: a month already shifted is not offered again", () => {
   const share = { carried: 30, planned: 44 };
-  assert.equal(shiftOffered({ month: OCT, today: "2026-11-05", share, shifted: [OCT] }), false);
-  assert.equal(shiftOffered({ month: OCT, today: "2026-11-05", share, shifted: ["2026-09-01"] }), true);
+  assert.equal(shiftOffered({ month: OCT, today: "2026-11-05", share, amount: { planned: null, reached: 0 }, shifted: [OCT] }), false);
+  assert.equal(shiftOffered({ month: OCT, today: "2026-11-05", share, amount: { planned: null, reached: 0 }, shifted: ["2026-09-01"] }), true);
 });
 
 test("shiftPlan: November through September's amounts move to December through October", () => {

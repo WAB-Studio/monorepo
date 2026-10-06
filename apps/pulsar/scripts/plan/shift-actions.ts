@@ -1,4 +1,4 @@
-// Drives `acceptShift` (`app/actions/shift.ts`, RP-34) the way `budget-actions.ts`
+// Drives `acceptShift` (`app/actions/shift.ts`, RP-48) the way `budget-actions.ts`
 // drives `setMonthBudget`: the action imported as a plain async function,
 // `server-only`, `next/headers` and `next/cache` stubbed before the first `@/`
 // import, and the cookie `harness:mint-session` left standing as the session.
@@ -517,4 +517,40 @@ test("acceptShift: the tasks reach the plan in position order, not creation orde
   assert.ok(update, "the action moved the tasks with one update");
   const sent = (JSON.parse(String(update.parameters[0])) as { id: string }[]).map((t) => t.id);
   assert.deepEqual(sent, [early, late]);
+});
+
+// A goal that measures minutes, so what the closed month reached is derived
+// from its done tasks' estimates (RP-36). The closed month planned 990.
+async function measureMinutes(goalId: string): Promise<void> {
+  await sql`update goals.goals set measure_name = 'horas', measure_unit = 'minutos' where id = ${goalId}`;
+}
+
+test("acceptShift: a month that reached 255 % of its amount is refused with its own key and changes nothing (RP-48)", async () => {
+  const { goalId } = await buildGoal("RP-48 fixture: mes superado", 2, [21, 23], async (id) => {
+    await measureMinutes(id);
+    const [row] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${personId}, ${id}, 'horas de más', ${`${current}-01`}, 2500) returning id`;
+    await sql`
+      insert into goals.facts (user_id, one_off_id, goal_id, day)
+      values (${personId}, ${row.id}, ${id}, ${`${closed}-02`})`;
+  });
+  const before = await snapshot(goalId);
+  const result = await acceptShift({ goalId, month: closed });
+  assert.deepEqual(result, { ok: false, error: "month.errors.shiftReached" });
+  assert.deepEqual(await snapshot(goalId), before);
+});
+
+test("acceptShift: a month that reached 40 % of its amount with most of its list undone is accepted (RP-48)", async () => {
+  const { goalId } = await buildGoal("RP-48 fixture: mes corto", 2, [21, 23], async (id) => {
+    await measureMinutes(id);
+    const [row] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${personId}, ${id}, 'casi la mitad', ${`${current}-01`}, 375) returning id`;
+    await sql`
+      insert into goals.facts (user_id, one_off_id, goal_id, day)
+      values (${personId}, ${row.id}, ${id}, ${`${closed}-02`})`;
+  });
+  // 21 + 375 of 990 is 40 %.
+  assert.equal((await acceptShift({ goalId, month: closed })).ok, true);
 });

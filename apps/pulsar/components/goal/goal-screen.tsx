@@ -148,6 +148,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           today,
           horizon: goal.horizon,
           budgets: goal.budgets,
+          months: goal.months,
           phases: goal.phases,
           tasks: goal.tasks,
           shifts: goal.shifts,

@@ -168,7 +168,7 @@ export function TaskRow({
 }
 
 /**
- * `MesCorrer.dc.html` (RP-34): the proposal under a closed month's tasks and
+ * `MesCorrer.dc.html` (RP-48): the proposal under a closed month's tasks and
  * the sheet it opens. The words arrive said, the plan arrives derived.
  */
 export function ShiftProposal({

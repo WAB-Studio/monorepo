@@ -126,7 +126,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
 
 /**
  * `MesesFilas.dc.html` / `MesesListaDetalle.dc.html` / `MesesVacio.dc.html` /
- * `MesesSinMedida.dc.html` (RP-28, RP-31, RP-32, RP-34): the goal's months, and
+ * `MesesSinMedida.dc.html` (RP-28, RP-31, RP-32, RP-48): the goal's months, and
  * from 1024 the month beside them — the current one, or the first outside the
  * span. The amount of a month still to be planned opens the amount sheet
  * through `?planear=`; an ended or archived goal offers no sheet. `listGoals`
@@ -155,6 +155,7 @@ export async function MonthsScreen({
         today,
         horizon: goal.horizon,
         budgets: goal.budgets,
+        months: goal.months,
         phases: goal.phases,
         tasks: goal.tasks,
         shifts: goal.shifts,
