@@ -135,9 +135,11 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
 export async function MonthsScreen({
   goalId,
   planning,
+  returnPath,
 }: {
   goalId: string;
   planning: string | null;
+  returnPath: string;
 }) {
   const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
   if (!goal) notFound();
@@ -207,7 +209,13 @@ export async function MonthsScreen({
               ) : null}
             </>
           }
-          detail={<MonthDetail goal={goal} goals={goals} month={target.month.slice(0, 7)} heading />}
+          detail={<MonthDetail
+              goal={goal}
+              goals={goals}
+              month={target.month.slice(0, 7)}
+              from={`/metas/${goal.id}/meses`}
+              heading
+            />}
         />
       ) : null}
       {planned && unit ? (
@@ -219,7 +227,7 @@ export async function MonthsScreen({
           month={planned.month.slice(0, 7)}
           monthName={monthLabel(planned.month)}
           amount={planned.planned}
-          closeHref={`/metas/${goal.id}/meses`}
+          closeHref={returnPath}
         />
       ) : null}
     </Page>

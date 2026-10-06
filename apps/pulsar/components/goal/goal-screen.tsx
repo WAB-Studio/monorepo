@@ -10,6 +10,7 @@ import {
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
+import { planHrefFrom } from "@/lib/plan/return-to";
 import { ShiftProposal } from "@/components/month/task-row";
 import { monthList } from "@/lib/plan/carry";
 import { shiftOfferNow } from "@/lib/plan/shift-offer";
@@ -248,7 +249,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         {shiftOffer}
         {planned === null && !archived && !ended ? (
           <Button asChild variant="outline">
-            <Link href={`/metas/${goal.id}/meses?planear=${today.slice(0, 7)}`}>
+            <Link href={planHrefFrom(goal.id, today.slice(0, 7), `/metas/${goal.id}`)}>
               {t("goal.detail.monthPlanLink", { month: monthName })}
             </Link>
           </Button>
