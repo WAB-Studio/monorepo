@@ -248,5 +248,83 @@ for (const width of [390, 1440]) {
         await context.close();
       }
     });
+
+    test("the «min» box sits on the «h» box's top (RP-55)", async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const { goalId } = await seedGoal(db, person.id, stamp, 600);
+      const name = `Tarea alinear ${stamp}`;
+      await seedTask(db, person.id, goalId, name, 90, null);
+      const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/meses/${seg(thisMonth)}`);
+      try {
+        await nameButton(page, name).click();
+        const sheet = page.getByRole("dialog");
+        const hours = await sheet.getByLabel("Cuánto le calculas").boundingBox();
+        const minutes = await sheet.getByRole("spinbutton", { name: "min" }).boundingBox();
+        expect(Math.abs(hours!.y - minutes!.y)).toBeLessThanOrEqual(1);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("a new task of the goal with no name says «Ponle un nombre.», never the loose task's words", async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const { goalId } = await seedGoal(db, person.id, stamp, 600);
+      await seedTask(db, person.id, goalId, `Tarea base ${stamp}`, 60, null);
+      const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/plan`);
+      try {
+        await page.getByRole("button", { name: "Añadir una tarea" }).click();
+        const sheet = page.getByRole("dialog");
+        await sheet.getByRole("button", { name: "Guardar" }).click();
+        await expect(sheet).toContainText("Ponle un nombre.");
+        await expect(sheet).not.toContainText("Escribe qué es lo suelto.");
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("a parent's sheet says it sums its sub-tasks and asks no estimate", async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const { goalId } = await seedGoal(db, person.id, stamp, 600);
+      const parent = `Tarea madre suma ${stamp}`;
+      const parentId = await seedTask(db, person.id, goalId, parent, null, thisMonth);
+      await db`
+        insert into goals.one_offs (user_id, goal_id, name, estimate, parent_id)
+        values (${person.id}, ${goalId}, ${`Hija suma ${stamp}`}, 20, ${parentId})
+      `;
+      const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/meses/${seg(thisMonth)}`);
+      try {
+        await nameButton(page, parent).click();
+        const sheet = page.getByRole("dialog");
+        await expect(sheet).toContainText("Suma lo de sus sub-tareas.");
+        await expect(sheet.getByLabel("Cuánto le calculas")).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("a task fixed to a closed month shows that month as the selected chip, and saving unchanged keeps it", async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const { goalId } = await seedGoal(db, person.id, stamp, 600);
+      const name = `Tarea mes cerrado ${stamp}`;
+      const closedMonth = (() => {
+        const date = new Date(`${thisMonth}T12:00:00Z`);
+        date.setUTCMonth(date.getUTCMonth() - 1);
+        return date.toISOString().slice(0, 10);
+      })();
+      await db`update goals.goals set created_at = '2020-01-01T00:00:00Z'::timestamptz where id = ${goalId}`;
+      const taskId = await seedTask(db, person.id, goalId, name, 60, closedMonth);
+      const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/meses/${seg(closedMonth)}`);
+      try {
+        await nameButton(page, name).click();
+        const sheet = page.getByRole("dialog");
+        await expect(sheet.getByRole("radio", { name: "Fijarla en" })).toHaveAttribute("aria-checked", "true");
+        await expect(sheet.getByRole("radio", { name: label(closedMonth) })).toHaveAttribute("aria-checked", "true");
+        await sheet.getByRole("button", { name: "Guardar" }).click();
+        await expect(sheet).toBeHidden();
+        expect((await row(db, taskId)).planned_month).toBe(closedMonth);
+      } finally {
+        await context.close();
+      }
+    });
   });
 }

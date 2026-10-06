@@ -9,3 +9,7 @@
 .narrow {
   grid-template-columns: var(--pair-narrow) minmax(0, 1fr);
 }
+
+.baseline {
+  align-items: end;
+}

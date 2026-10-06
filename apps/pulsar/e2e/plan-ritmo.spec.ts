@@ -149,6 +149,43 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("the first rhythm raises no «se movió» notice on Hoy, the plan starts there", async ({ page, db, personId }) => {
+      const [old] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+        values (${personId}, ${`Meta primer ritmo ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', null, now() - interval '70 days')
+        returning id
+      `;
+      const goalId = old.id;
+      const closed = `${monthOf(today).slice(0, 7)}-01`;
+      const lastMonth = new Date(`${closed}T12:00:00Z`);
+      lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+      const lastDay = lastMonth.toISOString().slice(0, 10);
+      const [done] = await db<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan)
+        values (${personId}, ${goalId}, 'Hecha el mes pasado', 60, 0, true) returning id
+      `;
+      await db`insert into goals.facts (user_id, goal_id, one_off_id, day) values (${personId}, ${goalId}, ${done.id}, ${lastDay}::date)`;
+      for (let index = 1; index <= 5; index++) {
+        await db`
+          insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan)
+          values (${personId}, ${goalId}, ${`Tarea ${index}`}, 240, ${index}, true)
+        `;
+      }
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: "Armar el plan" }).click();
+        await expect(page.getByText("Ritmo 12 h al mes")).toBeVisible();
+        const [row] = await db<{ seen: string | null }[]>`select plan_seen::text as seen from goals.goals where id = ${goalId}`;
+        expect(row.seen).toBe(lastDay.slice(0, 7) + "-01");
+        await page.goto("/");
+        await expect(page.locator("main")).toHaveCount(1);
+        await expect(page.getByText(/se movió \d+/).locator("visible=true")).toHaveCount(0);
+      } finally {
+        await db`delete from goals.facts where goal_id = ${goalId} and user_id = ${personId}`;
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("«Cambiar» opens the sheet and a new rhythm changes the end", async ({ page, db, personId }) => {
       const goalId = await seedGoal(db, personId, 720);
       try {

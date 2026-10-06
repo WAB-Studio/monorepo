@@ -72,7 +72,8 @@
     "minutes": "min",
     "newTitle": "Una tarea nueva",
     "goesTo": "va a: {month}",
-    "eyebrowLoose": "tarea suelta"
+    "eyebrowLoose": "tarea suelta",
+    "parentSum": "Suma lo de sus sub-tareas."
   },
   "errors": {
     "rhythmRange": "El ritmo va de 1 a 1 000 000 de minutos al mes.",
