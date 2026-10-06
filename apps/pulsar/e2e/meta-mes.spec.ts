@@ -67,6 +67,36 @@ async function quantity(db: postgres.Sql, person: Person, goalId: string, minute
 const seen = (page: Page, text: string) => page.getByText(text, { exact: true }).locator("visible=true");
 const visible = (page: Page, text: RegExp) => page.getByText(text).locator("visible=true");
 
+test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, and the two «Ver por» links share a line (RP-23, RNP-17)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const name = `Meta encabezado ${Date.now()}`;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  const page = await context.newPage();
+  try {
+    const goalId = await seedGoal(db, person, { name, budget: 720 });
+    await quantity(db, person, goalId, 90, today);
+    for (const width of [360, 390]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/metas/${goalId}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+      const month = (await page.getByRole("link", { name: "Ver por mes", exact: true }).boundingBox())!;
+      const week = (await page.getByRole("link", { name: "Ver por semana", exact: true }).boundingBox())!;
+      expect(Math.abs(month.y - week.y)).toBeLessThan(2);
+      expect(week.x).toBeGreaterThan(month.x);
+    }
+    await page.getByRole("link", { name: "Volver a Metas" }).click();
+    await expect(page).toHaveURL(/\/metas$/);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
 test("the goal says the month's amount, moves with a done task, and links to its months (RP-28, RP-29, RP-36)", async ({
   person,
   browser,

@@ -174,3 +174,39 @@ test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
 });
+
+// `MetaRiel.dc.html` (module 211): the name is the page's one h1, the actions
+// sit on its line, and the rail marks this goal.
+test("at 1280 and 1440 the goal's name is the one h1, «Renombrar» and «Archivar» sit on its line, the rail marks the goal (RP-23, RNP-16)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const name = `Meta encabezado ${Date.now()}`;
+  const goalId = await seedGoal(db, personId, name);
+  try {
+    for (const width of [1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/metas/${goalId}`);
+      await settled(page);
+
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      const h1 = page.getByRole("heading", { level: 1, name });
+      await expect(h1).toBeVisible();
+      const title = (await h1.boundingBox())!;
+      for (const action of ["Renombrar", "Archivar"]) {
+        const box = (await page.getByRole("button", { name: action }).boundingBox())!;
+        expect(box.x, action).toBeGreaterThan(title.x);
+        const gap = Math.abs(box.y + box.height / 2 - (title.y + title.height / 2));
+        expect(gap, action).toBeLessThan(title.height);
+      }
+      await expect(page.getByRole("link", { name: "Volver a Metas" })).toHaveAttribute("href", "/metas");
+      await expect(page.getByRole("navigation").getByRole("link", { name, exact: true })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    }
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});
