@@ -103,6 +103,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:unit -w apps/pulsar
+      - run: npm run check:unit -w packages/harness-registry
 
   # Drives the `goals` policies against the real database, exactly as
   # `policies` does for `reading` — one transaction that always rolls back,
