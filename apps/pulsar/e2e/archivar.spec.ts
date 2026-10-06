@@ -34,6 +34,16 @@ async function findOrCreateGoal(
   return createGoal(page, name);
 }
 
+async function askToday(db: postgres.Sql, personId: string, goalId: string): Promise<string> {
+  // Below 1024px Hoy draws a goal's section only when it asks something
+  // today (module 263): a daily tap commitment, born days ago, asks.
+  const [row] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${personId}, ${goalId}, 'Tocar la meta de archivar', 'daily', 'tap', now() - interval '3 days')
+    returning id`;
+  return row.id;
+}
+
 test("renaming a goal on screen reads everywhere: its own screen, Hoy and Semana (RP-23)", async ({
   page,
   db,
@@ -48,6 +58,7 @@ test("renaming a goal on screen reads everywhere: its own screen, Hoy and Semana
   await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
 
   const renamed = `${marker} · renombrada ${Date.now()}`;
+  const commitmentId = await askToday(db, personId, goalId);
 
   try {
     await page.goto(`/metas/${goalId}`);
@@ -64,8 +75,11 @@ test("renaming a goal on screen reads everywhere: its own screen, Hoy and Semana
     await expect(page.getByRole("main").getByText(renamed, { exact: true })).toBeVisible();
 
     await page.goto("/semana");
-    await expect(page.getByRole("main").getByText(renamed)).toBeVisible();
+    // A goal that asks today heads the wide table (hidden on a phone) and its
+    // folded group: the heading is the one drawn at every width.
+    await expect(page.getByRole("main").getByRole("heading", { name: renamed })).toBeVisible();
   } finally {
+    await db`delete from goals.commitments where id = ${commitmentId}`;
     // Restored: the marker this spec's own `findOrCreateGoal` looks for on
     // its next run, on this lane or any other.
     await db`update goals.goals set name = ${marker} where id = ${goalId}`;
@@ -153,16 +167,21 @@ test("reopening an archived goal through its own screen brings it back to Hoy (R
   // Archived here, bare, so this test proves «Reabrir» itself rather than
   // repeating the archive test above.
   await db`update goals.goals set archived_at = now(), name = ${marker} where id = ${goalId}`;
+  const commitmentId = await askToday(db, personId, goalId);
 
-  await page.goto(`/metas/${goalId}`);
-  await expect(page.getByRole("button", { name: "Reabrir" })).toBeVisible();
-  await page.getByRole("button", { name: "Reabrir" }).click();
+  try {
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByRole("button", { name: "Reabrir" })).toBeVisible();
+    await page.getByRole("button", { name: "Reabrir" }).click();
 
-  await expect(page.getByRole("button", { name: "Archivar esta meta" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Archivar esta meta" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
 
-  await page.goto("/");
-  await expect(page.getByRole("main").getByText(marker, { exact: true })).toBeVisible();
+    await page.goto("/");
+    await expect(page.getByRole("main").getByText(marker, { exact: true })).toBeVisible();
+  } finally {
+    await db`delete from goals.commitments where id = ${commitmentId}`;
+  }
 });
 
 test("an archived goal offers no way to add a phase, direct visit included (RP-24)", async ({

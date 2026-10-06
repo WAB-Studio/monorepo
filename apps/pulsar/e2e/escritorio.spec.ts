@@ -5,7 +5,7 @@ import postgres from "postgres";
 import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
-// RNP-11 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
+// RNP-17 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
 // `RevisionEscritorio`, `HojaEscritorio`): at 1280 × 800 every route is the
 // desktop face, at 1023 the phone face. Nothing scrolls sideways, the rail is
 // there and no bottom nav, no two visible controls overlap and each one's
@@ -228,7 +228,7 @@ const ROUTES: Route[] = [
 ];
 
 for (const route of ROUTES) {
-  worldTest(`${route.name} holds at 1280 × 800: rail, no bottom nav, one toggle, nothing over anything (RNP-11)`, async ({
+  worldTest(`${route.name} holds at 1280 × 800: rail, no bottom nav, one toggle, nothing over anything (RNP-17)`, async ({
     browser,
     baseURL,
     world,
@@ -258,7 +258,7 @@ for (const route of ROUTES) {
   });
 }
 
-worldTest("the quantity sheet on Hoy opens centred at 480 px at 1280 (RNP-11)", async ({ browser, baseURL, world }) => {
+worldTest("the quantity sheet on Hoy opens centred at 480 px at 1280 (RNP-17)", async ({ browser, baseURL, world }) => {
   const { context, page } = await signedIn(browser, baseURL, world, 1280, 800);
   try {
     await page.goto("/");
@@ -276,7 +276,7 @@ worldTest("the quantity sheet on Hoy opens centred at 480 px at 1280 (RNP-11)", 
   }
 });
 
-worldTest("the rename sheet on the goal opens centred at 480 px at 1280 (RNP-11)", async ({ browser, baseURL, world }) => {
+worldTest("the rename sheet on the goal opens centred at 480 px at 1280 (RNP-17)", async ({ browser, baseURL, world }) => {
   const { context, page } = await signedIn(browser, baseURL, world, 1280, 800);
   try {
     await page.goto(`/metas/${world.goalId}`);
@@ -294,7 +294,7 @@ worldTest("the rename sheet on the goal opens centred at 480 px at 1280 (RNP-11)
   }
 });
 
-worldTest("the move sheet on /sueltas opens centred at 480 px at 1280 (RNP-11)", async ({ browser, baseURL, world }) => {
+worldTest("the move sheet on /sueltas opens centred at 480 px at 1280 (RNP-17)", async ({ browser, baseURL, world }) => {
   const { context, page } = await signedIn(browser, baseURL, world, 1280, 800);
   try {
     await page.goto("/sueltas");
@@ -314,7 +314,7 @@ worldTest("the move sheet on /sueltas opens centred at 480 px at 1280 (RNP-11)",
 
 // The phone face runs to 1023: the nav four tabs fixed at the foot, no table, one toggle.
 for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
-  worldTest(`${path} is still the phone face at 1023 (RNP-11)`, async ({ browser, baseURL, world }) => {
+  worldTest(`${path} is still the phone face at 1023 (RNP-17)`, async ({ browser, baseURL, world }) => {
     const { context, page } = await signedIn(browser, baseURL, world, 1023, 740);
     try {
       await page.goto(path);

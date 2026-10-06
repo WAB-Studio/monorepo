@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button, Face, Flex, IconButton, ScreenHeader, Text, ThemeToggle } from "@/components/ui";
 
@@ -16,6 +16,7 @@ export function DayHeader({
   date,
   title,
   back,
+  forward,
   limitNote,
   toToday,
   theme,
@@ -26,6 +27,8 @@ export function DayHeader({
   title?: string;
   // Absent on the oldest day a fact may still name (`PAST_DAY_LIMIT`).
   back?: HeaderLink;
+  // A past day's step to the day after; the last one before today lands on Hoy.
+  forward?: HeaderLink;
   // Said in the step's place on that oldest day: why there is no way further.
   limitNote?: string;
   toToday?: HeaderLink;
@@ -36,7 +39,48 @@ export function DayHeader({
   // One quiet line per goal that ended this week, under the title.
   ended?: { id: string; text: string; href: string; see: string; seeLabel: string }[];
 }) {
-  const eyebrow = (
+  // A past day (`DiaPasadoPasos.dc.html`): both steps are words with their
+  // chevron, «volver a hoy» pushed to the end.
+  const eyebrow = title === undefined ? (
+    <Flex align="center" gap="1">
+      {back ? (
+        <Button asChild tap={44} variant="ghost">
+          <Link href={back.href}>
+            <ChevronLeft size={16} aria-hidden />
+            <Text variant="meta" tone="accent">
+              {back.label}
+            </Text>
+          </Link>
+        </Button>
+      ) : limitNote ? (
+        <Flex width="14px" flexShrink="0" aria-hidden />
+      ) : null}
+      {forward ? (
+        // A ghost button's own negative margin would lay it over the step back.
+        <Flex ml="3">
+          <Button asChild tap={44} variant="ghost">
+            <Link href={forward.href}>
+              <Text variant="meta" tone="accent">
+                {forward.label}
+              </Text>
+              <ChevronRight size={16} aria-hidden />
+            </Link>
+          </Button>
+        </Flex>
+      ) : null}
+      {toToday ? (
+        <Flex ml="auto" pl="3">
+          <Button asChild tap={44} variant="ghost">
+            <Link href={toToday.href}>
+              <Text variant="meta" tone="accent">
+                {toToday.label}
+              </Text>
+            </Link>
+          </Button>
+        </Flex>
+      ) : null}
+    </Flex>
+  ) : (
     <Flex justify="between" align="center" gap="2">
       <Flex align="center" gap="5">
         {back ? (

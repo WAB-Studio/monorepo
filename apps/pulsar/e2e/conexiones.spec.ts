@@ -3,7 +3,7 @@ import { request as playwrightRequest, type APIResponse, type Page } from "@play
 import messages from "../messages/es/connections.json";
 import { test, expect, type Person } from "./fixtures";
 
-// RP-38, RNP-11 (`ConexionesVacio`, `ConexionesUna`, `ConexionesCreada`,
+// RP-38, RNP-17 (`ConexionesVacio`, `ConexionesUna`, `ConexionesCreada`,
 // `ConexionesRevocada`, `ConexionesFallo`): the key is drawn once, right after
 // it is made, and no later render holds it.
 const NAME = "Claude Code";
@@ -36,6 +36,15 @@ async function expectMetasCurrent(page: Page) {
   const nav = page.getByRole("navigation");
   await expect(nav.locator("[aria-current]")).toHaveCount(1);
   await expect(nav.getByRole("link", { name: "Metas", exact: true })).toHaveAttribute("aria-current", "page");
+}
+
+// The row's button only asks; the sheet's own «Revocar» is what revokes.
+async function confirmRevoke(page: Page) {
+  await page.getByRole("button", { name: messages.row.revoke }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: messages.revokeSheet.confirm }).click();
+  await expect(sheet).toHaveCount(0);
 }
 
 // The server rendered nothing a later visit can read the key from.
@@ -154,7 +163,7 @@ test.describe("the connections screen (RP-38)", () => {
       await expect(page.getByText(messages.row.neverUsed)).toHaveCount(0);
       await expect(page.getByText(/usada hoy \d\d:\d\d$/)).toBeVisible();
 
-      await page.getByRole("button", { name: messages.row.revoke }).click();
+      await confirmRevoke(page);
       await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
       await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
       expect((await mcp(baseURL!, key)).status()).toBe(401);
@@ -219,10 +228,10 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
       await expect(page.getByText("Claude", { exact: true })).toBeVisible();
-      await expect(page.getByText(/^conectada el .* · usada /)).toBeVisible();
+      await expect(page.getByText(/^conectada el 1 mar 2026 · usada el 2 mar 2026 \d\d:\d\d$/)).toBeVisible();
       await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
 
-      await page.getByRole("button", { name: messages.row.revoke }).click();
+      await confirmRevoke(page);
       await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
       await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
       const [row] = await db`select revoked_at from goals.access_tokens where user_id = ${person.id}`;
@@ -242,7 +251,7 @@ test.describe("the connections screen (RP-38)", () => {
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
       await db`update goals.access_tokens set revoked_at = now() where user_id = ${person.id}`;
-      await page.getByRole("button", { name: messages.row.revoke }).click();
+      await confirmRevoke(page);
       await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
       await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(0);
       await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
@@ -293,4 +302,74 @@ test.describe("the connections screen (RP-38)", () => {
       }
     });
   }
+
+  test("a fresh key reads «creada hoy … · sin usar», never «usada sin usar»", async ({ person, browser, baseURL }) => {
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await create(page, NAME);
+      await page.getByRole("button", { name: messages.created.done }).click();
+      await expect(page.getByText(/^creada hoy \d\d:\d\d · sin usar$/)).toBeVisible();
+      expect(await page.locator("main").innerText()).not.toContain("usada sin usar");
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("«Revocar» asks first, «Dejarla» closes the sheet and the key still works", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      const key = await create(page, NAME);
+      await page.getByRole("button", { name: messages.created.done }).click();
+
+      await page.getByRole("button", { name: messages.row.revoke }).click();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByRole("heading", { name: `¿Revocar «${NAME}»?` })).toBeVisible();
+      await expect(sheet.getByText(messages.revokeSheet.keyLabel, { exact: true })).toBeVisible();
+      await expect(sheet.getByText(messages.revokeSheet.keyBody, { exact: true })).toBeVisible();
+      expect((await mcp(baseURL!, key)).status()).toBe(200);
+
+      await sheet.getByRole("button", { name: messages.revokeSheet.cancel }).click();
+      await expect(sheet).toHaveCount(0);
+      await expect(page.getByRole("button", { name: messages.row.revoke })).toBeVisible();
+      expect((await mcp(baseURL!, key)).status()).toBe(200);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("a claude.ai connection asks first too, in its own words", async ({ person, db, browser, baseURL }) => {
+    await seed(db, person, { kind: "oauth", name: "Claude", created: "2026-03-01T10:00:00Z" });
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await page.getByRole("button", { name: messages.row.revoke }).click();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByText(messages.revokeSheet.oauthLabel, { exact: true })).toBeVisible();
+      await sheet.getByRole("button", { name: messages.revokeSheet.cancel }).click();
+      const [open] = await db`select revoked_at from goals.access_tokens where user_id = ${person.id}`;
+      expect(open.revoked_at).toBeNull();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("every date carries its year, a fresh row and one from another year alike", async ({
+    person,
+    db,
+    browser,
+    baseURL,
+  }) => {
+    await seed(db, person, { kind: "personal", name: "Antigua", created: "2025-10-05T15:00:00Z", used: "2025-12-31T15:00:00Z" });
+    await seed(db, person, { kind: "personal", name: "Revocada", created: "2025-01-02T15:00:00Z", revoked: "2026-02-03T15:00:00Z" });
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await expect(page.getByText(/^creada el 5 oct 2025 · usada el 31 dic 2025 \d\d:\d\d$/)).toBeVisible();
+      await expect(page.getByText("revocada el 3 feb 2026 · ya no entra", { exact: true })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
 });

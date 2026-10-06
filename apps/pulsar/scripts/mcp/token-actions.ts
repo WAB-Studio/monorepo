@@ -147,3 +147,13 @@ test("no key appears in console output", () => {
   assert.equal(logged.filter((line) => keys.some((key) => line.includes(key))).length, 0);
   assert.equal(logged.filter((line) => /pls_[A-Za-z0-9_-]{20,}/.test(line)).length, 0);
 });
+
+test("revoking with a tokenId that is no uuid answers notFound and revokes nothing", async () => {
+  const made = await as(subject, () => actions.createAccessToken({ name: "survives a bad id" }));
+  assert.ok(made.ok);
+  assert.deepEqual(await as(subject, () => actions.revokeAccessToken({ tokenId: "nope" })), {
+    ok: false,
+    error: "connections.errors.notFound",
+  });
+  assert.equal((await tokens.resolveBearer(made.key))?.id, subject.id);
+});

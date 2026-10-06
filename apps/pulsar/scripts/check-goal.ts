@@ -1096,7 +1096,7 @@ async function runLateNightOpenCheck(): Promise<void> {
 }
 
 /**
- * RP-26: a goal ends on the day before its horizon. `horizon = today` is the
+ * RP-27: a goal ends on the day before its horizon. `horizon = today` is the
  * edge both comparisons must cross; archived wins over ended.
  */
 async function runEndedCheck(): Promise<void> {
@@ -1109,7 +1109,7 @@ async function runEndedCheck(): Promise<void> {
   const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   try {
     for (const name of ["terminada", "en curso", "archivada"]) {
-      const goal = await createGoal({ name: `check-goal.ts probe — RP-26 ${name}`, horizon: addDays(today, 60) });
+      const goal = await createGoal({ name: `check-goal.ts probe — RP-27 ${name}`, horizon: addDays(today, 60) });
       if (!goal.ok) throw new Error(`runEndedCheck: createGoal failed: ${goal.error}`);
       seeded.push(goal.goalId);
     }
@@ -1409,6 +1409,24 @@ async function runMain(): Promise<void> {
   await runEndedCheck();
   await runPlanMonthsCheck();
   await runMetasOverlapCheck();
+
+  // The commitment that reads a source names it, by the catalogue's own label
+  // key; one that reads nothing names none.
+  const catalogue = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const [source] = await catalogue<{ label_key: string }[]>`
+    select label_key from goals.evidence_sources where key = 'reading_lookups'`;
+  await catalogue.end();
+  const byKind = (kind: "evidence" | "quantity") => cold.commitments.filter((c) => c.satisfiedBy.kind === kind);
+  assert(
+    "a commitment satisfied by evidence carries its source's label key",
+    byKind("evidence").length > 0 && byKind("evidence").every((c) => c.sourceLabelKey === source.label_key),
+    `evidence: ${JSON.stringify(byKind("evidence").map((c) => c.sourceLabelKey))}, catalogue says ${source.label_key}`,
+  );
+  assert(
+    "a commitment that reads no source carries no label key",
+    byKind("quantity").length > 0 && byKind("quantity").every((c) => c.sourceLabelKey === null),
+    `quantity: ${JSON.stringify(byKind("quantity").map((c) => c.sourceLabelKey))}`,
+  );
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

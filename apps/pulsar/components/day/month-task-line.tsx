@@ -20,6 +20,7 @@ export function MonthTaskLine({
   oneOffId,
   name,
   estimate,
+  parentName,
   unit,
   note,
   noteEyebrow,
@@ -27,6 +28,9 @@ export function MonthTaskLine({
   oneOffId: string;
   name: string;
   estimate: number | null;
+  // The task is a sub-task: its parent's name rides above its own
+  // (`HoyTareaMesSubtarea.dc.html`).
+  parentName: string | null;
   unit: string;
   // Its button is drawn, never its text (`HoyNota`).
   note: string | null;
@@ -64,7 +68,7 @@ export function MonthTaskLine({
 
   return (
     <>
-      <Flex align="center" gap="2">
+      <Flex align="start" gap="2">
         <Flex ml="-3" asChild>
           <Button
             tap={44}
@@ -76,11 +80,20 @@ export function MonthTaskLine({
             <Mark state="empty" />
           </Button>
         </Flex>
-        <Text variant="name">{name}</Text>
+        <Flex direction="column" gap="1" flexGrow="1" minWidth="0" pt="2">
+          {parentName ? (
+            <Text variant="meta" tone="muted">
+              {t("day.monthLine.parent", { name: parentName })}
+            </Text>
+          ) : null}
+          <Text variant="name">{name}</Text>
+        </Flex>
         {estimate !== null ? (
-          <Text variant="meta" tone="muted" end>
-            {formatQuantity(estimate, unit, words)}
-          </Text>
+          <Flex flexShrink="0" pt="2">
+            <Text variant="meta" tone="muted" wrap="nowrap">
+              {formatQuantity(estimate, unit, words)}
+            </Text>
+          </Flex>
         ) : null}
         <Flex mr="-3">{noteButton}</Flex>
       </Flex>

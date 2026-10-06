@@ -24,15 +24,26 @@
     "copyName": "Copiar la dirección"
   },
   "row": {
-    "meta": "creada el {created} · usada {used}",
+    "metaUsed": "creada {created} · usada {used}",
+    "metaUnused": "creada {created} · sin usar",
     "neverUsed": "sin usar",
     "today": "hoy",
+    "on": "el {date}",
     "revokedMeta": "revocada el {date} · ya no entra",
-    "revoke": "Revocar",
-    "revoking": "Revocando…"
+    "revoke": "Revocar"
   },
   "oauth": {
-    "meta": "conectada el {date} · usada {used}"
+    "metaUsed": "conectada {created} · usada {used}",
+    "metaUnused": "conectada {created} · sin usar"
+  },
+  "revokeSheet": {
+    "keyLabel": "revocar la llave",
+    "oauthLabel": "revocar la conexión",
+    "title": "¿Revocar «{name}»?",
+    "keyBody": "Deja de funcionar en este momento. La IA que la usa ya no podrá leer ni anotar nada. No se puede deshacer.",
+    "oauthBody": "Deja de funcionar en este momento. La IA conectada ya no podrá leer ni anotar nada. No se puede deshacer.",
+    "confirm": "Revocar",
+    "cancel": "Dejarla"
   },
   "created": {
     "title": "Tu llave",

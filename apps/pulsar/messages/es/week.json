@@ -6,6 +6,15 @@
     "caption": "La semana, un compromiso por fila y un día por columna",
     "footer": "hechos"
   },
+  "summary": {
+    "rest": "de {total} · {partial} en parte"
+  },
+  "legend": {
+    "done": "hecho",
+    "evidence": "por evidencia",
+    "partial": "en parte",
+    "pending": "pendiente"
+  },
   "ratio": "{done} de {total}",
   "flexible": {
     "group": "{name} · por semana y por mes",
@@ -50,6 +59,7 @@
     "missed": "no hecho",
     "upcoming": "todavía no",
     "none": "no pedía",
-    "evidence": "hecho, por evidencia"
+    "evidence": "hecho, por evidencia",
+    "partial": "en parte"
   }
 }

@@ -167,6 +167,9 @@ throughout: the 2026–2027 roadmap, goal «IA aplicada». Export (PDF) and impo
 | `MetaMes.dc.html` | the goal's «este mes»: reached of planned, the month's name, «Ver por mes» (RP-28, RP-36) |
 | `MetaMesSinPlan.dc.html` | a measure and no amount this month: the reached figure and the way to plan it |
 | `MetaMesBajo.dc.html` | day ≥ 20 and under 60 %: figures, the day and «60 %», in ink, never alarm (RP-29) |
+
+- **Decided by the user 2026-10-06:** the pace line names no percentage of its own. It reads the day, reached of planned and «bajo el 60 %» — «día 21 · 5 h 24 min de 12 h, bajo el 60 %». A percentage of reached reads as a score (RP-29). The boards `MetaMesBajo` and `HoyMesBajo` still draw it; this line wins.
+- **Decided by the user 2026-10-06:** a goal's one-off takes its estimate where it is planned — Mes and the month's task form, or a connected AI. Hoy's «Escribe algo suelto de…» stays one field (RP-30).
 | `MetaMesSinEvidencia.dc.html` | the source unreadable: the month line is the declared half, and says so (RNP-04) |
 | `HoyMes.dc.html` | Hoy on the phone: an «este mes» block, one line per goal with an amount this month |
 | `HoyMesBajo.dc.html` | the same, the 22nd, one goal under 60 % |

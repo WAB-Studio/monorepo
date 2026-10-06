@@ -170,6 +170,11 @@
   box-shadow: inset 0 0 0 1.5px var(--pulsar-quiet);
 }
 
+.partial {
+  background: linear-gradient(to top, var(--pulsar-accent) 50%, transparent 50%);
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
+}
+
 .none::before {
   content: "·";
   color: var(--pulsar-quiet);

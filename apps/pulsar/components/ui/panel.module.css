@@ -79,7 +79,8 @@
   }
 }
 
-@media (min-width: 1024px) {
+/* Three columns only where the rail leaves room: 1440 less its 232px. */
+@media (min-width: 1440px) {
   .three {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

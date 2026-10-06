@@ -249,7 +249,7 @@ test("the archive sheet holds at 360 (RNP-07)", async ({ page, db, personId }) =
   });
 });
 
-// RNP-11 · RP-21 · RP-27: this slice's new states at 360. A person of their
+// RNP-17 · RP-21 · RP-27: this slice's new states at 360. A person of their
 // own, since an ended goal and a scheduled one-off are states the shared
 // identity's siblings would count.
 async function withNewStates(

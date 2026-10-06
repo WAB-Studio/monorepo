@@ -5,7 +5,7 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// Hoy at 1024 and beyond (`HoyEscritorio.dc.html`, RNP-11): the goals left, the
+// Hoy at 1024 and beyond (`HoyEscritorio.dc.html`, RNP-17): the goals left, the
 // week's figure, the sueltas, «N esperan» and «hechas hoy» right; at 360 the
 // order is the phone's own. «N esperan» counts dayless plus scheduled (RP-21).
 
@@ -50,7 +50,7 @@ async function seedGoals(db: postgres.Sql, personId: string, stamp: number) {
   return { measuredId: measured.id, plainId: plain.id };
 }
 
-test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «hechas hoy» right, with no overlap, one theme toggle and the figure of the review's current week (RNP-11, RP-27)", async ({
+test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «hechas hoy» right, with no overlap, one theme toggle and the figure of the review's current week (RNP-17, RP-27)", async ({
   person,
   browser,
   db,

@@ -49,6 +49,13 @@
   color: var(--pulsar-accent);
 }
 
+/* Done in part, a quantity commitment short of its target: the accent ring
+   with the lower half filled and no check. Same hue as declared, never red. */
+.partial {
+  background: linear-gradient(to top, var(--pulsar-accent) 50%, transparent 50%);
+  color: var(--pulsar-accent);
+}
+
 /* Not done: a stroke and nothing inside. Quiet, because an empty mark is a
    stroke, not a word (docs/pulsar/DESIGN.md "Tokens"). The design has no
    colour for failure, so this is as far as an unmet day is drawn. */

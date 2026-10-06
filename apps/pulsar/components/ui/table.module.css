@@ -190,6 +190,10 @@
   color: var(--pulsar-muted);
 }
 
+.nowrap {
+  white-space: nowrap;
+}
+
 .lead {
   font-family: var(--font-mono);
   font-size: var(--pulsar-text-measure-size);

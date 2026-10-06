@@ -6,7 +6,7 @@ import { civilDateInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// RNP-11: the goal opens in two columns from 1024 — the commitments left, the
+// RNP-17: the goal opens in two columns from 1024 — the commitments left, the
 // end, the figure and the phases right — and «Renombrar» and «Archivar» sit
 // beside the title. Below 1024 the order is the phone's own.
 
@@ -44,7 +44,7 @@ async function boxOf(page: Page, text: string) {
   });
 }
 
-test("at 1280 the commitments sit left, the end and the phases right, one of each act visible (RNP-11)", async ({
+test("at 1280 the commitments sit left, the end and the phases right, one of each act visible (RNP-17)", async ({
   page,
   db,
   personId,
@@ -103,7 +103,7 @@ async function panelCards(page: Page): Promise<number> {
   );
 }
 
-test("at 800 the goal draws no Panel card (RNP-11)", async ({ page, db, personId }) => {
+test("at 800 the goal draws no Panel card (RNP-17)", async ({ page, db, personId }) => {
   const goalId = await seedGoal(db, personId, `Meta media ${Date.now()}`);
   try {
     await page.setViewportSize({ width: 800, height: 800 });
@@ -115,7 +115,7 @@ test("at 800 the goal draws no Panel card (RNP-11)", async ({ page, db, personId
   }
 });
 
-test("at 360 the order is the phone's: end, commitments, phases, then «Archivar esta meta» (RNP-11)", async ({
+test("at 360 the order is the phone's: end, commitments, phases, then «Archivar esta meta» (RNP-17)", async ({
   page,
   db,
   personId,
@@ -142,7 +142,7 @@ test("at 360 the order is the phone's: end, commitments, phases, then «Archivar
   }
 });
 
-test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase» sits right of the phases label (RNP-11)", async ({
+test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase» sits right of the phases label (RNP-17)", async ({
   page,
   db,
   personId,

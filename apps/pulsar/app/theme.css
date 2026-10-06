@@ -119,7 +119,7 @@ body {
   }
 }
 
-/* RNP-11, `HoyEscritorio.dc.html`: from 1024px the shell is a row. The rail
+/* RNP-17, `HoyEscritorio.dc.html`: from 1024px the shell is a row. The rail
    (`components/ui/bottom-nav`) stands first and sticks to the viewport; the
    screen takes the rest. The root grows with its content so the rail has the
    whole scroll to stick through. */

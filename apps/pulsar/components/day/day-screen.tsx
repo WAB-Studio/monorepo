@@ -154,7 +154,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const tally =
     goals.length === 0 || lastEnded || counted.total === 0
       ? undefined
-      : t("day.tally", { done: counted.done, total: counted.total });
+      : counted.partial > 0
+        ? t("day.tallyPartial", { done: counted.done, total: counted.total, partial: counted.partial })
+        : t("day.tally", { done: counted.done, total: counted.total });
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
   // Stable: within each kind, `loadDay`'s own creation order stands.
@@ -184,12 +186,42 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     );
   }
 
-  const goalsMain = goals.length === 0 && past ? (
+  // The goals that ask today first, each group in `loadDay`'s order. A quiet
+  // met row asks nothing; a pending one-off of the goal does.
+  const sections = goals
+    .map((goal) => {
+      const own = commitments
+        .filter((commitment) => commitment.goalId === goal.id)
+        .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }));
+      // A commitment that does not ask on `day` has no slot at all
+      // (`deriveDay`'s own contract): one still owed draws nothing, one
+      // already met in its period draws quiet after the asked rows.
+      const rows = own.filter(
+        (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } => entry.slot !== undefined,
+      );
+      const met = own
+        .filter(
+          (entry) =>
+            entry.slot === undefined &&
+            metPhrase((key, values) => t(key, values), {
+              cadence: entry.commitment.cadence,
+              periodDone: periodDone[entry.commitment.id],
+            }) !== null,
+        )
+        .map((entry) => entry.commitment);
+      const asks = rows.length > 0 || (!past && oneOffs.some((oneOff) => oneOff.goalId === goal.id));
+      return { goal, rows, met, asks };
+    })
+    // A past day draws no goal that had no row and no met row.
+    .filter(({ rows, met }) => !past || rows.length > 0 || met.length > 0)
+    .sort((a, b) => Number(!a.asks) - Number(!b.asks));
+
+  const goalsMain = past && sections.length === 0 ? (
     <>
       <Text as="p" variant="title">
         {t("day.past.nothingTitle")}
       </Text>
-      {laterGoal ? (
+      {goals.length === 0 && laterGoal ? (
         <Text as="p" variant="meta" tone="muted">
           {dayPhrase("day.past.startedOn", laterGoal.openedOn, t, { goal: laterGoal.name })}
         </Text>
@@ -219,33 +251,21 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     <EmptyDay />
   ) : (
     <>
-      {goals.map((goal) => {
+      {sections.map(({ goal, rows, met, asks }) => {
         const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
         const goalPhase = phaseOn(goalPhases, day);
-        const own = commitments
-          .filter((commitment) => commitment.goalId === goal.id)
-          .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }));
-        // A commitment that does not ask on `day` has no slot at all
-        // (`deriveDay`'s own contract): one still owed draws nothing, one
-        // already met in its period draws quiet after the asked rows.
-        const rows = own.filter(
-          (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } => entry.slot !== undefined,
-        );
-        const met = own
-          .filter(
-            (entry) =>
-              entry.slot === undefined &&
-              metPhrase((key, values) => t(key, values), {
-                cadence: entry.commitment.cadence,
-                periodDone: periodDone[entry.commitment.id],
-              }) !== null,
-          )
-          .map((entry) => entry.commitment);
 
-        return (
+        const section = (
           <Panel as="div" key={goal.id}>
             <section>
-              <SectionLabel>{goal.name}</SectionLabel>
+              <SectionLabel>
+                {past && rows.length > 0
+                  ? t("day.past.asked", {
+                      goal: goal.name,
+                      count: (t.raw("day.past.askedWords") as string[])[rows.length] ?? rows.length,
+                    })
+                  : goal.name}
+              </SectionLabel>
               {goalPhase ? (
                 <Text as="p" tone="muted" variant="meta">
                   {phaseLine((key, values) => t(key, values), goalPhase.name, phasePositions[goalPhase.id])}
@@ -259,7 +279,15 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                     commitmentId={commitment.id}
                     name={commitment.name}
                     kind={commitment.kind}
-                    markState={slot.satisfiedBy === "evidence" ? "evidence" : slot.satisfied ? "declared" : "empty"}
+                    markState={
+                      slot.satisfiedBy === "evidence"
+                        ? "evidence"
+                        : slot.satisfied
+                          ? "declared"
+                          : slot.partial
+                            ? "partial"
+                            : "empty"
+                    }
                     sourceName={
                       slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
                     }
@@ -314,6 +342,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             </section>
           </Panel>
         );
+        // A goal that asks nothing today has no section on the phone; its
+        // «este mes» line is drawn elsewhere (`HoyTelefonoSinPedido.dc.html`).
+        return asks ? section : <Face on="desktop" key={goal.id}>{section}</Face>;
       })}
     </>
   );
@@ -357,6 +388,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             name={task.name}
             estimate={task.estimate}
             unit={goal.measureUnit as string}
+            parentName={task.parentName}
             note={task.note}
             noteEyebrow={noteEyebrow(goal.id)}
           />
@@ -457,6 +489,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {past ? (
         <DayHeader
           date={dateLabel(day, t)}
+          forward={{
+            href: shiftCivilDay(day, 1) === today ? "/" : `/dia/${shiftCivilDay(day, 1)}`,
+            label: t("day.nav.dayAfter"),
+          }}
           back={
             day > oldestPastDay(today)
               ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.dayBefore") }

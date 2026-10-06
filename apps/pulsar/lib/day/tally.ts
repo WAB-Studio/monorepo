@@ -14,14 +14,15 @@ export function isFlexible(cadence: Cadence): boolean {
   return cadence.kind === "times_per_week" || cadence.kind === "times_per_month";
 }
 
-export type DayTally = { day: string; done: number; total: number };
+export type DayTally = { day: string; done: number; total: number; partial: number };
 
 type OpenGoal = { id: string; openedOn: string; horizon: string };
 
 // One day's tally: the commitment slots of goals open that day
 // (`openedOn <= d < horizon`) plus the one-off facts whose goal is none or
 // open that day. `done` counts the satisfied slots and every such one-off
-// fact. Hoy and the Semana both count through here, so they never disagree.
+// fact. `partial` counts the partial slots among those; they never add to
+// `done`. Hoy and the Semana both count through here, so they never disagree.
 export function tallyDay(input: {
   view: DayView;
   goals: OpenGoal[];
@@ -53,6 +54,7 @@ export function tallyDay(input: {
     day: view.day,
     done: slots.filter((slot) => slot.satisfied).length + oneOffs.length,
     total: slots.length + oneOffs.length,
+    partial: slots.filter((slot) => slot.partial).length,
   };
 }
 

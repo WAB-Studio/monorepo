@@ -35,7 +35,15 @@ test("two goals ended this week draw one «terminó ayer · ver» line each", as
   const created = new Date(Date.now() - 60 * 86_400_000);
   const context = await browser.newContext({ baseURL: baseURL!, storageState: person.sessionFile });
   try {
-    await db`insert into goals.goals (user_id, name, horizon) values (${person.id}, ${openName}, ${shift(today, 60)})`;
+    const [open] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${openName}, ${shift(today, 60)}, now() - interval '3 days') returning id
+    `;
+    // It asks something, or the phone draws no section for it (RP-47).
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${person.id}, ${open.id}, ${`Tocar ${stamp}`}, 'daily', 'tap', now() - interval '3 days')
+    `;
     for (const name of [first, second]) {
       await db`
         insert into goals.goals (user_id, name, horizon, created_at)
