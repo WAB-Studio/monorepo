@@ -813,6 +813,10 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-33, RP-35)",
         .filter((found) => !/\d{4}/.test(flat.slice(found.index, found.index + found[0].length + 22)))
         .map((found) => flat.slice(found.index, found.index + 40));
       expect(bare).toEqual([]);
+      // A week's span never breaks: every «sem N ·» opening carries its closing year on its own line.
+      const opened = all.split("\n").filter((line) => /sem \d+ ·/.test(line));
+      expect(opened.length).toBeGreaterThan(0);
+      for (const line of opened) expect(line).toMatch(/sem \d+ · .*–.* \d{4}/);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;

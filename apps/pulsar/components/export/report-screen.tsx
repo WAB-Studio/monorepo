@@ -386,6 +386,7 @@ function GoalPart({
               rows={rows}
               figures={[1]}
               unit={unit as string}
+              nowrapLabel
               current={current === -1 ? undefined : current}
             />
           </Flex>
