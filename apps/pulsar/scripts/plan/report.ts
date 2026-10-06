@@ -332,10 +332,11 @@ test("loadReport: phases and the carried task read as the goal holds them", asyn
   assert.deepEqual(minutes.carried, [
     {
       name: "RP-33 fixture: arrastrada",
+      note: null,
       from: `${monthFrom(today, -1)}-01`,
       owes: 40,
       hasAmount: true,
-      children: [{ name: "RP-33 fixture: hija", owes: 40, hasAmount: true }],
+      children: [{ name: "RP-33 fixture: hija", note: null, owes: 40, hasAmount: true }],
     },
   ]);
 });
@@ -377,15 +378,16 @@ test("loadReport: a carried parent lists only what is undone, owing its estimate
   const entry = report.goals.find((goal) => goal.id === sharesGoalId)!;
   const from = `${monthFrom(today, -1)}-01`;
   assert.deepEqual(entry.carried, [
-    { name: "RP-33 cuota: debe", from, owes: 40, hasAmount: true, children: [] },
+    { name: "RP-33 cuota: debe", note: null, from, owes: 40, hasAmount: true, children: [] },
     {
       name: "RP-33 cuota: mitad",
+      note: null,
       from,
       owes: 15,
       hasAmount: true,
-      children: [{ name: "RP-33 cuota: mitad pendiente", owes: 15, hasAmount: true }],
+      children: [{ name: "RP-33 cuota: mitad pendiente", note: null, owes: 15, hasAmount: true }],
     },
-    { name: "RP-33 cuota: sin monto", from, owes: 0, hasAmount: false, children: [] },
+    { name: "RP-33 cuota: sin monto", note: null, from, owes: 0, hasAmount: false, children: [] },
   ]);
   // «toda hecha» finished its children before this month: it is not listed at all.
   assert.ok(!entry.carried.some((item) => item.name === "RP-33 cuota: toda hecha"));
