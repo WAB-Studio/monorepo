@@ -220,6 +220,25 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 10».
   imagen»; the model's file part takes PDF alone and a `.docx` answers `unreadableType` (module 151). Decided by the
   coordinator 2026-10-01: the hint never promises a kind the route refuses.
 
+### Notes on tasks (RP-45)
+
+Drawn 2026-10-05 on the pages they belong to, approved by the user the same day: «Aprobados así».
+
+| board | what it holds |
+|---|---|
+| `TareaNota.dc.html` | the note's sheet, empty: eyebrow «nota · <goal> · <month>», the task's name, a labelled text area, «Guardar», «Cancelar» |
+| `TareaNotaEscribiendo.dc.html` | an existing note being edited: line breaks kept, the count from 1800 («1 850 de 2000»), «Guardando…» busy, «quitar la nota» |
+| `TareaNotaGuardada.dc.html` | a month's list with noted tasks: up to two lines of the note under the name, clipped; the note button green with lines |
+| `TareaNotaHecha.dc.html` | a done task keeps its note and its button; the row's tap still undoes |
+| `TareaNotaFallo.dc.html` | the save failed: the sheet stays, the text stays, one line says so |
+| `TareaNotaLarga.dc.html` | over 2000: the ring and the count turn ink, the line says how much fits, nothing is cut |
+| `TareaNotaVaciar.dc.html` | after «quitar la nota»: the row as before, the button grey |
+| `HoyNota.dc.html` | Hoy: the note button on each one-off, pending or done, never the text |
+| `SueltasNota.dc.html` | `/sueltas`: up to two lines of the note under the name and its date |
+| `ImportarRevisarNota.dc.html` | the review shows a template task's and sub-task's note whole, read-only |
+| `ReporteNota.dc.html` | `/exportar`: the note whole under a carried task and its sub-task, set off by a thin left rule |
+| `ReporteImpresoNota.dc.html` | the same on A4 at 12 pt; a long note breaks across pages, never cut |
+
 ## The boards that do not exist
 
 Say what is missing, so a gap nobody drew reads as a gap nobody needed.
@@ -287,6 +306,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **`/metas` after «Crear N metas».** It is the list `Exportar.dc.html` draws, with the new goals.
 - **A template read.** It is `ImportarRevisar.dc.html` with «leído con la plantilla, sin IA» in place of
   «leído por OpenAI».
+- **Notes on tasks: dark, the desktop dialog, the create forms.** Dark is the token table's; from 1024 the note's sheet
+  is the centred dialog every sheet already is; `TareaNueva` and the AI's paths draw nothing new. Decided 2026-10-05 by
+  the coordinator with the boards' approval.
 
 ## Decisions taken here
 
@@ -731,3 +753,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   a past day's «volver a hoy» keeps its name. Decided 2026-10-05 by the coordinator.
 - **Module 211, `MetaRiel`.** The rail draws one row; nothing in it shares a left edge with the header. The plan said
   otherwise and was corrected to the board. Decided 2026-10-05 by the coordinator.
+- **Notes on tasks (RP-45).** Decided by the user 2026-10-05, five answers:
+  - the note lives on the task (month task, sub-task, one-off), editable at any time, done or not;
+  - it opens from a note button at the end of the row, grey when empty, green with lines when not; no tap that exists today
+    changes (the mark marks, the name deletes, undoes or schedules as before). Boards approved: «Aprobados así»;
+  - the month's lists and `/sueltas` show up to two lines of it; Hoy shows only the button;
+  - the connected AI writes and replaces a note, never empties one;
+  - the PDF prints it under carried tasks only; it travels in on the template's import, not out as text.
