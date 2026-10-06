@@ -16,6 +16,8 @@ export type CommitmentFormProps = {
   // `satisfaction === "quantity"`, to say the unit typed here is the one
   // that sets it.
   hasMeasure: boolean;
+  // The goal's own unit when it measures: the quantity takes it, no field.
+  measureUnit: string | null;
   // The evidence catalogue (RP-07, RNP-10), read off `goals.evidence_sources`
   // by the page: a second source is a seeded row, never a case this form
   // hardcodes.
@@ -52,7 +54,7 @@ const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
  * refuse never leaves the device — the same shape `NewGoalForm` already
  * takes. No new server code.
  */
-export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: CommitmentFormProps) {
+export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sources }: CommitmentFormProps) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -92,7 +94,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
       satisfaction === "tap"
         ? ({ satisfaction: "tap" } as const)
         : satisfaction === "quantity"
-          ? ({ satisfaction: "quantity", targetQuantity: Number(targetQuantity), unit } as const)
+          ? ({ satisfaction: "quantity", targetQuantity: Number(targetQuantity), unit: measureUnit ?? unit } as const)
           : ({ satisfaction: "evidence", sourceKey, threshold: Number(threshold) } as const);
 
     const parsed = addCommitmentSchema.safeParse({ goalId, name, ...cadence, ...done });
@@ -242,13 +244,19 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
                 invalid={quantityRefusal !== undefined}
                 style={{ maxWidth: 88 }}
               />
-              <Field
-                label={t("plan.commitmentForm.unitLabel")}
-                value={unit}
-                onChange={(event) => setUnit(event.target.value)}
-                invalid={unitRefusal !== undefined}
-                style={{ flex: 1 }}
-              />
+              {measureUnit !== null ? (
+                <Text as="span" variant="sentence" tone="muted" data-testid="commitment-unit">
+                  {measureUnit}
+                </Text>
+              ) : (
+                <Field
+                  label={t("plan.commitmentForm.unitLabel")}
+                  value={unit}
+                  onChange={(event) => setUnit(event.target.value)}
+                  invalid={unitRefusal !== undefined}
+                  style={{ flex: 1 }}
+                />
+              )}
             </Flex>
             {quantityRefusal || unitRefusal ? (
               <Text as="p" tone="ink" variant="sentence">
