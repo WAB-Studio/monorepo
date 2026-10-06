@@ -42,7 +42,7 @@ export function DayHeader({
   // A past day (`DiaPasadoPasos.dc.html`): both steps are words with their
   // chevron, «volver a hoy» pushed to the end.
   const eyebrow = title === undefined ? (
-    <Flex align="center" gap="5">
+    <Flex align="center" gap="1">
       {back ? (
         <Button asChild tap={44} variant="ghost">
           <Link href={back.href}>
@@ -56,17 +56,20 @@ export function DayHeader({
         <Flex width="14px" flexShrink="0" aria-hidden />
       ) : null}
       {forward ? (
-        <Button asChild tap={44} variant="ghost">
-          <Link href={forward.href}>
-            <Text variant="meta" tone="accent">
-              {forward.label}
-            </Text>
-            <ChevronRight size={16} aria-hidden />
-          </Link>
-        </Button>
+        // A ghost button's own negative margin would lay it over the step back.
+        <Flex ml="3">
+          <Button asChild tap={44} variant="ghost">
+            <Link href={forward.href}>
+              <Text variant="meta" tone="accent">
+                {forward.label}
+              </Text>
+              <ChevronRight size={16} aria-hidden />
+            </Link>
+          </Button>
+        </Flex>
       ) : null}
       {toToday ? (
-        <Flex ml="auto">
+        <Flex ml="auto" pl="3">
           <Button asChild tap={44} variant="ghost">
             <Link href={toToday.href}>
               <Text variant="meta" tone="accent">
