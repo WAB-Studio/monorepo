@@ -1,4 +1,6 @@
 import { test, expect } from "./fixtures";
+import { planMoved } from "@/lib/plan/roadmap-read";
+import type { PlanTask } from "@/lib/plan/roadmap";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `RoadmapHoyMovido.dc.html`, `RoadmapHoyMovidoDias.dc.html` (module 353,
@@ -82,6 +84,132 @@ for (const width of [390, 1440]) {
       await expect(seen(shortName).first()).toBeVisible();
       await expect(title, "a reload keeps it gone").toHaveCount(0);
       await expect(page.getByRole("button", { name: "Entendido" }).locator("visible=true")).toHaveCount(0);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where user_id = ${person.id}`;
+    }
+  });
+}
+
+const MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+// A month that closed 60 min short moves the end a few days; 300 short moves it
+// about half a month; none short moves it not at all. Each expected number is
+// the one `planMoved` reads from the same seed, never typed.
+for (const width of [390, 1440]) {
+  test(`Hoy at ${width} says days under a week, weeks from a week, and nothing for a move of none`, async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const today = todayInZone();
+    const closed = monthStartOf(-1);
+    const rhythm = 600;
+    const bigEstimate = 1800;
+
+    type Case = { name: string; done: number; id: string };
+    const cases: Case[] = [
+      { name: `Meta días ${stamp}`, done: 540, id: "" },
+      { name: `Meta semanas ${stamp}`, done: 300, id: "" },
+      { name: `Meta quieta ${stamp}`, done: 600, id: "" },
+    ];
+    for (const item of cases) {
+      const [goal] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+        values (${person.id}, ${item.name}, '2099-12-31'::date, 'minutos', 'minutos', ${rhythm}, '2020-01-01T00:00:00Z'::timestamptz)
+        returning id
+      `;
+      item.id = goal.id;
+      const [small] = await db<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, position, created_at)
+        values (${person.id}, ${goal.id}, ${`Hecha ${item.name}`}, ${item.done}, true, 1, '2020-01-01T00:00:00Z'::timestamptz)
+        returning id
+      `;
+      await db`
+        insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, position, created_at)
+        values (${person.id}, ${goal.id}, ${`Grande ${item.name}`}, ${bigEstimate}, true, 2, '2020-01-02T00:00:00Z'::timestamptz)
+      `;
+      await db`
+        insert into goals.facts (user_id, goal_id, one_off_id, day) values (${person.id}, ${goal.id}, ${small.id}, ${closed}::date)
+      `;
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount) values (${person.id}, ${goal.id}, ${closed}::date, ${rhythm})
+      `;
+    }
+
+    const expected = (done: number) => {
+      const tasks: PlanTask[] = [
+        { id: "a", parentId: null, name: "a", plannedMonth: null, day: null, estimate: done, doneOn: closed, note: null, inPlan: true, createdOn: "2020-01-01", position: 1 },
+        { id: "b", parentId: null, name: "b", plannedMonth: null, day: null, estimate: bigEstimate, doneOn: null, note: null, inPlan: true, createdOn: "2020-01-02", position: 2 },
+      ];
+      return planMoved({
+        rhythm,
+        budgets: [{ month: closed, amount: rhythm }],
+        tasks,
+        openedOn: "2020-01-01",
+        horizon: "2099-12-31",
+        today,
+        seen: null,
+      });
+    };
+    const [days, weeks, still] = cases.map((item) => expected(item.done));
+    expect(days, "the short seed moves the plan").not.toBeNull();
+    expect(weeks, "the long seed moves the plan").not.toBeNull();
+    expect(days!.movedDays, "the short seed moves under a week").toBeLessThan(7);
+    expect(weeks!.movedDays, "the long seed moves a week or more").toBeGreaterThanOrEqual(7);
+    expect(still, "the met seed does not move").toBeNull();
+
+    const body = (notice: NonNullable<typeof days>, done: number, tail: string) => {
+      const closedName = MONTHS[Number(notice.closedMonth.slice(5, 7)) - 1];
+      const nextName = MONTHS[Number(notice.closedMonth.slice(5, 7)) % 12];
+      const end = civilDateToDate(notice.end);
+      const hours = (minutes: number) => `${minutes / 60} h`;
+      return (
+        `${closedName[0].toUpperCase()}${closedName.slice(1)} cerró con ${hours(done)} de ${hours(rhythm)}. ` +
+        `Lo que faltó pasó a ${nextName}${tail} Ahora terminas el ${end.getUTCDate()} de ${MONTHS[end.getUTCMonth()]}.`
+      );
+    };
+    const dayCount = days!.movedDays;
+    const weekCount = Math.max(1, Math.round(weeks!.movedDays / 7));
+
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await expect(page.locator("main")).toHaveCount(1);
+      const seen = (text: string) => page.getByText(text, { exact: true }).locator("visible=true");
+
+      await expect
+        .soft(
+          seen(`Tu plan de ${cases[0].name} se movió ${dayCount} ${dayCount === 1 ? "día" : "días"}`),
+          "under a week reads the days",
+        )
+        .toHaveCount(1);
+      await expect
+        .soft(seen(body(days!, 540, ".")), "under a week drops the sentence about the rest")
+        .toHaveCount(1);
+      await expect
+        .soft(
+          seen(`Tu plan de ${cases[1].name} se movió ${weekCount} ${weekCount === 1 ? "semana" : "semanas"}`),
+          "a week or more reads whole weeks",
+        )
+        .toHaveCount(1);
+      await expect
+        .soft(
+          seen(body(weeks!, 300, " y el resto se corrió detrás.")),
+          "a week or more says the rest ran behind",
+        )
+        .toHaveCount(1);
+      await expect
+        .soft(page.getByText(new RegExp(`^Tu plan de ${cases[2].name}`)).locator("visible=true"), "a move of none draws no card")
+        .toHaveCount(0);
+      await expect.soft(page.getByText(cases[2].name, { exact: true }).locator("visible=true").first()).toBeVisible();
     } finally {
       await context.close();
       await db`delete from goals.goals where user_id = ${person.id}`;
