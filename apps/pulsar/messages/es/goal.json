@@ -30,7 +30,8 @@
     "monthNoPlan": "sin monto planeado",
     "monthPlanLink": "Planear {month}",
     "monthProgress": "llevas {percent} % · faltan {days, plural, one {# día} other {# días}}",
-    "monthPace": "día {day} · {percent} %, bajo el {threshold} %",
+    "monthPace": "día {day} ·",
+    "monthPaceUnder": ", bajo el {threshold} %",
     "monthDeclaredOnly": "solo lo que dijiste tú · no pudimos leer el diccionario de lectura"
   },
   "review": {

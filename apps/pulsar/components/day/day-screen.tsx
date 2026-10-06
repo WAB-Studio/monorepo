@@ -366,21 +366,21 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     const task = loaded.monthTask[goal.id];
     return (
       <>
-        <Flex align="baseline" gap="2" wrap="wrap">
-          <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
-          <Text variant="meta" tone="muted">
-            {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
-          </Text>
-        </Flex>
         {line.underPace ? (
           <Text as="p" variant="meta">
-            {t("day.monthLine.pace", {
-              day: Number(day.slice(8, 10)),
-              percent: Math.floor((line.reached * 100) / planned),
-              threshold: 60,
-            })}
+            {t("day.monthLine.pace", { day: Number(day.slice(8, 10)) })}{" "}
+            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />{" "}
+            {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
+            {t("day.monthLine.paceUnder", { threshold: 60 })}
           </Text>
-        ) : null}
+        ) : (
+          <Flex align="baseline" gap="2" wrap="wrap">
+            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
+            <Text variant="meta" tone="muted">
+              {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
+            </Text>
+          </Flex>
+        )}
         {task ? (
           <MonthTaskLine
             key={task.id}
