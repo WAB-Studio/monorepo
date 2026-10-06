@@ -19,6 +19,7 @@ import { isTimeUnit } from "@/lib/units/time";
 import {
   civilDateInZone,
   civilDateLabel,
+  civilDayMonthShort,
   todayInZone,
   TIME_ZONE,
 } from "@/lib/zone";
@@ -93,6 +94,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const t = await getTranslations();
   const today = todayInZone();
+  const endDay = dayBefore(goal.horizon);
+  const endLabel =
+    endDay.slice(0, 4) === today.slice(0, 4)
+      ? civilDayMonthShort(endDay)
+      : `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
   const openedOn = civilDateInZone(new Date(goal.createdAt));
   const totalWeeks = horizonWeeks(openedOn, goal.horizon);
   const currentPhase = phaseOn(goal.phases, today);
@@ -264,7 +270,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             <Text as="p" variant="meta" tone="muted">
               {t("goal.detail.horizonUntil", {
                 weeks: totalWeeks,
-                date: civilDateLabel(dayBefore(goal.horizon)),
+                date: endLabel,
               })}
             </Text>
             {archived ? null : moveAction}
