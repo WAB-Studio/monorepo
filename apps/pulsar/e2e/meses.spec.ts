@@ -514,3 +514,76 @@ test("each month is a whole 48 px link in ink to its month; one h1; the back rea
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
+
+// RP-28: the amount of a month still to come is a door to the sheet only while
+// the goal is open. The month in play and a coming one are the months the
+// sheet could reach, so they are where an ended or archived goal must refuse.
+test("an ended goal and an archived one refuse the sheet on this month and a coming one, in the list and on the month's page (RP-28)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const [ended] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${`Meta terminada mes ${stamp}`}, ${todayInZone()}::date, 'minutos', 'minutos', now() - interval '20 days')
+    returning id
+  `;
+  const archivedId = await seedGoal(db, person.id, `Meta archivada mes ${stamp}`);
+  await db`update goals.goals set archived_at = now() where id = ${archivedId}`;
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${ended.id}, ${thisMonth}::date, 300),
+           (${person.id}, ${archivedId}, ${thisMonth}::date, 300),
+           (${person.id}, ${archivedId}, ${followingMonth}::date, 300)
+  `;
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    for (const [goalId, months] of [
+      [ended.id, [thisMonth]],
+      [archivedId, [thisMonth, followingMonth]],
+    ] as const) {
+      for (const month of months) {
+        await page.goto(`/metas/${goalId}/meses?planear=${seg(month)}`);
+        await expect(page.locator("main")).toHaveCount(1);
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+
+        await page.goto(`/metas/${goalId}/meses/${seg(month)}`);
+        await expect(page.locator("main")).toHaveCount(1);
+        await expect(page.getByText("de 5 h", { exact: true }).locator("visible=true")).toHaveCount(1);
+        await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
+      }
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
+// RP-32: only the months of the goal's span exist as pages.
+test("a month before the goal was written, one past its horizon and a malformed one are not pages (RP-32)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person.id, `Meta fuera de rango ${Date.now()}`);
+  const before = monthOf(dayBefore(lastMonth));
+  const after = nextMonth(horizon);
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
+    await expect(page.getByRole("heading", { name: label(thisMonth), level: 1 })).toBeVisible();
+    for (const month of [seg(before), seg(after), "2026-13", "2026-00", "26-10"]) {
+      await page.goto(`/metas/${goalId}/meses/${month}`);
+      await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});

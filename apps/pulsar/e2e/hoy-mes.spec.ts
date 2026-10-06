@@ -216,3 +216,55 @@ test("Hoy draws the goal's next task of the month under its line, completes it, 
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
+
+// RP-30 on Hoy's month line: a task that gained sub-tasks after the screen
+// loaded is refused, and the refusal is said under the line, never swallowed.
+test("Hoy says why a month task cannot be marked done when it gained sub-tasks meanwhile (RP-30)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const today = todayInZone();
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const goalName = `Meta rechazo ${stamp}`;
+  const taskName = `Con hijas ${stamp}`;
+
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${goalName}, ${plusDays(90)}, 'minutos', 'minutos', now() - interval '40 days')
+    returning id
+  `;
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${goal.id}, ${monthStart}::date, 720)
+  `;
+  const [task] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${person.id}, ${goal.id}, ${taskName}, ${monthStart}::date, 60) returning id
+  `;
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto("/");
+    const mark = page.getByRole("button", { name: `Marcar hecha: ${taskName}` }).locator("visible=true");
+    await expect(mark).toHaveCount(1);
+    const refusal = page.getByText("Esta tarea se da por hecha cuando lo están sus sub-tareas.");
+    await expect(refusal).toHaveCount(0);
+
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, parent_id)
+      values (${person.id}, ${goal.id}, ${`Hija ${stamp}`}, ${task.id})
+    `;
+    await mark.click();
+    await expect(refusal.locator("visible=true")).toHaveCount(1);
+    const facts = await db`select 1 from goals.facts where one_off_id = ${task.id}`;
+    expect(facts.length).toBe(0);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
