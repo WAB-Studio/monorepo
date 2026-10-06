@@ -14,7 +14,7 @@ import {
   Notice,
   Page,
   ScreenHeader,
-  SectionLabel,
+  Section,
   Separator,
   Text,
 } from "@/components/ui";
@@ -64,7 +64,7 @@ function Copyable({ text, label }: { text: string; label: string }) {
         </Button>
       </Flex>
       {state === "idle" ? null : (
-        <Text as="p" role="status" aria-live="polite" tone={state === "copied" ? "accent" : "muted"}>
+        <Text as="p" variant="sentence" role="status" aria-live="polite" tone={state === "copied" ? "accent" : "muted"}>
           {state === "copied" ? (
             <Flex as="span" align="center" gap="1">
               <Check size={14} strokeWidth={2} aria-hidden />
@@ -88,12 +88,11 @@ function Keys({ rows, section, onAsk, busy }: {
   const t = useTranslations("connections");
 
   return (
-    <section>
-      <SectionLabel>{section}</SectionLabel>
+    <Section label={section}>
       {rows.map((row) => (
         <div key={row.id}>
           <Separator />
-          <Flex align="center" justify="between" gap="3">
+          <Flex align="center" justify="between" gap="3" py="3" minHeight="56px">
             <Flex direction="column" gap="1">
               <Text variant="name" tone={row.revoked ? "muted" : undefined}>
                 {row.name}
@@ -110,7 +109,7 @@ function Keys({ rows, section, onAsk, busy }: {
           </Flex>
         </div>
       ))}
-    </section>
+    </Section>
   );
 }
 
@@ -132,11 +131,6 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
   const keys = rows.filter((row) => row.kind === "personal");
   const connected = rows.filter((row) => row.kind === "oauth");
   const place = { href: "/metas", place: useTranslations("common.nav")("goals") };
-  const eyebrow = (
-    <Text as="p" variant="meta" tone="muted">
-      {t("eyebrow")}
-    </Text>
-  );
 
   function create() {
     startTransition(async () => {
@@ -164,19 +158,17 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
     const command = t("created.claudeCode", { url: siteUrl, key: created.key });
     return (
       <Page>
-        <ScreenHeader title={t("created.title")} back={place} eyebrow={eyebrow} />
+        <ScreenHeader title={t("created.title")} back={place} />
         <Notice role="note">{t("created.once")}</Notice>
-        <section>
-          <SectionLabel>{created.name}</SectionLabel>
+        <Section label={created.name}>
           <Copyable text={created.key} label={t("created.copyName")} />
-        </section>
-        <section>
-          <SectionLabel>{t("created.terminal")}</SectionLabel>
+        </Section>
+        <Section label={t("created.terminal")}>
           <Copyable text={command} label={t("created.copyCommandName")} />
-          <Text as="p" variant="meta" tone="muted">
+          <Text as="p" variant="sentence" tone="muted">
             {t("created.connected")}
           </Text>
-        </section>
+        </Section>
         <Button variant="outline" tap={52} block onClick={() => setCreated(null)}>
           {t("created.done")}
         </Button>
@@ -185,8 +177,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
   }
 
   const form = (
-    <section>
-      <SectionLabel>{keys.length > 0 || connected.length > 0 ? t("sections.another") : t("sections.first")}</SectionLabel>
+    <Section label={keys.length > 0 || connected.length > 0 ? t("sections.another") : t("sections.first")}>
       <Field
         label={t("nameLabel")}
         placeholder={t("namePlaceholder")}
@@ -199,12 +190,12 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
       <Button tap={52} block disabled={pending} aria-busy={pending || undefined} onClick={create}>
         {pending ? t("creating") : t("create")}
       </Button>
-    </section>
+    </Section>
   );
 
   return (
     <Page>
-      <ScreenHeader title={t("title")} back={place} eyebrow={eyebrow} />
+      <ScreenHeader title={t("title")} back={place} />
       <Text as="p">{t("intro")}</Text>
       {keys.length > 0 ? <Keys rows={keys} section={t("sections.keys")} onAsk={setAsked} busy={pending} /> : null}
       {connected.length > 0 ? (
@@ -221,13 +212,12 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
         onConfirm={() => asked && revoke(asked.id)}
         busy={pending}
       />
-      <section>
-        <SectionLabel>{t("sections.connector")}</SectionLabel>
-        <Text as="p" variant="meta" tone="muted">
+      <Section label={t("sections.connector")}>
+        <Text as="p" variant="sentence" tone="muted">
           {t("connector.note")}
         </Text>
         <Copyable text={`${siteUrl}/mcp`} label={t("connector.copyName")} />
-      </section>
+      </Section>
     </Page>
   );
 }

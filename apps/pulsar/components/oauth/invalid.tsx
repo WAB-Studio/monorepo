@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { Button, Page, Text } from "@/components/ui";
+import { Button, Page, ScreenHeader, Text } from "@/components/ui";
 
 // No button that approves: a request that cannot be trusted has nothing to grant.
 export function Invalid() {
@@ -9,12 +9,7 @@ export function Invalid() {
 
   return (
     <Page alone middle>
-      <Text as="p" variant="meta" tone="muted">
-        {t("eyebrow")}
-      </Text>
-      <Text asChild variant="title">
-        <h1>{t("invalid.title")}</h1>
-      </Text>
+      <ScreenHeader title={t("invalid.title")} eyebrow={t("eyebrow")} />
       <Text as="p">{t("invalid.body")}</Text>
       <Button asChild variant="outline" tap={52} block>
         <Link href="/">{t("invalid.home")}</Link>

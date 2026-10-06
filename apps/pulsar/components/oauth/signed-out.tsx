@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { sendSignInLink, type SendSignInLinkResult } from "@/app/actions/account";
-import { Button, Field, Page, Text } from "@/components/ui";
+import { Button, Field, Page, ScreenHeader, Text } from "@/components/ui";
 
 type SendError = Extract<SendSignInLinkResult, { ok: false }>["error"];
 
@@ -26,12 +26,7 @@ export function SignedOut({ client, next }: { client: string; next: string }) {
 
   return (
     <Page alone>
-      <Text as="p" variant="meta" tone="muted">
-        {t("eyebrow")}
-      </Text>
-      <Text asChild variant="title">
-        <h1>{t("signedOut.title")}</h1>
-      </Text>
+      <ScreenHeader title={t("signedOut.title")} eyebrow={t("eyebrow")} />
       <Text as="p">{t("signedOut.body", { client })}</Text>
       {state.kind === "sent" ? (
         <Text as="p">{account("sent")}</Text>
@@ -61,7 +56,7 @@ export function SignedOut({ client, next }: { client: string; next: string }) {
           </Button>
         </form>
       )}
-      <Text as="p" variant="meta" tone="muted">
+      <Text as="p" variant="sentence" tone="muted">
         {t("signedOut.promise")}
       </Text>
     </Page>

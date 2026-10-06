@@ -98,6 +98,9 @@ test.describe("the consent screen (RP-41)", () => {
         await expect(page.getByText(text, { exact: true })).toBeVisible();
       }
       await expect(page.getByRole("button", { name: oauth.allow, exact: true })).toBeVisible();
+      // 318: the app has one name wherever a person reads it.
+      await expect(page.getByText("Bitácora de metas · permiso", { exact: true })).toBeVisible();
+      expect(await page.locator("main").innerText()).not.toMatch(/pulsar ·/i);
       await expect(page.getByRole("button", { name: oauth.deny })).toBeVisible();
       await expect(page.getByRole("navigation")).toHaveCount(0);
       await expectNoOverflow(page);

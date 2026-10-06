@@ -51,9 +51,6 @@ export default function GlobalError({
       <body>
         <Theme accentColor="teal" grayColor="slate" radius="large" scaling="100%">
           <Page>
-            <Text as="p" variant="meta" tone="muted">
-              {t.kicker}
-            </Text>
             <Text asChild variant="title">
               <h1>{t.title}</h1>
             </Text>
