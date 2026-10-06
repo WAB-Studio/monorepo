@@ -43,7 +43,12 @@ export const createOneOffSchema = z.object({
   // The child takes its parent's goal and month, so it names neither.
   parentId: z.uuid({ error: "month.errors.invalid" }).nullish(),
   note: noteSchema.nullish(),
+  // A task of the goal's plan with no month of its own: the plan places it (RP-50).
+  inPlan: z.boolean({ error: "month.errors.invalid" }).optional(),
 })
+  .refine((input) => !input.inPlan || (input.goalId != null && input.day == null && input.parentId == null), {
+    error: "month.errors.invalid",
+  })
   .refine((input) => input.plannedMonth == null || input.goalId != null, {
     error: "month.errors.invalid",
   })
@@ -87,6 +92,37 @@ export const moveTaskSchema = z.object({
 });
 
 export type MoveTaskInput = z.infer<typeof moveTaskSchema>;
+
+const taskName = z
+  .string({ error: "roadmap.errors.nameEmpty" })
+  .trim()
+  .min(1, { error: "roadmap.errors.nameEmpty" })
+  .max(120, { error: "roadmap.errors.nameTooLong" });
+
+const taskEstimate = z
+  .number({ error: "month.errors.estimateInvalid" })
+  .int({ error: "month.errors.estimateInvalid" })
+  .min(1, { error: "month.errors.estimateInvalid" })
+  .max(1_000_000, { error: "month.errors.estimateInvalid" });
+
+// The sheet's one act (RP-55). Absent leaves a field; `null` clears the
+// estimate and returns the month to the plan (RP-51).
+export const editTaskSchema = z.object({
+  oneOffId: z.uuid({ error: "month.errors.invalid" }),
+  name: taskName,
+  estimate: taskEstimate.nullish(),
+  month: setMonthBudgetSchema.shape.month.nullish(),
+});
+
+export type EditTaskInput = z.input<typeof editTaskSchema>;
+
+// The month half of `editTask`, for the AI (RP-51): null unfixes.
+export const fixTaskSchema = z.object({
+  oneOffId: z.uuid({ error: "month.errors.invalid" }),
+  month: setMonthBudgetSchema.shape.month.nullable(),
+});
+
+export type FixTaskInput = z.infer<typeof fixTaskSchema>;
 
 export const setOneOffNoteSchema = z.object({
   oneOffId: z.uuid({ error: "day.errors.invalid" }),

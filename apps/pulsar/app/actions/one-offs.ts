@@ -8,11 +8,13 @@ import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
-import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import {
   createOneOffSchema,
   completeOneOffSchema,
   deleteOneOffSchema,
+  editTaskSchema,
+  fixTaskSchema,
   moveTaskSchema,
   scheduleOneOffSchema,
   setOneOffNoteSchema,
@@ -22,6 +24,8 @@ import {
   type CompleteOneOffInput,
   type DeleteOneOffInput,
   type MoveTaskInput,
+  type EditTaskInput,
+  type FixTaskInput,
 } from "@/lib/validation/one-off";
 
 import { declareFact, type DeclareFactResult } from "./facts";
@@ -33,6 +37,8 @@ export type ScheduleOneOffResult = { ok: true } | { ok: false; error: MessageKey
 export type DeleteOneOffResult = { ok: true } | { ok: false; error: MessageKey };
 export type SetOneOffNoteResult = { ok: true } | { ok: false; error: MessageKey };
 export type MoveTaskResult = { ok: true } | { ok: false; error: MessageKey };
+export type EditTaskResult = { ok: true } | { ok: false; error: MessageKey };
+export type FixTaskResult = EditTaskResult;
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -55,9 +61,9 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { name, day, estimate, plannedMonth, parentId, note } = parsed.data;
+  const { name, day, estimate, plannedMonth, parentId, note, inPlan } = parsed.data;
   // A plain one-off of a goal keeps RP-20's rules; a month's task obeys the goal's plan.
-  const isTask = plannedMonth != null || estimate != null || parentId != null;
+  const isTask = plannedMonth != null || estimate != null || parentId != null || inPlan === true;
 
   try {
     const written = await withGoalsDb(async (tx) => {
@@ -145,11 +151,11 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
       // "Drizzle's insert builder names every column"): `id` and `created_at`
       // are left off, and the grant does not even list `created_at`.
       const [inserted] = await tx.execute<{ id: string }>(sql`
-        insert into ${oneOffs} (user_id, goal_id, name, day, estimate, planned_month, parent_id, note)
+        insert into ${oneOffs} (user_id, goal_id, name, day, estimate, planned_month, parent_id, note, in_plan)
         values (
           ${person.id}, ${goalId}, ${name}, ${day}, ${estimate ?? null},
           ${plannedMonth != null ? monthStart(plannedMonth) : null}, ${parentId ?? null},
-          ${note ?? null}
+          ${note ?? null}, ${inPlan === true}
         )
         returning id
       `);
@@ -319,84 +325,133 @@ export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneO
   }
 }
 
-/**
- * Moves an undone month task, with its sub-tasks, to another open month of
- * its goal's span (RP-42). Sub-tasks carry no month and follow the parent's
- * row. The row is read first only to name the refusal; the UPDATE repeats
- * `day is null` and writes 0 rows if a day landed in between, reported as
- * `oneOffHasFact`.
- */
-export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskResult> {
-  const parsed = moveTaskSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+type TaskWrite = {
+  oneOffId: string;
+  name?: string;
+  estimate?: number | null;
+  month?: string | null;
+};
 
+const REFUSALS: Record<string, MessageKey> = {
+  noMeasure: "month.errors.noMeasure",
+  invalid: "month.errors.invalid",
+  closed: "month.errors.closed",
+  doneTask: "roadmap.errors.doneTask",
+  subTaskMonth: "roadmap.errors.subTaskMonth",
+  dayInMonth: "roadmap.errors.dayInMonth",
+  parentEstimate: "roadmap.errors.parentEstimate",
+  monthOutsideSpan: "roadmap.errors.monthOutsideSpan",
+  monthEnded: "roadmap.errors.monthEnded",
+};
+
+/**
+ * The one write behind `editTask` and `fixTask` (RP-51, RP-55, RP-57), in one
+ * statement. The CTEs read one snapshot: `chk` names the first refusal and
+ * `upd` writes only when there is none, so a refusal writes nothing and needs
+ * no rollback. A task is done when it, or a child, has a fact. A fact or a
+ * child landing in between makes `one_offs_guard_day` return 0 rows for an
+ * estimate or a month, reported as `doneTask`. A one-off of no goal (RP-57)
+ * takes its name alone.
+ */
+async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { oneOffId, month } = parsed.data;
+  const { oneOffId, name, estimate, month } = input;
+  const touchesEstimate = estimate !== undefined;
+  const touchesMonth = month !== undefined;
+  const today = todayInZone();
 
-  try {
-    const moved = await withGoalsDb(async (tx) => {
-      const [row] = await tx
-        .select({
-          goalId: oneOffs.goalId,
-          parentId: oneOffs.parentId,
-          day: oneOffs.day,
-          plannedMonth: oneOffs.plannedMonth,
-          // Itself or any child; `${oneOffs}.id`, never `${oneOffs.id}` (see scheduleOneOff).
-          hasFact: sql<boolean>`exists (
-            select 1 from ${facts} f
-            where f.one_off_id = ${oneOffs}.id
-              or f.one_off_id in (select c.id from ${oneOffs} c where c.parent_id = ${oneOffs}.id)
-          )`,
-          horizon: goals.horizon,
-          archivedAt: goals.archivedAt,
-          createdAt: goals.createdAt,
-        })
-        .from(oneOffs)
-        .leftJoin(goals, eq(goals.id, oneOffs.goalId))
-        .where(eq(oneOffs.id, oneOffId));
-      if (!row) throw new NamedError("plan.errors.notFound");
-      if (
-        row.parentId !== null ||
-        row.plannedMonth === null ||
-        row.goalId === null ||
-        row.horizon === null ||
-        row.createdAt === null
-      ) {
-        throw new NamedError("month.errors.invalid");
-      }
-      if (row.day !== null || row.hasFact) throw new NamedError("day.errors.oneOffHasFact");
-      if (isClosed({ horizon: row.horizon, archivedAt: row.archivedAt })) {
-        throw new NamedError("month.errors.closed");
-      }
-      if (
-        monthOutsideSpan({
-          month,
-          openedOn: civilDateInZone(row.createdAt),
-          horizon: row.horizon,
-        })
-      ) {
-        throw new NamedError("month.errors.outsideSpan");
-      }
-      if (month < todayInZone().slice(0, 7)) throw new NamedError("month.errors.monthClosed");
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<{ goal_id: string | null; refusal: string | null; updated: number }>(sql`
+      with t as (
+        select o.id, o.goal_id, o.parent_id, o.in_plan, o.day,
+               exists (
+                 select 1 from facts f
+                 where f.one_off_id = o.id
+                    or f.one_off_id in (select c.id from one_offs c where c.parent_id = o.id)
+               ) as has_fact,
+               exists (select 1 from one_offs c where c.parent_id = o.id) as has_children,
+               g.horizon, g.archived_at, g.measure_unit,
+               (g.created_at at time zone ${TIME_ZONE})::date as opened
+        from one_offs o left join goals g on g.id = o.goal_id
+        where o.id = ${oneOffId} and o.user_id = ${person.id}
+      ),
+      chk as (
+        select t.*,
+          case
+            when goal_id is null then
+              case when ${estimate ?? null}::int is not null then 'noMeasure'
+                   when ${touchesMonth}::boolean then 'invalid' end
+            when not in_plan then 'invalid'
+            when ${touchesEstimate || touchesMonth}::boolean then
+              case
+                when has_fact then 'doneTask'
+                when ${touchesMonth}::boolean and parent_id is not null then 'subTaskMonth'
+                when ${touchesMonth}::boolean and day is not null then 'dayInMonth'
+                when archived_at is not null or horizon <= ${today}::date then 'closed'
+                when ${estimate ?? null}::int is not null and has_children then 'parentEstimate'
+                when ${estimate ?? null}::int is not null and measure_unit is null then 'noMeasure'
+                when ${month ?? null}::text is not null and (
+                  ${month ? monthStart(month) : null}::date < date_trunc('month', opened)
+                  or ${month ? monthStart(month) : null}::date > date_trunc('month', horizon - 1)
+                ) then 'monthOutsideSpan'
+                when ${month ?? null}::text is not null and ${month ?? null}::text < ${today.slice(0, 7)}::text then 'monthEnded'
+              end
+          end as refusal
+        from t
+      ),
+      upd as (
+        update one_offs set
+          name = coalesce(${name ?? null}::text, name),
+          estimate = case when ${touchesEstimate}::boolean then ${estimate ?? null}::int else estimate end,
+          planned_month = case when ${touchesMonth}::boolean then ${month ? monthStart(month) : null}::date else planned_month end
+        where id in (select id from chk where refusal is null)
+        returning id
+      )
+      select goal_id, refusal, (select count(*) from upd)::int as updated from chk
+    `),
+  );
 
-      const updated = await tx
-        .update(oneOffs)
-        .set({ plannedMonth: monthStart(month) })
-        .where(and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id), isNull(oneOffs.day)))
-        .returning({ id: oneOffs.id });
-      if (updated.length === 0) throw new NamedError("day.errors.oneOffHasFact");
-      return { goalId: row.goalId, from: row.plannedMonth.slice(0, 7) };
-    });
-
-    revalidatePath(`/metas/${moved.goalId}/meses/${moved.from}`);
-    revalidatePath(`/metas/${moved.goalId}/meses/${month}`);
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
-    throw error;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "plan.errors.notFound" };
+  if (row.refusal !== null) return { ok: false, error: REFUSALS[row.refusal] };
+  if (row.updated === 0) {
+    return { ok: false, error: touchesEstimate || touchesMonth ? "roadmap.errors.doneTask" : "plan.errors.notFound" };
   }
+
+  revalidatePath("/");
+  revalidatePath("/sueltas");
+  if (row.goal_id !== null) {
+    revalidatePath("/mes");
+    revalidatePath(`/metas/${row.goal_id}`, "layout");
+  }
+  return { ok: true };
+}
+
+/**
+ * The sheet's one act (RP-55, RP-57): name, estimate and month of a plan
+ * task, or the name of a suelta. Absent leaves a field; `month: null`
+ * returns the task to the plan.
+ */
+export async function editTask(input: EditTaskInput): Promise<EditTaskResult> {
+  const parsed = editTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  return writeTask(parsed.data);
+}
+
+/** The month half of `editTask`, for the AI (RP-51): fixes, or unfixes with `null`. */
+export async function fixTask(input: FixTaskInput): Promise<FixTaskResult> {
+  const parsed = fixTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  return writeTask(parsed.data);
+}
+
+/** Fixes a task to a month. Stays for the MCP until 355 deletes it. */
+export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskResult> {
+  const parsed = moveTaskSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  return writeTask(parsed.data);
 }
 
 /**

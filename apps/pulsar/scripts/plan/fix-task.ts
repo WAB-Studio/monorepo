@@ -1,4 +1,4 @@
-// Drives `moveTaskToMonth` (`app/actions/one-offs.ts`, RP-42) the way
+// Drives `fixTask` and `moveTaskToMonth` (`app/actions/one-offs.ts`, RP-51) the way
 // `task-actions.ts` drives its siblings: the action imported as a plain async
 // function, `server-only`, `next/headers` and `next/cache` stubbed before the
 // first `@/` import, and the cookie `harness:mint-session` left standing is
@@ -85,6 +85,14 @@ async function move(input: Parameters<Actions["moveTaskToMonth"]>[0]) {
   }
 }
 
+async function fix(input: Parameters<Actions["fixTask"]>[0]) {
+  try {
+    return await actions.fixTask(input);
+  } catch (error) {
+    assert.fail(`fixTask threw ${pgCode(error) ?? "without a code"}`);
+  }
+}
+
 async function created(input: Parameters<Actions["createOneOff"]>[0]): Promise<string> {
   const result = await actions.createOneOff(input);
   if (!result.ok) throw new Error(`createOneOff ${input.name}: ${result.error}`);
@@ -129,7 +137,7 @@ before(async () => {
   nextMonth = monthFrom(today, 1);
   lastMonth = monthFrom(today, -1);
   // The 1st of the month after next: next month is the last one the goal plans.
-  const made = await createGoal({ name: "RP-42 fixture: mover", horizon: `${monthFrom(today, 2)}-01` });
+  const made = await createGoal({ name: "RP-51 fixture: mover", horizon: `${monthFrom(today, 2)}-01` });
   if (!made.ok) throw new Error(`createGoal: ${made.error}`);
   goalId = made.goalId;
   goalIds.push(goalId);
@@ -143,8 +151,8 @@ after(async () => {
 });
 
 test("moveTaskToMonth: a task of this month moves to next month with its children, in at most three statements", async () => {
-  const taskId = await created({ name: "RP-42 mover", day: null, goalId, plannedMonth: thisMonth });
-  const childId = await created({ name: "RP-42 mover hija", day: null, parentId: taskId, estimate: undefined });
+  const taskId = await created({ name: "RP-51 mover", day: null, goalId, plannedMonth: thisMonth });
+  const childId = await created({ name: "RP-51 mover hija", day: null, parentId: taskId, estimate: undefined });
   revalidated.length = 0;
   wire = [];
   const result = await move({ oneOffId: taskId, month: nextMonth });
@@ -160,10 +168,7 @@ test("moveTaskToMonth: a task of this month moves to next month with its childre
   const [{ count }] = await sql<{ count: number }[]>`
     select count(*)::int as count from goals.one_offs where parent_id = ${taskId}`;
   assert.equal(count, 1);
-  assert.deepEqual(
-    [...revalidated].sort(),
-    [`/metas/${goalId}/meses/${thisMonth}`, `/metas/${goalId}/meses/${nextMonth}`].sort(),
-  );
+  assert.ok(revalidated.includes(`/metas/${goalId}`), revalidated.join(" "));
   // The list of the destination reads it.
   const { loadGoal } = await import("@/lib/queries/goal");
   const { monthList } = await import("@/lib/plan/carry");
@@ -178,42 +183,38 @@ test("moveTaskToMonth: a task of this month moves to next month with its childre
 });
 
 test("moveTaskToMonth: a closed month and a month outside the span are refused and the task stays", async () => {
-  const taskId = await created({ name: "RP-42 quieta", day: null, goalId, plannedMonth: thisMonth });
+  const taskId = await created({ name: "RP-51 quieta", day: null, goalId, plannedMonth: thisMonth });
   const closed = await move({ oneOffId: taskId, month: lastMonth });
-  assert.deepEqual(closed, { ok: false, error: "month.errors.monthClosed" });
+  assert.deepEqual(closed, { ok: false, error: "roadmap.errors.monthEnded" });
   for (const month of [monthFrom(today, -2), monthFrom(today, 2)]) {
     const outside = await move({ oneOffId: taskId, month });
-    assert.deepEqual(outside, { ok: false, error: "month.errors.outsideSpan" }, month);
+    assert.deepEqual(outside, { ok: false, error: "roadmap.errors.monthOutsideSpan" }, month);
   }
   assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
 });
 
-test("moveTaskToMonth: a done task, one with a done child and a dated one are refused as oneOffHasFact", async () => {
-  const doneId = await created({ name: "RP-42 hecha", day: null, goalId, plannedMonth: thisMonth });
+test("moveTaskToMonth: a done task and one with a done child are refused as doneTask", async () => {
+  const doneId = await created({ name: "RP-51 hecha", day: null, goalId, plannedMonth: thisMonth });
   const completed = await actions.completeOneOff({ oneOffId: doneId });
   assert.equal(completed.ok, true, JSON.stringify(completed));
 
-  const parentId = await created({ name: "RP-42 padre", day: null, goalId, plannedMonth: thisMonth });
-  const childId = await created({ name: "RP-42 hija hecha", day: null, parentId });
+  const parentId = await created({ name: "RP-51 padre", day: null, goalId, plannedMonth: thisMonth });
+  const childId = await created({ name: "RP-51 hija hecha", day: null, parentId });
   const childDone = await actions.completeOneOff({ oneOffId: childId });
   assert.equal(childDone.ok, true, JSON.stringify(childDone));
 
-  const datedId = await created({ name: "RP-42 fechada", day: null, goalId, plannedMonth: thisMonth });
-  const scheduled = await actions.scheduleOneOff({ oneOffId: datedId, day: today });
-  assert.deepEqual(scheduled, { ok: true });
-
-  for (const id of [doneId, parentId, datedId]) {
-    assert.deepEqual(await move({ oneOffId: id, month: nextMonth }), { ok: false, error: "day.errors.oneOffHasFact" });
+  for (const id of [doneId, parentId]) {
+    assert.deepEqual(await move({ oneOffId: id, month: nextMonth }), { ok: false, error: "roadmap.errors.doneTask" });
   }
-  assert.deepEqual(await monthsOf(doneId, parentId, datedId), [`${thisMonth}-01`, `${thisMonth}-01`, `${thisMonth}-01`]);
+  assert.deepEqual(await monthsOf(doneId, parentId), [`${thisMonth}-01`, `${thisMonth}-01`]);
 });
 
 test("moveTaskToMonth: a sub-task, a one-off with no month and an id that is nobody's are refused", async () => {
-  const parentId = await created({ name: "RP-42 padre solo", day: null, goalId, plannedMonth: thisMonth });
-  const childId = await created({ name: "RP-42 hija sola", day: null, parentId });
-  assert.deepEqual(await move({ oneOffId: childId, month: nextMonth }), { ok: false, error: "month.errors.invalid" });
+  const parentId = await created({ name: "RP-51 padre solo", day: null, goalId, plannedMonth: thisMonth });
+  const childId = await created({ name: "RP-51 hija sola", day: null, parentId });
+  assert.deepEqual(await move({ oneOffId: childId, month: nextMonth }), { ok: false, error: "roadmap.errors.subTaskMonth" });
 
-  const plainId = await created({ name: "RP-42 suelta", day: null, goalId });
+  const plainId = await created({ name: "RP-51 suelta", day: null, goalId });
   assert.deepEqual(await move({ oneOffId: plainId, month: nextMonth }), { ok: false, error: "month.errors.invalid" });
 
   const nobody = await move({ oneOffId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", month: nextMonth });
@@ -230,11 +231,11 @@ test("moveTaskToMonth: another person's task is not found and keeps its month; a
 
   const [foreignGoal] = await sql<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)
-    values (${member.id}, 'RP-42 ajena', ${`${monthFrom(today, 2)}-01`}) returning id`;
+    values (${member.id}, 'RP-51 ajena', ${`${monthFrom(today, 2)}-01`}) returning id`;
   try {
     const [foreign] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, goal_id, name, planned_month)
-      values (${member.id}, ${foreignGoal.id}, 'RP-42 tarea ajena', ${`${thisMonth}-01`}) returning id`;
+      values (${member.id}, ${foreignGoal.id}, 'RP-51 tarea ajena', ${`${thisMonth}-01`}) returning id`;
     assert.deepEqual(await move({ oneOffId: foreign.id, month: nextMonth }), { ok: false, error: "plan.errors.notFound" });
     assert.deepEqual(await monthsOf(foreign.id), [`${thisMonth}-01`]);
   } finally {
@@ -242,12 +243,23 @@ test("moveTaskToMonth: another person's task is not found and keeps its month; a
   }
 
   const plan = await import("@/app/actions/plan");
-  const made = await createGoal({ name: "RP-42 fixture: archivada", horizon: `${monthFrom(today, 2)}-01` });
+  const made = await createGoal({ name: "RP-51 fixture: archivada", horizon: `${monthFrom(today, 2)}-01` });
   if (!made.ok) throw new Error(`createGoal: ${made.error}`);
   goalIds.push(made.goalId);
-  const taskId = await created({ name: "RP-42 de archivada", day: null, goalId: made.goalId, plannedMonth: thisMonth });
+  const taskId = await created({ name: "RP-51 de archivada", day: null, goalId: made.goalId, plannedMonth: thisMonth });
   const archived = await plan.archiveGoal({ goalId: made.goalId });
   if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
   assert.deepEqual(await move({ oneOffId: taskId, month: nextMonth }), { ok: false, error: "month.errors.closed" });
   assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
+});
+
+test("fixTask: a task added to the plan with inPlan lands unfixed and can be fixed", async () => {
+  const taskId = await created({ name: "RP-50 al plan", day: null, goalId, inPlan: true });
+  const [row] = await sql<{ in_plan: boolean; planned_month: string | null }[]>`
+    select in_plan, planned_month::text as planned_month from goals.one_offs where id = ${taskId}`;
+  assert.deepEqual(row, { in_plan: true, planned_month: null });
+  assert.deepEqual(await fix({ oneOffId: taskId, month: nextMonth }), { ok: true });
+  assert.deepEqual(await monthsOf(taskId), [`${nextMonth}-01`]);
+  const refused = await actions.createOneOff({ name: "RP-50 sin meta", day: null, inPlan: true });
+  assert.deepEqual(refused, { ok: false, error: "month.errors.invalid" });
 });

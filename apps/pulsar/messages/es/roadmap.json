@@ -78,6 +78,8 @@
     "monthEnded": "Ese mes ya terminó.",
     "doneTask": "Una tarea hecha ya no cambia su estimación ni su mes.",
     "subTaskMonth": "Una parte de una tarea sigue el mes de su tarea.",
+    "dayInMonth": "Esa tarea tiene día: cambia el día, no el mes.",
+    "parentEstimate": "Una tarea con partes suma las de sus partes.",
     "nameEmpty": "Ponle un nombre.",
     "nameTooLong": "El nombre es demasiado largo."
   },
