@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { test, expect } from "./fixtures";
+import { appAlerts, test, expect } from "./fixtures";
 import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, todayInZone } from "../lib/zone";
 
@@ -97,7 +97,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(box(page, /Sesiones 1–4/)).toBeChecked();
       await expect(page.getByText(`${word(first)} · la suma de lo marcado`, { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Crear 1 meta" })).toBeVisible();
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveCount(0);
     });
   });
 

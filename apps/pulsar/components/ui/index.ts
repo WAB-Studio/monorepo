@@ -31,6 +31,10 @@ export { MarkList } from "./mark-list";
 export { Panel, PanelGrid } from "./panel";
 export { SectionLabel } from "./section-label";
 
+export { Section } from "./section";
+
+export { TextLink } from "./text-link";
+
 export { Figure } from "./figure";
 
 export { Progress } from "./progress";

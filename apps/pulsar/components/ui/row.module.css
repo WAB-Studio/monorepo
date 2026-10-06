@@ -38,14 +38,27 @@
   border-radius: 10px;
 }
 
+/* The name and what trails it. The trailing block stays beside the name while
+   the name fits by word (its min-content) and drops under it, start-aligned,
+   when it does not. */
+.content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
 /* A long name wraps rather than pushing the measure off the row. */
 .body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1 1 auto;
+  flex: 1 1 min-content;
   min-inline-size: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .leading {
@@ -125,21 +138,18 @@
   border-radius: 10px;
 }
 
-/* Unlike `.leading`, a trailing block can carry a sentence — `Meta.dc.html`'s
-   own two-line cadence-and-satisfaction column. Bounded to under half the
-   row, so a long one (five weekday names) wraps onto its own lines instead
-   of claiming its full unwrapped width and squeezing `.body` to a sliver.
-   `flex-shrink: 0`, unlike `.body`: this text has no `overflow-wrap:
-   anywhere` floor to fall back on, so letting the flex algorithm shrink it
-   past what its own wrapping already settled on would overflow the row
-   instead of wrapping a second time. `.body`'s own shrink-to-fit, safe at
-   any width, is what absorbs the rest of the squeeze. */
+/* A trailing block is a figure or a phrase (`Meta.dc.html`'s cadence and
+   satisfaction column). It shrinks and wraps by word, capped under half the
+   row so `.body` keeps its share, but never narrower than its longest word:
+   `min-content` is a figure's whole width (nowrap), so a figure is never
+   capped and a phrase never breaks inside a word. */
 .trailing {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 0 auto;
-  max-inline-size: 45%;
+  flex: 0 1 auto;
+  min-inline-size: min-content;
+  max-inline-size: max(45%, min-content);
   text-align: end;
 }
 

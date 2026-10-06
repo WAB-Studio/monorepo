@@ -22,21 +22,24 @@
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     grid-template-rows: auto 1fr;
     column-gap: 24px;
-    /* Between the two cards of the right column. */
-    row-gap: 18px;
+    /* Between the two columns' parts; each column spaces its own children. */
+    row-gap: 16px;
     align-items: start;
   }
 
   .main {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     grid-column: 1;
     grid-row: 1 / span 2;
     min-inline-size: 0;
   }
 
   .tail {
-    display: block;
-    margin-block-start: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .tail > *,
@@ -45,13 +48,17 @@
   }
 
   .before {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     grid-column: 2;
     grid-row: 1;
   }
 
   .after {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     grid-column: 2;
     grid-row: 2;
   }
@@ -84,7 +91,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 24px;
-    row-gap: 18px;
+    row-gap: 16px;
     align-items: start;
   }
 

@@ -48,9 +48,12 @@
     max-inline-size: 560px;
   }
 
-  .page:not(.full):not(.alone) > button {
-    inline-size: auto;
-    align-self: flex-start;
+  /* `SistemaEspacio.dc.html`: a screen of columns stops at 1200 (plus its two
+     gutters) and stays centred in what the rail leaves, so the header and the
+     content share one edge. */
+  .page.full {
+    flex: 0 1 calc(1200px + 112px);
+    margin-inline: auto;
   }
 }
 

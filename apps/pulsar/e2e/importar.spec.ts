@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { test, expect } from "./fixtures";
+import { appAlerts, test, expect } from "./fixtures";
 
 // The page always carries Next's own empty `role="alert"` route announcer, so an
 // alert is the one with text in it.
@@ -74,7 +74,7 @@ test.describe("the import screen (RP-37)", () => {
       await area.fill(text);
       await page.getByRole("button", { name: "Leer el plan" }).click();
 
-      const alert = page.getByRole("alert").filter({ hasText: /\S/ });
+      const alert = appAlerts(page).filter({ hasText: /\S/ });
       await expect(alert).toHaveText(NO_KEY);
       // The box sits above the text area, and the upload is shut.
       expect((await boxOf(alert)).y).toBeLessThan((await boxOf(area)).y);
@@ -160,7 +160,7 @@ test.describe("the import screen (RP-37)", () => {
       await area.fill(broken);
       await page.getByRole("button", { name: "Leer el plan" }).click();
 
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(/^Línea 12: «- 2026-13 · 20 h»\. Esperaba - AAAA-MM · monto\.$/);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(/^Línea 12: «- 2026-13 · 20 h»\. Esperaba - AAAA-MM · monto\.$/);
       await expect(area).toHaveValue(broken);
       await expect(page).toHaveURL(/\/metas\/importar$/);
 
@@ -185,7 +185,7 @@ test.describe("the import screen (RP-37)", () => {
         mimeType: "text/plain",
         buffer: Buffer.from(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h")),
       });
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
         /^Línea 12: «- 2026-13 · 20 h»\. Esperaba/,
       );
     } finally {
@@ -209,7 +209,7 @@ test.describe("the import screen (RP-37)", () => {
       );
       await page.getByLabel(messages.textLabel).fill("algo sin metas");
       await page.getByRole("button", { name: "Leer el plan" }).click();
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(messages.errors.empty);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(messages.errors.empty);
       await page.getByRole("button", { name: "ver la plantilla" }).click();
       await expect(page.getByRole("button", { name: "copiar la plantilla" })).toBeVisible();
     } finally {
@@ -231,7 +231,7 @@ test.describe("the import screen (RP-37)", () => {
 
       await page.getByLabel(messages.textLabel).fill("   \n ");
       await page.getByRole("button", { name: "Leer el plan" }).click();
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(messages.errors.blank);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(messages.errors.blank);
       expect(sent).toBe(0);
     } finally {
       await context.close();
@@ -254,7 +254,7 @@ test.describe("the import screen (RP-37)", () => {
         mimeType: "application/pdf",
         buffer: Buffer.alloc(5 * 1024 * 1024, 1),
       });
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
         "«roadmap-escaneado.pdf» pesa 5 MB y el tope es 4 MB. Pega su texto en la caja.",
       );
       expect(sent).toBe(0);
@@ -291,7 +291,7 @@ test.describe("the import screen (RP-37)", () => {
       await expect(page.getByLabel(messages.upload)).toBeDisabled();
 
       release();
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(NO_KEY);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(NO_KEY);
     } finally {
       await context.close();
     }
@@ -345,7 +345,7 @@ test.describe("the import screen (RP-37)", () => {
 
         await page.getByLabel(messages.textLabel).fill(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h"));
         await page.getByRole("button", { name: "Leer el plan" }).click();
-        const alert = page.getByRole("alert").filter({ hasText: /Línea 12/ });
+        const alert = appAlerts(page).filter({ hasText: /Línea 12/ });
         await expect(alert).toBeVisible();
         const show = page.getByRole("button", { name: "ver la plantilla" });
         await expect(show).toBeVisible();
