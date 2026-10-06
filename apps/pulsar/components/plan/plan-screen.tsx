@@ -70,7 +70,7 @@ export async function PlanScreen({ goalId }: { goalId: string }) {
   const totalHours = roadmap.unplaced.reduce((sum, item) => sum + item.hours, 0);
 
   return (
-    <Page>
+    <Page width="column">
       <ScreenHeader title={t("roadmap.plan.title")} back={{ href: `/metas/${goal.id}`, place: goal.name }} />
       {lead ? (
         <Text as="p" variant="sentence">

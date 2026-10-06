@@ -167,13 +167,12 @@ for (const width of [390, 1440]) {
     });
 
     if (width === 1440) {
-      test("the column is at most 640 wide at 1440", async ({ page, db, personId }) => {
+      test("the column is 640 wide at 1440", async ({ page, db, personId }) => {
         const goalId = await seedGoal(db, personId, 720);
         try {
           await page.goto(`/metas/${goalId}/plan`);
           const box = await planned(page).boundingBox();
-          expect(box!.width).toBeLessThanOrEqual(640);
-          expect(box!.width).toBeGreaterThan(400);
+          expect(Math.abs(box!.width - 640)).toBeLessThanOrEqual(1);
         } finally {
           await drop(db, personId, goalId);
         }
