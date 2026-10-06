@@ -11,9 +11,12 @@
  */
 import { randomUUID } from "node:crypto";
 
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import { settleSessionSql } from "@repo/supabase-auth/settle";
 import { PgDialect } from "drizzle-orm/pg-core";
 import postgres from "postgres";
+
+assertSuiteDatabase();
 
 const sql = postgres(process.env.DATABASE_URL!, {
   prepare: false,

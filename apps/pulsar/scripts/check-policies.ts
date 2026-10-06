@@ -55,6 +55,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mock } from "node:test";
 
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import { createClient } from "@supabase/supabase-js";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -1930,6 +1931,7 @@ async function checkAiDoor(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
     prepare: false,
     max: 1,

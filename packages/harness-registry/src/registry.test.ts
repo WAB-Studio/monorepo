@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertSuiteDatabase, openRun } from "./registry";
+import { assertSuiteDatabase } from "./registry";
+
+// `openRun` caches its run id per module instance; a fresh instance per call keeps one
+// test from deciding another's outcome.
+let instance = 0;
+async function freshRegistry(): Promise<typeof import("./registry")> {
+  instance += 1;
+  return (await import(`./registry.ts?instance=${instance}`)) as typeof import("./registry");
+}
 
 const REMOTE = "postgresql://postgres.abc:s3cret@aws-0-us.pooler.supabase.com:6543/postgres";
 const LOCAL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
@@ -64,6 +72,7 @@ test("openRun refuses before issuing any statement", () =>
       return Promise.resolve([]);
     }) as never;
     try {
+      const { openRun } = await freshRegistry();
       await assert.rejects(openRun("queries", sql), /not the local stack/);
       assert.equal(queries, 0);
     } finally {
@@ -85,8 +94,55 @@ test("openRun with HARNESS_DATABASE=remote reaches the insert", () =>
       {},
     ) as never;
     try {
+      const { openRun } = await freshRegistry();
       await openRun("queries", sql);
       assert.equal(queries, 1);
+    } finally {
+      if (before === undefined) delete process.env.MIGRATION_DATABASE_URL;
+      else process.env.MIGRATION_DATABASE_URL = before;
+    }
+  }));
+
+// Refused by the guard, not by the missing run: a fresh instance has no run id, so
+// `runId()` would throw a different message if the guard were gone.
+test("registerEphemeralIdentity refuses a remote host before issuing any statement", () =>
+  withEnv(undefined, async () => {
+    const before = process.env.MIGRATION_DATABASE_URL;
+    process.env.MIGRATION_DATABASE_URL = REMOTE;
+    let queries = 0;
+    const sql = (() => {
+      queries++;
+      return Promise.resolve([]);
+    }) as never;
+    try {
+      const { registerEphemeralIdentity } = await freshRegistry();
+      await assert.rejects(
+        registerEphemeralIdentity(sql, { id: "u", email: "e" }),
+        /not the local stack/,
+      );
+      assert.equal(queries, 0);
+    } finally {
+      if (before === undefined) delete process.env.MIGRATION_DATABASE_URL;
+      else process.env.MIGRATION_DATABASE_URL = before;
+    }
+  }));
+
+test("registerSharedIdentity refuses a remote host before issuing any statement", () =>
+  withEnv(undefined, async () => {
+    const before = process.env.MIGRATION_DATABASE_URL;
+    process.env.MIGRATION_DATABASE_URL = REMOTE;
+    let queries = 0;
+    const sql = (() => {
+      queries++;
+      return Promise.resolve([]);
+    }) as never;
+    try {
+      const { registerSharedIdentity } = await freshRegistry();
+      await assert.rejects(
+        registerSharedIdentity(sql, { id: "u", email: "e" }),
+        /not the local stack/,
+      );
+      assert.equal(queries, 0);
     } finally {
       if (before === undefined) delete process.env.MIGRATION_DATABASE_URL;
       else process.env.MIGRATION_DATABASE_URL = before;

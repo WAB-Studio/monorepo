@@ -1,4 +1,9 @@
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import { test as base, expect } from "@playwright/test";
+
+// `registro`, `offline` and `sync` insert `auth.users` rows on `MIGRATION_DATABASE_URL`; with
+// none set, no spec can write. Specs without a database keep running.
+if (process.env.MIGRATION_DATABASE_URL) assertSuiteDatabase();
 
 // `/api/word/text` calls the model and spends the user's own OpenAI money;
 // `/api/word/unlisted` and `/api/phrase/notes` are the same kind of paid,
