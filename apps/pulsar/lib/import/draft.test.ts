@@ -277,3 +277,21 @@ test("strayEstimates and withoutStrayEstimates: only the estimates go, the tasks
 test("strayEstimates: a goal with a measure drops nothing", () => {
   assert.deepEqual(strayEstimates(draft(goal())), []);
 });
+
+test("importDraftSchema: a task and a sub-task take a note judged by the note's own rule; a draft with none still passes", () => {
+  const task = { name: "T", month: "2026-10", estimate: null, children: [{ name: "c", estimate: 60 }] };
+  const parse = (over: object, child: object = {}) =>
+    importDraftSchema.safeParse(draft(goal({ tasks: [{ ...task, ...over, children: [{ ...task.children[0], ...child }] }] })));
+  assert.equal(parse({}).success, true);
+  const ok = parse({ note: "  hola \n" }, { note: "  " });
+  assert.ok(ok.success);
+  assert.equal(ok.data.goals[0].tasks[0].note, "hola");
+  assert.equal(ok.data.goals[0].tasks[0].children[0].note, null);
+  const long = parse({}, { note: "x".repeat(2001) });
+  assert.ok(!long.success);
+  assert.deepEqual(long.error.issues.map((i) => [i.path.join("."), i.message]), [["goals.0.tasks.0.children.0.note", "day.errors.oneOffNoteTooLong"]]);
+});
+
+test("importDraftJsonSchema: holds no note key, so the model proposes none", () => {
+  assert.equal(JSON.stringify(importDraftJsonSchema).includes('"note"'), false);
+});

@@ -4,7 +4,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthsOfSpan } from "@/lib/plan/months";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
-import { createOneOffSchema } from "@/lib/validation/one-off";
+import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 
 // The forms' own schemas judge what the import carries; the model's answer
 // and the template are shaped around them, never a second set of rules.
@@ -71,34 +71,43 @@ const commitment = z
 
 const estimate = createOneOffSchema.shape.estimate.nonoptional();
 
-const task = z.strictObject({
-  name: createOneOffSchema.shape.name,
-  month: setMonthBudgetSchema.shape.month,
-  estimate,
-  children: z.array(z.strictObject({ name: createOneOffSchema.shape.name, estimate })),
-});
+// The note is the template's alone (RP-45): the model is sent the draft
+// without it, and a draft that carries none reads as it always did.
+function draftSchema(withNote: boolean) {
+  // Typed as present either way: the types are the template's, the model's schema just leaves the key out.
+  const note = (withNote ? { note: noteSchema.optional() } : {}) as { note: ReturnType<typeof noteSchema.optional> };
+  const task = z.strictObject({
+    name: createOneOffSchema.shape.name,
+    month: setMonthBudgetSchema.shape.month,
+    estimate,
+    ...note,
+    children: z.array(z.strictObject({ name: createOneOffSchema.shape.name, estimate, ...note })),
+  });
 
-const goal = z.strictObject({
-  name: createGoalSchema.shape.name,
-  horizon: createGoalSchema.shape.horizon,
-  measure: measure.nullable(),
-  phases: z.array(phase),
-  months: z.array(month),
-  commitments: z.array(commitment),
-  tasks: z.array(task),
-});
+  const goal = z.strictObject({
+    name: createGoalSchema.shape.name,
+    horizon: createGoalSchema.shape.horizon,
+    measure: measure.nullable(),
+    phases: z.array(phase),
+    months: z.array(month),
+    commitments: z.array(commitment),
+    tasks: z.array(task),
+  });
 
-export const importDraftSchema = z.strictObject({
-  goals: z
-    .array(goal)
-    .min(1, { error: "import.errors.empty" })
-    .max(12, { error: "import.errors.draftInvalid" }),
-});
+  return z.strictObject({
+    goals: z
+      .array(goal)
+      .min(1, { error: "import.errors.empty" })
+      .max(12, { error: "import.errors.draftInvalid" }),
+  });
+}
+
+export const importDraftSchema = draftSchema(true);
 
 export type ImportDraft = z.infer<typeof importDraftSchema>;
 
 // What 151 hands the model as its response format.
-export const importDraftJsonSchema = z.toJSONSchema(importDraftSchema);
+export const importDraftJsonSchema = z.toJSONSchema(draftSchema(false));
 
 export type DraftRefusal = { path: string; key: string; values?: Record<string, string> };
 
