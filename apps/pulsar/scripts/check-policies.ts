@@ -2158,7 +2158,7 @@ async function checkPlanOrder(): Promise<void> {
       assert(
         "P180",
         same[0].position < same[1].position,
-        `an insert orders by arrival, never by name, got ${same.map((r) => `${r.name}=${r.position}`).join()}`,
+        `one statement, two rows: arrival order is kept by an insert, got ${same.map((r) => `${r.name}=${r.position}`).join()}`,
       );
 
       const moveGoal = await attempt(tx, (sp) => sp`update goals.goals set position = 99 where id = ${g1.id}`);
@@ -2180,6 +2180,65 @@ async function checkPlanOrder(): Promise<void> {
         (sp) => sp`insert into goals.one_offs (user_id, name, position) values (${subject}, 'anon', 5)`,
       );
       assert("P185", anonInsert.code === "42501", `anon insert naming position, sqlstate = ${anonInsert.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
+// RP-47: the backfill's tie-break, run over a fixture; the expression is the 0012 one.
+async function checkPlanOrderBackfillTieBreak(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const rows = await sql<{ name: string; rn: number }[]>`
+    select name, row_number() over (
+      partition by user_id
+      order by created_at, substring(name from '\\d+')::numeric nulls last, name, id
+    ) as rn
+    from (values
+      ('00000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-0000000000aa'::uuid, '2026-01-01T00:00:00Z'::timestamptz, 'Cap. 10'),
+      ('00000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-0000000000aa'::uuid, '2026-01-01T00:00:00Z'::timestamptz, 'Cap. 2'),
+      ('00000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-0000000000aa'::uuid, '2026-01-01T00:00:00Z'::timestamptz, 'Cap. 1')
+    ) as t (id, user_id, created_at, name)
+    order by rn`;
+  assert(
+    "P186",
+    rows.map((r) => r.name).join("|") === "Cap. 1|Cap. 2|Cap. 10",
+    `backfill with equal created_at orders by the number in the name, got ${rows.map((r) => r.name).join("|")}`,
+  );
+  await sql.end();
+}
+
+// RP-47: the commitments trigger takes its max per person. Runs with no RLS, the only caller that sees another person's rows.
+async function checkCommitmentPositionPerPerson(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      const [ig] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
+      await tx`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, position)
+        values (${intruder}, ${ig.id}, 'ajeno', 'daily', 'tap', 40)`;
+
+      const [sg] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'mia', '2027-12-31') returning id`;
+      const [first] = await tx<{ position: number }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${sg.id}, 'primero', 'daily', 'tap') returning position`;
+      assert(
+        "P187",
+        first.position === 1,
+        `intruder's commitment at 40 does not move my first commitment, got ${first.position}`,
+      );
 
       throw forcedRollback;
     })
@@ -2214,6 +2273,8 @@ async function main(): Promise<void> {
   await checkAiDoor();
   await checkTaskNote();
   await checkPlanOrder();
+  await checkPlanOrderBackfillTieBreak();
+  await checkCommitmentPositionPerPerson();
 
   if (failed) process.exit(1);
 }
