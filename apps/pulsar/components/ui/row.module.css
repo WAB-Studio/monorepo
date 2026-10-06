@@ -64,16 +64,19 @@
   padding: 0;
 }
 
-/* The mark's own button: 56px inside its own 56px row, the visual glyph
-   staying the 24px "The marks" gives it (docs/pulsar/DESIGN.md). */
+/* The mark's own button: its layout box is the mark's, so mark and name sit
+   where a plain row's `.leading` puts them. The hit area reaches 16px past the
+   mark on the left and 12px (the row's gap) on the right through padding
+   cancelled by negative margin — 52px wide, as tall as the row's 56px floor. */
 .leadingButton {
   display: flex;
   align-items: center;
   justify-content: center;
   align-self: stretch;
   flex: none;
-  min-inline-size: 56px;
-  padding: 0;
+  box-sizing: content-box;
+  padding: 0 12px 0 16px;
+  margin: 0 -12px 0 -16px;
   background: none;
   border: 0;
   border-radius: 10px;
