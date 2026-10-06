@@ -5,6 +5,7 @@ import type { Report } from "@/lib/export/report";
 import { monthList, type Task } from "@/lib/plan/carry";
 import type { loadDay } from "@/lib/queries/day";
 import type { GoalView } from "@/lib/queries/goal";
+import type { PlanTask } from "@/lib/plan/roadmap";
 
 import { amountOf, shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "./shape";
 
@@ -17,6 +18,9 @@ const tasks: Task[] = [
   { id: ID(4), parentId: ID(3), name: "Leer", plannedMonth: null, day: null, estimate: 200, doneOn: "2026-10-03", note: "Hasta la página 40" },
   { id: ID(5), parentId: ID(3), name: "Resumir", plannedMonth: null, day: null, estimate: 100, doneOn: null },
 ];
+
+const planned = (list: Task[]): PlanTask[] =>
+  list.map((task, position) => ({ ...task, inPlan: false, position, createdOn: "2026-08-15" }));
 
 function goalView(unit: string | null): GoalView {
   return {
@@ -68,7 +72,18 @@ function goalView(unit: string | null): GoalView {
       { month: "2026-11-01", planned: null, reached: 0, current: false, past: false },
     ],
     budgets: [],
-    tasks,
+    tasks: planned(tasks),
+    rhythm: null,
+    planSeen: null,
+    plan: {
+      rhythm: null,
+      budgets: [],
+      tasks: planned(tasks),
+      openedOn: "2026-08-15",
+      horizon: "2027-01-01",
+      today: "2026-10-05",
+    },
+    roadmap: { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: "2026-12-31" },
     shifts: ["2026-09-01"],
   };
 }
@@ -141,11 +156,11 @@ test("a finished month's carried share is what its undone tasks left, floored", 
 test("a share floors: 2 carried of 3 planned is 66, never rounded to 67", () => {
   const view = goalView("minutos");
   view.months = [{ month: "2026-08-01", planned: 3, reached: 1, current: false, past: true }];
-  view.tasks = [
+  view.tasks = planned([
     { id: ID(40), parentId: null, name: "a", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: "2026-08-20" },
     { id: ID(41), parentId: null, name: "b", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: null },
     { id: ID(42), parentId: null, name: "c", plannedMonth: "2026-08-01", day: null, estimate: 1, doneOn: null },
-  ];
+  ]);
   const [august] = shapeGoal(view).months;
   assert.equal(august.carried?.value, 2);
   assert.equal(august.carriedPercent, 66);
