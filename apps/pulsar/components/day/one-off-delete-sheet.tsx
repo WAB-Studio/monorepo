@@ -54,7 +54,7 @@ export function OneOffDeleteSheet({ open, onOpenChange, oneOffId, name }: OneOff
       description={t("day.oneOffs.delete.description")}
     >
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

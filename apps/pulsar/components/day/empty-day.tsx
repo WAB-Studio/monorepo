@@ -13,7 +13,7 @@ export async function EmptyDay() {
       <Text as="p" variant="title">
         {t("title")}
       </Text>
-      <Text as="p" tone="secondary">
+      <Text as="p" variant="sentence">
         {t("body")}
       </Text>
       <Button asChild block>

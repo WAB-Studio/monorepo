@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { Button, Face, Flex, IconButton, ScreenHeader, Text, ThemeToggle } from "@/components/ui";
+import { Face, Flex, IconButton, ScreenHeader, Text, TextLink, ThemeToggle } from "@/components/ui";
 
 type HeaderLink = { href: string; label: string };
 
@@ -42,41 +42,28 @@ export function DayHeader({
   // A past day (`DiaPasadoPasos.dc.html`): both steps are words with their
   // chevron, «volver a hoy» pushed to the end.
   const eyebrow = title === undefined ? (
-    <Flex align="center" gap="1">
+    <Flex align="center" gap="5">
       {back ? (
-        <Button asChild tap={44} variant="ghost">
-          <Link href={back.href}>
+        <TextLink href={back.href}>
+          <Flex as="span" align="center" gap="1">
             <ChevronLeft size={16} aria-hidden />
-            <Text variant="meta" tone="accent">
-              {back.label}
-            </Text>
-          </Link>
-        </Button>
+            {back.label}
+          </Flex>
+        </TextLink>
       ) : limitNote ? (
         <Flex width="14px" flexShrink="0" aria-hidden />
       ) : null}
       {forward ? (
-        // A ghost button's own negative margin would lay it over the step back.
-        <Flex ml="3">
-          <Button asChild tap={44} variant="ghost">
-            <Link href={forward.href}>
-              <Text variant="meta" tone="accent">
-                {forward.label}
-              </Text>
-              <ChevronRight size={16} aria-hidden />
-            </Link>
-          </Button>
-        </Flex>
+        <TextLink href={forward.href}>
+          <Flex as="span" align="center" gap="1">
+            {forward.label}
+            <ChevronRight size={16} aria-hidden />
+          </Flex>
+        </TextLink>
       ) : null}
       {toToday ? (
-        <Flex ml="auto" pl="3">
-          <Button asChild tap={44} variant="ghost">
-            <Link href={toToday.href}>
-              <Text variant="meta" tone="accent">
-                {toToday.label}
-              </Text>
-            </Link>
-          </Button>
+        <Flex ml="auto">
+          <TextLink href={toToday.href}>{toToday.label}</TextLink>
         </Flex>
       ) : null}
     </Flex>
@@ -97,15 +84,7 @@ export function DayHeader({
             {date}
           </Text>
         ) : null}
-        {toToday ? (
-          <Button asChild tap={44} variant="ghost">
-            <Link href={toToday.href}>
-              <Text variant="meta" tone="accent">
-                {toToday.label}
-              </Text>
-            </Link>
-          </Button>
-        ) : null}
+        {toToday ? <TextLink href={toToday.href}>{toToday.label}</TextLink> : null}
       </Flex>
       {theme ? (
         <Face on="phone">
@@ -119,24 +98,24 @@ export function DayHeader({
     <>
       <ScreenHeader title={title ?? date} eyebrow={eyebrow} meta={tally} />
       {limitNote ? (
-        <Text as="p" variant="meta" tone="muted">
+        <Text as="p" variant="sentence">
           {limitNote}
         </Text>
       ) : null}
-      {ended?.map((line) => (
-        <Flex key={line.id} align="center" gap="1" wrap="wrap">
-          <Text as="p" variant="meta" tone="muted">
-            {line.text}
-          </Text>
-          <Button asChild tap={44} variant="ghost">
-            <Link href={line.href} aria-label={line.seeLabel}>
-              <Text variant="meta" tone="accent">
-                {line.see}
+      {ended && ended.length > 0 ? (
+        <Flex direction="column" gap="1">
+          {ended.map((line) => (
+            <Flex key={line.id} align="center" gap="3" wrap="wrap">
+              <Text as="p" variant="sentence">
+                {line.text}
               </Text>
-            </Link>
-          </Button>
+              <TextLink href={line.href} aria-label={line.seeLabel}>
+                {line.see}
+              </TextLink>
+            </Flex>
+          ))}
         </Flex>
-      ))}
+      ) : null}
     </>
   );
 }
