@@ -943,6 +943,12 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - A goal's own dated one-off opens the same sheet with its name alone (W3-Q2).
   - Figures use a plain zero, never the slashed one (W3-Q3).
   - An imported phase that ends before its goal opens is dropped and listed in the import's review (W3-Q4).
+- **Wave 3 of the UX review, decided by the orchestrator 2026-10-06** (module 365):
+  - A past day's heading counts what «hechos» counts (:671, :846): «ese día pedía cinco» never adds a weekly row.
+  - The phone week draws a goal only when it has rows, and says «hechos» once, in its footer.
+  - An empty section draws no label: no «cero compromisos», «cero fases», «abiertas» over nothing.
+  - An archived goal with no task this month draws no month block.
+  - A unit is said once in a figure pair («7 de 90 kilómetros»); a stored phase reads from week 1 at the earliest.
 - **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
   - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
     on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
