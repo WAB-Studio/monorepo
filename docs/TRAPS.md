@@ -2810,3 +2810,13 @@ branch could pass until it was restored.
 - Every local probe registered its own clean document, so nothing caught it before production. Measured 2026-10-06 by the
   user's first connection from claude.ai (module 200), fixed in module 287: ignore unknown grants, require the code grant.
 - Fetch the real document before trusting a schema that parses someone else's metadata.
+
+## Next's route announcer is an alert
+
+- `node_modules/next/dist/client/components/app-router-announcer.js` renders `<next-route-announcer>` with an open shadow
+  root holding `role="alert"`, filled with the new title after a client navigation. Playwright's `getByRole` pierces open
+  shadow roots, so it counts that node as an app alert.
+- Measured 2026-10-06: CI run 37524876363 failed `importar-revisar.spec.ts:84` at line 100,
+  `getByRole('alert').filter({ hasText: /\S/ })` counting 1. Locally it never reproduced: it is timing.
+- Count app alerts with `appAlerts(page)` from `apps/pulsar/e2e/fixtures.ts`, never `getByRole('alert')` on the page.
+  `anunciador.spec.ts` shows both counts after a client navigation.

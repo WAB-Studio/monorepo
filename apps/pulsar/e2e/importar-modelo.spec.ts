@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { appAlerts, test, expect } from "./fixtures";
 import messages from "../messages/es/import.json";
 
 // Against `PULSAR_FAULT_BASE_URL`: a `next start` of the same build with
@@ -51,7 +51,7 @@ test.describe("the import screen against a stubbed model (RP-37, RNP-13)", () =>
       await page.getByLabel(messages.textLabel).fill(PROSE);
       await page.getByRole("button", { name: "Leer el plan" }).click();
 
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(messages.errors.cap);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(messages.errors.cap);
       await expect(page.getByLabel(messages.upload)).toBeDisabled();
       await expect(page.getByLabel(messages.textLabel)).toHaveValue(PROSE);
       await expect(page.getByRole("button", { name: "ver la plantilla" })).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("the import screen against a stubbed model (RP-37, RNP-13)", () =>
       await area.fill(PROSE);
       await page.getByRole("button", { name: "Leer el plan" }).click();
 
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText(messages.errors.modelFailed);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(messages.errors.modelFailed);
       await expect(area).toHaveValue(PROSE);
       await expect(page.getByRole("button", { name: "Intentar otra vez" })).toBeVisible();
       await expect(page.getByRole("button", { name: "ver la plantilla" })).toBeVisible();
