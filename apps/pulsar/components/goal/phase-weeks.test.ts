@@ -72,3 +72,14 @@ test("defaultPhaseWeeks: no phase opens on week 1", () => {
     { from: 1, to: 4 },
   );
 });
+
+test("defaultPhaseWeeks: starts after the latest phase, whatever order the phases come in", () => {
+  const openedOn = "2026-01-15";
+  const horizon = "2026-09-24";
+  const early = weeksToPhaseSpan(openedOn, 1, 4);
+  const late = weeksToPhaseSpan(openedOn, 9, 12);
+  const middle = weeksToPhaseSpan(openedOn, 5, 8);
+  for (const phases of [[early, middle, late], [late, early, middle], [middle, late, early]]) {
+    assert.deepEqual(defaultPhaseWeeks({ openedOn, horizon, phases }), { from: 13, to: 16 });
+  }
+});
