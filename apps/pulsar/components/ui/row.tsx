@@ -21,6 +21,10 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   name: ReactNode;
   // The line under the name: mono, muted, a date or a count.
   meta?: ReactNode;
+  // `sentence` sets the line in Archivo for a mixed line (a sentence whose
+  // figures and dates are `<Figure variant="meta">` spans, each on one line).
+  // Default `meta`: the whole line in mono, as every call site reads today.
+  metaVariant?: "meta" | "sentence";
   // What sits at the end — a measure, a chevron.
   trailing?: ReactNode;
   // Drops the hairline for the last row of a group, where the group's own
@@ -60,6 +64,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     leading,
     name,
     meta,
+    metaVariant = "meta",
     trailing,
     rule = true,
     onLeadingClick,
@@ -95,12 +100,12 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
           {name}
         </Text>
         {meta ? (
-          <Text as="span" variant="meta" className={wideMeta ? styles.narrowOnly : undefined}>
+          <Text as="span" variant={metaVariant} className={wideMeta ? styles.narrowOnly : undefined}>
             {meta}
           </Text>
         ) : null}
         {wideMeta ? (
-          <Text as="span" variant="meta" className={styles.wideOnly}>
+          <Text as="span" variant={metaVariant} className={styles.wideOnly}>
             {wideMeta}
           </Text>
         ) : null}
