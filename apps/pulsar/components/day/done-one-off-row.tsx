@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { undoFact } from "@/app/actions/facts";
 import { Mark, Row, Text } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type DoneOneOffRowProps = {
   factId: string;
@@ -21,7 +22,7 @@ export type DoneOneOffRowProps = {
 export function DoneOneOffRow({ factId, name, time }: DoneOneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   function handleUndo() {
     if (pending) return;

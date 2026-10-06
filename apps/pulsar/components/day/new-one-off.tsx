@@ -11,6 +11,7 @@ import { todayInZone } from "@/lib/zone";
 
 import { DayChoice } from "./day-choice";
 import { DEFAULT_DAY_CHOICE, dayForChoice, type DayChoiceValue } from "./day-for-choice";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type NewOneOffProps = {
   // Absent, the one-off written here belongs to nothing (RP-20); given, it is
@@ -41,7 +42,7 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [choice, setChoice] = useState<DayChoiceValue>(DEFAULT_DAY_CHOICE);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
   function savedMessage(kind: DayChoiceValue["kind"], day: string | null): string | null {
@@ -74,7 +75,7 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
     // quantity (`lib/validation/fact.ts`'s `quantitySchema`).
     const parsed = createOneOffSchema.safeParse({ name, day, goalId });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      setError(messageKey(parsed.error.issues[0].message));
       return;
     }
     setError(null);

@@ -9,8 +9,9 @@ import { clientFromMetadataUrl } from "@/lib/oauth/client-metadata";
 import { redirectAllowed } from "@/lib/oauth/clients";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { authorizationErrorKey, authorizationRequestSchema, type AuthorizationRequest } from "@/lib/validation/oauth";
+import { type MessageKey } from "@/i18n/translator";
 
-export type ConsentResult = { ok: true; redirectTo: string } | { ok: false; error: string };
+export type ConsentResult = { ok: true; redirectTo: string } | { ok: false; error: MessageKey };
 
 type KnownClient = { id: string; redirectUris: string[] };
 
@@ -31,7 +32,7 @@ async function findClient(clientId: string): Promise<KnownClient | null> {
 
 type Checked =
   | { ok: true; request: AuthorizationRequest; client: KnownClient; personId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: MessageKey };
 
 // The redirect target is only ever one the client registered: the error
 // redirect is as much an open redirect as the success one.

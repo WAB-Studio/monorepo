@@ -8,6 +8,7 @@ import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
 import { Mark, Row, Text } from "@/components/ui";
 
 import { ScheduleSheet } from "./schedule-sheet";
+import { type MessageKey } from "@/i18n/translator";
 
 export type DaylessRowProps = {
   oneOffId: string;
@@ -27,7 +28,7 @@ export type DaylessRowProps = {
 export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone }: DaylessRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 

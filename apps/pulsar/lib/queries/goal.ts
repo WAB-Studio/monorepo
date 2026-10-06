@@ -29,6 +29,7 @@ import {
   type MonthBudget,
   type MonthRow,
 } from "@/lib/plan/months";
+import { sourceKey, type SourceKey } from "@/i18n/translator";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), for the same reason `lib/queries/day.ts` and
@@ -110,7 +111,7 @@ export type GoalCommitment = {
   // The evidence source's own catalogue key (RNP-01), set only when
   // `satisfiedBy.kind === "evidence"` — the goal's screen reads the source's
   // name from `sources.json` under this key, never a sentence stored here.
-  sourceLabelKey: string | null;
+  sourceLabelKey: SourceKey | null;
   // Distinct days this commitment has a declared fact on (module 18's retire
   // sheet: "los N días en que lo hiciste" — RP-13 says the days already done
   // stay done). Counted here, off `row.facts` the goal statement already
@@ -230,7 +231,7 @@ function toGoalCommitment(row: CommitmentRow, factDayCount: number): GoalCommitm
     cadence: toCadence(row),
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
-    sourceLabelKey: row.satisfaction === "evidence" ? row.source_label_key : null,
+    sourceLabelKey: row.satisfaction === "evidence" && row.source_label_key ? sourceKey(row.source_label_key) : null,
     factDayCount,
   };
 }

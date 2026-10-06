@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Chip, Field, Flex, Text } from "@/components/ui";
 
 import type { DayChoiceKind, DayChoiceValue } from "./day-for-choice";
+import type { MessageKey } from "@/i18n/translator";
 
 export type DayChoiceProps = {
   value: DayChoiceValue;
@@ -15,7 +16,7 @@ export type DayChoiceProps = {
   // Earliest date the picker offers: the day already gone is never one.
   min: string;
   // Set when the schema refused the picked date; already a catalogue key.
-  error?: string | null;
+  error?: MessageKey | null;
   // Sits under the chips and the date, indented with them («Anotar»).
   action?: ReactNode;
 };

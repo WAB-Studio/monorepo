@@ -6,6 +6,7 @@ import postgres from "postgres";
 
 import { readerFor } from "../lib/evidence/registry";
 import { SOURCE_ROWS, type EvidenceSourceRow } from "../lib/evidence/source-rows";
+import { sourceKey } from "@/i18n/translator";
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -35,7 +36,7 @@ function declared(argv: string[]): EvidenceSourceRow[] {
   const labelKey = flag("label-key");
   const unit = flag("unit");
   if (!labelKey || !unit) throw new Error("--key needs --label-key and --unit");
-  return [{ key, labelKey, unit }];
+  return [{ key, labelKey: sourceKey(labelKey), unit }];
 }
 
 async function main() {

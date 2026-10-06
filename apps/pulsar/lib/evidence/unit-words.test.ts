@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createTranslator } from "use-intl";
 
+import { sourceKey } from "../../i18n/translator";
 import sources from "../../messages/es/sources.json";
 import { knownSourceKeys } from "./registry";
 import { SOURCE_ROWS } from "./source-rows";
@@ -14,7 +15,7 @@ const real = createTranslator({ locale: "es", messages: { sources } }) as unknow
 
 // A second source, declared the way the next one will be: a row plus two
 // message keys, and no component named anywhere.
-const second = { labelKey: "sources.fakeMinutes", unit: "minutes" };
+const second = { labelKey: sourceKey("sources.fakeMinutes"), unit: "minutes" };
 const fake = createTranslator({
   locale: "es",
   messages: {

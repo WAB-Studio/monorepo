@@ -23,12 +23,13 @@ import {
 } from "@/lib/validation/one-off";
 
 import { declareFact, type DeclareFactResult } from "./facts";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
-export type CreateOneOffResult = { ok: true; oneOffId: string } | { ok: false; error: string };
+export type CreateOneOffResult = { ok: true; oneOffId: string } | { ok: false; error: MessageKey };
 export type CompleteOneOffResult = DeclareFactResult;
-export type ScheduleOneOffResult = { ok: true } | { ok: false; error: string };
-export type DeleteOneOffResult = { ok: true } | { ok: false; error: string };
-export type MoveTaskResult = { ok: true } | { ok: false; error: string };
+export type ScheduleOneOffResult = { ok: true } | { ok: false; error: MessageKey };
+export type DeleteOneOffResult = { ok: true } | { ok: false; error: MessageKey };
+export type MoveTaskResult = { ok: true } | { ok: false; error: MessageKey };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -46,7 +47,7 @@ class NamedError extends Error {}
  */
 export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneOffResult> {
   const parsed = createOneOffSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
@@ -159,7 +160,7 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
     }
     return { ok: true, oneOffId: written.oneOffId };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 }
@@ -172,7 +173,7 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
  */
 export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<ScheduleOneOffResult> {
   const parsed = scheduleOneOffSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
@@ -221,7 +222,7 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
     revalidatePath("/sueltas");
     return { ok: true };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 }
@@ -236,7 +237,7 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
  */
 export async function completeOneOff(input: CompleteOneOffInput): Promise<CompleteOneOffResult> {
   const parsed = completeOneOffSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
@@ -270,7 +271,7 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
  */
 export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneOffResult> {
   const parsed = deleteOneOffSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
@@ -302,7 +303,7 @@ export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneO
     revalidatePath("/");
     return { ok: true };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 }
@@ -316,7 +317,7 @@ export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneO
  */
 export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskResult> {
   const parsed = moveTaskSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
@@ -382,7 +383,7 @@ export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskRes
     revalidatePath(`/metas/${moved.goalId}/meses/${month}`);
     return { ok: true };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 }

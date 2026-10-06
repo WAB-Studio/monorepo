@@ -8,6 +8,7 @@ import { Button, Notice, Page, Text } from "@/components/ui";
 import type { AuthorizationRequest } from "@/lib/validation/oauth";
 
 import { ConsentList } from "./consent-list";
+import { type MessageKey } from "@/i18n/translator";
 
 const MAY = ["read", "done", "write", "reorganize"] as const;
 const NEVER = ["delete", "undo"] as const;
@@ -24,7 +25,7 @@ export function Consent({
   const t = useTranslations("oauth");
   const root = useTranslations();
   const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   async function answer(act: typeof approveAuthorization): Promise<void> {
     setWorking(true);

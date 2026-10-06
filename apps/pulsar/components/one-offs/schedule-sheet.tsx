@@ -13,6 +13,7 @@ import {
 import { Button, Sheet, SheetActions, Text } from "@/components/ui";
 import { scheduleOneOffSchema } from "@/lib/validation/one-off";
 import { todayInZone } from "@/lib/zone";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type ScheduleSheetProps = {
   open: boolean;
@@ -43,7 +44,7 @@ export function ScheduleSheet({
   const [choice, setChoice] = useState<DayChoiceValue>(
     current ? { kind: "other", date: current.day } : DEFAULT_DAY_CHOICE,
   );
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   function handleSchedule() {
     if (pending) return;
@@ -54,7 +55,7 @@ export function ScheduleSheet({
       day: dayForChoice(choice, todayInZone()),
     });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      setError(messageKey(parsed.error.issues[0].message));
       return;
     }
     setError(null);

@@ -8,6 +8,7 @@ import { removeMonthBudget, setMonthBudget } from "@/app/actions/budgets";
 import { isTimeUnit, splitMinutes } from "@/lib/units/time";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { Button, Field, Flex, Sheet, SheetActions } from "@/components/ui";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const WHOLE = /^\d+$/;
 
@@ -49,7 +50,7 @@ export function BudgetSheet({
     router.replace(closeHref);
   }
 
-  function typedAmount(): number | string {
+  function typedAmount(): number | MessageKey {
     if (!timed) return WHOLE.test(single.trim()) ? Number(single.trim()) : Number.NaN;
     const h = hours.trim() === "" ? "0" : hours.trim();
     const min = minutes.trim() === "" ? "0" : minutes.trim();
@@ -67,7 +68,7 @@ export function BudgetSheet({
     }
     const parsed = setMonthBudgetSchema.safeParse({ goalId, month, amount: typed });
     if (!parsed.success) {
-      setError(t(parsed.error.issues[0].message));
+      setError(t(messageKey(parsed.error.issues[0].message)));
       return;
     }
 

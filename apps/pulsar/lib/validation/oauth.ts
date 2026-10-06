@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const CLIENT_URL_BASE = "https://";
 const UUID = z.uuid();
@@ -39,11 +40,11 @@ export function authorizationRequestSchema(siteUrl: string) {
 export type AuthorizationRequest = z.infer<ReturnType<typeof authorizationRequestSchema>>;
 
 /** The error key of the first thing wrong with a request. */
-export function authorizationErrorKey(input: unknown, siteUrl: string): string | null {
+export function authorizationErrorKey(input: unknown, siteUrl: string): MessageKey | null {
   if (typeof input !== "object" || input === null) return "oauth.errors.invalid";
   const parsed = authorizationRequestSchema(siteUrl).safeParse(input);
 
-  return parsed.success ? null : parsed.error.issues[0].message;
+  return parsed.success ? null : messageKey(parsed.error.issues[0].message);
 }
 
 const CONSENT_PATH = "/oauth/autorizar";

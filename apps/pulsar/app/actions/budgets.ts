@@ -16,9 +16,10 @@ import {
 } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
-export type SetMonthBudgetResult = { ok: true } | { ok: false; error: string };
-export type RemoveMonthBudgetResult = { ok: true } | { ok: false; error: string };
+export type SetMonthBudgetResult = { ok: true } | { ok: false; error: MessageKey };
+export type RemoveMonthBudgetResult = { ok: true } | { ok: false; error: MessageKey };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -41,7 +42,7 @@ function revalidateMonthScreens(goalId: string, month: string): void {
  */
 export async function setMonthBudget(input: SetMonthBudgetInput): Promise<SetMonthBudgetResult> {
   const parsed = setMonthBudgetSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "month.errors.signedOut" };
@@ -77,7 +78,7 @@ export async function setMonthBudget(input: SetMonthBudgetInput): Promise<SetMon
       `);
     });
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 
@@ -96,7 +97,7 @@ export async function removeMonthBudget(
   input: RemoveMonthBudgetInput,
 ): Promise<RemoveMonthBudgetResult> {
   const parsed = removeMonthBudgetSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "month.errors.signedOut" };
@@ -118,7 +119,7 @@ export async function removeMonthBudget(
         .where(and(eq(monthBudgets.goalId, goalId), eq(monthBudgets.month, monthStart(month))));
     });
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 

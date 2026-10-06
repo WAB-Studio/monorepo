@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { type Translator } from "@/i18n/translator";
 import { dayBefore } from "@/lib/day/weeks";
 import { goalSections, type Section } from "@/lib/export/sections";
 import type { GoalReport, Report } from "@/lib/export/report";
@@ -26,7 +27,6 @@ import {
 
 import { PrintButton } from "./print-button";
 
-type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 const monthName = new Intl.DateTimeFormat("es-CO", {
   month: "long",
@@ -52,7 +52,7 @@ function MonthFigures({
 }: {
   goal: GoalReport;
   declaredOnly: boolean;
-  t: Translator;
+  t: Translator<"export">;
 }) {
   const unit = goal.unit as string;
   return (
@@ -80,7 +80,7 @@ function Owes({
 }: {
   owes: number;
   unit: string | null;
-  t: Translator;
+  t: Translator<"export">;
 }) {
   return (
     <>
@@ -102,7 +102,7 @@ function GoalPart({
 }: {
   goal: GoalReport;
   declaredOnly: boolean;
-  t: Translator;
+  t: Translator<"export">;
 }) {
   const sections = goalSections(goal);
   const unit = goal.unit;

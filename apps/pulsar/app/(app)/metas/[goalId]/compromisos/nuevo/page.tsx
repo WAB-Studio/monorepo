@@ -4,6 +4,7 @@ import { evidenceSources } from "@/db/schema";
 import { CommitmentForm } from "@/components/goal/commitment-form";
 import { listGoals } from "@/lib/queries/goal";
 import { getPerson, withGoalsDb } from "@/lib/session";
+import { sourceKey } from "@/i18n/translator";
 
 /**
  * `CompromisoNuevo.dc.html` (RP-12): the auth gate, the goal it belongs to
@@ -30,6 +31,7 @@ export default async function NewCommitmentPage({
         .from(evidenceSources),
     ),
   ]);
+  const sourceChoices = sources.map((source) => ({ ...source, labelKey: sourceKey(source.labelKey) }));
 
   const goal = goals.find((candidate) => candidate.id === goalId);
   if (!goal) notFound();
@@ -39,7 +41,7 @@ export default async function NewCommitmentPage({
       goalId={goal.id}
       goalName={goal.name}
       hasMeasure={goal.measureUnit !== null}
-      sources={sources}
+      sources={sourceChoices}
     />
   );
 }

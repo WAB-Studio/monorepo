@@ -10,6 +10,7 @@ import { addPhaseSchema, phasesOverlap, phaseWithinHorizon, type PhaseSpan } fro
 import { Button, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
 
 import { weeksToPhaseSpan } from "./phase-weeks";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type PhaseFormProps = {
   goalId: string;
@@ -58,7 +59,7 @@ export function PhaseForm({
   const [aim, setAim] = useState("");
   const [fromWeek, setFromWeek] = useState(String(defaultFromWeek));
   const [toWeek, setToWeek] = useState(String(defaultToWeek));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   function handleSubmit() {
     if (pending) return;
@@ -87,7 +88,7 @@ export function PhaseForm({
 
     const parsed = addPhaseSchema.safeParse({ goalId, aim, ...span });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      setError(messageKey(parsed.error.issues[0].message));
       return;
     }
 
