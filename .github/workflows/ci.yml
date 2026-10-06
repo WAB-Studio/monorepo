@@ -427,7 +427,7 @@ jobs:
           exit 1
 
   # `check:day`, `check:goal`, `check:goal-actions` and `check:plan` under one harness run of
-  # their own (`scripts/harness/checks-run.ts`), never `pulsar-e2e`'s person:
+  # their own, then `check:mcp` on a session of its own (`scripts/harness/checks-run.ts`), never `pulsar-e2e`'s person:
   # its teardown drops it. A job of its own so the two run side by side. Lane
   # 7: local lanes are 1-5, `pulsar-e2e` is 8, orbit's `e2e` is 9, so the
   # shared `harness-member-7` never meets another job's seeds.
@@ -462,25 +462,37 @@ jobs:
 
       - name: Start the app and wait for it to answer
         run: |
-          npm run start -w apps/pulsar -- --port 3206 > /tmp/pulsar-checks.log 2>&1 &
+          # `check:mcp` reads this log at `private/dev3206.log` and asserts an `[outbound]` line
+          # that only this fetch hook writes.
+          mkdir -p apps/pulsar/private
+          NODE_OPTIONS='--import data:text/javascript,const%20f=fetch;globalThis.fetch=(i,o)=>{console.log(%22[outbound]%22,String(i.url??i));return%20f(i,o)}' \
+            npm run start -w apps/pulsar -- --port 3206 > apps/pulsar/private/dev3206.log 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf -o /dev/null http://localhost:3206/; then
               echo "up after ${SECONDS}s"; exit 0
             fi
             sleep 2
           done
-          echo "the server never answered"; tail -50 /tmp/pulsar-checks.log; exit 1
+          echo "the server never answered"; tail -50 apps/pulsar/private/dev3206.log; exit 1
 
       - name: Run the four checks under one harness run
         working-directory: apps/pulsar
         run: node --import tsx --env-file=.env.local scripts/harness/checks-run.ts
+
+      # `route.ts` reads `private/session-7.json`, which `checks-run.ts` drops with its run;
+      # a bare mint leaves a session of its own for this step.
+      - name: Run check:mcp
+        if: ${{ !cancelled() }}
+        run: |
+          npm run harness:mint-session -w apps/pulsar
+          npm run check:mcp -w apps/pulsar
 
       - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: pulsar-checks-log
-          path: /tmp/pulsar-checks.log
+          path: apps/pulsar/private/dev3206.log
 
   e2e:
     runs-on: ubuntu-latest
