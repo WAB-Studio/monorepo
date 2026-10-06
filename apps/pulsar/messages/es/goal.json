@@ -45,7 +45,8 @@
     },
     "weekLabel": "semana {n}",
     "current": "en curso",
-    "noMeasure": "Esta meta todavía no tiene cifra."
+    "noMeasure": "Esta meta todavía no tiene cifra.",
+    "back": "Volver a la meta"
   },
   "commitments": {
     "retired": "retirado",
