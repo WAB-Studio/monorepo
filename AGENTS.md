@@ -158,7 +158,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   `--app voyager` copies no `apps/orbit/.env.local`, so `npm run harness:census -w apps/orbit` dies on
   a missing env file there. Both checkouts share one database, so the number is the same.
 - Run the RNF-09 timing alone: it lives in `check:http` and `check:queries`, and a second lane inflates it.
-- Copy the lane's report out before you drop it: `cp ../finances-app-l<n>/private/reportes/*.md private/reportes/`.
+- Copy everything an agent left in the lane's `private/` before you drop it: reports, logs a handoff cites and captures (`cp -r ../finances-app-l<n>/private/{reportes,ux-*} private/`). `worktree remove --force` deletes them. Measured 2026-10-06: 144 captures of two UX critics went with lanes 3 and 6.
 - Free the lane's port with `fuser -k <port>/tcp`. Never `pkill -f` a path: the pattern matches your own shell.
 - Drop the worktree when its branch lands: `git worktree remove ../finances-app-l<n> --force`.
 - Forbid a file to every live lane the moment you hand it out, not only to the lanes you open next.
