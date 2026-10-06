@@ -809,7 +809,9 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 
 - **The report has two columns from 1024, never three.** At 1440 three columns gave 299 px cards and the months table
   (334 px) ran out of them. `ReporteMarcoEscritorio.dc.html` (three columns) is superseded on this point; the 1024 board's
-  two columns hold at every desktop width.
+  two columns hold at every desktop width. From 1024 to 1279 the months table inside its card takes the phone's stacked face (label over
+  figures); the wide table returns at 1280, where it fits. Decided by the orchestrator 2026-10-06 (module 281): two columns
+  at 1024 leave 280 px of card and the wide table needs 382.
 - **A week that crosses two months is split in the report's months table.** Each month holds the days of that week that
   fall in it, so the weeks under a month add up to the month. The split week shows under both months with its own span
   («sem 5 · 28–30 sep 2026», «sem 5 · 1–4 oct 2026»).
