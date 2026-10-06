@@ -18,18 +18,31 @@ export function goalSections(goal: GoalReport): Section[] {
   return sections;
 }
 
+// A week as one month holds it: the whole week, or its days in that month.
+export type MonthWeek = Pick<ReviewWeek, "index" | "startsOn" | "endsOn" | "total" | "current">;
+
 export type MonthWithWeeks = {
   month: GoalReport["months"][number];
-  weeks: ReviewWeek[];
+  weeks: MonthWeek[];
 };
 
-// Each week sits under the month its first day falls in, so a week that
-// crosses into the next month stays with the month it began in.
+// A week inside one month sits under it whole; one crossing two sits under
+// both, cut at the edge (`goal.weekSplits`), so a month's weeks add up to it.
 export function monthsWithWeeks(goal: GoalReport): MonthWithWeeks[] {
-  return goal.months.map((month) => ({
-    month,
-    weeks: goal.weeks.filter((week) => week.startsOn.slice(0, 7) === month.month.slice(0, 7)),
-  }));
+  return goal.months.map((month) => {
+    const key = month.month.slice(0, 7);
+    const weeks: MonthWeek[] = [];
+    for (const week of goal.weeks) {
+      const parts = goal.weekSplits.filter((split) => split.index === week.index);
+      if (parts.length === 0) {
+        if (week.startsOn.slice(0, 7) === key) weeks.push(week);
+        continue;
+      }
+      const part = parts.find((split) => split.month.slice(0, 7) === key);
+      if (part) weeks.push({ ...week, startsOn: part.startsOn, endsOn: part.endsOn, total: part.total });
+    }
+    return { month, weeks };
+  });
 }
 
 const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];

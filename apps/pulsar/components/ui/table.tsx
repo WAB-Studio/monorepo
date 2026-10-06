@@ -54,6 +54,9 @@ type TableProps = {
   // Keeps the wide face's label column on one line (`ReporteMesesSemanas.dc.html`'s
   // «sem 1 · 28 jul–2 ago 2026»): the column grows to its text rather than wrap it.
   nowrapLabel?: boolean;
+  // Draws the phone's stack from 1024 to 1279px, where the shell's rail leaves
+  // a two-column card too narrow for the wide face; the wide face returns at 1280.
+  stackInCard?: boolean;
 };
 
 function isEmpty(cell: ReactNode): boolean {
@@ -66,7 +69,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -107,7 +110,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
   );
 
   return (
-    <div className={narrow ? `${styles.table} ${styles.narrow}` : styles.table}>
+    <div className={join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined)}>
       <div className={styles.phone}>
         <span className={styles.caption}>{caption}</span>
         <ol className={styles.stack}>

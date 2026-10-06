@@ -881,7 +881,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
   for (const [width, columns] of [
     [1024, 2],
     [1280, 2],
-    [1440, 3],
+    [1440, 2],
   ] as const) {
     test(`at ${width} the page does not overflow and the goals take ${columns} columns`, async ({
       person,
@@ -905,6 +905,20 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
             document.querySelector("main")!.scrollWidth,
             document.querySelector("main")!.clientWidth,
           ],
+          // Whatever table or list is drawn stays inside the card that holds it.
+          tableFits: (() => {
+            let card = document.querySelector("main h2")!;
+            while (getComputedStyle(card.parentElement!).display !== "grid") card = card.parentElement!;
+            const cardBox = card.getBoundingClientRect();
+            return [...card.querySelectorAll("table, ol")]
+              .filter((node) => (node as HTMLElement).offsetParent !== null)
+              .map((node) => {
+                const box = node.getBoundingClientRect();
+                return [box.left >= cardBox.left, box.right <= cardBox.right, node.scrollWidth <= node.clientWidth];
+              })
+              .flat()
+              .every(Boolean);
+          })(),
           columns: (() => {
             let node = document.querySelector("main h2")!.parentElement;
             while (node && getComputedStyle(node).display !== "grid") node = node.parentElement;
@@ -914,6 +928,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
         expect(sizes.page[0]).toBeLessThanOrEqual(sizes.page[1]);
         expect(sizes.main[0]).toBeLessThanOrEqual(sizes.main[1]);
         expect(sizes.columns).toBe(columns);
+        expect(sizes.tableFits).toBe(true);
       } finally {
         await context.close();
         await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -981,4 +996,110 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       }
     });
   }
+
+  // Opened on a Monday in the past, so week 5 (28 sep–4 oct) crosses two months
+  // whatever day the suite runs; nothing is planned in any month.
+  async function seedBoundary(db: postgres.Sql, person: Person) {
+    const name = `Meta de frontera ${Date.now()}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${name}, '2027-12-31', 'minutos', 'minutos', '2026-08-31 12:00:00-05')
+      returning id
+    `;
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${goal.id}, 'Sesión', 'daily', 'quantity', 30, 'minutos', '2026-08-31 12:00:00-05')
+      returning id
+    `;
+    for (const [day, quantity] of [
+      ["2026-09-29", 30],
+      ["2026-10-02", 20],
+    ] as const) {
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${person.id}, ${goal.id}, ${commitment.id}, ${day}::date, ${quantity})
+      `;
+    }
+    return { goalId: goal.id, name };
+  }
+
+  test("RP-46: a week crossing two months sits under both with its own span and share", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seedBoundary(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      const rows = await page
+        .getByRole("main")
+        .locator("table tbody tr")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => [...node.querySelectorAll("td")].map((cell) => (cell.textContent ?? "").trim())),
+        );
+      const split = rows.filter((cells) => /^sem 5 · /.test(cells[0]));
+      expect(split.map((cells) => [cells[0], cells[1]])).toEqual([
+        ["sem 5 · 28–30 sep 2026", "30 min"],
+        ["sem 5 · 1–4 oct 2026", "20 min"],
+      ]);
+      // Each month's weeks add up to its row.
+      const total = (cells: string[]) => Number(/(\d+) min/.exec(cells[1])?.[1] ?? 0);
+      const monthRow = (label: string) => rows.find((cells) => cells[0].startsWith(label))!;
+      const under = (label: string) => {
+        const at = rows.indexOf(monthRow(label));
+        let sum = 0;
+        for (const cells of rows.slice(at + 1)) {
+          if (!cells[0].startsWith("sem ")) break;
+          sum += total(cells);
+        }
+        return sum;
+      };
+      expect(under("septiembre")).toBe(total(monthRow("septiembre")));
+      expect(under("octubre")).toBe(total(monthRow("octubre")));
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("RP-28: a goal with nothing planned prints no «de 0», on the screen and on paper", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seedBoundary(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByText("hasta hoy", { exact: true })).toBeVisible();
+      await expect(page.getByRole("main")).not.toContainText(/\bde 0\b/);
+
+      await page.emulateMedia({ media: "print" });
+      const file = resolve(process.cwd(), "private/export-pdf", `281-${seeded.goalId}.pdf`);
+      mkdirSync(resolve(process.cwd(), "private/export-pdf"), { recursive: true });
+      writeFileSync(file, await page.pdf({ format: "A4" }));
+      const text = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" });
+      expect(text.toLowerCase()).toContain("hasta hoy");
+      expect(text.replace(/\s+/g, " ")).not.toMatch(/\bde 0\b/);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
 });

@@ -22,6 +22,8 @@ export type ReportTask = {
   children: { name: string; done: boolean; doneOn: string | null; estimate: number | null; note: string | null }[];
 };
 
+export type WeekSplit = { index: number; month: string; startsOn: string; endsOn: string; total: number };
+
 export type GoalReport = {
   id: string;
   name: string;
@@ -35,6 +37,9 @@ export type GoalReport = {
   carried: CarriedReport[];
   months: (MonthRow & { carried: number | null })[];
   weeks: ReviewWeek[];
+  // A week crossing two months, cut at the month's edge: each part holds the
+  // week's days that fall in `month` (the first of it), so a month's parts add up to it.
+  weekSplits: WeekSplit[];
 };
 
 export type Report = {
