@@ -90,32 +90,6 @@
       "save": "Guardar la sub-tarea"
     }
   },
-  "shift": {
-    "proposal": "Se arrastró más de la mitad de {month}. Puedes correr un mes lo que sigue de esta meta.",
-    "carriedOver": "{month} arrastró {share} %. Puedes correr un mes lo que sigue de esta meta.",
-    "monthsAction": "correr el plan un mes",
-    "see": "ver qué se corre",
-    "until": "se puede hasta el {date}",
-    "eyebrow": "{goal}",
-    "title": "Correr un mes lo que sigue",
-    "movesTitle": "se corre un mes",
-    "budgets": "montos de {from} a {to}",
-    "budgetsDetail": "{from} → {next}, …",
-    "tasks": "{count, plural, one {# tarea planeada} other {# tareas planeadas}}",
-    "tasksDetail": "de {month} en adelante",
-    "phase": "fase «{name}»",
-    "phaseDetail": "{from} → {to}",
-    "end": "el final",
-    "endDetail": "{from} → {to}",
-    "staysTitle": "no se mueve",
-    "currentPhase": "la fase en curso",
-    "doneTasks": "tareas hechas",
-    "doneTasksDetail": "quedan en su mes",
-    "otherGoals": "las demás metas",
-    "nextKeeps": "{month} queda sin monto hasta que le pongas uno.",
-    "confirm": "Correr un mes",
-    "cancel": "Dejarlo como está"
-  },
   "errors": {
     "noMeasure": "Esta meta no mide nada, así que no lleva montos ni tiempo.",
     "monthClosed": "Un mes cerrado guarda el monto con que terminó.",

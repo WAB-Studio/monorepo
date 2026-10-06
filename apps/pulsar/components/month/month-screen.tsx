@@ -11,7 +11,7 @@ import type { PlanItem } from "@/lib/plan/roadmap";
 import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
-import { loadGoal, type GoalSummary, type GoalView } from "@/lib/queries/goal";
+import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
@@ -57,8 +57,6 @@ export async function MonthDetail({
   heading,
 }: {
   goal: GoalView;
-  // Still passed by `MonthsScreen`; unread since the shift offer went.
-  goals?: GoalSummary[];
   month: string;
   // The path the sheet returns to; the month page itself by default.
   from?: string;
