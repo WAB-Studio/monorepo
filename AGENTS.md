@@ -173,11 +173,14 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 - Set `HARNESS_LANE=n` to give a track its own identities, session files, storage states and seeded rows.
 - Leave it unset for lane 1. `HARNESS_LANE=1` is the same lane.
-- `scripts/worktree.sh` bootstraps a lane. Bootstrap one by hand only outside a worktree: `HARNESS_LANE=2 npm run harness:token`. It creates `harness-2@example.invalid` and `harness-member-2@example.invalid` and lands their token rows.
-- Run any suite on that lane: `HARNESS_LANE=2 npm run check:http`, `HARNESS_LANE=2 npm run check:e2e`, `HARNESS_LANE=2 npm run seed:year`.
+- `scripts/worktree.sh` bootstraps a lane. Bootstrap one by hand only outside a worktree: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run harness:token`. It creates `harness-2@example.invalid` and `harness-member-2@example.invalid` and lands their token rows.
+- Run any suite on that lane through the local stack: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run check:e2e`.
+- Run pulsar specs with `PULSAR_BASE_URL=http://localhost:320<n-1>`. Its Playwright ignores `HARNESS_BASE_URL`.
+- Take `harness: <host> is not the local stack` as: wrap the command in `scripts/supabase-local.sh exec`. Set
+  `HARNESS_DATABASE=remote` only for the RNF-09 timing (`check:http`, `check:queries` against the remote).
 - Share one dev server between lanes, or point a lane at its own with `HARNESS_BASE_URL`.
 - Run the RNF-09 timing alone. A second lane on the same server inflates it.
-- Land a fresh token when a lane's session file is lost: `HARNESS_LANE=2 npm run harness:token`.
+- Land a fresh token when a lane's session file is lost: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run harness:token`.
 - Never run a lane's suite while another track holds that lane.
 - Never age a harness run by hand to make `harness:reap` fire. `heartbeat_at`, `started_at` and
   `finished_at` in `harness.runs` are written by `@repo/harness-registry` and nothing else. A check

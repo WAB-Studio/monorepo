@@ -2742,3 +2742,13 @@ branch could pass until it was restored.
 
 - **Do.** Before you finish a `WIP:` branch, read `git diff <base>..HEAD` over the app code, not only the specs.
 - **Do.** Before merging, check that the net diff against the base touches only what the module claims.
+
+## The harness refuses the remote, and the RNF-09 timing must say it means it
+
+- **What.** Since modules 228 and 235, `openRun`, the identity registrars and every script that writes `auth` call
+  `assertSuiteDatabase()`. A command run without `scripts/supabase-local.sh exec` exits with `harness: <host> is not the
+  local stack`, before any write. Measured 2026-10-05: remote `auth.users` 188 and `harness.runs` 2974, unchanged across
+  every unwrapped run of both modules.
+- **Do.** Wrap every suite, seed and `harness:token` in `scripts/supabase-local.sh exec`. Run the RNF-09 timing against the
+  remote with `HARNESS_DATABASE=remote` — exactly `remote`, nothing else passes. `census` and `reap` stay unguarded on
+  purpose: one reads, the other prunes registered rows.
