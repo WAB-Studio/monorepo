@@ -228,7 +228,7 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
       await expect(page.getByText("Claude", { exact: true })).toBeVisible();
-      await expect(page.getByText(/^conectada el .* · usada /)).toBeVisible();
+      await expect(page.getByText(/^conectada el 1 mar 2026 · usada el 2 mar 2026 \d\d:\d\d$/)).toBeVisible();
       await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
 
       await confirmRevoke(page);
@@ -351,6 +351,23 @@ test.describe("the connections screen (RP-38)", () => {
       await sheet.getByRole("button", { name: messages.revokeSheet.cancel }).click();
       const [open] = await db`select revoked_at from goals.access_tokens where user_id = ${person.id}`;
       expect(open.revoked_at).toBeNull();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("every date carries its year, a fresh row and one from another year alike", async ({
+    person,
+    db,
+    browser,
+    baseURL,
+  }) => {
+    await seed(db, person, { kind: "personal", name: "Antigua", created: "2025-10-05T15:00:00Z", used: "2025-12-31T15:00:00Z" });
+    await seed(db, person, { kind: "personal", name: "Revocada", created: "2025-01-02T15:00:00Z", revoked: "2026-02-03T15:00:00Z" });
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await expect(page.getByText(/^creada el 5 oct 2025 · usada el 31 dic 2025 \d\d:\d\d$/)).toBeVisible();
+      await expect(page.getByText("revocada el 3 feb 2026 · ya no entra", { exact: true })).toBeVisible();
     } finally {
       await context.close();
     }

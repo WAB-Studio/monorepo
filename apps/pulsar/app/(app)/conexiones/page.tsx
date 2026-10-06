@@ -8,7 +8,10 @@ import { listAccessTokens } from "@/lib/queries/tokens";
 import { getPerson } from "@/lib/session";
 import { civilDateInZone, civilDayMonthShort, timeInZone, todayInZone } from "@/lib/zone";
 
-const dayOf = (instant: string) => civilDayMonthShort(civilDateInZone(new Date(instant)));
+const dayOf = (instant: string) => {
+  const day = civilDateInZone(new Date(instant));
+  return `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
+};
 
 // Static per route: no title reads a goal or costs a statement (RNP-01).
 export async function generateMetadata(): Promise<Metadata> {
@@ -25,18 +28,16 @@ export default async function ConnectionsPage() {
   const [tokens, t] = await Promise.all([listAccessTokens(), getTranslations()]);
 
   const today = todayInZone();
-  // «hoy 09:40» for today, «el 5 oct» for any other day.
-  const stamp = (instant: string, prefixed: boolean) =>
+  // «hoy 09:40» for today, «el 5 oct 2026» (plus the time when `clock`) for any other day.
+  const stamp = (instant: string, clock: boolean) =>
     civilDateInZone(new Date(instant)) === today
       ? `${t("connections.row.today")} ${timeInZone(instant)}`
-      : prefixed
-        ? t("connections.row.on", { date: dayOf(instant) })
-        : `${dayOf(instant)} ${timeInZone(instant)}`;
+      : `${t("connections.row.on", { date: dayOf(instant) })}${clock ? ` ${timeInZone(instant)}` : ""}`;
   const live = (token: (typeof tokens)[number]) => {
     const family = token.kind === "oauth" ? "connections.oauth" : "connections.row";
-    const created = stamp(token.createdAt, true);
+    const created = stamp(token.createdAt, false);
     return token.lastUsedAt
-      ? t(`${family}.metaUsed`, { created, used: stamp(token.lastUsedAt, false) })
+      ? t(`${family}.metaUsed`, { created, used: stamp(token.lastUsedAt, true) })
       : t(`${family}.metaUnused`, { created });
   };
 
