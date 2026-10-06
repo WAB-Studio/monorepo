@@ -120,9 +120,16 @@ type MonthTaskRow = {
   name: string;
   estimate: number | null;
   note: string | null;
+  parent_name: string | null;
 };
 
-export type MonthTask = { id: string; name: string; estimate: number | null; note: string | null };
+export type MonthTask = {
+  id: string;
+  name: string;
+  estimate: number | null;
+  note: string | null;
+  parentName: string | null;
+};
 
 // Every evidence commitment of a goal, retired ones included: the source keys
 // a goal's measure reads, as `loadGoal` reads them.
@@ -201,13 +208,13 @@ async function queryGoalsRow(
 ): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
     select
-      (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(g) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
-               ) order by c.created_at), '[]'::json)
+               ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${day}::date) as commitments,
@@ -236,7 +243,7 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
          where b.month = date_trunc('month', ${day}::date)::date) as month_budgets,
-      (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(o) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.day <= ${day}::date
            and not exists (
@@ -258,11 +265,12 @@ async function queryGoalsRow(
                  'id', t.id,
                  'name', t.name,
                  'estimate', t.estimate,
-                 'note', t.note
+                 'note', t.note,
+                 'parent_name', t.parent_name
                )), '[]'::json)
          from (
            select distinct on (coalesce(p.goal_id, o.goal_id))
-                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate, o.note
+                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate, o.note, p.name as parent_name
              from "goals"."one_offs" o
              left join "goals"."one_offs" p on p.id = o.parent_id
              join "goals"."goals" g on g.id = coalesce(p.goal_id, o.goal_id) and ${openGoal("g", day)}
@@ -274,8 +282,9 @@ async function queryGoalsRow(
               and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
             order by coalesce(p.goal_id, o.goal_id),
                      coalesce(p.planned_month, o.planned_month),
-                     coalesce(p.created_at, o.created_at),
-                     o.created_at
+                     coalesce(p.position, o.position),
+                     o.position,
+                     o.id
          ) t) as month_tasks,
       (select count(*)::int
          from "goals"."one_offs" o
@@ -541,7 +550,9 @@ function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, Month
   const tasks: Record<string, MonthTask | null> = {};
   for (const goal of goals) {
     const next = row.month_tasks.find((task) => task.goal_id === goal.id);
-    tasks[goal.id] = next ? { id: next.id, name: next.name, estimate: next.estimate, note: next.note } : null;
+    tasks[goal.id] = next
+      ? { id: next.id, name: next.name, estimate: next.estimate, note: next.note, parentName: next.parent_name }
+      : null;
   }
   return tasks;
 }
