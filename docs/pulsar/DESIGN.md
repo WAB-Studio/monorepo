@@ -877,5 +877,15 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - Hoy steps between days with labelled controls beside the date, «‹ ayer» and «mañana ›»; a bare ‹ means back
     everywhere.
   - A commitment in a goal that measures takes the goal's unit; there is no free unit field there.
-- **Open: a task's month.** The user asked on 2026-10-06 for the plan to work «por cantidad de horas por mes … como
-  roadmap … todo se mueve proporcionalmente». RP-42 stands until that is drawn and decided.
+- **The plan is a roadmap, decided by the user 2026-10-06** («que vaya por cantidad de horas por mes y funcione como
+  roadmap, de esa manera todo se mueve proporcionalmente»). Not yet drawn; RP-42, RP-48 and the SPEC stand until the boards
+  are approved.
+  - A goal has a rhythm, hours per month, which one month may override. Its tasks are one ordered list, each with its
+    estimate. The app gives each task its month by filling each month's hours in order.
+  - The person may **fix** a task to a month (a real date: an exam, a delivery); the rest flows around it.
+  - **The plan moves by itself** whenever something changes — a month left short, an estimate, a new task, a month's
+    hours — and Hoy says so («tu plan se movió 2 semanas»). Nothing asks to be accepted.
+  - **A task that does not fit whole starts where it fits and goes on in the next month** («sigue en noviembre»); its
+    hours are split between the two.
+  - The end date is the plan's: «a este ritmo terminas en …», set against the goal's end.
+  - Built before wave 3 of the UX slice: the edit sheet and the plan's words wait for these boards.
