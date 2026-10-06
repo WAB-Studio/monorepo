@@ -2249,6 +2249,36 @@ async function checkCommitmentPositionPerPerson(): Promise<void> {
   await sql.end();
 }
 
+// RP-47: the goals and one_offs triggers take their max per person, run with no RLS.
+async function checkGoalAndOneOffPositionPerPerson(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      await tx`insert into goals.goals (user_id, name, horizon, position) values (${intruder}, 'ajena', '2027-12-31', 40)`;
+      await tx`insert into goals.one_offs (user_id, name, position) values (${intruder}, 'ajena', 40)`;
+
+      const [goal] = await tx<{ position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'mia', '2027-12-31') returning position`;
+      assert("P188", goal.position === 1, `intruder's goal at 40 does not move my first goal, got ${goal.position}`);
+
+      const [oneOff] = await tx<{ position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'mia') returning position`;
+      assert("P189", oneOff.position === 1, `intruder's one-off at 40 does not move my first one-off, got ${oneOff.position}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2275,6 +2305,7 @@ async function main(): Promise<void> {
   await checkPlanOrder();
   await checkPlanOrderBackfillTieBreak();
   await checkCommitmentPositionPerPerson();
+  await checkGoalAndOneOffPositionPerPerson();
 
   if (failed) process.exit(1);
 }

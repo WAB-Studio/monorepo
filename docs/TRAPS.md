@@ -2775,3 +2775,19 @@ branch could pass until it was restored.
 - Run a DDL mutant only when no other lane runs a suite, or inside one transaction that rolls back (and see «A policy
   mutant proved inside a rollback…» for what that costs). A red that names a column another branch owns is that branch's
   mutant until proved otherwise.
+
+## A probe of a SECURITY INVOKER trigger under RLS cannot see a missing `user_id` filter
+
+- A `BEFORE INSERT` trigger that takes `max(position)` runs as the caller. Under the person's RLS its subquery already sees
+  only that person's rows, so the mutant «max without `user_id`» is equivalent to the correct trigger there, and a probe
+  that plants an intruder's row at 40 and inserts as the subject stays green.
+- Plant the intruder's row and insert the subject's in the privileged part of the transaction, with no
+  `enterUserContext`, and roll back. Prove the probe by running the mutated function inside that same rollback.
+- Measured 2026-10-06: module 252's P177 and P187 (first version) passed against the unfiltered `commitments_fill_position`;
+  run privileged, P187 read 42 instead of 1. `apps/pulsar/scripts/check-policies.ts`: P187, P188, P189.
+
+## `\d` in a TS template literal collapses to `d`
+
+- `` sql`... substring(name from '\d+') ...` `` reaches Postgres as `'d+'`: the escape is dropped, the regex matches nothing,
+  and every row sorts as `NULLS LAST`. Write `\\d` in embedded SQL.
+- Measured 2026-10-06: module 252's backfill probe P186 returned Cap. 1|Cap. 10|Cap. 2 (name order) until `\\d` replaced `\d`.
