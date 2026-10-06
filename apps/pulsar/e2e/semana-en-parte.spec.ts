@@ -202,6 +202,11 @@ for (const width of [390, 1280]) {
         await expect(partial).toHaveAccessibleName(/: en parte$/);
         await expect(markOf(page, lastMonday)).toHaveAttribute("data-state", "none");
         await expect(markOf(page, shift(lastMonday, 3))).toHaveAttribute("data-state", "none");
+        // The key of the half dot shows on the phone even with no daily partial.
+        if (width === 390) {
+          await expect(page.getByTestId("week-legend").getByText("en parte", { exact: true })).toBeVisible();
+          await expect(page.getByText("en parte", { exact: false }).filter({ hasText: /de \d+ · / })).toHaveCount(0);
+        }
       });
     } finally {
       await db`delete from goals.goals where id = ${goal.id}`;
