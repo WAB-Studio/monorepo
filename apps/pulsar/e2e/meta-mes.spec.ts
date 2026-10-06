@@ -385,6 +385,18 @@ test("a goal with a rhythm leads to its plan: «el plan», the end, the rhythm a
       await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      // A white bordered card: 1px border, radius 10, 56 tall at least.
+      const box = await row.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return {
+          border: style.borderTopWidth,
+          radius: style.borderTopLeftRadius,
+          height: el.getBoundingClientRect().height,
+        };
+      });
+      expect(box.border, `border at ${width}`).toBe("1px");
+      expect(box.radius, `radius at ${width}`).toBe("10px");
+      expect(box.height, `height at ${width}`).toBeGreaterThanOrEqual(56);
     }
   } finally {
     await context.close();

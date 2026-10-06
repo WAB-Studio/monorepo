@@ -169,6 +169,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <Section label={t("roadmap.meta.planLabel")}>
         <Row
           href={`/metas/${goal.id}/plan`}
+          card
           name={
             goal.roadmap.state === "noRhythm"
               ? t("roadmap.meta.build")
