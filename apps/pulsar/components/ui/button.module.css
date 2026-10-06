@@ -57,8 +57,10 @@
   }
 }
 
+/* A flex column stretches its children (Split from 301), so the width is set, not left to the parent. */
 @media (min-width: 1024px) {
   .block.block {
+    inline-size: fit-content;
     min-inline-size: 160px;
   }
 }
