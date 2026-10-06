@@ -9,6 +9,7 @@ import { test, expect } from "./fixtures";
 const SEEDED_GOAL_NAME = "Inglés B1/B2 → B2+ laboral";
 
 async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): Promise<void> {
+  await db`delete from goals.commitments where goal_id = ${goalId} and user_id = ${personId}`;
   await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
 }
 
@@ -38,6 +39,12 @@ test("the Metas tab opens the goals list, and a second goal is opened from it, n
   await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
   const goalId = page.url().split("/metas/")[1];
 
+  // Below 1024px Hoy draws a section only for a goal that asks today
+  // (module 263): a daily tap commitment makes the new one ask.
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${personId}, ${goalId}, 'Tocar la segunda', 'daily', 'tap', now() - interval '3 days')`;
+
   try {
     // The list, with two: neither redirected past, both their own row.
     await page.goto("/metas");
@@ -46,7 +53,7 @@ test("the Metas tab opens the goals list, and a second goal is opened from it, n
     await expect(page.getByRole("link", { name: "Abrir otra meta" })).toBeVisible();
 
     // Both open goals draw on the day (§0.3, 5), grouped, with no selector —
-    // the newly opened one included, even with no commitment of its own yet.
+    // the newly opened one included once it asks something today.
     await page.goto("/");
     // A time-unit goal's name also heads its figure card (RP-35): take the section's.
     await expect(page.getByText(SEEDED_GOAL_NAME, { exact: true }).first()).toBeVisible();
