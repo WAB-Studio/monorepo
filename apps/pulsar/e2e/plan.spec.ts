@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { monthOf, nextMonth } from "@/lib/plan/months";
@@ -22,6 +22,15 @@ const m4 = nextMonth(m3);
 // The plan's own wording: the year shows only off this year.
 const name = (month: string) =>
   month.slice(0, 4) === thisYear ? NAMES[Number(month.slice(5, 7)) - 1] : `${NAMES[Number(month.slice(5, 7)) - 1]} de ${month.slice(0, 4)}`;
+
+// A white bordered card: 1px line, radius 10 (`Row card`), never `Panel bordered`.
+async function expectCard(row: Locator) {
+  const box = await row.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { border: style.borderTopWidth, radius: style.borderTopLeftRadius };
+  });
+  expect(box).toEqual({ border: "1px", radius: "10px" });
+}
 
 type Db = postgres.Sql;
 
@@ -130,6 +139,7 @@ for (const width of [390, 1440]) {
         const rest = section(page, `${name(m2)} a ${name(m4)}`);
         await expect(rest.getByText("3 tareas · 24 h", { exact: true })).toBeVisible();
         await expect(page.getByText("T3", { exact: true })).toHaveCount(0);
+        await expectCard(page.getByRole("link", { name: "Ver el resto del plan" }));
         await page.getByRole("link", { name: "Ver el resto del plan" }).click();
         await expect(page).toHaveURL(/\?todo=1$/);
         for (const task of ["T3", "T4", "T5"]) await expect(page.getByText(task, { exact: true })).toBeVisible();
@@ -179,12 +189,17 @@ for (const width of [390, 1440]) {
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toBeVisible();
         await expect(page.getByText("Con 11 h al mes llegas a tiempo.")).toBeVisible();
         await expect(page.getByRole("button", { name: "Mover el final" })).toBeVisible();
+        for (const row of ["Subir el ritmo", "Mover el final"]) await expectCard(page.getByRole("button", { name: row }));
         await expect(page.getByText(/^Al \d{1,2} de \p{L}+, donde termina el plan\.$/u)).toBeVisible();
         await expect(page.getByText("O quita tareas del plan: cada una que sale adelanta el final.")).toBeVisible();
         const past = section(page, "después de tu final");
         await expect(past.getByText("2 tareas · 9 h", { exact: true })).toBeVisible();
         for (const task of ["D", "E"]) await expect(past.getByText(task, { exact: true })).toBeVisible();
         await expect(past.getByText("A", { exact: true })).toHaveCount(0);
+        // Every month drawn whole (`?todo=1`): D and E sit once, under «después de tu final», never also in a month.
+        await page.goto(`/metas/${goalId}/plan?todo=1`);
+        for (const task of ["D", "E"]) await expect(page.getByText(task, { exact: true })).toHaveCount(1);
+        await expect(section(page, "después de tu final").getByText("D", { exact: true })).toHaveCount(1);
         // No element paints a red: its red channel never leads green and blue by 60.
         const reds = await page.evaluate(() => {
           const found: string[] = [];
@@ -230,9 +245,6 @@ for (const width of [390, 1440]) {
         await expect(page.getByRole("button", { name: "Mover el final" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toHaveCount(0);
         await expect(page.getByText("después de tu final", { exact: true })).toHaveCount(0);
-        // The end falls on the new last day: no day of slack, none late.
-        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, el día de tu final\.$/u)).toBeVisible();
-        await expect(page.getByText(/0 días/)).toHaveCount(0);
         // The end falls on the new last day: no day of slack, none late.
         await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, el día de tu final\.$/u)).toBeVisible();
         await expect(page.getByText(/0 días/)).toHaveCount(0);

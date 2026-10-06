@@ -9,7 +9,7 @@ import {
   Flex,
   Figure,
   Page,
-  Panel,
+  Row,
   ScreenHeader,
   Section,
   Separator,
@@ -134,21 +134,23 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
         </>
       ) : null}
       {unit && goal.rhythm !== null ? (
-        <Panel as="div" bordered>
-          <Flex justify="between" align="center" gap="3">
-            <Text variant="name">{t("roadmap.plan.rhythm", { hours: say(goal.rhythm) })}</Text>
-            {open ? (
-              <RhythmSheet
-                goalId={goal.id}
-                goalName={goal.name}
-                unit={unit}
-                plan={plan}
-                initial={goal.rhythm}
-                trigger={t("roadmap.plan.change")}
-              />
-            ) : null}
-          </Flex>
-        </Panel>
+        open ? (
+          <RhythmSheet
+            goalId={goal.id}
+            goalName={goal.name}
+            unit={unit}
+            plan={plan}
+            initial={goal.rhythm}
+            name={t("roadmap.plan.rhythm", { hours: say(goal.rhythm) })}
+            trailing={
+              <Text as="span" variant="name" tone="accent">
+                {t("roadmap.plan.change")}
+              </Text>
+            }
+          />
+        ) : (
+          <Row card rule={false} name={t("roadmap.plan.rhythm", { hours: say(goal.rhythm) })} disabled />
+        )
       ) : null}
       {late && open && unit && roadmap.end !== null ? (
         <PlanEnd

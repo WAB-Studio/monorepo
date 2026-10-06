@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button, Sheet } from "@/components/ui";
+import { Row, Sheet } from "@/components/ui";
 import type { PlanInput } from "@/lib/plan/roadmap";
 
 import { RhythmForm } from "./rhythm-form";
 
 /**
- * `RoadmapRitmoHoja` (RP-50): a link that opens the rhythm form in a sheet,
+ * `RoadmapRitmoHoja` (RP-50): a card row that opens the rhythm form in a sheet,
  * prefilled with `initial` — the goal's rhythm, or the one «Subir el ritmo»
  * names.
  */
@@ -19,23 +20,35 @@ export function RhythmSheet({
   unit,
   plan,
   initial,
-  trigger,
+  name,
+  meta,
+  trailing,
 }: {
   goalId: string;
   goalName: string;
   unit: string;
   plan: PlanInput;
   initial: number | null;
-  trigger: string;
+  // The card row's own words: its name, the line under it, and what sits at
+  // its end (a chevron when absent).
+  name: ReactNode;
+  meta?: ReactNode;
+  trailing?: ReactNode;
 }) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <Button variant="ghost" tone="accent" tap={44} onClick={() => setOpen(true)}>
-        {trigger}
-      </Button>
+      <Row
+        card
+        rule={false}
+        name={name}
+        meta={meta}
+        metaVariant="sentence"
+        trailing={trailing ?? <ChevronRight size={20} aria-hidden />}
+        onClick={() => setOpen(true)}
+      />
       <Sheet
         open={open}
         onOpenChange={setOpen}
