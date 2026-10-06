@@ -6,7 +6,7 @@ import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
 import { amountOf } from "@/lib/plan/roadmap";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
-import { listGoals, loadGoal, type GoalView } from "@/lib/queries/goal";
+import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 import { Button, ListDetail, Page, ScreenHeader, Table, Text, type TableRow } from "@/components/ui";
 
@@ -133,7 +133,7 @@ export async function MonthsScreen({
   planning: string | null;
   returnPath: string;
 }) {
-  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
   const t = await getTranslations();
@@ -171,7 +171,6 @@ export async function MonthsScreen({
           list={<MonthsList goal={goal} open={target.month} />}
           detail={<MonthDetail
               goal={goal}
-              goals={goals}
               month={target.month.slice(0, 7)}
               from={`/metas/${goal.id}/meses`}
               heading

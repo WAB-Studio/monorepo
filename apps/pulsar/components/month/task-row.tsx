@@ -8,9 +8,8 @@ import { useTranslations } from "next-intl";
 import { undoFact } from "@/app/actions/facts";
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
-import { ShiftSheet, type ShiftSheetProps } from "@/components/month/shift-sheet";
 import { monthName, TaskSheet } from "@/components/plan/task-sheet";
-import { Button, Flex, IconButton, Mark, Panel, Row, Text } from "@/components/ui";
+import { Flex, IconButton, Mark, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 
@@ -236,50 +235,5 @@ export function TaskRow({
         />
       )}
     </Flex>
-  );
-}
-
-/**
- * `MesCorrer.dc.html` (RP-48): the proposal under a closed month's tasks and
- * the sheet it opens. The words arrive said, the plan arrives derived.
- */
-export function ShiftProposal({
-  proposal,
-  see,
-  until,
-  compact,
-  ...sheet
-}: Omit<ShiftSheetProps, "open" | "onOpenChange"> & {
-  see: string;
-  // `MesesCorrer.dc.html`: on a month's row it is the trigger alone, with
-  // neither the sentence nor the deadline.
-  compact?: boolean;
-  proposal?: string;
-  until?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  if (compact) {
-    return (
-      <>
-        <Button variant="ghost" tone="accent" onClick={() => setOpen(true)}>
-          {see}
-        </Button>
-        <ShiftSheet {...sheet} open={open} onOpenChange={setOpen} />
-      </>
-    );
-  }
-  return (
-    <Panel as="div" bordered>
-      <Flex direction="column" gap="2" align="start">
-        <Text as="p">{proposal}</Text>
-        <Button variant="ghost" tone="accent" onClick={() => setOpen(true)}>
-          {see}
-        </Button>
-        <Text as="p" variant="sentence">
-          {until}
-        </Text>
-      </Flex>
-      <ShiftSheet {...sheet} open={open} onOpenChange={setOpen} />
-    </Panel>
   );
 }
