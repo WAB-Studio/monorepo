@@ -23,7 +23,7 @@
     "copy": "Copiar",
     "copyName": "Copiar la dirección",
     "copied": "Copiada.",
-    "copyFailed": "No se pudo copiar. Mantén presionada la dirección para copiarla."
+    "copyFailed": "No se pudo copiar. Mantén presionado el texto para copiarlo."
   },
   "row": {
     "metaUsed": "creada {created} · usada {used}",

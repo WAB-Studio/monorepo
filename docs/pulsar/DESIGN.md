@@ -865,4 +865,4 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
 - **`ConexionesTelefono.dc.html` and `HoyVacioEscritorio.dc.html` are the two screens redrawn on the system**, approved
   with it. Their words: «Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.»; a key's
   line «Creada hoy a las 12:18 · sin usar»; «Copiar» answers «Copiada.» beside a check.
-  A failed copy shows, in the same place, one quiet sentence: «No se pudo copiar. Mantén presionada la dirección para copiarla.» (decided 2026-10-06).
+  A failed copy shows, in the same place, one quiet sentence: «No se pudo copiar. Mantén presionado el texto para copiarlo.» (decided 2026-10-06).
