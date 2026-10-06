@@ -28,7 +28,7 @@ export { Mark, type MarkState } from "./mark";
 
 export { MarkList } from "./mark-list";
 
-export { Panel } from "./panel";
+export { Panel, PanelGrid } from "./panel";
 export { SectionLabel } from "./section-label";
 
 export { Figure } from "./figure";
