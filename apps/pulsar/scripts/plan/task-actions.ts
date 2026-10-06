@@ -333,14 +333,14 @@ test("completeOneOff: a parent is refused and writes no fact; both children done
   assert.equal(item.task.doneOn, null);
 });
 
-test("deleteOneOff: a parent with a done child is refused as oneOffHasFact; one with none goes, children and all", async () => {
+test("deleteOneOff: a parent with a done child is refused as parentHasDoneChild; one with none goes, children and all", async () => {
   const keptId = await created({ name: "RP-30 borrar con hecha", day: null, goalId: measuredGoalId, plannedMonth: thisMonth });
   const doneChildId = await created({ name: "RP-30 borrar hecha", day: null, parentId: keptId });
   const done = await call("completeOneOff", { oneOffId: doneChildId });
   assert.equal(done.ok, true, JSON.stringify(done));
 
   const refused = await call("deleteOneOff", { oneOffId: keptId });
-  assert.deepEqual(refused, { ok: false, error: "day.errors.oneOffHasFact" });
+  assert.deepEqual(refused, { ok: false, error: "month.errors.parentHasDoneChild" });
   assert.equal(await factsOf(doneChildId), 1);
 
   const goneId = await created({ name: "RP-30 borrar sin hecha", day: null, goalId: measuredGoalId, plannedMonth: thisMonth });

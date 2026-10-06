@@ -213,10 +213,10 @@ test("no key: 503 import.errors.noKey, no row, no model", async () => {
   assert.equal(modelCalls.length, 0);
 });
 
-test("a blank text: 422 import.errors.empty, no row", async () => {
+test("a blank text: 422 import.errors.blank, no row", async () => {
   const response = await route.POST(request({ text: "   " }));
   assert.equal(response.status, 422);
-  assert.equal((await answer(response)).error, "import.errors.empty");
+  assert.equal((await answer(response)).error, "import.errors.blank");
   assert.equal((await rows()).length, 0);
 });
 
@@ -303,4 +303,18 @@ test("a refused file type answers 415 even with no key: the type is judged befor
   assert.equal(response.status, 415);
   assert.equal((await answer(response)).error, "import.errors.unreadableType");
   assert.equal((await rows()).length, 0);
+});
+
+test("a body that is no form: 422 import.errors.blank, no row, no model", async () => {
+  const response = await route.POST(
+    new Request("http://localhost/importar/leer", {
+      method: "POST",
+      body: "not a form",
+      headers: { "content-type": "text/plain" },
+    }) as unknown as Parameters<typeof route.POST>[0],
+  );
+  assert.equal(response.status, 422);
+  assert.equal((await answer(response)).error, "import.errors.blank");
+  assert.equal((await rows()).length, 0);
+  assert.equal(modelCalls.length, 0);
 });
