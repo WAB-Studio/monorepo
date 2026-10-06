@@ -35,6 +35,10 @@ test("minutes print as the words say", () => {
     [90, "1 h 30 min"],
     [720, "12 h"],
     [750, "12 h 30 min"],
+    [65, "1 h 05 min"],
+    [125, "2 h 05 min"],
+    [5, "5 min"],
+    [120, "2 h"],
     [74040, "1.234 h"],
   ];
   for (const [n, out] of cases) assert.equal(formatTime(n, words), out, String(n));

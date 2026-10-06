@@ -27,7 +27,7 @@ export function formatTime(n: number, words: TimeWords): string {
   const { h, min } = splitMinutes(n);
   if (h === 0) return words.min(grouped.format(min));
   if (min === 0) return words.h(grouped.format(h));
-  return words.join(words.h(grouped.format(h)), words.min(grouped.format(min)));
+  return words.join(words.h(grouped.format(h)), words.min(String(min).padStart(2, "0")));
 }
 
 export function formatQuantity(n: number, unit: string, words: TimeWords): string {
