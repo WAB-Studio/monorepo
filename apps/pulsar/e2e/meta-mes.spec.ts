@@ -67,7 +67,7 @@ async function quantity(db: postgres.Sql, person: Person, goalId: string, minute
 const seen = (page: Page, text: string) => page.getByText(text, { exact: true }).locator("visible=true");
 const visible = (page: Page, text: RegExp) => page.getByText(text).locator("visible=true");
 
-test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, and the two «Ver por» links stack on one edge (RP-23, RNP-17)", async ({
+test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, and the two «Ver por» links share a line (RP-23, RNP-17)", async ({
   person,
   browser,
   baseURL,
@@ -86,9 +86,8 @@ test("at 360 and 390 the goal has one h1, «Volver a Metas» lands on /metas, an
       await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
       const month = (await page.getByRole("link", { name: "Ver por mes", exact: true }).boundingBox())!;
       const week = (await page.getByRole("link", { name: "Ver por semana", exact: true }).boundingBox())!;
-      // Text links stack in their Section, 12 apart, on one left edge.
-      expect(Math.abs(month.x - week.x)).toBeLessThan(2);
-      expect(week.y).toBeGreaterThanOrEqual(month.y + month.height);
+      expect(Math.abs(month.y - week.y)).toBeLessThan(2);
+      expect(week.x).toBeGreaterThan(month.x);
     }
     await page.getByRole("link", { name: "Volver a Metas" }).click();
     await expect(page).toHaveURL(/\/metas$/);

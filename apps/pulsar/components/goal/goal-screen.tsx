@@ -291,10 +291,12 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           {monthBlock}
 
           <Section as="div">
-            {month ? monthsLink : null}
-            <TextLink href={`/metas/${goal.id}/revision`}>
-              {t("goal.detail.reviewLink")}
-            </TextLink>
+            <Flex wrap="wrap" gap="4">
+              {month ? monthsLink : null}
+              <TextLink href={`/metas/${goal.id}/revision`}>
+                {t("goal.detail.reviewLink")}
+              </TextLink>
+            </Flex>
           </Section>
 
           {goal.measureUnit && goal.evidence === "unreadable" ? (
