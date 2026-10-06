@@ -28,7 +28,7 @@ export const removeMonthBudgetSchema = z.object({ goalId, month });
 
 export type RemoveMonthBudgetInput = z.infer<typeof removeMonthBudgetSchema>;
 
-// The act of RP-34: the closed month whose undone work moves forward.
+// The act of RP-48: the closed month whose undone work moves forward.
 export const acceptShiftSchema = z.object({ goalId, month });
 
 export type AcceptShiftInput = z.infer<typeof acceptShiftSchema>;
