@@ -166,3 +166,21 @@ test("deleted from the sheet its row is gone from the database, and the last one
     await db`delete from goals.one_offs where id = ${oneOffId}`;
   }
 });
+
+for (const width of [360, 390, 1280, 1440]) {
+  test(`the header is one h1 and a way back to Hoy, at ${width} (RP-21, RNP-16, RNP-17)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width < 1024 ? 800 : 900 });
+    await page.goto("/sueltas");
+
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1, name: "Lo que espera" })).toBeVisible();
+    await expect(page.getByRole("navigation").getByRole("link", { name: "Hoy" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+    await page.getByRole("link", { name: "Volver a Hoy", exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+}
