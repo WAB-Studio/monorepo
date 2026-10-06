@@ -72,6 +72,14 @@ export type DayRowProps = {
  * or `undoFact` for it (RP-05: a derived fact belongs to the app that
  * recorded it).
  */
+// «1 de 3 min»: when both read as one number and one word, the word is said once.
+function partialPair(logged: string, target: string): { logged: string; target: string } {
+  const [loggedNumber, loggedWord, ...loggedRest] = logged.split(" ");
+  const [, targetWord, ...targetRest] = target.split(" ");
+  const single = loggedRest.length === 0 && targetRest.length === 0 && loggedWord !== undefined;
+  return { logged: single && loggedWord === targetWord ? loggedNumber : logged, target };
+}
+
 export function DayRow({
   commitmentId,
   name,
@@ -134,7 +142,7 @@ export function DayRow({
     writtenLabel,
     partial:
       kind === "quantity" && loggedQuantity != null && factId !== undefined && target != null && unit != null
-        ? { logged: formatQuantity(loggedQuantity, unit, words), target: formatQuantity(target, unit, words) }
+        ? partialPair(formatQuantity(loggedQuantity, unit, words), formatQuantity(target, unit, words))
         : null,
   });
 

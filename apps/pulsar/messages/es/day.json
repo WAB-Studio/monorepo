@@ -1,5 +1,6 @@
 {
   "title": "Hoy",
+  "pastTitle": "Día pasado",
   "date": "{weekday} {day} de {month}",
   "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
   "monthLong": [
@@ -8,8 +9,9 @@
   ],
   "nav": {
     "yesterday": "Ver ayer",
-    "dayBefore": "Ver el día anterior",
-    "today": "volver a hoy"
+    "dayBefore": "día anterior",
+    "today": "volver a hoy",
+    "dayAfter": "día siguiente"
   },
   "past": {
     "writtenOn": "anotado el {weekday} {day}",
@@ -17,6 +19,8 @@
     "writtenOnFar": "anotado el {weekday} {day} de {month}",
     "startedOn": "{goal} empezó el {weekday} {day}",
     "startedOnFar": "{goal} empezó el {weekday} {day} de {month}",
+    "asked": "{goal} · ese día pedía {count}",
+    "askedWords": ["ninguno", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"],
     "limit": "Siete días atrás es lo más lejos que se anota."
   },
   "weekFigure": {
@@ -117,9 +121,11 @@
     "title": "este mes",
     "markTask": "Marcar hecha: {name}",
     "of": "de",
+    "parent": "de {name}",
     "pace": "día {day} · {percent} %, bajo el {threshold} %"
   },
   "tally": "hechos {done} de {total}",
+  "tallyPartial": "hechos {done} de {total} · {partial} en parte",
   "met": {
     "week": "cumplida esta semana · {done} de {total}",
     "month": "cumplida este mes · {done} de {total}",

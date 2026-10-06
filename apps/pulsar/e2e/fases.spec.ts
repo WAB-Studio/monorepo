@@ -76,8 +76,12 @@ test("a fresh goal draws its own way in solid; the first phase added lists as se
 
     // The day this phase covers names it (RP-15): a goal's own opening day
     // falls in week 1, so today's screen reads this phase's own aim.
+    // A goal that asks nothing has no section on the phone (RP-47).
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     await expect(page.getByText(aim)).toBeVisible();
+    await page.setViewportSize(viewport!);
 
     // With one phase in effect, the way in is no longer the only thing this
     // screen asks for.
