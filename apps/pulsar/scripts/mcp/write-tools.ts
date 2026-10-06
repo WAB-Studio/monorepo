@@ -1,4 +1,4 @@
-// Proves RP-40, RP-42, RNP-05 and RNP-14 for the write tools: each handler,
+// Proves RP-56, RP-42, RNP-05 and RNP-14 for the write tools: each handler,
 // called in-process with a stub `ctx` that carries a person the way
 // `withMcpAuth` will, runs the act the app runs, writes under the subject,
 // writes nothing for the intruder's target, and issues exactly the
@@ -19,6 +19,7 @@ import { todayInZone } from "@/lib/zone";
 import day from "../../messages/es/day.json";
 import month from "../../messages/es/month.json";
 import plan from "../../messages/es/plan.json";
+import roadmap from "../../messages/es/roadmap.json";
 
 type Handler = (input: Record<string, unknown>, ctx: ServerContext) => Promise<{
   content: { type: string; text: string }[];
@@ -43,7 +44,6 @@ let acts: {
   budgets: typeof import("@/app/actions/budgets");
   oneOffs: typeof import("@/app/actions/one-offs");
   facts: typeof import("@/app/actions/facts");
-  shift: typeof import("@/app/actions/shift");
 };
 let subject: Person;
 let intruder: Person;
@@ -55,6 +55,8 @@ let intruderTask: string;
 let intruderLoose: string;
 
 const NEVER = [
+  "accept_shift",
+  "move_task_to_month",
   "delete_one_off",
   "undo_fact",
   "remove_month_amount",
@@ -157,14 +159,6 @@ async function freshTask(): Promise<string> {
   return made.oneOffId;
 }
 
-async function freshMonthTask(): Promise<string> {
-  const made = await as(subject, () =>
-    acts.oneOffs.createOneOff({ name: "del mes", day: null, goalId: goal, estimate: 30, plannedMonth: currentMonth }),
-  );
-  if (!made.ok) throw new Error(`createOneOff month: ${made.error}`);
-  return made.oneOffId;
-}
-
 async function freshGoal(): Promise<string> {
   const made = await as(subject, () => acts.plan.createGoal({ name: "otra", horizon: dayFrom(120) }));
   if (!made.ok) throw new Error(`createGoal: ${made.error}`);
@@ -184,15 +178,13 @@ async function freshCommitment(): Promise<string> {
   return made.commitmentId;
 }
 
-// A goal whose previous month left its one task undone: the app offers to run the plan,
-// and the task of the month in course is what moves.
-async function shiftableGoal(): Promise<string> {
-  const id = await freshGoal();
-  await admin`insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-    values (${subject.id}, ${id}, 'sin hacer', ${`${previousMonth}-01`}, 60)`;
-  await admin`insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-    values (${subject.id}, ${id}, 'del mes en curso', ${`${currentMonth}-01`}, 60)`;
-  return id;
+// A task of the goal's plan with no month of its own: the plan places it (RP-50).
+async function freshPlanTask(): Promise<string> {
+  const made = await as(subject, () =>
+    acts.oneOffs.createOneOff({ name: "del plan", day: null, goalId: goal, estimate: 30, inPlan: true }),
+  );
+  if (!made.ok) throw new Error(`createOneOff plan: ${made.error}`);
+  return made.oneOffId;
 }
 
 before(async () => {
@@ -203,7 +195,6 @@ before(async () => {
     budgets: await import("@/app/actions/budgets"),
     oneOffs: await import("@/app/actions/one-offs"),
     facts: await import("@/app/actions/facts"),
-    shift: await import("@/app/actions/shift"),
   };
   const { registerWriteTools } = await import("@/lib/mcp/tools/write");
   registerWriteTools({
@@ -278,20 +269,20 @@ after(async () => {
 
 test("exactly the fourteen write tools are registered, and none of the never-registered", () => {
   assert.deepEqual([...handlers.keys()].sort(), [
-    "accept_shift",
     "add_commitment",
     "add_phase",
     "complete_task",
     "create_goal",
     "create_task",
     "declare_fact",
+    "fix_task",
     "move_horizon",
-    "move_task_to_month",
     "rename_goal",
     "retire_commitment",
     "schedule_task",
     "set_month_amount",
     "set_task_note",
+    "unfix_task",
   ]);
   for (const name of NEVER) assert.equal(handlers.has(name), false, `${name} must not exist`);
 });
@@ -412,21 +403,39 @@ test("set_month_amount writes an open month and refuses a closed one without wri
   assert.equal(rows.length, 0);
 });
 
-test("move_task_to_month moves an undone month task to another month of its goal", async () => {
-  const id = await freshMonthTask();
-  await succeeds("move_task_to_month", { one_off_id: id, month: nextMonth });
-  const [row] = await door`select planned_month::text as planned_month from goals.one_offs where id = ${id}`;
-  assert.equal(row.planned_month, `${nextMonth}-01`);
+test("fix_task fixes a plan task to a month and unfix_task returns it to the plan", async () => {
+  const id = await freshPlanTask();
+  await succeeds("fix_task", { one_off_id: id, month: nextMonth });
+  const [fixed] = await door`select planned_month::text as planned_month, in_plan from goals.one_offs where id = ${id}`;
+  assert.deepEqual([fixed.planned_month, fixed.in_plan], [`${nextMonth}-01`, true]);
+
+  await succeeds("unfix_task", { one_off_id: id });
+  const [back] = await door`select planned_month::text as planned_month, in_plan from goals.one_offs where id = ${id}`;
+  assert.deepEqual([back.planned_month, back.in_plan], [null, true]);
 });
 
-test("accept_shift runs the plan a month forward and records it", async () => {
-  const id = await shiftableGoal();
-  const result = await succeeds("accept_shift", { goal_id: id, month: previousMonth });
-  assert.equal((result.moved as { tasks: number }).tasks, 1);
-  const [task] = await door`select planned_month::text as planned_month from goals.one_offs where goal_id = ${id} and name = 'del mes en curso'`;
-  assert.equal(task.planned_month, `${nextMonth}-01`);
-  const shifts = await door`select 1 from goals.month_shifts where goal_id = ${id}`;
-  assert.equal(shifts.length, 1);
+test("create_task with in_plan writes a task the plan places, with no month of its own", async () => {
+  const made = await succeeds("create_task", { name: "para el plan", goal_id: goal, estimate: 45, in_plan: true });
+  const [row] = await door`select in_plan, planned_month from goals.one_offs where id = ${made.oneOffId as string}`;
+  assert.deepEqual([row.in_plan, row.planned_month], [true, null]);
+});
+
+test("a done task is refused fixing and unfixing with the act's Spanish reason, and keeps its month", async () => {
+  const id = await freshPlanTask();
+  await succeeds("fix_task", { one_off_id: id, month: currentMonth });
+  await succeeds("complete_task", { one_off_id: id });
+  await refused("fix_task", { one_off_id: id, month: nextMonth }, "roadmap.errors.doneTask", roadmap.errors.doneTask);
+  await refused("unfix_task", { one_off_id: id }, "roadmap.errors.doneTask", roadmap.errors.doneTask);
+  const [row] = await door`select planned_month::text as planned_month from goals.one_offs where id = ${id}`;
+  assert.equal(row.planned_month, `${currentMonth}-01`);
+});
+
+test("fix_task refuses a month before the goal opened and one past its end, and writes nothing", async () => {
+  const id = await freshPlanTask();
+  await refused("fix_task", { one_off_id: id, month: monthFrom(-1) }, "roadmap.errors.monthOutsideSpan", roadmap.errors.monthOutsideSpan);
+  await refused("fix_task", { one_off_id: id, month: monthFrom(24) }, "roadmap.errors.monthOutsideSpan", roadmap.errors.monthOutsideSpan);
+  const [row] = await door`select planned_month from goals.one_offs where id = ${id}`;
+  assert.equal(row.planned_month, null);
 });
 
 test("every tool on the intruder's target answers the act's not-found key and writes nothing", async () => {
@@ -441,8 +450,8 @@ test("every tool on the intruder's target answers the act's not-found key and wr
     ["add_phase", { goal_id: intruderGoal, aim: "x", starts_on: dayFrom(40), ends_on: dayFrom(50) }, "plan.errors.goalNotFound", plan.errors.goalNotFound],
     ["add_commitment", { goal_id: intruderGoal, name: "x", cadence_kind: "daily", satisfaction: "tap" }, "plan.errors.goalNotFound", plan.errors.goalNotFound],
     ["move_horizon", { goal_id: intruderGoal, horizon: dayFrom(200) }, "plan.errors.notFound", plan.errors.notFound],
-    ["accept_shift", { goal_id: intruderGoal, month: previousMonth }, "month.errors.notFound", month.errors.notFound],
-    ["move_task_to_month", { one_off_id: intruderTask, month: nextMonth }, "plan.errors.notFound", plan.errors.notFound],
+    ["fix_task", { one_off_id: intruderTask, month: nextMonth }, "plan.errors.notFound", plan.errors.notFound],
+    ["unfix_task", { one_off_id: intruderTask }, "plan.errors.notFound", plan.errors.notFound],
     ["retire_commitment", { commitment_id: intruderCommitment }, "plan.errors.notFound", plan.errors.notFound],
   ];
   const before = await fingerprint();
@@ -530,9 +539,14 @@ test("each tool issues exactly the statements its act issues called directly", a
       direct: (i) => acts.oneOffs.completeOneOff(i as never),
     },
     {
-      tool: "move_task_to_month",
-      make: async () => ({ one_off_id: await freshMonthTask(), month: nextMonth }),
-      direct: (i) => acts.oneOffs.moveTaskToMonth(i as never),
+      tool: "fix_task",
+      make: async () => ({ one_off_id: await freshPlanTask(), month: nextMonth }),
+      direct: (i) => acts.oneOffs.fixTask(i as never),
+    },
+    {
+      tool: "unfix_task",
+      make: async () => ({ one_off_id: await freshPlanTask() }),
+      direct: (i) => acts.oneOffs.fixTask({ ...i, month: null } as never),
     },
     {
       tool: "set_month_amount",
@@ -543,11 +557,6 @@ test("each tool issues exactly the statements its act issues called directly", a
       tool: "declare_fact",
       make: async () => ({ commitment_id: quantityCommitment, quantity: 7, day: dayFrom(-4 - factDays++) }),
       direct: (i) => acts.facts.declareFact(i as never),
-    },
-    {
-      tool: "accept_shift",
-      make: async () => ({ goal_id: await shiftableGoal(), month: previousMonth }),
-      direct: (i) => acts.shift.acceptShift(i as never),
     },
   ];
   const camel = (input: Record<string, unknown>) =>
