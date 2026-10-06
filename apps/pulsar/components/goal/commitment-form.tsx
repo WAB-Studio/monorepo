@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { addCommitment } from "@/app/actions/plan";
 import { addCommitmentSchema, type AddCommitmentInput } from "@/lib/validation/plan";
-import { Button, Chip, Field, Flex, Page, ScreenHeader, Section, Text } from "@/components/ui";
+import { Button, Chip, ChipRow, Field, FieldPair, Page, ScreenHeader, Section, Text } from "@/components/ui";
 import { messageKey, type MessageKey, type SourceKey } from "@/i18n/translator";
 
 export type CommitmentFormProps = {
@@ -148,16 +148,16 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
       />
 
       <Section label={t("plan.commitmentForm.whenLabel")}>
-        <Flex gap="2" wrap="wrap">
+        <ChipRow>
           {CADENCE_KINDS.map((kind) => (
             <Chip key={kind} selected={cadenceKind === kind} onClick={() => setCadenceKind(kind)}>
               {t(`plan.commitmentForm.cadence.${kind}`)}
             </Chip>
           ))}
-        </Flex>
+        </ChipRow>
 
         {cadenceKind === "weekdays" ? (
-          <Flex gap="1">
+          <ChipRow tight>
             {WEEKDAYS.map((day) => (
               <Chip
                 key={day}
@@ -169,7 +169,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
                 {weekdayShort[day - 1]}
               </Chip>
             ))}
-          </Flex>
+          </ChipRow>
         ) : null}
         {weekdaysRefusal ? (
           <Text as="p" tone="ink" variant="sentence">
@@ -222,17 +222,17 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
       </Section>
 
       <Section label={t("plan.commitmentForm.doneByLabel")}>
-        <Flex gap="2" wrap="wrap">
+        <ChipRow>
           {SATISFACTION_KINDS.filter((kind) => kind !== "evidence" || sources.length > 0).map((kind) => (
             <Chip key={kind} selected={satisfaction === kind} onClick={() => setSatisfaction(kind)}>
               {t(`plan.commitmentForm.satisfaction.${kind}`)}
             </Chip>
           ))}
-        </Flex>
+        </ChipRow>
 
         {satisfaction === "quantity" ? (
           <>
-            <Flex gap="2">
+            <FieldPair narrow={88}>
               <Field
                 label={t("plan.commitmentForm.quantityLabel")}
                 type="number"
@@ -242,7 +242,6 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
                 value={targetQuantity}
                 onChange={(event) => setTargetQuantity(event.target.value)}
                 invalid={quantityRefusal !== undefined}
-                style={{ maxWidth: 88 }}
               />
               {measureUnit !== null ? (
                 <Text as="span" variant="sentence" tone="muted" data-testid="commitment-unit">
@@ -254,10 +253,9 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
                   value={unit}
                   onChange={(event) => setUnit(event.target.value)}
                   invalid={unitRefusal !== undefined}
-                  style={{ flex: 1 }}
                 />
               )}
-            </Flex>
+            </FieldPair>
             {quantityRefusal || unitRefusal ? (
               <Text as="p" tone="ink" variant="sentence">
                 {quantityRefusal ?? unitRefusal}
@@ -273,13 +271,13 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
 
         {satisfaction === "evidence" ? (
           <>
-            <Flex gap="2" wrap="wrap">
+            <ChipRow>
               {sources.map((source) => (
                 <Chip key={source.key} selected={sourceKey === source.key} onClick={() => setSourceKey(source.key)}>
                   {t(source.labelKey)}
                 </Chip>
               ))}
-            </Flex>
+            </ChipRow>
             <Field
               label={t("plan.commitmentForm.thresholdLabel")}
               type="number"

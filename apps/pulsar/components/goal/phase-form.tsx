@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { addPhase } from "@/app/actions/plan";
 import { addPhaseSchema, phasesOverlap, phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
-import { Button, Field, Flex, Page, ScreenHeader, Section, Text } from "@/components/ui";
+import { Button, Field, FieldPair, Page, ScreenHeader, Section, Text } from "@/components/ui";
 
 import { weeksToPhaseSpan } from "./phase-weeks";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -134,7 +134,7 @@ export function PhaseForm({
       />
 
       <Section as="div">
-        <Flex gap="2">
+        <FieldPair>
           <Field
             label={t("plan.phaseForm.fromLabel")}
             type="number"
@@ -155,7 +155,7 @@ export function PhaseForm({
             onChange={(event) => setToWeek(event.target.value)}
             invalid={weeksRefusal !== undefined}
           />
-        </Flex>
+        </FieldPair>
         {weeksRefusal ? (
           <Text as="p" tone="ink" variant="sentence">
             {weeksRefusal}

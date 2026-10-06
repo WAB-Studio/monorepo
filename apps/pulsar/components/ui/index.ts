@@ -55,6 +55,10 @@ export { CheckRow, ActionBar } from "./check-row";
 
 export { Chip } from "./chip";
 
+export { ChipRow } from "./chip-row";
+
+export { FieldPair } from "./field-pair";
+
 export { Skeleton } from "./skeleton";
 
 export { Button, IconButton } from "./button";
