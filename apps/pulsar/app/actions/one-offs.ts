@@ -284,12 +284,19 @@ export async function deleteOneOff(input: DeleteOneOffInput): Promise<DeleteOneO
 
   try {
     const deleted = await withGoalsDb(async (tx) => {
-      // A done sub-task's fact is the policy's alone; its 0 rows read the same.
-      const [existingFact] = await tx
-        .select({ id: facts.id })
-        .from(facts)
-        .where(eq(facts.oneOffId, oneOffId));
-      if (existingFact) throw new NamedError("day.errors.oneOffHasFact");
+      // One statement names both refusals; a done sub-task's fact is the
+      // policy's alone, and its 0 rows read as the own-fact refusal.
+      const [found] = await tx
+        .select({
+          own: sql<boolean>`exists (select 1 from ${facts} where ${facts.oneOffId} = ${oneOffId})`,
+          child: sql<boolean>`exists (
+            select 1 from ${facts} f join ${oneOffs} c on c.id = f.one_off_id
+            where c.parent_id = ${oneOffId}
+          )`,
+        })
+        .from(sql`(select 1) as one`);
+      if (found.own) throw new NamedError("day.errors.oneOffHasFact");
+      if (found.child) throw new NamedError("month.errors.parentHasDoneChild");
 
       return tx
         .delete(oneOffs)
