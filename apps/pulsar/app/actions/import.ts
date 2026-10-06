@@ -92,9 +92,9 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     }
     for (const task of goal.tasks) {
       const taskId = randomUUID();
-      parentRows.push(sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${monthStart(task.month)}::date, ${task.estimate}::integer`);
+      parentRows.push(sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${monthStart(task.month)}::date, ${task.estimate}::integer, ${task.note ?? null}::text`);
       for (const child of task.children) {
-        childRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer`);
+        childRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer, ${child.note ?? null}::text`);
       }
     }
   }
@@ -131,13 +131,13 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     // Parents before children: the child's policy reads its parent back.
     if (parentRows.length > 0) {
       await tx.execute(sql`
-        insert into ${oneOffs} (id, user_id, goal_id, name, planned_month, estimate)
+        insert into ${oneOffs} (id, user_id, goal_id, name, planned_month, estimate, note)
         values ${rows(parentRows)}
       `);
     }
     if (childRows.length > 0) {
       await tx.execute(sql`
-        insert into ${oneOffs} (user_id, goal_id, parent_id, name, estimate)
+        insert into ${oneOffs} (user_id, goal_id, parent_id, name, estimate, note)
         values ${rows(childRows)}
       `);
     }

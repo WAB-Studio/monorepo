@@ -11,7 +11,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
-import { TIME_ZONE } from "../../lib/zone";
 import { goalsSchema } from "./_schema";
 import { goals } from "./goals";
 
@@ -28,12 +27,16 @@ export const oneOffs = goalsSchema.table(
     name: text().notNull(),
     day: date(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // The plan's order among this person's own rows. A trigger fills it at insert when none is named; no UPDATE grant (RP-47).
+    position: integer().notNull(),
     // In the goal's measure unit (RP-30). No UPDATE grant: written once.
     estimate: integer(),
     // A month instead of a day (RP-31); the shift is its one later write.
     plannedMonth: date(),
     // One level deep (RP-30). No UPDATE grant: a sub-task never changes hands.
     parentId: uuid().references((): AnyPgColumn => oneOffs.id, { onDelete: "cascade" }),
+    // Plain text a person writes and changes at any time (RP-45); null when empty, never "".
+    note: text(),
   },
   (t) => [
     check("one_offs_estimate_range", sql`${t.estimate} between 1 and 1000000`),
@@ -46,6 +49,10 @@ export const oneOffs = goalsSchema.table(
     // A sub-task takes its parent's month.
     check("one_offs_child_has_no_month", sql`${t.parentId} is null or ${t.plannedMonth} is null`),
     check("one_offs_not_own_parent", sql`${t.parentId} <> ${t.id}`),
+    check(
+      "one_offs_note_shape",
+      sql`${t.note} is null or (char_length(${t.note}) between 1 and 2000 and ${t.note} ~ '\\S')`,
+    ),
     // `auth.uid()` bare, never `authUid`'s `(select auth.uid())`: the policies
     // below read this table again, and Postgres refuses as infinite recursion
     // any self-read whose select policy holds a subquery of its own (42P17).
@@ -91,17 +98,14 @@ export const oneOffs = goalsSchema.table(
         where c.parent_id = ${t.id}
       )`,
     }),
-    // RP-21: a one-off with no day, or a day after the person's today, takes
-    // another, never one on or before today or one with a fact. The grant
-    // narrows the write to `day`; `using` is what refuses the rest. Today is
-    // the zone's civil day, never `current_date` (UTC). Same subquery shape
-    // as the delete policy, for the same import-cycle reason.
+    // `using` is the own row alone: a note reaches a done or past-dated row.
+    // RP-21's rule (a day after the person's today, no fact) moved to the
+    // `goals.one_offs_guard_day` trigger, which skips the row when `day` or
+    // `planned_month` changes on a row the rule refuses — 0 rows, as before.
     pgPolicy("one_offs_update_self", {
       for: "update",
       to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId} and (${t.day} is null or ${t.day} > (now() at time zone '${sql.raw(TIME_ZONE)}')::date) and not exists (
-        select 1 from "goals"."facts" f where f.one_off_id = ${t.id}
-      )`,
+      using: sql`${authUid} = ${t.userId}`,
       // A parent never takes a day, and still takes a month. In `withCheck`,
       // never in `using`: there it would refuse the shift's move of a parent.
       withCheck: sql`${authUid} = ${t.userId} and (${t.day} is null or not exists (

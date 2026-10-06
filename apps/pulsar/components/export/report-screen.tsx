@@ -173,13 +173,25 @@ function GoalPart({
                     <Owes owes={item.owes} unit={unit} t={t} />
                   ) : null}
                 </Text>
-                {item.children.map((child) => (
-                  <Text key={child.name} as="p" variant="meta" tone="secondary">
-                    <Text>{child.name}</Text>
-                    {child.hasAmount ? (
-                      <Owes owes={child.owes} unit={unit} t={t} />
-                    ) : null}
+                {item.note !== null ? (
+                  <Text as="p" tone="secondary" note>
+                    {item.note}
                   </Text>
+                ) : null}
+                {item.children.map((child) => (
+                  <Flex key={child.name} direction="column" gap="1">
+                    <Text as="p" variant="meta" tone="secondary">
+                      <Text>{child.name}</Text>
+                      {child.hasAmount ? (
+                        <Owes owes={child.owes} unit={unit} t={t} />
+                      ) : null}
+                    </Text>
+                    {child.note !== null ? (
+                      <Text as="p" tone="secondary" note>
+                        {child.note}
+                      </Text>
+                    ) : null}
+                  </Flex>
                 ))}
               </Flex>
             ))}

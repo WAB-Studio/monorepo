@@ -14,7 +14,7 @@ const tasks: Task[] = [
   { id: ID(1), parentId: null, name: "Capítulo 1", plannedMonth: "2026-09-01", day: null, estimate: 300, doneOn: null },
   { id: ID(2), parentId: null, name: "Capítulo 0", plannedMonth: "2026-09-01", day: null, estimate: 300, doneOn: "2026-09-10" },
   { id: ID(3), parentId: null, name: "Parte 2", plannedMonth: "2026-10-01", day: null, estimate: null, doneOn: null },
-  { id: ID(4), parentId: ID(3), name: "Leer", plannedMonth: null, day: null, estimate: 200, doneOn: "2026-10-03" },
+  { id: ID(4), parentId: ID(3), name: "Leer", plannedMonth: null, day: null, estimate: 200, doneOn: "2026-10-03", note: "Hasta la página 40" },
   { id: ID(5), parentId: ID(3), name: "Resumir", plannedMonth: null, day: null, estimate: 100, doneOn: null },
 ];
 
@@ -168,6 +168,7 @@ test("tasks are a tree: a sub-task sits under its parent and takes its month", (
   );
   assert.equal(tree[1].doneOn, "2026-09-10");
   assert.equal(parent.estimate, null);
+  assert.deepEqual(parent.children.map((c) => c.note), ["Hasta la página 40", null]);
 });
 
 test("commitments keep cadence, retirement and what satisfies them; evidence is named", () => {
@@ -246,10 +247,10 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
       { id: ID(10), name: "Leer más", horizon: "2027-01-01", openedOn: "2026-08-15", measureName: "Lectura", measureUnit: "minutos" },
     ],
     oneOffs: [
-      { id: ID(20), goalId: ID(10), name: "Pedir el libro", day: "2026-10-03" },
-      { id: ID(21), goalId: null, name: "Llamar", day: "2026-10-05" },
+      { id: ID(20), goalId: ID(10), name: "Pedir el libro", note: "Pedir en la biblioteca\nantes del viernes", day: "2026-10-03" },
+      { id: ID(21), goalId: null, name: "Llamar", note: null, day: "2026-10-05" },
     ],
-    doneOneOffs: [{ id: ID(22), goalId: null, name: "Pagar", factId: ID(23), writtenAt: "2026-10-05T14:00:00Z" }],
+    doneOneOffs: [{ id: ID(22), goalId: null, name: "Pagar", note: "Con la tarjeta", factId: ID(23), writtenAt: "2026-10-05T14:00:00Z" }],
     daylessCount: 2,
     scheduledCount: 1,
     lastEnded: null,
@@ -277,6 +278,8 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
   assert.deepEqual(shaped.goals[0].weekTotal, { value: 90, unit: "minutos", text: "1 h 30 min" });
   assert.deepEqual(shaped.oneOffs.map((o) => o.carried), [true, false]);
   assert.equal(shaped.doneOneOffs[0].factId, ID(23));
+  assert.deepEqual(shaped.oneOffs.map((o) => o.note), ["Pedir en la biblioteca\nantes del viernes", null]);
+  assert.equal(shaped.doneOneOffs[0].note, "Con la tarjeta");
   assert.equal(shaped.evidence, "unreadable");
   assert.deepEqual(JSON.parse(JSON.stringify(shaped)), shaped);
 });
@@ -296,7 +299,7 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
         toDate: { planned: 1350, reached: 570 },
         phases: [{ aim: "Arrancar", startsOn: "2026-08-17", endsOn: "2026-11-01", current: true }],
         carried: [
-          { name: "Capítulo 1", from: "2026-09-01", owes: 300, hasAmount: true, children: [{ name: "Leer", owes: 300, hasAmount: true }] },
+          { name: "Capítulo 1", note: "Del libro azul", from: "2026-09-01", owes: 300, hasAmount: true, children: [{ name: "Leer", note: "Sin celular", owes: 300, hasAmount: true }] },
         ],
         months: [{ month: "2026-09-01", planned: 600, reached: 450, current: false, past: true, carried: 50 }],
         weeks: [],
@@ -308,6 +311,8 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
   assert.deepEqual(goal.thisMonth.planned, { value: 750, unit: "páginas" });
   assert.deepEqual(goal.toDate.reached, { value: 570, unit: "páginas" });
   assert.equal(goal.carried[0].from, "2026-09");
+  assert.equal(goal.carried[0].note, "Del libro azul");
+  assert.equal(goal.carried[0].children[0].note, "Sin celular");
   assert.deepEqual(goal.carried[0].children[0].owes, { value: 300, unit: "páginas" });
   assert.equal(goal.months[0].month, "2026-09");
   assert.equal(goal.months[0].carriedPercent, 50);
@@ -316,11 +321,11 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
 
 test("loose one-offs keep the two lists apart, the scheduled with their day", () => {
   const shaped = shapeLoose({
-    dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null }],
-    scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", day: "2026-10-09" }],
+    dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null, note: "Empezar por el estante" }],
+    scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", note: null, day: "2026-10-09" }],
   });
   assert.deepEqual(shaped, {
-    dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null }],
-    scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", day: "2026-10-09" }],
+    dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null, note: "Empezar por el estante" }],
+    scheduled: [{ id: ID(31), name: "Cita", goalId: ID(10), goalName: "Leer más", note: null, day: "2026-10-09" }],
   });
 });

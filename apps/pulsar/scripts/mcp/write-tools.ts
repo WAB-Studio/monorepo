@@ -276,7 +276,7 @@ after(async () => {
   }
 });
 
-test("exactly the thirteen write tools are registered, and none of the never-registered", () => {
+test("exactly the fourteen write tools are registered, and none of the never-registered", () => {
   assert.deepEqual([...handlers.keys()].sort(), [
     "accept_shift",
     "add_commitment",
@@ -291,6 +291,7 @@ test("exactly the thirteen write tools are registered, and none of the never-reg
     "retire_commitment",
     "schedule_task",
     "set_month_amount",
+    "set_task_note",
   ]);
   for (const name of NEVER) assert.equal(handlers.has(name), false, `${name} must not exist`);
 });

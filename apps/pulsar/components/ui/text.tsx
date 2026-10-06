@@ -21,6 +21,8 @@ type PulsarTextProps = {
   // A section's head on the phone: a 2px ink rule above it, 18px of air under
   // the rule. From 1024 the card is the divider, so the rule goes.
   rule?: boolean;
+  // A task's note read whole: line breaks kept, set off by a thin left rule.
+  note?: boolean;
 };
 
 const variants: Record<Variant, string | undefined> = {
@@ -45,8 +47,8 @@ const tones: Record<Tone, string> = {
 // union over the element it renders and a plain `Omit` would collapse it to one.
 type Narrowed<T> = T extends unknown ? Omit<T, "color" | "highContrast" | "size"> : never;
 
-export function Text({ variant = "body", tone, end, plainWide, rule, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
-  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, rule ? styles.rule : undefined, className]
+export function Text({ variant = "body", tone, end, plainWide, rule, note, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
+  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, rule ? styles.rule : undefined, note ? styles.note : undefined, className]
     .filter(Boolean)
     .join(" ");
   return <ThemesText {...props} className={merged || undefined} />;

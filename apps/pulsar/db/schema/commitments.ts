@@ -55,6 +55,8 @@ export const commitments = goalsSchema.table(
     threshold: integer(),
     retiredAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // The plan's order among this person's own rows. A trigger fills it at insert when none is named; no UPDATE grant (RP-47).
+    position: integer().notNull(),
   },
   (t) => [
     // The day's screen reads the live commitments of one person.

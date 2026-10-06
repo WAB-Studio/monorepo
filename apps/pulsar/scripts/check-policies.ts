@@ -1028,8 +1028,8 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
     });
 
   // Read from the catalogue: `one_offs` takes `day` (0005) and
-  // `planned_month` (0007, the shift's one write on this table) and nothing
-  // else.
+  // `planned_month` (0007, the shift's one write on this table), `note`
+  // (0011) and nothing else.
   const oneOffCols = await sql<{ column_name: string }[]>`
     select column_name from information_schema.column_privileges
     where table_schema = 'goals' and table_name = 'one_offs'
@@ -1037,7 +1037,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
   const oneOffUpdatable = oneOffCols.map((r) => r.column_name).sort();
   assert(
     "P58",
-    oneOffUpdatable.join(",") === "day,planned_month",
+    oneOffUpdatable.join(",") === "day,note,planned_month",
     `columns of goals.one_offs updatable by authenticated = ${oneOffUpdatable.join(", ") || "none"}`,
   );
 
@@ -1136,18 +1136,22 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
       if (error !== forcedRollback) throw error;
     });
 
-  const policies = await sql<{ policyname: string; qual: string }[]>`
-    select policyname, qual from pg_policies
+  // 0011 moved the zone's day rule from the policy into the trigger's body.
+  const policies = await sql<{ policyname: string }[]>`
+    select policyname from pg_policies
     where schemaname = 'goals' and tablename = 'one_offs' order by policyname`;
-  const update = policies.find((p) => p.policyname === "one_offs_update_self");
+  const [guard] = await sql<{ prosrc: string }[]>`
+    select prosrc from pg_proc
+    where pronamespace = 'goals'::regnamespace and proname = 'one_offs_guard_day'`;
   assert(
     "P65",
     policies.length === 4 &&
-      !!update &&
-      update.qual.includes("America/Bogota") &&
-      !update.qual.includes("CURRENT_DATE") &&
-      update.qual.includes("IS NULL"),
-    `one_offs policies = ${policies.map((p) => p.policyname).join(", ")}; update using names the zone`,
+      policies.some((p) => p.policyname === "one_offs_update_self") &&
+      !!guard &&
+      guard.prosrc.includes("America/Bogota") &&
+      !guard.prosrc.includes("CURRENT_DATE") &&
+      guard.prosrc.includes("IS NULL"),
+    `one_offs policies = ${policies.map((p) => p.policyname).join(", ")}; guard trigger names the zone`,
   );
 
   await sql.end();
@@ -1207,7 +1211,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   assert(
     "P111",
     oneOffs ===
-      "DELETE INSERT(day,estimate,goal_id,id,name,parent_id,planned_month,user_id) SELECT UPDATE(day,planned_month)",
+      "DELETE INSERT(day,estimate,goal_id,id,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,note,planned_month)",
     `one_offs: authenticated = ${oneOffs || "none"}`,
   );
 
@@ -1930,6 +1934,351 @@ async function checkAiDoor(): Promise<void> {
   await sql.end();
 }
 
+// Module 237 (RP-45): `0011` adds `note`, loosens `one_offs_update_self` to the
+// own row and moves RP-21's day/month rule into the `one_offs_guard_day`
+// trigger, which skips the row. Driven bare under a settled session.
+async function checkTaskNote(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta', '2027-12-31') returning id`;
+      const [done] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'hecha') returning id`;
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${done.id}, '2026-09-22')`;
+      const [doneTask] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${subject}, ${goal.id}, 'tarea hecha', '2026-11-01') returning id`;
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${doneTask.id}, '2026-09-22')`;
+      const [today] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name, day) values (${subject}, 'de hoy', ${todayInZone()}) returning id`;
+      const [past] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name, day) values (${subject}, 'pasada', ${dayAfter(todayInZone(), -3)}) returning id`;
+
+      await enterUserContext(tx, intruder);
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, name) values (${intruder}, 'ajeno') returning id`;
+
+      await enterUserContext(tx, subject);
+
+      const doneNote = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set note = 'una nota' where id = ${done.id} returning id`,
+      );
+      assert(
+        "P160",
+        doneNote.code === undefined && doneNote.rows.length === 1,
+        `own done one-off takes a note, sqlstate = ${doneNote.code ?? "none"}, rows = ${doneNote.rows.length}`,
+      );
+
+      const todayNote = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set note = 'otra' where id = ${today.id} returning id`,
+      );
+      assert(
+        "P161",
+        todayNote.code === undefined && todayNote.rows.length === 1,
+        `own one-off dated today takes a note, sqlstate = ${todayNote.code ?? "none"}, rows = ${todayNote.rows.length}`,
+      );
+
+      const doneDay = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set day = ${dayAfter(todayInZone(), 5)} where id = ${done.id} returning id`,
+      );
+      assert(
+        "P162",
+        doneDay.code === undefined && doneDay.rows.length === 0,
+        `done one-off takes a day, sqlstate = ${doneDay.code ?? "none"}, rows = ${doneDay.rows.length}`,
+      );
+
+      const doneMonth = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set planned_month = '2026-12-01' where id = ${doneTask.id} returning id`,
+      );
+      assert(
+        "P163",
+        doneMonth.code === undefined && doneMonth.rows.length === 0,
+        `done task takes another month, sqlstate = ${doneMonth.code ?? "none"}, rows = ${doneMonth.rows.length}`,
+      );
+
+      const pastDay = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set day = ${dayAfter(todayInZone(), 5)} where id = ${past.id} returning id`,
+      );
+      assert(
+        "P164",
+        pastDay.code === undefined && pastDay.rows.length === 0,
+        `past-dated one-off takes a day, sqlstate = ${pastDay.code ?? "none"}, rows = ${pastDay.rows.length}`,
+      );
+
+      const foreignNote = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set note = 'ajena' where id = ${theirs.id} returning id`,
+      );
+      assert(
+        "P165",
+        foreignNote.code === undefined && foreignNote.rows.length === 0,
+        `another person's one-off takes a note, sqlstate = ${foreignNote.code ?? "none"}, rows = ${foreignNote.rows.length}`,
+      );
+
+      const empty = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set note = '' where id = ${done.id}`,
+      );
+      assert("P166", empty.code === "23514", `note = '' , sqlstate = ${empty.code ?? "none"}`);
+
+      const blank = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set note = E'  \n ' where id = ${done.id}`,
+      );
+      assert("P167", blank.code === "23514", `note of whitespace, sqlstate = ${blank.code ?? "none"}`);
+
+      const long = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set note = ${"x".repeat(2001)} where id = ${done.id}`,
+      );
+      assert("P168", long.code === "23514", `note of 2001 characters, sqlstate = ${long.code ?? "none"}`);
+
+      const exact = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set note = ${"x".repeat(2000)} where id = ${done.id} returning id`,
+      );
+      assert(
+        "P169",
+        exact.code === undefined && exact.rows.length === 1,
+        `note of 2000 characters, sqlstate = ${exact.code ?? "none"}, rows = ${exact.rows.length}`,
+      );
+
+      const cleared = await attemptRows<{ note: string | null }>(
+        tx,
+        (sp) => sp`update goals.one_offs set note = null where id = ${done.id} returning note`,
+      );
+      assert(
+        "P170",
+        cleared.code === undefined && cleared.rows.length === 1 && cleared.rows[0].note === null,
+        `note emptied reads null, sqlstate = ${cleared.code ?? "none"}, rows = ${cleared.rows.length}`,
+      );
+
+      const insertNote = await attemptRows<{ note: string | null }>(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, name, note) values (${subject}, 'con nota', 'hola') returning note`,
+      );
+      assert(
+        "P171",
+        insertNote.code === undefined && insertNote.rows[0]?.note === "hola",
+        `insert with a note, sqlstate = ${insertNote.code ?? "none"}`,
+      );
+
+      const renames = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'otro' where id = ${done.id}`,
+      );
+      assert("P172", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+
+      await tx`select set_config('role', 'anon', true)`;
+      const anonNote = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set note = 'anon' where id = ${done.id}`,
+      );
+      assert("P173", anonNote.code === "42501", `anon update note, sqlstate = ${anonNote.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
+// RP-47: the plan's order is written at insert by a trigger and no act changes it.
+async function checkPlanOrder(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, intruder);
+      await tx`insert into goals.goals (user_id, name, horizon, position) values (${intruder}, 'ajena', '2027-12-31', 40)`;
+      await tx`insert into goals.one_offs (user_id, name, position) values (${intruder}, 'ajena', 40)`;
+
+      await enterUserContext(tx, subject);
+      const [g1] = await tx<{ id: string; position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'uno', '2027-12-31') returning id, position`;
+      const [g2] = await tx<{ id: string; position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'dos', '2027-12-31') returning id, position`;
+      assert(
+        "P174",
+        g1.position === 1 && g2.position === 2,
+        `goals with no position land at max + 1 per person, got ${g1.position}, ${g2.position}`,
+      );
+
+      const [named] = await tx<{ position: number }[]>`
+        insert into goals.goals (user_id, name, horizon, position) values (${subject}, 'tres', '2027-12-31', 10) returning position`;
+      assert("P175", named.position === 10, `an insert naming a position keeps it, got ${named.position}`);
+
+      const [after] = await tx<{ position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'cuatro', '2027-12-31') returning position`;
+      assert("P176", after.position === 11, `max + 1 after a named position, got ${after.position}`);
+
+      const [o1] = await tx<{ id: string; position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'a') returning id, position`;
+      assert("P177", o1.position === 1, `intruder's one-off at 40 does not move my max, got ${o1.position}`);
+
+      const many = await tx<{ name: string; position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'b'), (${subject}, 'c') returning name, position`;
+      assert(
+        "P178",
+        many.map((r) => r.position).join() === "2,3",
+        `one statement, two rows, takes consecutive positions, got ${many.map((r) => r.position).join()}`,
+      );
+
+      const [c1] = await tx<{ id: string; position: number }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${g1.id}, 'diario', 'daily', 'tap') returning id, position`;
+      const [c2] = await tx<{ position: number }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${g1.id}, 'otro', 'daily', 'tap') returning position`;
+      assert("P179", c1.position === 1 && c2.position === 2, `commitments fill too, got ${c1.position}, ${c2.position}`);
+
+      const same = await tx<{ name: string; position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'Cap. 2'), (${subject}, 'Cap. 1') returning name, position`;
+      assert(
+        "P180",
+        same[0].position < same[1].position,
+        `one statement, two rows: arrival order is kept by an insert, got ${same.map((r) => `${r.name}=${r.position}`).join()}`,
+      );
+
+      const moveGoal = await attempt(tx, (sp) => sp`update goals.goals set position = 99 where id = ${g1.id}`);
+      assert("P181", moveGoal.code === "42501", `update goals.position, sqlstate = ${moveGoal.code ?? "none"}`);
+      const moveOne = await attempt(tx, (sp) => sp`update goals.one_offs set position = 99 where id = ${o1.id}`);
+      assert("P182", moveOne.code === "42501", `update one_offs.position, sqlstate = ${moveOne.code ?? "none"}`);
+      const moveCommitment = await attempt(tx, (sp) => sp`update goals.commitments set position = 99 where id = ${c1.id}`);
+      assert("P183", moveCommitment.code === "42501", `update commitments.position, sqlstate = ${moveCommitment.code ?? "none"}`);
+
+      const [{ nulls }] = await tx<{ nulls: number }[]>`
+        select (select count(*) from goals.goals where position is null)
+             + (select count(*) from goals.one_offs where position is null)
+             + (select count(*) from goals.commitments where position is null) as nulls`;
+      assert("P184", Number(nulls) === 0, `no row without a position, got ${nulls}`);
+
+      await tx`select set_config('role', 'anon', true)`;
+      const anonInsert = await attempt(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, name, position) values (${subject}, 'anon', 5)`,
+      );
+      assert("P185", anonInsert.code === "42501", `anon insert naming position, sqlstate = ${anonInsert.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
+// RP-47: the backfill's tie-break, run over a fixture; the expression is the 0012 one.
+async function checkPlanOrderBackfillTieBreak(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const rows = await sql<{ name: string; rn: number }[]>`
+    select name, row_number() over (
+      partition by user_id
+      order by created_at, substring(name from '\\d+')::numeric nulls last, name, id
+    ) as rn
+    from (values
+      ('00000000-0000-0000-0000-000000000003'::uuid, '00000000-0000-0000-0000-0000000000aa'::uuid, '2026-01-01T00:00:00Z'::timestamptz, 'Cap. 10'),
+      ('00000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-0000000000aa'::uuid, '2026-01-01T00:00:00Z'::timestamptz, 'Cap. 2'),
+      ('00000000-0000-0000-0000-000000000002'::uuid, '00000000-0000-0000-0000-0000000000aa'::uuid, '2026-01-01T00:00:00Z'::timestamptz, 'Cap. 1')
+    ) as t (id, user_id, created_at, name)
+    order by rn`;
+  assert(
+    "P186",
+    rows.map((r) => r.name).join("|") === "Cap. 1|Cap. 2|Cap. 10",
+    `backfill with equal created_at orders by the number in the name, got ${rows.map((r) => r.name).join("|")}`,
+  );
+  await sql.end();
+}
+
+// RP-47: the commitments trigger takes its max per person. Runs with no RLS, the only caller that sees another person's rows.
+async function checkCommitmentPositionPerPerson(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      const [ig] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
+      await tx`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, position)
+        values (${intruder}, ${ig.id}, 'ajeno', 'daily', 'tap', 40)`;
+
+      const [sg] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'mia', '2027-12-31') returning id`;
+      const [first] = await tx<{ position: number }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${sg.id}, 'primero', 'daily', 'tap') returning position`;
+      assert(
+        "P187",
+        first.position === 1,
+        `intruder's commitment at 40 does not move my first commitment, got ${first.position}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
+// RP-47: the goals and one_offs triggers take their max per person, run with no RLS.
+async function checkGoalAndOneOffPositionPerPerson(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      await tx`insert into goals.goals (user_id, name, horizon, position) values (${intruder}, 'ajena', '2027-12-31', 40)`;
+      await tx`insert into goals.one_offs (user_id, name, position) values (${intruder}, 'ajena', 40)`;
+
+      const [goal] = await tx<{ position: number }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'mia', '2027-12-31') returning position`;
+      assert("P188", goal.position === 1, `intruder's goal at 40 does not move my first goal, got ${goal.position}`);
+
+      const [oneOff] = await tx<{ position: number }[]>`
+        insert into goals.one_offs (user_id, name) values (${subject}, 'mia') returning position`;
+      assert("P189", oneOff.position === 1, `intruder's one-off at 40 does not move my first one-off, got ${oneOff.position}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -1952,6 +2301,11 @@ async function main(): Promise<void> {
   await checkScheduledOneOffMoveByZone();
   await checkPlanByMonth();
   await checkAiDoor();
+  await checkTaskNote();
+  await checkPlanOrder();
+  await checkPlanOrderBackfillTieBreak();
+  await checkCommitmentPositionPerPerson();
+  await checkGoalAndOneOffPositionPerPerson();
 
   if (failed) process.exit(1);
 }

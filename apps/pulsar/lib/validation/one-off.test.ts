@@ -3,7 +3,13 @@ import test from "node:test";
 
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-import { createOneOffSchema, moveTaskSchema, scheduleOneOffSchema } from "./one-off";
+import {
+  createOneOffSchema,
+  moveTaskSchema,
+  noteSchema,
+  scheduleOneOffSchema,
+  setOneOffNoteSchema,
+} from "./one-off";
 
 // RP-19: an errand's day is today or later, never one already gone.
 function yesterday() {
@@ -103,3 +109,37 @@ function refusal2(input: unknown): string | undefined {
   assert.equal(parsed.success, false, JSON.stringify(input));
   return parsed.error?.issues[0]?.message;
 }
+
+// RP-45: the note's one rule, shared by the act, the template and the AI.
+test("noteSchema: 2000 characters pass, 2001 are refused with the key", () => {
+  assert.equal(noteSchema.safeParse("a".repeat(2000)).success, true);
+  const long = noteSchema.safeParse("a".repeat(2001));
+  assert.equal(long.success, false);
+  assert.equal(long.error?.issues[0]?.message, "day.errors.oneOffNoteTooLong");
+});
+
+test("noteSchema: blank is null, CRLF is LF, the ends are trimmed, null passes", () => {
+  assert.equal(noteSchema.parse("  \n "), null);
+  assert.equal(noteSchema.parse(""), null);
+  assert.equal(noteSchema.parse("a\r\nb"), "a\nb");
+  assert.equal(noteSchema.parse("  a\n\nb \n"), "a\n\nb");
+  assert.equal(noteSchema.parse(null), null);
+});
+
+test("noteSchema: the length is judged after normalising", () => {
+  assert.equal(noteSchema.safeParse(`${"a\r\n".repeat(1000)}`).success, true);
+  assert.equal(noteSchema.safeParse(`  ${"a".repeat(2000)}  `).success, true);
+});
+
+test("setOneOffNoteSchema: an id and a note, the note parsed", () => {
+  const id = "0b9f3d1e-6c1a-4a53-9a41-6f0a7d5d2c11";
+  assert.deepEqual(setOneOffNoteSchema.parse({ oneOffId: id, note: " x " }), { oneOffId: id, note: "x" });
+  assert.equal(setOneOffNoteSchema.safeParse({ oneOffId: "no", note: "x" }).success, false);
+  assert.equal(setOneOffNoteSchema.safeParse({ oneOffId: id }).success, false);
+});
+
+test("createOneOffSchema: note is optional and parsed", () => {
+  assert.equal(createOneOffSchema.parse({ name: "x", day: null }).note, undefined);
+  assert.equal(createOneOffSchema.parse({ name: "x", day: null, note: " y " }).note, "y");
+  assert.equal(createOneOffSchema.parse({ name: "x", day: null, note: "  " }).note, null);
+});

@@ -15,6 +15,8 @@ import {
   deleteOneOffSchema,
   moveTaskSchema,
   scheduleOneOffSchema,
+  setOneOffNoteSchema,
+  type SetOneOffNoteInput,
   type ScheduleOneOffInput,
   type CreateOneOffInput,
   type CompleteOneOffInput,
@@ -29,6 +31,7 @@ export type CreateOneOffResult = { ok: true; oneOffId: string } | { ok: false; e
 export type CompleteOneOffResult = DeclareFactResult;
 export type ScheduleOneOffResult = { ok: true } | { ok: false; error: MessageKey };
 export type DeleteOneOffResult = { ok: true } | { ok: false; error: MessageKey };
+export type SetOneOffNoteResult = { ok: true } | { ok: false; error: MessageKey };
 export type MoveTaskResult = { ok: true } | { ok: false; error: MessageKey };
 
 // Carries a message key out of the transaction without collapsing every
@@ -52,7 +55,7 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { name, day, estimate, plannedMonth, parentId } = parsed.data;
+  const { name, day, estimate, plannedMonth, parentId, note } = parsed.data;
   // A plain one-off of a goal keeps RP-20's rules; a month's task obeys the goal's plan.
   const isTask = plannedMonth != null || estimate != null || parentId != null;
 
@@ -142,10 +145,11 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
       // "Drizzle's insert builder names every column"): `id` and `created_at`
       // are left off, and the grant does not even list `created_at`.
       const [inserted] = await tx.execute<{ id: string }>(sql`
-        insert into ${oneOffs} (user_id, goal_id, name, day, estimate, planned_month, parent_id)
+        insert into ${oneOffs} (user_id, goal_id, name, day, estimate, planned_month, parent_id, note)
         values (
           ${person.id}, ${goalId}, ${name}, ${day}, ${estimate ?? null},
-          ${plannedMonth != null ? monthStart(plannedMonth) : null}, ${parentId ?? null}
+          ${plannedMonth != null ? monthStart(plannedMonth) : null}, ${parentId ?? null},
+          ${note ?? null}
         )
         returning id
       `);
@@ -386,4 +390,38 @@ export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskRes
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
+}
+
+/**
+ * Writes, changes or empties a task's note (RP-45), done or not. One UPDATE
+ * of `note` alone: it never touches `day` or `planned_month`, so
+ * `one_offs_guard_day` lets it through on a done or past row. Another
+ * person's row is hidden by `one_offs_update_self` and reads as 0 rows.
+ */
+export async function setOneOffNote(input: SetOneOffNoteInput): Promise<SetOneOffNoteResult> {
+  const parsed = setOneOffNoteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "day.errors.signedOut" };
+
+  const { oneOffId, note } = parsed.data;
+
+  const updated = await withGoalsDb((tx) =>
+    tx
+      .update(oneOffs)
+      .set({ note })
+      .where(and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id)))
+      .returning({ goalId: oneOffs.goalId }),
+  );
+  if (updated.length === 0) return { ok: false, error: "day.errors.notFound" };
+
+  revalidatePath("/");
+  revalidatePath("/sueltas");
+  revalidatePath("/mes");
+  revalidatePath("/metas");
+  revalidatePath("/exportar");
+  const { goalId } = updated[0];
+  if (goalId !== null) revalidatePath(`/metas/${goalId}`, "layout");
+  return { ok: true };
 }
