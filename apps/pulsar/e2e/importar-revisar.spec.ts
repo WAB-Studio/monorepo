@@ -361,4 +361,21 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       { width: 1440, height: 900 },
     );
   });
+
+  for (const width of [360, 1280]) {
+    test(`its provenance is the header's one eyebrow and its sentences read in Archivo at ${width}`, async ({ person, browser, baseURL }) => {
+      await asPerson(
+        { person, browser, baseURL },
+        async (page) => {
+          await toReview(page, template());
+          const header = page.locator("main > header");
+          await expect(header.getByText(messages.review.eyebrowTemplate, { exact: true })).toBeVisible();
+          await expect(page.locator("main > :not(header)").getByText(messages.review.eyebrowTemplate, { exact: true })).toHaveCount(0);
+          const hint = page.getByText(messages.review.hint, { exact: true });
+          expect(await hint.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+        },
+        { width, height: 800 },
+      );
+    });
+  }
 });
