@@ -84,3 +84,28 @@ test("a draft with an unknown field reads null", () => {
   memory.set("pulsar.import-draft", JSON.stringify({ via: "template", draft: bad, source: null, unmarked: null }));
   assert.equal(readDraft(), null);
 });
+
+test("a file save reads back its name, and no text", () => {
+  saveDraft({ via: "model", draft: draft(), sourceName: "plan-2027.md" });
+  const read = readDraft();
+  assert.equal(read?.sourceName, "plan-2027.md");
+  assert.equal(read?.source, null);
+});
+
+test("a text save carries no file name", () => {
+  saveDraft({ via: "template", draft: draft(), source: "texto" });
+  assert.equal(readDraft()?.sourceName, null);
+});
+
+test("saveReview keeps the file name", () => {
+  saveDraft({ via: "model", draft: draft(), sourceName: "plan-2027.md" });
+  saveReview(draft(900), ["goals.0"]);
+  assert.equal(readDraft()?.sourceName, "plan-2027.md");
+});
+
+test("a stored file name that is no string reads null, and the older shape without one reads null", () => {
+  memory.set("pulsar.import-draft", JSON.stringify({ via: "model", draft: draft(), sourceName: 3 }));
+  assert.equal(readDraft()?.sourceName, null);
+  memory.set("pulsar.import-draft", JSON.stringify({ via: "model", draft: draft() }));
+  assert.equal(readDraft()?.sourceName, null);
+});

@@ -165,7 +165,15 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const monthWord = (month: string, long = false) =>
     format.dateTime(civilDateToDate(`${month}-01`), long ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" });
   const dayLabel = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-  const shortMonth = (date: string) => format.dateTime(civilDateToDate(date), { month: "short", timeZone: "UTC" }).replace(".", "");
+  const shortMonth = (date: string, withYear = false) =>
+    format
+      .dateTime(civilDateToDate(date), withYear ? { month: "short", year: "numeric", timeZone: "UTC" } : { month: "short", timeZone: "UTC" })
+      .replace(".", "");
+  const phaseSpan = (startsOn: string, endsOn: string) => {
+    if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return shortMonth(startsOn);
+    const crossesYear = startsOn.slice(0, 4) !== endsOn.slice(0, 4);
+    return `${shortMonth(startsOn, crossesYear)}–${shortMonth(endsOn, crossesYear)}`;
+  };
   const figure = (value: number | null, unit: string | null): ReactNode =>
     unit === null || value === null ? null : <Figure value={value} unit={unit} variant="meta" />;
 
@@ -389,7 +397,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                 disabled={!goalOn}
                 onCheckedChange={(value) => toggle(path, value)}
                 name={phase.aim}
-                trailing={`${shortMonth(phase.startsOn)}–${shortMonth(phase.endsOn)}`}
+                trailing={phaseSpan(phase.startsOn, phase.endsOn)}
               />
             ))}
 
@@ -432,6 +440,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     disabled={!goalOn}
                     onCheckedChange={(value) => toggle(path, value)}
                     name={task.name}
+                    note={task.note}
                     meta={
                       task.children.length > 0
                         ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
@@ -452,6 +461,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                       disabled={!taskOn}
                       onCheckedChange={(value) => toggle(childPath, value)}
                       name={child.name}
+                      note={child.note}
                       meta={strays.has(childPath) ? t("import.notices.estimateDropped") : undefined}
                       {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
                     />

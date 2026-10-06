@@ -19,6 +19,8 @@ import {
 } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 
+import { RevokeSheet } from "./revoke-sheet";
+
 export type ConnectionRow = {
   id: string;
   kind: "personal" | "oauth";
@@ -47,10 +49,10 @@ function Copyable({ text, label }: { text: string; label: string }) {
   );
 }
 
-function Keys({ rows, section, onRevoke, busy }: {
+function Keys({ rows, section, onAsk, busy }: {
   rows: ConnectionRow[];
   section: string;
-  onRevoke: (id: string) => void;
+  onAsk: (row: ConnectionRow) => void;
   busy: boolean;
 }) {
   const t = useTranslations("connections");
@@ -71,8 +73,8 @@ function Keys({ rows, section, onRevoke, busy }: {
               </Text>
             </Flex>
             {row.revoked ? null : (
-              <Button variant="outline" tap={44} disabled={busy} onClick={() => onRevoke(row.id)}>
-                {busy ? t("row.revoking") : t("row.revoke")}
+              <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>
+                {t("row.revoke")}
               </Button>
             )}
           </Flex>
@@ -85,7 +87,7 @@ function Keys({ rows, section, onRevoke, busy }: {
 /**
  * `/conexiones` (RP-38): the list of keys and connections, the form that mints
  * one, and the one render that shows its value. The key is state, never props
- * and never storage: leaving or refreshing the page loses it for good (RNP-11).
+ * and never storage: leaving or refreshing the page loses it for good (RNP-17).
  */
 export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; siteUrl: string }) {
   const t = useTranslations("connections");
@@ -94,6 +96,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
   const [created, setCreated] = useState<Created | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<MessageKey | null>(null);
+  const [asked, setAsked] = useState<ConnectionRow | null>(null);
   const [pending, startTransition] = useTransition();
 
   const keys = rows.filter((row) => row.kind === "personal");
@@ -122,6 +125,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
     startTransition(async () => {
       // Zero rows reads as «already revoked»: either way the list is refreshed.
       await revokeAccessToken({ tokenId: id });
+      setAsked(null);
       router.refresh();
     });
   }
@@ -172,11 +176,21 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
     <Page>
       <ScreenHeader title={t("title")} back={place} eyebrow={eyebrow} />
       <Text as="p">{t("intro")}</Text>
-      {keys.length > 0 ? <Keys rows={keys} section={t("sections.keys")} onRevoke={revoke} busy={pending} /> : null}
+      {keys.length > 0 ? <Keys rows={keys} section={t("sections.keys")} onAsk={setAsked} busy={pending} /> : null}
       {connected.length > 0 ? (
-        <Keys rows={connected} section={t("sections.oauth")} onRevoke={revoke} busy={pending} />
+        <Keys rows={connected} section={t("sections.oauth")} onAsk={setAsked} busy={pending} />
       ) : null}
       {form}
+      <RevokeSheet
+        open={asked !== null}
+        onOpenChange={(open) => {
+          if (!open) setAsked(null);
+        }}
+        name={asked?.name ?? ""}
+        kind={asked?.kind ?? "personal"}
+        onConfirm={() => asked && revoke(asked.id)}
+        busy={pending}
+      />
       <section>
         <SectionLabel>{t("sections.connector")}</SectionLabel>
         <Text as="p" variant="meta" tone="muted">

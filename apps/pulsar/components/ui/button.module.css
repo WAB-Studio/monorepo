@@ -53,6 +53,24 @@
   inline-size: 100%;
 }
 
+/* A label with its hint under it: the height follows the two lines, the hint
+   wraps rather than pushing the label, and nothing centres either of them. */
+.stack.stack {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  block-size: auto;
+  min-block-size: 52px;
+  padding: 10px 16px;
+  text-align: start;
+  white-space: normal;
+}
+
+/* The hint is quieter than the label it sits under. */
+.stack.stack > * {
+  font-weight: 400;
+}
+
 /* docs/pulsar/DESIGN.md "The controls": outline is a transparent fill, a 1.5px
    `border` ring and ink — never a tint of the accent, which is what Radix's own
    `--accent-a8` draws. The ring is an inset shadow at zero blur because

@@ -4,7 +4,7 @@ import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
 // `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (module 139,
-// RP-30, RP-31, RP-32, RP-34): one month of a goal, its carried tasks first,
+// RP-30, RP-31, RP-32, RP-48): one month of a goal, its carried tasks first,
 // and the shift a closed month offers. Calendar-bound as 135: the seeded
 // «last month» is always the month before today, so the proposal's window is
 // always open.
@@ -257,7 +257,7 @@ test("a goal with no measure's empty month promises no time; the back and «Todo
   }
 });
 
-test("a closed month over half carried proposes the shift; the sheet lists the moves; accepting moves the plan a month and the proposal is gone; at exactly half or two months back there is none (RP-34)", async ({
+test("a closed month over half carried proposes the shift; the sheet lists the moves; accepting moves the plan a month and the proposal is gone; at exactly half or two months back there is none (RP-48)", async ({
   person,
   browser,
   baseURL,

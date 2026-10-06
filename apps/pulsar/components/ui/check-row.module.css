@@ -46,6 +46,14 @@
   overflow-wrap: anywhere;
 }
 
+/* The note is read whole: no clamp, breaks kept. */
+.note {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--pulsar-ink-secondary);
+  white-space: pre-line;
+}
+
 /* The refusal's own reason is a sentence the person must read: ink, never muted. */
 .reason {
   font-family: var(--font-mono);

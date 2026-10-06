@@ -59,6 +59,15 @@ function spanishDay(day: string, weekday: boolean): string {
   }).format(civilDateToDate(day));
 }
 
+// «30 sep», or «30 sep 2027» when the year is not this one: the form /metas reads.
+function shortEnd(day: string): string {
+  const month = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" })
+    .format(civilDateToDate(day))
+    .slice(0, 3);
+  const label = `${Number(day.slice(8, 10))} ${month}`;
+  return day.slice(0, 4) === todayInZone().slice(0, 4) ? label : `${label} ${day.slice(0, 4)}`;
+}
+
 // «miércoles 23»: the weekday from ICU, never the catalogue the screen reads.
 function shortDay(day: string): string {
   const date = civilDateToDate(day);
@@ -206,12 +215,29 @@ test("a goal typed as 8 weeks lands on the Monday after its week 8 (RP-11)", asy
   }
 });
 
+test("the goal screen reads the year of an end date in another year", async ({ page, db, personId }) => {
+  const { goalId, openedOn } = await seedGoal(db, personId, `Meta otro año ${Date.now()}`, { weeks: 70 });
+  try {
+    const sunday = shiftDay(horizonAfterWeeks(openedOn, 70), -1);
+    expect(sunday.slice(0, 4)).not.toBe(todayInZone().slice(0, 4));
+    for (const viewport of [{ width: 360, height: 800 }, { width: 1280, height: 800 }]) {
+      await page.setViewportSize(viewport);
+      await page.goto(`/metas/${goalId}`);
+      await expect(page.getByText(`70 semanas · hasta el ${shortEnd(sunday)}`, { exact: true })).toBeVisible();
+      expect(shortEnd(sunday)).toMatch(/ \d{4}$/);
+    }
+  } finally {
+    await dropGoal(db, personId, goalId);
+  }
+});
+
 test("the goal screen reads its last day, the Sunday before the horizon (RP-11)", async ({ page, db, personId }) => {
   const { goalId, openedOn } = await seedGoal(db, personId, `Meta último día ${Date.now()}`, { weeks: 12 });
   try {
     await page.goto(`/metas/${goalId}`);
     const sunday = shiftDay(horizonAfterWeeks(openedOn, 12), -1);
-    await expect(page.getByText(`12 semanas · hasta el ${spanishDay(sunday, false)}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`12 semanas · hasta el ${shortEnd(sunday)}`, { exact: true })).toBeVisible();
+    expect(shortEnd(sunday)).not.toMatch(/\d{4}$/);
   } finally {
     await dropGoal(db, personId, goalId);
   }

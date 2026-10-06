@@ -38,9 +38,17 @@ async function seedEnded(db: postgres.Sql, personId: string, name: string, lastD
   return goal.id;
 }
 
-// An open goal keeps Hoy from being the all-ended card.
+// An open goal keeps Hoy from being the all-ended card. It asks something, or
+// the phone draws no section for it (RP-47).
 async function seedOpen(db: postgres.Sql, personId: string, name: string) {
-  await db`insert into goals.goals (user_id, name, horizon) values (${personId}, ${name}, ${shift(today, 60)})`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, ${name}, ${shift(today, 60)}, now() - interval '3 days') returning id
+  `;
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${personId}, ${goal.id}, ${`Tocar ${name}`}, 'daily', 'tap', now() - interval '3 days')
+  `;
 }
 
 // Rows are dropped here; the person's identity is the suite run's to drop.

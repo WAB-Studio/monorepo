@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import styles from "./panel.module.css";
 
-// The desktop card that groups one part of a screen (RNP-11): white ground,
+// The desktop card that groups one part of a screen (RNP-17): white ground,
 // 1px line, radius 14. Below 1024px it draws nothing, so the phone face is the
 // page's own column. Stack panels as siblings: consecutive ones sit 18px apart.
 export function Panel({
@@ -39,8 +39,8 @@ export function Panel({
   );
 }
 
-// Cards side by side from 1024px, tops aligned, two columns or three (the
-// report); below, the children stay the parent's own items.
-export function PanelGrid({ children, columns = 2 }: { children: ReactNode; columns?: 2 | 3 }) {
-  return <div className={columns === 3 ? `${styles.grid} ${styles.three}` : styles.grid}>{children}</div>;
+// Cards side by side from 1024px, tops aligned, two columns at every width;
+// below, the children stay the parent's own items.
+export function PanelGrid({ children }: { children: ReactNode }) {
+  return <div className={styles.grid}>{children}</div>;
 }

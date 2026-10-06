@@ -2752,3 +2752,61 @@ branch could pass until it was restored.
 - **Do.** Wrap every suite, seed and `harness:token` in `scripts/supabase-local.sh exec`. Run the RNF-09 timing against the
   remote with `HARNESS_DATABASE=remote` — exactly `remote`, nothing else passes. `census` and `reap` stay unguarded on
   purpose: one reads, the other prunes registered rows.
+
+## `check:mcp` needs a dev server started a certain way, and a session of its own
+
+- `scripts/mcp/route.ts` and `oauth-flow.ts` read the server log at `apps/pulsar/private/dev<port>.log` (port `3200 + lane - 1`)
+  and assert a `[outbound]` line. Nothing in the app writes it: the server must start with the fetch hook
+  `NODE_OPTIONS='--import data:text/javascript,const%20f=fetch;globalThis.fetch=(i,o)=>{console.log(%22[outbound]%22,String(i.url??i));return%20f(i,o)}'`.
+  Without it, 23 tests fail with «the server log does not show outbound calls»; without the server, 39 fail with `fetch failed`.
+- `scripts/harness/checks-run.ts` runs `check:day`, `check:goal`, `check:goal-actions`, `check:plan` — not `check:mcp`.
+  CI's `pulsar-checks` runs it in a step of its own, after a bare `harness:mint-session` (`route.ts` reads
+  `private/session-<lane>.json`, which `checks-run.ts` drops with its run). Locally, mint the session the same way first.
+  Measured 2026-10-05: `read-tools.ts` expected `list_goals` at 2 statements; module 210 (tren 5) made `/metas` read the
+  evidence beside the goals, 4 statements, and the red sat unseen through trains 5, 6 and 7, because no CI ran it then.
+- A lane opened with `--app pulsar` has no member identity until `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run
+  harness:token -w apps/orbit` runs from the main checkout; `harness:mint-session` makes the person only. Without it
+  `check:plan` reports 14 reds («no member identity») that read like regressions. Measured the same day in lanes 4 and 5.
+
+## A DDL mutant on the local stack breaks every other lane
+
+- Every lane and every suite share the one local Supabase in Docker. A negative control that drops a trigger, a grant or a
+  check there drops it for every lane at once, not only for the branch that proves it.
+- Measured 2026-10-05: module 252's control dropped `one_offs_fill_position`; four `exportar.spec.ts` tests in lane 4 failed
+  `null value in column "position" of relation "one_offs"` on their seed and passed on the next run.
+- Run a DDL mutant only when no other lane runs a suite, or inside one transaction that rolls back (and see «A policy
+  mutant proved inside a rollback…» for what that costs). A red that names a column another branch owns is that branch's
+  mutant until proved otherwise.
+
+## A probe of a SECURITY INVOKER trigger under RLS cannot see a missing `user_id` filter
+
+- A `BEFORE INSERT` trigger that takes `max(position)` runs as the caller. Under the person's RLS its subquery already sees
+  only that person's rows, so the mutant «max without `user_id`» is equivalent to the correct trigger there, and a probe
+  that plants an intruder's row at 40 and inserts as the subject stays green.
+- Plant the intruder's row and insert the subject's in the privileged part of the transaction, with no
+  `enterUserContext`, and roll back. Prove the probe by running the mutated function inside that same rollback.
+- Measured 2026-10-06: module 252's P177 and P187 (first version) passed against the unfiltered `commitments_fill_position`;
+  run privileged, P187 read 42 instead of 1. `apps/pulsar/scripts/check-policies.ts`: P187, P188, P189.
+
+## `\d` in a TS template literal collapses to `d`
+
+- `` sql`... substring(name from '\d+') ...` `` reaches Postgres as `'d+'`: the escape is dropped, the regex matches nothing,
+  and every row sorts as `NULLS LAST`. Write `\\d` in embedded SQL.
+- Measured 2026-10-06: module 252's backfill probe P186 returned Cap. 1|Cap. 10|Cap. 2 (name order) until `\\d` replaced `\d`.
+
+## `armazon-estados.spec.ts` is red under `next dev` and racy under load
+
+- The skeleton test holds `/mes`'s RSC request and expects `main header[aria-hidden]`. The block shows only when the
+  «Mes» link's prefetch already put `loading` in the router cache. `next dev` serves no `loading` prefetch, so the test is
+  red 2/2 in every lane on every branch; it means nothing there. Run it against `next build && next start`, as CI does.
+- Measured 2026-10-06: CI went red at 1440 only on train 13; a prod build of the same commit was green 6/6, and a
+  prefetch delayed 2.5 s reproduced the red. The spec now awaits the prefetch's response before the click.
+
+## claude.ai's client metadata lists a grant pulsar does not offer
+
+- `https://claude.ai/oauth/mcp-oauth-client-metadata` declares `grant_types` with a third entry,
+  `urn:ietf:params:oauth:grant-type:jwt-bearer`. A schema that takes `z.enum` of the grants it serves refuses the whole
+  document, and `/oauth/autorizar` reads «Este pedido no es válido» on the first real connection.
+- Every local probe registered its own clean document, so nothing caught it before production. Measured 2026-10-06 by the
+  user's first connection from claude.ai (module 200), fixed in module 287: ignore unknown grants, require the code grant.
+- Fetch the real document before trusting a schema that parses someone else's metadata.

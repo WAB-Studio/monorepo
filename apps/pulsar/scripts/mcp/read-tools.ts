@@ -280,7 +280,8 @@ test("each tool issues exactly its loader's statements", async () => {
     list_loose_one_offs: await measured("list_loose_one_offs", {}),
   };
   console.log(`wire: ${JSON.stringify(counts)}`);
-  assert.equal(counts.list_goals.statements, 2);
+  // `/metas` reads the evidence beside the goals since module 210: two transactions.
+  assert.equal(counts.list_goals.statements, 4);
   assert.equal(counts.get_goal.statements, 4);
   assert.equal(counts.get_month.statements, 4);
   assert.equal(counts.get_today.statements, 4);

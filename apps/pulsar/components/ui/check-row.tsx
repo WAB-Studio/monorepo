@@ -13,6 +13,7 @@ export function CheckRow({
   disabled,
   name,
   meta,
+  note,
   reason,
   trailing,
   amount,
@@ -26,6 +27,8 @@ export function CheckRow({
   name: ReactNode;
   // The quiet line under the name.
   meta?: ReactNode;
+  // A task's note, whole, under the meta: read-only, its line breaks kept.
+  note?: string | null;
   // A refusal's words, in ink under the meta.
   reason?: ReactNode;
   // Text at the end that opens nothing.
@@ -62,6 +65,7 @@ export function CheckRow({
               {meta}
             </Text>
           ) : null}
+          {note ? <span className={styles.note}>{note}</span> : null}
           {reason ? <span className={styles.reason}>{reason}</span> : null}
         </span>
         {trailing ? <span className={styles.trailing}>{trailing}</span> : null}

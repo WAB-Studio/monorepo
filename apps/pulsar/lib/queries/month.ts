@@ -53,7 +53,7 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
                  'source_key', s.key,
                  'source_unit', s.unit,
                  'source_label_key', s.label_key
-               )), '[]'::json)
+               ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.goal_id = g.id) as commitments,
@@ -72,13 +72,13 @@ async function queryRows(tx: Transaction, month: string, today: string): Promise
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id),
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id
                              order by f.day, f.id limit 1)
-               ) order by o.created_at, o.id), '[]'::json)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o where o.goal_id = g.id) as tasks
     from "goals"."goals" g
     where g.archived_at is null
       and g.horizon > ${today}::date
       and (g.created_at at time zone ${TIME_ZONE})::date <= ${today}::date
-    order by g.created_at, g.id
+    order by g.position, g.created_at, g.id
   `);
   return [...rows];
 }
@@ -127,6 +127,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       estimate: task.estimate,
       doneOn: task.done_on,
       factId: task.fact_id ?? null,
+      note: task.note,
     }));
     const unit = row.goal.measure_unit;
 

@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
+import type { MessageKey } from "@/i18n/translator";
 import type { TimeWords } from "@/lib/units/time";
 
 import { formatFigureValue, isTimeFigure, type TimeFigure } from "./format-figure";
@@ -10,10 +11,18 @@ import styles from "./figure.module.css";
 // `lib/units/time.ts` takes them.
 export function useTimeWords(): TimeWords {
   const t = useTranslations("units");
+  const root = useTranslations();
   return {
     h: (h) => t("h", { h }),
     min: (min) => t("min", { min }),
     join: (h, min) => t("join", { h, min }),
+    // The catalogue's `words` agree with the count in ICU plural; a word it
+    // lacks (the unit is free text) prints as typed.
+    unit: (unit, n) => {
+      const word = unit.trim().toLowerCase();
+      const key = `units.words.${word}` as MessageKey;
+      return /^\p{L}+$/u.test(word) && root.has(key) ? root(key, { count: n }) : unit;
+    },
   };
 }
 
@@ -48,7 +57,9 @@ export function Figure({
   return (
     <span className={`${styles.figure} ${size}`}>
       {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
-      {unit && !isTimeFigure(formatted) ? <span className={styles.unit}>{unit}</span> : null}
+      {unit && !isTimeFigure(formatted) ? (
+        <span className={styles.unit}>{typeof value === "number" ? (words.unit?.(unit, value) ?? unit) : unit}</span>
+      ) : null}
     </span>
   );
 }

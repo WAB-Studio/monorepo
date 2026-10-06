@@ -1,5 +1,6 @@
 {
   "appName": "Bitácora de metas",
+  "brand": "pulsar",
   "tagline": "Lo que pasó, cuándo y quién lo escribió.",
   "nav": {
     "today": "Hoy",
@@ -25,5 +26,25 @@
     "body": "Lo que ya anotaste está guardado.",
     "retry": "Intentar otra vez",
     "secondaryAction": "Ir a hoy"
+  },
+  "titles": {
+    "today": "Hoy",
+    "entrar": "Entrar",
+    "connections": "Conectar una IA",
+    "oneOffs": "Sueltas",
+    "goals": "Metas",
+    "week": "Semana",
+    "month": "Mes",
+    "authorize": "Permiso",
+    "import": "Importar un plan",
+    "importReview": "Revisar el plan",
+    "newGoal": "Meta nueva",
+    "goal": "Meta",
+    "months": "Meses",
+    "review": "Revisión",
+    "goalMonth": "Mes",
+    "newPhase": "Fase nueva",
+    "newCommitment": "Compromiso nuevo",
+    "newTask": "Tarea nueva"
   }
 }

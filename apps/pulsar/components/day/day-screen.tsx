@@ -6,7 +6,6 @@ import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
 import { tallyDay } from "@/lib/day/tally";
-import { isTimeUnit } from "@/lib/units/time";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -154,7 +153,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const tally =
     goals.length === 0 || lastEnded || counted.total === 0
       ? undefined
-      : t("day.tally", { done: counted.done, total: counted.total });
+      : counted.partial > 0
+        ? t("day.tallyPartial", { done: counted.done, total: counted.total, partial: counted.partial })
+        : t("day.tally", { done: counted.done, total: counted.total });
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
   // Stable: within each kind, `loadDay`'s own creation order stands.
@@ -162,12 +163,19 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     (a, b) => Number(!isCarried(a, day)) - Number(!isCarried(b, day)),
   );
 
+  function noteEyebrow(goalId: string | null) {
+    const goal = goals.find((candidate) => candidate.id === goalId);
+    return goal ? t("oneOffs.note.eyebrowGoal", { goal: goal.name }) : t("oneOffs.note.eyebrowLoose");
+  }
+
   function oneOffRow(oneOff: OneOffSummary) {
     return (
       <OneOffRow
         key={oneOff.id}
         oneOffId={oneOff.id}
         name={oneOff.name}
+        note={oneOff.note}
+        noteEyebrow={noteEyebrow(oneOff.goalId)}
         carriedFrom={
           isCarried(oneOff, day)
             ? dayPhrase("day.oneOffs.carriedFrom", oneOff.day, t)
@@ -177,12 +185,42 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     );
   }
 
-  const goalsMain = goals.length === 0 && past ? (
+  // The goals that ask today first, each group in `loadDay`'s order. A quiet
+  // met row asks nothing; a pending one-off of the goal does.
+  const sections = goals
+    .map((goal) => {
+      const own = commitments
+        .filter((commitment) => commitment.goalId === goal.id)
+        .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }));
+      // A commitment that does not ask on `day` has no slot at all
+      // (`deriveDay`'s own contract): one still owed draws nothing, one
+      // already met in its period draws quiet after the asked rows.
+      const rows = own.filter(
+        (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } => entry.slot !== undefined,
+      );
+      const met = own
+        .filter(
+          (entry) =>
+            entry.slot === undefined &&
+            metPhrase((key, values) => t(key, values), {
+              cadence: entry.commitment.cadence,
+              periodDone: periodDone[entry.commitment.id],
+            }) !== null,
+        )
+        .map((entry) => entry.commitment);
+      const asks = rows.length > 0 || (!past && oneOffs.some((oneOff) => oneOff.goalId === goal.id));
+      return { goal, rows, met, asks };
+    })
+    // A past day draws no goal that had no row and no met row.
+    .filter(({ rows, met }) => !past || rows.length > 0 || met.length > 0)
+    .sort((a, b) => Number(!a.asks) - Number(!b.asks));
+
+  const goalsMain = past && sections.length === 0 ? (
     <>
       <Text as="p" variant="title">
         {t("day.past.nothingTitle")}
       </Text>
-      {laterGoal ? (
+      {goals.length === 0 && laterGoal ? (
         <Text as="p" variant="meta" tone="muted">
           {dayPhrase("day.past.startedOn", laterGoal.openedOn, t, { goal: laterGoal.name })}
         </Text>
@@ -212,33 +250,21 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     <EmptyDay />
   ) : (
     <>
-      {goals.map((goal) => {
+      {sections.map(({ goal, rows, met, asks }) => {
         const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
         const goalPhase = phaseOn(goalPhases, day);
-        const own = commitments
-          .filter((commitment) => commitment.goalId === goal.id)
-          .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }));
-        // A commitment that does not ask on `day` has no slot at all
-        // (`deriveDay`'s own contract): one still owed draws nothing, one
-        // already met in its period draws quiet after the asked rows.
-        const rows = own.filter(
-          (entry): entry is { commitment: CommitmentInfo; slot: DaySlot } => entry.slot !== undefined,
-        );
-        const met = own
-          .filter(
-            (entry) =>
-              entry.slot === undefined &&
-              metPhrase((key, values) => t(key, values), {
-                cadence: entry.commitment.cadence,
-                periodDone: periodDone[entry.commitment.id],
-              }) !== null,
-          )
-          .map((entry) => entry.commitment);
 
-        return (
+        const section = (
           <Panel as="div" key={goal.id}>
             <section>
-              <SectionLabel>{goal.name}</SectionLabel>
+              <SectionLabel>
+                {past && rows.length > 0
+                  ? t("day.past.asked", {
+                      goal: goal.name,
+                      count: (t.raw("day.past.askedWords") as string[])[rows.length] ?? rows.length,
+                    })
+                  : goal.name}
+              </SectionLabel>
               {goalPhase ? (
                 <Text as="p" tone="muted" variant="meta">
                   {phaseLine((key, values) => t(key, values), goalPhase.name, phasePositions[goalPhase.id])}
@@ -252,7 +278,15 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                     commitmentId={commitment.id}
                     name={commitment.name}
                     kind={commitment.kind}
-                    markState={slot.satisfiedBy === "evidence" ? "evidence" : slot.satisfied ? "declared" : "empty"}
+                    markState={
+                      slot.satisfiedBy === "evidence"
+                        ? "evidence"
+                        : slot.satisfied
+                          ? "declared"
+                          : slot.partial
+                            ? "partial"
+                            : "empty"
+                    }
                     sourceName={
                       slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
                     }
@@ -307,49 +341,79 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             </section>
           </Panel>
         );
+        // A goal that asks nothing today has no section on the phone; its
+        // «este mes» line is drawn elsewhere (`HoyTelefonoSinPedido.dc.html`).
+        return asks ? section : <Face on="desktop" key={goal.id}>{section}</Face>;
       })}
     </>
   );
 
-  // One card per open goal that has a measure; a goal without one draws none.
+  // One card per open goal that has a measure; the rest get one only for «este mes».
   const figures = goals.filter((goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined);
 
   // Drawn inside `goalless`, so only on today (RP-28), never on a past day.
-  // A goal with no amount this month draws nothing.
+  // A goal with no amount and no task this month draws nothing; one with
+  // tasks draws its line measured or not.
   const monthGoals = goals.filter(
-    (goal) => goal.measureUnit !== null && loaded.monthLine[goal.id]?.planned != null,
+    (goal) =>
+      (goal.measureUnit !== null && loaded.monthLine[goal.id]?.planned != null) ||
+      loaded.monthTaskCounts[goal.id] !== undefined,
   );
 
   // The same two lines on the phone block and in the desktop card: reached
   // «de» planned, and from the 20th the pace in ink, never an alarm.
   const monthLines = (goal: (typeof goals)[number]) => {
     const line = loaded.monthLine[goal.id];
-    const planned = line.planned as number;
+    const planned = line?.planned ?? null;
+    const counts = loaded.monthTaskCounts[goal.id];
     const task = loaded.monthTask[goal.id];
     return (
       <>
-        <Flex align="baseline" gap="2" wrap="wrap">
-          <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
-          <Text variant="meta" tone="muted">
-            {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
-          </Text>
-        </Flex>
-        {line.underPace ? (
+        {line === undefined || planned === null ? (
+          // No amount planned: the reached figure when the goal measures,
+          // then its tasks done of total (a measureless goal reads only those).
+          <Flex align="baseline" gap="2" wrap="wrap">
+            {line !== undefined ? (
+              <>
+                <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
+                <Text variant="meta" tone="muted">
+                  {t("day.monthLine.tasksAfterFigure", { done: counts.done, total: counts.total })}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Figure value={counts.done} variant="meta" />
+                <Text variant="meta" tone="muted">
+                  {t("day.monthLine.tasksOf", { total: counts.total })}
+                </Text>
+              </>
+            )}
+          </Flex>
+        ) : line.underPace ? (
           <Text as="p" variant="meta">
-            {t("day.monthLine.pace", {
-              day: Number(day.slice(8, 10)),
-              percent: Math.floor((line.reached * 100) / planned),
-              threshold: 60,
-            })}
+            {t("day.monthLine.pace", { day: Number(day.slice(8, 10)) })}{" "}
+            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />{" "}
+            {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
+            {t("day.monthLine.paceUnder", { threshold: 60 })}
           </Text>
-        ) : null}
+        ) : (
+          <Flex align="baseline" gap="2" wrap="wrap">
+            <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
+            <Text variant="meta" tone="muted">
+              {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
+            </Text>
+          </Flex>
+        )}
         {task ? (
           <MonthTaskLine
             key={task.id}
             oneOffId={task.id}
             name={task.name}
             estimate={task.estimate}
-            unit={goal.measureUnit as string}
+            unit={goal.measureUnit ?? ""}
+            parentName={task.parentName}
+            note={task.note}
+            noteEyebrow={noteEyebrow(goal.id)}
           />
         ) : null}
       </>
@@ -364,9 +428,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {figures.map((goal) => (
         <Panel as="div" key={goal.id}>
           <Face on="desktop">
-            <SectionLabel>{isTimeUnit(goal.measureUnit) ? goal.name : goal.measureUnit}</SectionLabel>
+            <SectionLabel>{goal.name}</SectionLabel>
             <Flex align="baseline" gap="2">
-              <Figure value={weekMeasure[goal.id]} unit={isTimeUnit(goal.measureUnit) ? goal.measureUnit ?? undefined : undefined} />
+              <Figure value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
               <Text variant="meta" tone="muted">
                 {t("day.weekFigure.caption")}
               </Text>
@@ -387,6 +451,17 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           </Face>
         </Panel>
       ))}
+      {monthGoals
+        .filter((goal) => !figures.includes(goal))
+        .map((goal) => (
+          <Panel as="div" key={goal.id}>
+            <Face on="desktop">
+              <SectionLabel>{goal.name}</SectionLabel>
+              <SectionLabel>{t("day.monthLine.title")}</SectionLabel>
+              {monthLines(goal)}
+            </Face>
+          </Panel>
+        ))}
       {monthGoals.length > 0 ? (
         <Face on="phone">
           <Panel as="div">
@@ -431,6 +506,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 key={done.id}
                 factId={done.factId}
                 name={done.name}
+                oneOffId={done.id}
+                note={done.note}
+                noteEyebrow={noteEyebrow(done.goalId)}
                 time={timeInZone(done.writtenAt)}
               />
             ))}
@@ -445,6 +523,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {past ? (
         <DayHeader
           date={dateLabel(day, t)}
+          forward={{
+            href: shiftCivilDay(day, 1) === today ? "/" : `/dia/${shiftCivilDay(day, 1)}`,
+            label: t("day.nav.dayAfter"),
+          }}
           back={
             day > oldestPastDay(today)
               ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.dayBefore") }

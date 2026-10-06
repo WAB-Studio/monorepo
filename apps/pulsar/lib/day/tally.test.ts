@@ -17,6 +17,7 @@ function dayView(day: string, slots: [string, boolean][]): DayView {
       satisfiedBy: satisfied ? "declared" : null,
       labelKey: null,
       quantity: null,
+      partial: false,
     })),
   };
 }
@@ -71,8 +72,8 @@ test("tallyDays: a one-off fact of no goal counts, one of an ended goal does not
       { day: "2026-09-30", goalId: "archived" },
     ],
   });
-  assert.deepEqual(tally[1], { day: "2026-09-29", done: 2, total: 2 });
-  assert.deepEqual(tally[2], { day: "2026-09-30", done: 0, total: 0 });
+  assert.deepEqual(tally[1], { day: "2026-09-29", done: 2, total: 2, partial: 0 });
+  assert.deepEqual(tally[2], { day: "2026-09-30", done: 0, total: 0, partial: 0 });
 });
 
 test("tallyDays: a commitment counted by the week or the month leaves the daily count", () => {
@@ -92,8 +93,8 @@ test("tallyDays: a commitment counted by the week or the month leaves the daily 
     ],
     oneOffFacts: [],
   });
-  assert.deepEqual(tally[0], { day: DAYS[0], done: 1, total: 1 });
-  assert.deepEqual(tally[1], { day: DAYS[1], done: 0, total: 1 });
+  assert.deepEqual(tally[0], { day: DAYS[0], done: 1, total: 1, partial: 0 });
+  assert.deepEqual(tally[1], { day: DAYS[1], done: 0, total: 1, partial: 0 });
 });
 
 test("tallyDays: weekday and every-n-days commitments still count by the day", () => {
@@ -107,7 +108,7 @@ test("tallyDays: weekday and every-n-days commitments still count by the day", (
     ],
     oneOffFacts: [],
   });
-  assert.deepEqual(tally[2], { day: DAYS[2], done: 1, total: 2 });
+  assert.deepEqual(tally[2], { day: DAYS[2], done: 1, total: 2, partial: 0 });
 });
 
 test("tallyDay: equals tallyDays' cell for the same day, flexible and one-offs included", () => {
@@ -143,5 +144,26 @@ test("tallyDay: equals tallyDays' cell for the same day, flexible and one-offs i
     });
     assert.deepEqual(single, cells[i]);
   }
-  assert.deepEqual(cells[1], { day: DAYS[1], done: 4, total: 4 });
+  assert.deepEqual(cells[1], { day: DAYS[1], done: 4, total: 4, partial: 0 });
+});
+
+test("tallyDay: a partial slot counts in total and partial, never in done", () => {
+  const view: DayView = {
+    day: DAYS[0],
+    phase: null,
+    slots: [
+      { commitmentId: "c1", satisfied: true, satisfiedBy: "declared", labelKey: null, quantity: 30, partial: false },
+      { commitmentId: "c2", satisfied: false, satisfiedBy: null, labelKey: null, quantity: 10, partial: true },
+    ],
+  };
+  const tally = tallyDay({
+    view,
+    goals: [{ id: "g1", openedOn: "2026-01-01", horizon: "2027-01-01" }],
+    commitments: [
+      { id: "c1", goalId: "g1" },
+      { id: "c2", goalId: "g1" },
+    ],
+    oneOffFacts: [],
+  });
+  assert.deepEqual(tally, { day: DAYS[0], done: 1, total: 2, partial: 1 });
 });

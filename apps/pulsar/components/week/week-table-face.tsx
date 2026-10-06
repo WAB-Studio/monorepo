@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { type MessageKey, type Translator } from "@/i18n/translator";
-import { Face, Panel, WeekFold, WeekTable } from "@/components/ui";
+import { Face, Flex, Mark, Panel, SectionLabel, Text, WeekFold, WeekTable } from "@/components/ui";
 import type { WeekTableCell, WeekTableColumn } from "@/components/ui/week-table";
 import { tallyDays } from "@/lib/day/tally";
 import type { DaySlot } from "@/lib/day/types";
@@ -46,9 +46,22 @@ export function WeekTableFace({
   const live = (goalId: string | null, day: string) =>
     goalId === null || day < (horizonOf.get(goalId) ?? "");
 
-  function mark(name: string, day: string, status: "done" | "missed" | "upcoming" | "none" | "evidence"): WeekTableCell {
+  function mark(
+    name: string,
+    day: string,
+    status: "done" | "missed" | "upcoming" | "none" | "evidence" | "partial",
+  ): WeekTableCell {
     return {
-      state: status === "none" ? "none" : status === "evidence" ? "evidence" : status === "done" ? "declared" : "empty",
+      state:
+        status === "none"
+          ? "none"
+          : status === "evidence"
+            ? "evidence"
+            : status === "partial"
+              ? "partial"
+              : status === "done"
+                ? "declared"
+                : "empty",
       label: t("week.mark.label", {
         name,
         weekday: weekdayLong[(civilDateToDate(day).getUTCDay() + 6) % 7],
@@ -61,6 +74,7 @@ export function WeekTableFace({
   function slotStatus(slot: DaySlot, day: string) {
     if (day > today) return "upcoming";
     if (slot.satisfiedBy === "evidence") return "evidence";
+    if (slot.partial) return "partial";
     return slot.satisfied ? "done" : "missed";
   }
 
@@ -79,9 +93,9 @@ export function WeekTableFace({
           detail: words ? t("week.flexible.detail", words) : undefined,
           cells: view.days.map((dayView) => {
             const slot = dayView.slots.find((s) => s.commitmentId === commitment.id);
-            // A flexible row marks the days it was done and leaves the rest
-            // quiet: no day of it was ever asked on its own.
-            if (!live(goalId, dayView.day) || !slot || (words && !slot.satisfied)) {
+            // A flexible row marks the days it was done or logged in part and
+            // leaves the rest quiet: no day of it was ever asked on its own.
+            if (!live(goalId, dayView.day) || !slot || (words && !slot.satisfied && !slot.partial)) {
               return mark(commitment.name, dayView.day, "none");
             }
             return mark(commitment.name, dayView.day, slotStatus(slot, dayView.day));
@@ -130,6 +144,17 @@ export function WeekTableFace({
   );
   const footer = { label: t("week.table.footer"), cells };
 
+  // `SemanaEnParte.dc.html`: the phone names the partial days apart from
+  // «hechos», over the days that have come, and draws its legend. Without a
+  // partial day the per-day tally says it all.
+  const lived = tallyDays(week).filter(({ day, total }) => day <= today && total > 0);
+  const sum = (pick: (tally: (typeof lived)[number]) => number) => lived.reduce((acc, tally) => acc + pick(tally), 0);
+  const partial = sum((tally) => tally.partial);
+  // The key shows whenever any half dot is drawn, flexible rows included.
+  const halfDrawn = foldGroups.some((group) =>
+    group.rows.some((row) => row.cells.some((cell) => cell.state === "partial")),
+  );
+
   return (
     <>
       {tableGroups.length > 0 ? (
@@ -141,6 +166,36 @@ export function WeekTableFace({
       ) : null}
       <Face on="phone">
         <WeekFold columns={columns} groups={foldGroups} footer={footer} />
+        {halfDrawn ? (
+          <Flex direction="column" gap="3" mt="4">
+            {partial > 0 ? (
+              <Flex align="baseline" gap="2">
+                <SectionLabel>{t("week.table.footer")}</SectionLabel>
+                <Text variant="name">{sum((tally) => tally.done)}</Text>
+                <Text variant="meta" tone="muted">
+                  {t("week.summary.rest", { total: sum((tally) => tally.total), partial })}
+                </Text>
+              </Flex>
+            ) : null}
+            <Flex wrap="wrap" gap="3" data-testid="week-legend">
+              {(
+                [
+                  ["declared", "week.legend.done"],
+                  ["evidence", "week.legend.evidence"],
+                  ["partial", "week.legend.partial"],
+                  ["empty", "week.legend.pending"],
+                ] as const
+              ).map(([state, key]) => (
+                <Flex key={state} align="center" gap="2">
+                  <Mark state={state} size="dot" />
+                  <Text variant="meta" tone="muted">
+                    {t(key)}
+                  </Text>
+                </Flex>
+              ))}
+            </Flex>
+          </Flex>
+        ) : null}
       </Face>
     </>
   );

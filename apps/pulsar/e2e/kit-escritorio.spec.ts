@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import { test, expect, laneNumber } from "./fixtures";
 
-// RNP-11 at the kit's level: what `components/ui` does at 1024px and does not
+// RNP-17 at the kit's level: what `components/ui` does at 1024px and does not
 // do below it. `Face`, `Split` and `WeekTable` have no consumer yet; the
 // screens that adopt them prove them.
 type Box = { x: number; y: number; width: number; height: number };
@@ -14,7 +14,7 @@ async function box(page: Page, selector: string, nth = 0): Promise<Box> {
   });
 }
 
-test("at 1280 the nav is a rail down the left edge and nothing sits under it (RNP-11)", async ({
+test("at 1280 the nav is a rail down the left edge and nothing sits under it (RNP-17)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -54,7 +54,7 @@ for (const [width, pageBox] of [
   [800, { x: 80, width: 640 }],
   [1023, { x: 191.5, width: 640 }],
 ] as const) {
-  test(`at ${width} the nav is four tabs at the foot and the page column has not moved (RNP-11)`, async ({
+  test(`at ${width} the nav is four tabs at the foot and the page column has not moved (RNP-17)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 740 });
@@ -83,7 +83,7 @@ for (const [width, pageBox] of [
   });
 }
 
-test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 800, and the review's header names the column alone for a time unit (RNP-11, RP-35)", async ({
+test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 800, and the review's header names the column alone for a time unit (RNP-17, RP-35)", async ({
   page,
   db,
   personId,

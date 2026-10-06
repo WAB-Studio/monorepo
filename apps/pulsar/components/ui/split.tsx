@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import styles from "./split.module.css";
 
-// The desktop screen's two columns (RNP-11): `main` on the left, `before` over
+// The desktop screen's two columns (RNP-17): `main` on the left, `before` over
 // `after` on the right. Below 1024px the three parts are plain siblings in the
 // page's own column, in the order `before`, `main`, `after`.
 export function Split({

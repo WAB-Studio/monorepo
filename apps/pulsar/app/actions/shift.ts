@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { sql, type SQL } from "drizzle-orm";
 
-import { carryShare } from "@/lib/plan/carry";
-import { shiftOffered, shiftPlan } from "@/lib/plan/shift";
+import { carryShare, estimateFacts } from "@/lib/plan/carry";
+import { reachedByMonth } from "@/lib/plan/months";
+import { monthAmount, shiftOffered, shiftPlan } from "@/lib/plan/shift";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
-import type { TaskRow } from "@/lib/queries/goal";
+import type { FactRow, TaskRow } from "@/lib/queries/goal";
+import { toDeclaredFact } from "@/lib/queries/rows";
 import { acceptShiftSchema, monthStart, type AcceptShiftInput } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
 import { todayInZone } from "@/lib/zone";
@@ -23,10 +25,11 @@ export type AcceptShiftResult =
 class NamedError extends Error {}
 
 type ShiftRow = {
-  goal: { horizon: string; archived_at: string | null } | null;
+  goal: { horizon: string; archived_at: string | null; measure_unit: string | null } | null;
   budgets: { month: string; amount: number }[];
   phases: { id: string; aim: string; starts_on: string; ends_on: string }[];
   tasks: TaskRow[];
+  facts: FactRow[];
   shifts: string[];
 };
 
@@ -37,7 +40,7 @@ function asJson(rows: unknown[]): SQL {
 }
 
 /**
- * Moves the plan one month forward and records that it was moved (RP-34).
+ * Moves the plan one month forward and records that it was moved (RP-48).
  * The sheet only shows what 142 derived; here the rows are read and 142 is
  * asked again, so nothing a client sends but the goal and the month is read.
  * Every write is one statement whatever the counts, raw SQL naming the
@@ -64,7 +67,8 @@ export async function acceptShift(input: AcceptShiftInput): Promise<AcceptShiftR
     ({ moved: result, emptied } = await withGoalsDb(async (tx) => {
       const [row] = await tx.execute<ShiftRow>(sql`
         select
-          (select jsonb_build_object('horizon', g.horizon, 'archived_at', g.archived_at)
+          (select jsonb_build_object('horizon', g.horizon, 'archived_at', g.archived_at,
+                                'measure_unit', g.measure_unit)
              from "goals"."goals" g where g.id = ${goalId}) as goal,
           (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                     order by b.month), '[]'::json)
@@ -73,8 +77,14 @@ export async function acceptShift(input: AcceptShiftInput): Promise<AcceptShiftR
              from "goals"."phases" p where p.goal_id = ${goalId}) as phases,
           (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                      'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-                   ) order by o.created_at, o.id), '[]'::json)
+                   ) order by o.position, o.created_at, o.id), '[]'::json)
              from "goals"."one_offs" o where o.goal_id = ${goalId}) as tasks,
+          (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
+                     'commitment_unit', c.unit
+                   )), '[]'::json)
+             from "goals"."facts" f
+             left join "goals"."commitments" c on c.id = f.commitment_id
+             where f.goal_id = ${goalId} and f.commitment_id is not null) as facts,
           (select coalesce(json_agg(m.month order by m.month), '[]'::json)
              from "goals"."month_shifts" m where m.goal_id = ${goalId}) as shifts
       `);
@@ -92,13 +102,41 @@ export async function acceptShift(input: AcceptShiftInput): Promise<AcceptShiftR
         doneOn: task.done_on,
       }));
 
+      // The declared half of what each month reached, estimates included
+      // (RP-36). Evidence is another transaction and is not read here, so a
+      // forged accept can pass a month the screen would not have offered.
+      const reached = [
+        ...reachedByMonth({
+          unit: row.goal.measure_unit,
+          facts: [
+            ...row.facts
+              .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+              .map(toDeclaredFact),
+            ...estimateFacts(tasks, row.goal.measure_unit),
+          ],
+          evidence: [],
+        }),
+      ].map(([reachedMonth, amount]) => ({ month: reachedMonth, reached: amount }));
+
       const offered = shiftOffered({
         month,
         today,
         share: carryShare(tasks, month),
+        amount: monthAmount(month, row.budgets, reached),
         shifted: row.shifts,
       });
-      if (!offered) throw new NamedError("month.errors.shiftNotOffered");
+      if (!offered) {
+        // A month that reached its amount has its own message: the list alone
+        // would have offered it.
+        const listOnly = shiftOffered({
+          month,
+          today,
+          share: carryShare(tasks, month),
+          amount: { planned: null, reached: 0 },
+          shifted: row.shifts,
+        });
+        throw new NamedError(listOnly ? "month.errors.shiftReached" : "month.errors.shiftNotOffered");
+      }
 
       const plan = shiftPlan({
         closedMonth: month,

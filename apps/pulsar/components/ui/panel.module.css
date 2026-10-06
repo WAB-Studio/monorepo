@@ -78,9 +78,3 @@
     margin-block-start: 0;
   }
 }
-
-@media (min-width: 1024px) {
-  .three {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}

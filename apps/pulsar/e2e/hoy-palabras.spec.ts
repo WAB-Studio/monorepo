@@ -39,6 +39,12 @@ test("a goal named «Inglés Crítico» keeps its capitals on its field, and on 
     values (${person.id}, 'Inglés Crítico', ${plusDays(60)}) returning id
   `;
 
+  // It asks something, or the phone draws no section for it (RP-47).
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+    values (${person.id}, ${goal.id}, 'Tocar', 'daily', 'tap')
+  `;
+
   try {
     const page = await context.newPage();
     await page.goto("/");
@@ -86,7 +92,14 @@ test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ person, br
     insert into goals.goals (user_id, name, horizon, created_at)
     values (${person.id}, 'Meta que terminó', ${todayInZone()}, ${new Date(Date.now() - 30 * 86_400_000)})
   `;
-  await db`insert into goals.goals (user_id, name, horizon) values (${person.id}, 'Meta abierta', ${plusDays(30)})`;
+  const [open] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${person.id}, 'Meta abierta', ${plusDays(30)}) returning id
+  `;
+  // It asks something, or the phone draws no section for it (RP-47).
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+    values (${person.id}, ${open.id}, 'Tocar', 'daily', 'tap')
+  `;
 
   try {
     const page = await context.newPage();
@@ -133,7 +146,7 @@ test("with every goal ended and none open and a suelta due, Hoy names the goal a
   }
 });
 
-test("at 1280 the all-ended message stands in a card, its title and buttons padded inside it (RNP-11)", async ({
+test("at 1280 the all-ended message stands in a card, its title and buttons padded inside it (RNP-17)", async ({
   person,
   browser,
   db,

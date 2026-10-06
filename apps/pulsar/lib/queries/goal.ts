@@ -1,11 +1,12 @@
 import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
+import { cache } from "react";
 import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
-import { measureByWeek } from "@/lib/day/review";
+import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
@@ -96,6 +97,7 @@ export type TaskRow = {
   done_on: string | null;
   // The id of its own fact, what `undoFact` takes back; null while undone.
   fact_id?: string | null;
+  note: string | null;
 };
 
 // What a commitment reads as on the goal's own screen: its cadence and what
@@ -164,7 +166,7 @@ export type GoalView = {
   months: MonthRow[];
   budgets: MonthBudget[];
   tasks: Task[];
-  // The months of this goal already shifted (RP-34).
+  // The months of this goal already shifted (RP-48).
   shifts: string[];
 };
 
@@ -196,7 +198,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                  'source_key', s.key,
                  'source_unit', s.unit,
                  'source_label_key', s.label_key
-               )), '[]'::json)
+               ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.goal_id = ${goalId}) as commitments,
@@ -213,7 +215,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
       (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id),
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
-               ) order by o.created_at, o.id), '[]'::json)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.goal_id = ${goalId}) as tasks,
       (select coalesce(json_agg(m.month order by m.month), '[]'::json)
@@ -375,6 +377,8 @@ export function goalFigures(input: {
   months: MonthRow[];
   month: GoalView["month"];
   weeks: ReviewWeek[];
+  // The week rule over any span, for a caller that splits a week.
+  totalInSpan: (startsOn: string, endsOn: string) => number;
 } {
   const { goal, phases, commitments, budgets, evidence, today } = input;
   // A one-off's fact carries no `commitment_id`, and no unit to feed the
@@ -397,6 +401,7 @@ export function goalFigures(input: {
     estimate: task.estimate,
     doneOn: task.done_on,
     factId: task.fact_id ?? null,
+    note: task.note,
   }));
   // A done task's estimate counts as declared quantity (RP-36): feeds the
   // measure alone, never a commitment's slot.
@@ -440,7 +445,15 @@ export function goalFigures(input: {
     phases,
   });
 
-  return { tasks, measureTotal: declaredTotal + evidenceTotal, months, month, weeks };
+  return {
+    tasks,
+    measureTotal: declaredTotal + evidenceTotal,
+    months,
+    month,
+    weeks,
+    totalInSpan: (startsOn, endsOn) =>
+      totalInSpan(goal.measure_unit, measureFacts, evidenceDays, startsOn, endsOn),
+  };
 }
 
 /**
@@ -535,14 +548,18 @@ function toGoalSummary(row: GoalRow): GoalSummary {
  * 404 for one, the same way "no add-commitment button" reads on its own
  * screen. `listGoalsForMetas` below is `/metas`'s own query: it needs the
  * archived half too, to list under "Archivadas".
+ *
+ * `cache()`-wrapped: the layout's rail and the screen's `otherGoals` read it in
+ * one render, so a page pays this statement once (RNP-18). It takes no
+ * argument, so the one entry is the whole request's.
  */
-export async function listGoals(): Promise<GoalSummary[]> {
+export const listGoals = cache(async function listGoals(): Promise<GoalSummary[]> {
   const rows = await withGoalsDb((tx) =>
     tx.execute<GoalRow>(sql`
       select id, name, horizon, measure_name, measure_unit, archived_at
       from "goals"."goals"
       where archived_at is null
-      order by created_at
+      order by position, created_at, id
     `),
   );
 
@@ -550,7 +567,7 @@ export async function listGoals(): Promise<GoalSummary[]> {
   // never `current_date`: an ended goal is refused like an archived one.
   const today = todayInZone();
   return rows.filter((row) => row.horizon > today).map(toGoalSummary);
-}
+});
 
 // An open goal's current month, as `/metas` draws it beside the goal: the
 // amount in its unit, or the tasks when it measures nothing. The amount folds
@@ -600,7 +617,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
              where b.goal_id = g.id and b.month = ${month}::date) as budgets,
           (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                      'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-                   ) order by o.created_at, o.id), '[]'::json)
+                   ) order by o.position, o.created_at, o.id), '[]'::json)
              from "goals"."one_offs" o where o.goal_id = g.id) as tasks,
           (select coalesce(json_agg(jsonb_build_object(
                      'satisfaction', c.satisfaction,
@@ -611,7 +628,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
              join "goals"."evidence_sources" s on s.id = c.source_id
              where c.goal_id = g.id and c.satisfaction = 'evidence') as measure_sources
         from "goals"."goals" g
-        order by g.created_at
+        order by g.position, g.created_at, g.id
       `),
     ),
     readEvidenceOutcome(person.id, month, today),
@@ -628,6 +645,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       estimate: task.estimate,
       doneOn: task.done_on,
       factId: null,
+      note: task.note,
     }));
     if (unit === null) {
       const items = monthList(tasks, month, today);

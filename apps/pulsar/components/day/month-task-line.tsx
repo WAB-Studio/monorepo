@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { File, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
-import { Button, Flex, Mark, Text } from "@/components/ui";
+import { NoteSheet } from "@/components/one-offs/note-sheet";
+import { Button, Flex, IconButton, Mark, Text } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import type { MessageKey } from "@/i18n/translator";
 import { formatQuantity } from "@/lib/units/time";
@@ -18,17 +20,27 @@ export function MonthTaskLine({
   oneOffId,
   name,
   estimate,
+  parentName,
   unit,
+  note,
+  noteEyebrow,
 }: {
   oneOffId: string;
   name: string;
   estimate: number | null;
+  // The task is a sub-task: its parent's name rides above its own
+  // (`HoyTareaMesSubtarea.dc.html`).
+  parentName: string | null;
   unit: string;
+  // Its button is drawn, never its text (`HoyNota`).
+  note: string | null;
+  noteEyebrow: string;
 }) {
   const t = useTranslations();
   const words = useTimeWords();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
 
   function handleComplete() {
     if (pending) return;
@@ -41,9 +53,22 @@ export function MonthTaskLine({
     });
   }
 
+  const noteButton = (
+    <IconButton
+      tap={44}
+      variant="ghost"
+      tone={note ? "accent" : undefined}
+      aria-label={t(note ? "oneOffs.note.view" : "oneOffs.note.open", { name })}
+      onClick={() => setNoteOpen(true)}
+      disabled={pending}
+    >
+      {note ? <FileText size={18} aria-hidden /> : <File size={18} aria-hidden />}
+    </IconButton>
+  );
+
   return (
     <>
-      <Flex align="center" gap="2">
+      <Flex align="start" gap="2">
         <Flex ml="-3" asChild>
           <Button
             tap={44}
@@ -55,18 +80,36 @@ export function MonthTaskLine({
             <Mark state="empty" />
           </Button>
         </Flex>
-        <Text variant="name">{name}</Text>
+        <Flex direction="column" gap="1" flexGrow="1" minWidth="0" pt="2">
+          {parentName ? (
+            <Text variant="meta" tone="muted">
+              {t("day.monthLine.parent", { name: parentName })}
+            </Text>
+          ) : null}
+          <Text variant="name">{name}</Text>
+        </Flex>
         {estimate !== null ? (
-          <Text variant="meta" tone="muted" end>
-            {formatQuantity(estimate, unit, words)}
-          </Text>
+          <Flex flexShrink="0" pt="2">
+            <Text variant="meta" tone="muted" wrap="nowrap">
+              {formatQuantity(estimate, unit, words)}
+            </Text>
+          </Flex>
         ) : null}
+        <Flex mr="-3">{noteButton}</Flex>
       </Flex>
       {error ? (
         <Text as="p" tone="muted" variant="meta">
           {t(error)}
         </Text>
       ) : null}
+      <NoteSheet
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        oneOffId={oneOffId}
+        name={name}
+        note={note}
+        eyebrow={noteEyebrow}
+      />
     </>
   );
 }

@@ -71,10 +71,23 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   const childRows: SQL[] = [];
   const goalIds: string[] = [];
 
+  // RP-47: each table's position is the person's current max plus the row's
+  // place in the draft, so the plan's order never rests on how a multi-row
+  // VALUES is walked. A VALUES subquery reads the table as it stood before
+  // the statement, so every row of one statement sees the same base.
+  const basePosition = (table: typeof goals | typeof commitments | typeof oneOffs): SQL =>
+    sql`(select coalesce(max(p.position), 0) from ${table} p where p.user_id = ${person.id}::uuid)`;
+  let goalIndex = 0;
+  let commitmentIndex = 0;
+  // Parents and their children share one sequence in reading order: a child
+  // sits at its parent's slot plus its own place under it.
+  let taskIndex = 0;
+
   for (const goal of draft.goals) {
     const goalId = randomUUID();
     goalIds.push(goalId);
-    goalRows.push(sql`${goalId}::uuid, ${person.id}::uuid, ${goal.name}, ${goal.horizon}::date`);
+    goalIndex += 1;
+    goalRows.push(sql`${goalId}::uuid, ${person.id}::uuid, ${goal.name}, ${goal.horizon}::date, ${basePosition(goals)} + ${goalIndex}::integer`);
     if (goal.measure !== null) {
       measureRows.push(sql`${goalId}::uuid, ${goal.measure.name}, ${goal.measure.unit}`);
     }
@@ -85,23 +98,29 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       budgetRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${monthStart(entry.month)}::date, ${entry.amount}::integer`);
     }
     for (const commitment of goal.commitments) {
+      commitmentIndex += 1;
       commitmentRows.push(sql`
         ${person.id}::uuid, ${goalId}::uuid, ${commitment.name}, ${commitment.cadenceKind},
         ${commitment.cadenceN}::integer, ${weekdaysSql(commitment.cadenceWeekdays)},
-        ${commitment.satisfaction}, ${commitment.targetQuantity}::integer, ${commitment.unit}::text`);
+        ${commitment.satisfaction}, ${commitment.targetQuantity}::integer, ${commitment.unit}::text,
+        ${basePosition(commitments)} + ${commitmentIndex}::integer`);
     }
     for (const task of goal.tasks) {
       const taskId = randomUUID();
-      parentRows.push(sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${monthStart(task.month)}::date, ${task.estimate}::integer`);
-      for (const child of task.children) {
-        childRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer`);
+      taskIndex += 1;
+      const parentIndex = taskIndex;
+      parentRows.push(sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${monthStart(task.month)}::date, ${task.estimate}::integer, ${task.note ?? null}::text, ${basePosition(oneOffs)} + ${parentIndex}::integer`);
+      for (const [place, child] of task.children.entries()) {
+        taskIndex += 1;
+        // The parent's own row already holds base + parentIndex.
+        childRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${taskId}::uuid, ${child.name}, ${child.estimate}::integer, ${child.note ?? null}::text, (select p.position from ${oneOffs} p where p.id = ${taskId}::uuid) + ${place + 1}::integer`);
       }
     }
   }
 
   await withGoalsDb(async (tx) => {
     await tx.execute(sql`
-      insert into ${goals} (id, user_id, name, horizon) values ${rows(goalRows)}
+      insert into ${goals} (id, user_id, name, horizon, position) values ${rows(goalRows)}
     `);
     if (measureRows.length > 0) {
       await tx.execute(sql`
@@ -124,20 +143,20 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       await tx.execute(sql`
         insert into ${commitments}
           (user_id, goal_id, name, cadence_kind, cadence_n, cadence_weekdays,
-           satisfaction, target_quantity, unit)
+           satisfaction, target_quantity, unit, position)
         values ${rows(commitmentRows)}
       `);
     }
     // Parents before children: the child's policy reads its parent back.
     if (parentRows.length > 0) {
       await tx.execute(sql`
-        insert into ${oneOffs} (id, user_id, goal_id, name, planned_month, estimate)
+        insert into ${oneOffs} (id, user_id, goal_id, name, planned_month, estimate, note, position)
         values ${rows(parentRows)}
       `);
     }
     if (childRows.length > 0) {
       await tx.execute(sql`
-        insert into ${oneOffs} (user_id, goal_id, parent_id, name, estimate)
+        insert into ${oneOffs} (user_id, goal_id, parent_id, name, estimate, note, position)
         values ${rows(childRows)}
       `);
     }

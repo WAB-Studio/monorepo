@@ -7,7 +7,7 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, SectionLabel, Separator, Text } from "@/components/ui";
 import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
 import { nextMonth } from "@/lib/plan/months";
-import { shiftOffered, shiftPlan } from "@/lib/plan/shift";
+import { monthAmount, shiftOffered, shiftPlan } from "@/lib/plan/shift";
 import { listGoals, loadGoal, type GoalSummary, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 import { todayInZone } from "@/lib/zone";
@@ -30,10 +30,12 @@ function sum(tasks: Task[], pick: (task: Task) => number): number {
 /** The dashed-circle link that closes a list: «Otra tarea», or, indented as the children, «Otra sub-tarea». */
 function AddRow({ href, label, child }: { href: string; label: string; child?: boolean }) {
   return (
-    <Flex align="center" gap="3" minHeight="48px" ml={child ? "30px" : undefined}>
-      <Mark state="empty" dashed />
+    <Flex asChild align="center" gap="3" minHeight="48px" ml={child ? "30px" : undefined}>
       <Text asChild tone="accent">
-        <Link href={href}>{label}</Link>
+        <Link href={href}>
+          <Mark state="empty" dashed />
+          {label}
+        </Link>
       </Text>
     </Flex>
   );
@@ -41,7 +43,7 @@ function AddRow({ href, label, child }: { href: string; label: string; child?: b
 
 /**
  * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (RP-30, RP-31,
- * RP-32, RP-34): the month's own content, as `loadGoal`'s `months` and 126's
+ * RP-32, RP-48): the month's own content, as `loadGoal`'s `months` and 126's
  * `monthList` read it (carried ones first), the closed month's share from
  * `carryShare`, and the proposal from 142's `shiftOffered` and `shiftPlan`.
  * `heading` draws the month's name as an `h2`, for the screen whose `h1` is
@@ -75,6 +77,7 @@ export async function MonthDetail({
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
+  const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
 
   const items = monthList(goal.tasks, mes, today);
@@ -150,6 +153,8 @@ export async function MonthDetail({
           parent={isParent}
           meta={meta}
           trailing={unit && owes > 0 ? say(owes) : undefined}
+          note={task.note}
+          noteEyebrow={noteEyebrow}
         />
         {children.map((child) => (
           <TaskRow
@@ -160,6 +165,8 @@ export async function MonthDetail({
             done={child.doneOn !== null}
             child
             trailing={unit && child.estimate ? say(child.estimate) : undefined}
+            note={child.note}
+            noteEyebrow={noteEyebrow}
           />
         ))}
         {subtaskable ? (
@@ -179,7 +186,13 @@ export async function MonthDetail({
   const offered =
     open &&
     closed &&
-    shiftOffered({ month: mes, today, share, shifted: goal.shifts });
+    shiftOffered({
+      month: mes,
+      today,
+      share,
+      amount: monthAmount(mes, goal.budgets, goal.months),
+      shifted: goal.shifts,
+    });
   const plan = offered
     ? shiftPlan({
         closedMonth: mes,
@@ -214,9 +227,9 @@ export async function MonthDetail({
           <Flex align="baseline" gap="2">
             <Figure value={row.reached} unit={unit} />
             {open && !closed ? (
-              <Text asChild tone="accent">
+              <Button asChild tap={44} variant="ghost" tone="accent">
                 <Link href={`/metas/${goal.id}/meses?planear=${month}`}>{planned}</Link>
-              </Text>
+              </Button>
             ) : (
               <Text tone="secondary">{planned}</Text>
             )}

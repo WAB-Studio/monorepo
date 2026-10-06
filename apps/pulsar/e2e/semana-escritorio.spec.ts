@@ -6,7 +6,7 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// RNP-11, RP-16, RP-20, RP-27 on Semana (`SemanaEscritorio.dc.html`): at 1280
+// RNP-17, RP-16, RP-20, RP-27 on Semana (`SemanaEscritorio.dc.html`): at 1280
 // the week is a table, at 360 it is still the list. Each test seeds its own
 // rows and drops them by id.
 
@@ -126,7 +126,7 @@ async function dropPerson(db: postgres.Sql, id: string) {
 
 const longAgo = () => new Date(Date.now() - 12 * 86_400_000);
 
-test("at 1280 the week is a table: commitments down, days across, today's fact in today's cell, a one-off a named row (RNP-11, RP-16, RP-20)", async ({
+test("at 1280 the week is a table: commitments down, days across, today's fact in today's cell, a one-off a named row (RNP-17, RP-16, RP-20)", async ({
   browser,
   baseURL,
   db,

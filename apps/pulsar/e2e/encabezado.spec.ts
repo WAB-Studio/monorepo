@@ -69,3 +69,64 @@ for (const size of SIZES) {
     }
   });
 }
+
+const NAMES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+// `TareaNueva`, `SubtareaNueva`: the task form's header says which month it
+// writes into, and the sub-task form says it writes a sub-task; the way back
+// names the month it returns to.
+test("the task form's h1 names the month, the sub-task form's says «Una sub-tarea», and both lead back to the month (RNP-16)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+    values (${person.id}, ${`Meta encabezado tarea ${stamp}`}, ${horizon}::date, 'minutos', 'minutos')
+    returning id
+  `;
+  const [parent] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month)
+    values (${person.id}, ${goal.id}, ${`Padre ${stamp}`}, ${thisMonth}::date)
+    returning id
+  `;
+  const month = seg(thisMonth);
+  const monthName = NAMES[Number(month.slice(5, 7)) - 1];
+  const base = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    for (const [path, title] of [
+      [base, `Una tarea de ${monthName}`],
+      [`${base}?padre=${parent.id}`, "Una sub-tarea"],
+    ]) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+      await expect(page.getByRole("link", { name: /^Volver a / })).toHaveAccessibleName(`Volver a ${monthName}`);
+      await expect(page.getByRole("link", { name: /^Volver a / })).toHaveAttribute(
+        "href",
+        `/metas/${goal.id}/meses/${month}`,
+      );
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});

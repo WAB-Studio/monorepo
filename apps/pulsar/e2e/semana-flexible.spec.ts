@@ -187,3 +187,56 @@ test("Hoy carries a flexible commitment's period count on its row and asks it on
     await db`delete from goals.goals where id = ${goal.id}`;
   }
 });
+
+// The counts of a week already over say «esa semana» and «ese mes», never the
+// present tense of the running week.
+test("a past week reads its flexible counts as «esa semana» and «ese mes» (phone and 1280)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const weekly = `Empuje pasado ${stamp}`;
+  const monthly = `Pesarse pasado ${stamp}`;
+  const lastMonday = weekOf(plusDays(-7))[0];
+
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${`Meta semana pasada flexible ${stamp}`}, ${plusDays(90)}::date, now() - interval '40 days') returning id
+  `;
+  for (const [name, kind, count] of [
+    [weekly, "times_per_week", 3],
+    [monthly, "times_per_month", 4],
+  ] as const) {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+      values (${person.id}, ${goal.id}, ${name}, ${kind}, ${count}, 'tap', now() - interval '40 days') returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day)
+      values (${person.id}, ${goal.id}, ${row.id}, ${lastMonday}::date)
+    `;
+  }
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    for (const size of [
+      { width: 360, height: 740 },
+      { width: 1280, height: 800 },
+    ]) {
+      await page.setViewportSize(size);
+      await page.goto(`/semana?semana=${lastMonday}`);
+      await expect(page.locator("main")).toHaveCount(1);
+      const seen = (text: string) => page.getByText(text).filter({ visible: true });
+      await expect(seen(`3 veces por semana · 1 de 3 esa semana`)).toHaveCount(1);
+      await expect(seen(`4 al mes · 1 de 4 ese mes`)).toHaveCount(1);
+      await expect(seen("esta semana")).toHaveCount(0);
+      await expect(seen("este mes")).toHaveCount(0);
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id}`;
+  }
+});

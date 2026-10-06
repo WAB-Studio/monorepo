@@ -12,6 +12,15 @@ const oneOffDay = () =>
     error: "day.errors.oneOffDayPast",
   });
 
+// One rule for the act, the template and the AI (RP-45): line breaks kept,
+// ends trimmed, empty is no note. The length is judged after normalising.
+export const noteSchema = z
+  .string({ error: "day.errors.oneOffNoteTooLong" })
+  .transform((text) => text.replace(/\r\n/g, "\n").trim())
+  .pipe(z.string().max(2000, { error: "day.errors.oneOffNoteTooLong" }))
+  .transform((text) => (text === "" ? null : text))
+  .nullable();
+
 export const createOneOffSchema = z.object({
   name: z
     .string({ error: "day.errors.oneOffNameEmpty" })
@@ -33,6 +42,7 @@ export const createOneOffSchema = z.object({
   plannedMonth: setMonthBudgetSchema.shape.month.nullish(),
   // The child takes its parent's goal and month, so it names neither.
   parentId: z.uuid({ error: "month.errors.invalid" }).nullish(),
+  note: noteSchema.nullish(),
 })
   .refine((input) => input.plannedMonth == null || input.goalId != null, {
     error: "month.errors.invalid",
@@ -77,3 +87,10 @@ export const moveTaskSchema = z.object({
 });
 
 export type MoveTaskInput = z.infer<typeof moveTaskSchema>;
+
+export const setOneOffNoteSchema = z.object({
+  oneOffId: z.uuid({ error: "day.errors.invalid" }),
+  note: noteSchema,
+});
+
+export type SetOneOffNoteInput = z.input<typeof setOneOffNoteSchema>;

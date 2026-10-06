@@ -18,8 +18,8 @@
 // either — an extra transaction-control statement is itself a round trip
 // `day.ts` did not choose to spend, and independent validation found this
 // file originally let it hide inside the very count it was supposed to
-// bound. Every run asserts the bracket, cold included: only the overlap
-// claim is cold-exempt, never the shape of the transaction or its count.
+// bound. Every run asserts the bracket, cold included, and the overlap is
+// decided by call order (`./plan/wire.ts`), never by timestamps.
 // The type-fetch `postgres` sends on a connection's first-ever use is netted
 // out the same bounded way, by an exact match on its own text (never a bare
 // substring, which let a statement merely mentioning `pg_catalog.pg_type`
@@ -42,6 +42,8 @@ import { resolve } from "node:path";
 // The session pooler, loaded here before `installStubs` runs so it is never
 // the wrapped, counted `postgres` — used only to delete a probe's own goal.
 import postgres from "postgres";
+
+import { proveOverlap, wrapPostgres, type DebugCall, type PostgresFactory } from "./plan/wire";
 
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
@@ -112,11 +114,7 @@ async function assertSessionUserExists(cookies: StoredCookie[]): Promise<void> {
   }
 }
 
-type DebugCall = { at: number; connection: number; query: string; parameters: unknown[] };
-
 const wireCalls: DebugCall[] = [];
-
-type PostgresFactory = (url: string, options?: Record<string, unknown>) => unknown;
 
 /**
  * Installs every stub `@/lib/queries/day.ts`'s own import chain needs to run
@@ -154,14 +152,7 @@ function installStubs(cookies: StoredCookie[], degraded: boolean): void {
     // untouched, the pool under measurement stays the pool `loadDay` gets.
     if (request === "postgres") {
       const real = originalLoad(request, parent, isMain) as PostgresFactory;
-      const wrapped: PostgresFactory = (url, options) =>
-        real(url, {
-          ...options,
-          debug: (connection: number, query: string, parameters: unknown[]) => {
-            wireCalls.push({ at: Date.now(), connection, query, parameters });
-          },
-        });
-      return wrapped;
+      return wrapPostgres(real, (call) => wireCalls.push(call));
     }
     return originalLoad(request, parent, isMain);
   };
@@ -237,7 +228,6 @@ function groupByConnection(calls: DebugCall[]): Map<number, DebugCall[]> {
 type GroupAnalysis = {
   connection: number;
   label: string;
-  window: { start: number; end: number };
   beginCount: number;
   commitCount: number;
   rollbackCount: number;
@@ -251,8 +241,6 @@ type GroupAnalysis = {
 
 function analyzeGroup(connection: number, calls: DebugCall[]): GroupAnalysis {
   const label = labelConnection(calls);
-  const times = calls.map((call) => call.at);
-  const window = { start: Math.min(...times), end: Math.max(...times) };
 
   const beginCount = calls.filter((call) => normalizeStatement(call.query).startsWith("begin")).length;
   const commitCount = calls.filter((call) => normalizeStatement(call.query) === "commit").length;
@@ -261,7 +249,7 @@ function analyzeGroup(connection: number, calls: DebugCall[]): GroupAnalysis {
   const applicationCount = calls.length - beginCount - commitCount - rollbackCount - typeFetchCount;
   const bracketOk = beginCount === 1 && commitCount === 1 && rollbackCount === 0;
 
-  return { connection, label, window, beginCount, commitCount, rollbackCount, typeFetchCount, applicationCount, bracketOk };
+  return { connection, label, beginCount, commitCount, rollbackCount, typeFetchCount, applicationCount, bracketOk };
 }
 
 let failed = false;
@@ -287,13 +275,11 @@ function assert(label: string, ok: boolean, detail: string): void {
  * never a fact to net out a second time; the application statements, net of
  * that bracket and of any legitimate type-fetch, total exactly four —
  * asserted on the cold run too, not only the warm ones; and, only when
- * `isWarm`, the two windows overlap in wall-clock time. `isWarm` is false
- * for the cold run alone: the user's own decided note says a cold process
- * pays a real dial between the two transactions and does not overlap — a
- * timing fact, never a licence to leave the cold run's bracket, its
- * type-fetch cap or its statement count unchecked.
+ * the caller passed `overlap`, the second transaction started while the
+ * first was held (`proveOverlap`: decided by call order, no clock). The cold
+ * run proves it too; `isWarm` only gates the zero-type-fetch assertion.
  */
-function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
+function reportRun(label: string, calls: DebugCall[], isWarm: boolean, overlap?: OverlapOutcome): void {
   const groups = [...groupByConnection(calls).entries()].map(([connection, groupCalls]) =>
     analyzeGroup(connection, groupCalls),
   );
@@ -308,22 +294,10 @@ function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
   for (const group of groups) {
     console.log(
       `  ${group.label.padEnd(8)} cid=${group.connection} ` +
-        `${new Date(group.window.start).toISOString()} -> ${new Date(group.window.end).toISOString()} ` +
-        `(${(group.window.end - group.window.start).toFixed(1)}ms), ` +
         `begin=${group.beginCount} commit=${group.commitCount} rollback=${group.rollbackCount}, ` +
         `application=${group.applicationCount}, type-fetch=${group.typeFetchCount}`,
     );
   }
-
-  const [a, b] = groups.map((group) => group.window);
-  const overlaps = a !== undefined && b !== undefined && Math.max(a.start, b.start) < Math.min(a.end, b.end);
-  const gapMs =
-    a !== undefined && b !== undefined
-      ? a.start <= b.start
-        ? b.start - a.end
-        : a.start - b.end
-      : NaN;
-  console.log(`  overlap = ${overlaps}${overlaps ? "" : `, gap = ${gapMs.toFixed(1)}ms`}`);
 
   const badBrackets = groups.filter((group) => !group.bracketOk);
   assert(
@@ -367,13 +341,38 @@ function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
     `${totalApplication} application statement(s) of ${calls.length} on the wire, ${totalTypeFetch} netted out as type-fetch`,
   );
 
-  if (isWarm) {
+  if (overlap) {
     assert(
-      `${label} run's two transactions overlap in wall-clock time`,
-      overlaps,
-      overlaps ? "the second starts before the first ends" : `no overlap, gap = ${gapMs.toFixed(1)}ms`,
+      `${label} run's two transactions overlap: the second starts while the first is held`,
+      overlap.ok,
+      overlap.ok ? "the second began before the first was released" : overlap.detail,
     );
   }
+}
+
+type OverlapOutcome = { ok: boolean; detail: string };
+
+// Runs one loader with its first transaction held; a chained loader never asks
+// for the second, so the deadline turns into a failed assertion, not a hang.
+async function withOverlap<T>(run: () => Promise<T>): Promise<{ result: T; overlap: OverlapOutcome }> {
+  let result!: T;
+  let loaderError: unknown;
+  try {
+    await proveOverlap(
+      async () => {
+        try {
+          result = await run();
+        } catch (error) {
+          loaderError = error;
+        }
+      },
+      { deadlineMs: 10_000 },
+    );
+  } catch (error) {
+    return { result, overlap: { ok: false, detail: error instanceof Error ? error.message : String(error) } };
+  }
+  if (loaderError) throw loaderError;
+  return { result, overlap: { ok: true, detail: "" } };
 }
 
 type DegradedResult = { evidence: string; slotIds: string[] };
@@ -2312,13 +2311,12 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   const today = todayInZone();
 
   // First call: whatever the pool's connections happen to be, cold after
-  // this process's own startup. Its bracket, its type-fetch cap and its
-  // statement count are asserted like any other run; only its overlap is
-  // not — the user's own decided note names the cold dial, never a free
-  // pass on the rest.
+  // this process's own startup. Bracket, type-fetch cap, statement count and
+  // overlap are asserted like any other run: the barrier holds the first
+  // transaction before any dial, so a cold dial cannot fake a chain.
   const coldStart = wireCalls.length;
-  const cold = await loadDay(today);
-  reportRun("cold", wireCalls.slice(coldStart), false);
+  const { result: cold, overlap: coldOverlap } = await withOverlap(() => loadDay(today));
+  reportRun("cold", wireCalls.slice(coldStart), false, coldOverlap);
 
   // Five consecutive warm calls, each bounded on its own: a fix that only
   // holds for the first one or two warm calls after the cold one is a fix a
@@ -2330,8 +2328,8 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   const warmResults: Awaited<ReturnType<typeof loadDay>>[] = [];
   for (let i = 1; i <= WARM_CALLS; i++) {
     const start = wireCalls.length;
-    const result = await loadDay(today);
-    reportRun(`warm-${i}`, wireCalls.slice(start), true);
+    const { result, overlap } = await withOverlap(() => loadDay(today));
+    reportRun(`warm-${i}`, wireCalls.slice(start), true, overlap);
     warmResults.push(result);
     assert(`the warm-${i} run reads the source`, result.evidence === "read", `evidence = ${result.evidence}`);
   }
@@ -2428,32 +2426,32 @@ async function runEndedThisWeekCheck(): Promise<void> {
     const ended = (await loadDay("2010-06-10")).endedThisWeek;
     const seeded = ended.filter((goal) => goal.name.startsWith("ended-week"));
     assert(
-      "endedThisWeek lists the goals whose last day fell this week, most recent first, with the last day",
+      "endedThisWeek lists the goals whose last day fell this week, in plan order, with the last day",
       JSON.stringify(seeded) ===
         JSON.stringify([
-          { id: tuesday, name: "ended-week last day tuesday", lastDay: "2010-06-08" },
           { id: monday, name: "ended-week last day monday", lastDay: "2010-06-07" },
+          { id: tuesday, name: "ended-week last day tuesday", lastDay: "2010-06-08" },
         ]),
       `endedThisWeek = ${JSON.stringify(seeded)}; the previous week's goal ${previousWeek} must be absent`,
     );
     const sunday = (await loadDay("2010-06-13")).endedThisWeek.filter((goal) => goal.name.startsWith("ended-week"));
     assert(
       "endedThisWeek on the Sunday holds the whole week's endings, the goal open on Thursday included",
-      sunday.length === 3 && sunday[0].lastDay === "2010-06-10",
+      sunday.length === 3 && sunday.some((goal) => goal.lastDay === "2010-06-10"),
       `endedThisWeek on Sunday = ${JSON.stringify(sunday)}`,
     );
 
     // A fixed week (Mon 2010-08-02): endings on Monday, Tuesday and Thursday
-    // read from its Friday, in horizon-descending order, and none from before.
+    // read from its Friday, in plan order, and none from before.
     const before = await seedGoal("fixed-week before", "2010-08-02");
     const fixedMon = await seedGoal("fixed-week mon", "2010-08-03");
     const fixedTue = await seedGoal("fixed-week tue", "2010-08-04");
     const fixedThu = await seedGoal("fixed-week thu", "2010-08-06");
     const fixed = (await loadDay("2010-08-06")).endedThisWeek.filter((goal) => goal.name.startsWith("fixed-week"));
     assert(
-      "endedThisWeek from a Friday holds the Thursday, Tuesday and Monday endings in horizon-descending order, none from the week before",
+      "endedThisWeek from a Friday holds the Thursday, Tuesday and Monday endings in plan order, none from the week before",
       JSON.stringify(fixed.map((goal) => [goal.id, goal.lastDay])) ===
-        JSON.stringify([[fixedThu, "2010-08-05"], [fixedTue, "2010-08-03"], [fixedMon, "2010-08-02"]]),
+        JSON.stringify([[fixedMon, "2010-08-02"], [fixedTue, "2010-08-03"], [fixedThu, "2010-08-05"]]),
       `endedThisWeek = ${JSON.stringify(fixed)}; the previous week's goal ${before} must be absent`,
     );
   } finally {
@@ -2695,8 +2693,8 @@ async function runMonthLineCheck(): Promise<void> {
     // The overlap and the four statements, on the day with a budget.
     await loadDay("2010-10-20");
     const start = wireCalls.length;
-    await loadDay("2010-10-20");
-    reportRun("month-line", wireCalls.slice(start), true);
+    const { overlap } = await withOverlap(() => loadDay("2010-10-20"));
+    reportRun("month-line", wireCalls.slice(start), true, overlap);
   } finally {
     await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
     if (goalIds.length > 0) {
@@ -2792,8 +2790,8 @@ async function runMonthTaskCheck(): Promise<void> {
 
     await loadDay(today);
     const start = wireCalls.length;
-    await loadDay(today);
-    reportRun("month-task", wireCalls.slice(start), true);
+    const { overlap } = await withOverlap(() => loadDay(today));
+    reportRun("month-task", wireCalls.slice(start), true, overlap);
   } finally {
     if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
     await db.end();
@@ -2834,8 +2832,8 @@ async function runPastWeekCheck(): Promise<void> {
 
     await loadWeek(threeBack);
     const start = wireCalls.length;
-    const past = await loadWeek(threeBack);
-    reportRun("past-week", wireCalls.slice(start), true);
+    const { result: past, overlap } = await withOverlap(() => loadWeek(threeBack));
+    reportRun("past-week", wireCalls.slice(start), true, overlap);
     const current = await loadWeek(today);
 
     assert(

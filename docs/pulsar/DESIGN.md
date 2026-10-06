@@ -91,12 +91,13 @@ Dark, the same design inverted:
 
 ## The marks
 
-Three states, one shape — a 24 px circle at the head of the row:
+Four states, one shape — a 24 px circle at the head of the row:
 
 | state | mark |
 |---|---|
 | done, declared | filled accent, a `#FFFFFF` check inside (`#0F1317` on dark) |
 | done, by evidence | accent-soft fill, 1.5 px accent border, an accent check |
+| done in part | 1.5 px accent border, the lower half filled accent, no check — a quantity logged under its target; it does not count as done |
 | not done | 1.5 px border, nothing inside |
 
 - The two done marks differ so a day marked by another app never reads as one the person said they
@@ -166,6 +167,9 @@ throughout: the 2026–2027 roadmap, goal «IA aplicada». Export (PDF) and impo
 | `MetaMes.dc.html` | the goal's «este mes»: reached of planned, the month's name, «Ver por mes» (RP-28, RP-36) |
 | `MetaMesSinPlan.dc.html` | a measure and no amount this month: the reached figure and the way to plan it |
 | `MetaMesBajo.dc.html` | day ≥ 20 and under 60 %: figures, the day and «60 %», in ink, never alarm (RP-29) |
+
+- **Decided by the user 2026-10-06:** the pace line names no percentage of its own. It reads the day, reached of planned and «bajo el 60 %» — «día 21 · 5 h 24 min de 12 h, bajo el 60 %». A percentage of reached reads as a score (RP-29). The boards `MetaMesBajo` and `HoyMesBajo` still draw it; this line wins.
+- **Decided by the user 2026-10-06:** a goal's one-off takes its estimate where it is planned — Mes and the month's task form, or a connected AI. Hoy's «Escribe algo suelto de…» stays one field (RP-30).
 | `MetaMesSinEvidencia.dc.html` | the source unreadable: the month line is the declared half, and says so (RNP-04) |
 | `HoyMes.dc.html` | Hoy on the phone: an «este mes» block, one line per goal with an amount this month |
 | `HoyMesBajo.dc.html` | the same, the 22nd, one goal under 60 % |
@@ -197,7 +201,7 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 5».
 | `ReporteImpreso.dc.html` | the same page printed on A4: no nav, no button, black on white, «pulsar» and the date in the head |
 | `ReporteSinEvidencia.dc.html` | the source unreadable: one line at the top, each figure from it says «solo lo que dijiste tú» |
 | `ReporteVacio.dc.html` | no goal open: one line and the way back |
-| `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html` | `/exportar` inside the shell, built 2026-10-05 (module 217): the header with «Metas» as its way back, tabs and rail around it with Metas current; each goal's name an `h2`, with a 2px ink rule over it on the phone; from 1024 the goals are cards in three columns and «Descargar PDF» sits beside the title. The printed page is unchanged: no nav, no back |
+| `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html` | `/exportar` inside the shell, built 2026-10-05 (module 217): the header with «Metas» as its way back, tabs and rail around it with Metas current; each goal's name an `h2`, with a 2px ink rule over it on the phone; from 1024 the goals are cards in two columns (three were dropped 2026-10-06, see «Decisions of 2026-10-06») and «Descargar PDF» sits beside the title. The printed page is unchanged: no nav, no back |
 
 ### Page «Importar»
 
@@ -219,6 +223,45 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 10».
 - **The upload hint reads «PDF, texto o imagen · hasta 4 MB», without «Word».** The boards say «PDF, Word, texto o
   imagen»; the model's file part takes PDF alone and a `.docx` answers `unreadableType` (module 151). Decided by the
   coordinator 2026-10-01: the hint never promises a kind the route refuses.
+
+### Notes on tasks (RP-45)
+
+Drawn 2026-10-05 on the pages they belong to, approved by the user the same day: «Aprobados así».
+
+| board | what it holds |
+|---|---|
+| `TareaNota.dc.html` | the note's sheet, empty: eyebrow «nota · <goal> · <month>», the task's name, a labelled text area, «Guardar», «Cancelar» |
+| `TareaNotaEscribiendo.dc.html` | an existing note being edited: line breaks kept, the count from 1800 («1 850 de 2000»), «Guardando…» busy, «quitar la nota» |
+| `TareaNotaGuardada.dc.html` | a month's list with noted tasks: up to two lines of the note under the name, clipped; the note button green with lines |
+| `TareaNotaHecha.dc.html` | a done task keeps its note and its button; the row's tap still undoes |
+| `TareaNotaFallo.dc.html` | the save failed: the sheet stays, the text stays, one line says so |
+| `TareaNotaLarga.dc.html` | over 2000: the ring and the count turn ink, the line says how much fits, nothing is cut |
+| `TareaNotaVaciar.dc.html` | after «quitar la nota»: the row as before, the button grey |
+| `HoyNota.dc.html` | Hoy: the note button on each one-off, pending or done, never the text |
+| `SueltasNota.dc.html` | `/sueltas`: up to two lines of the note under the name and its date |
+| `ImportarRevisarNota.dc.html` | the review shows a template task's and sub-task's note whole, read-only |
+| `ReporteNota.dc.html` | `/exportar`: the note whole under a carried task and its sub-task, set off by a thin left rule |
+| `ReporteImpresoNota.dc.html` | the same on A4 at 12 pt; a long note breaks across pages, never cut |
+
+### The critic's cut of trains 6 and 7 (RP-16, RP-46, RP-47)
+
+Drawn 2026-10-06 on the pages they belong to, approved by the user the same day: «confirma los diseños, me da igual».
+
+| board | what it holds |
+|---|---|
+| `HoyEnParte.dc.html` | Hoy: «1 de 3 min · 09:22 · lo dijiste tú» under the half-filled mark, beside a done and an empty row |
+| `HoyCuentaEnParte.dc.html` | the count with a partial row: «hechos 2 de 5 · 1 en parte»; the partial never adds to «hechos» |
+| `HoyTelefonoSinPedido.dc.html` | phone: a goal that asks nothing today has no section; its «este mes» line stays; asking goals first, in plan order |
+| `HoyTareaMesSubtarea.dc.html` | the next month task is a sub-task: «de <parent>» above its name; the estimate on one line |
+| `DiaPasadoEnParte.dc.html` | a past day with a partial row, the same mark as Hoy |
+| `DiaPasadoPasos.dc.html` | a past day: «‹ día anterior», «día siguiente ›», «volver a hoy»; the date is the title; no empty goal section; «Ese día no pedía nada» when nothing asked |
+| `SemanaEnParte.dc.html` | the phone week: a half dot; the footer «hechos 4 de 6 · 1 en parte»; the desktop cell takes the same half dot |
+| `ReporteTareas.dc.html` | `/exportar` phone: «4 metas · 1 terminada»; «este mes · octubre» on the first figure; «tareas de octubre» — carried first, then the month's own, done and not, sub-tasks indented, notes under every task; every date with its year |
+| `ReporteMesesSemanas.dc.html` | the months table with each week folded under the month of its Monday, indented and muted, spans with year |
+| `ReporteImpresoTareas.dc.html` | the same on A4 |
+| `ReporteMarcoEscritorio.dc.html` | redrawn at 1440: three columns beside the rail, the ended goal last with its date |
+| `ReporteMarcoEscritorio1024.dc.html` | at 1024: two columns; the column count follows the width the rail leaves; no overflow |
+| `ConexionesRevocar.dc.html` | «Revocar» opens a sheet: «¿Revocar «<key>»?», «Deja de funcionar en este momento. La IA que la usa ya no podrá leer ni anotar nada. No se puede deshacer.»; «Revocar» solid, «Dejarla» outline; an unused key reads «creada … · sin usar» |
 
 ## The boards that do not exist
 
@@ -287,6 +330,14 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **`/metas` after «Crear N metas».** It is the list `Exportar.dc.html` draws, with the new goals.
 - **A template read.** It is `ImportarRevisar.dc.html` with «leído con la plantilla, sin IA» in place of
   «leído por OpenAI».
+- **Notes on tasks: dark, the desktop dialog, the create forms.** Dark is the token table's; from 1024 the note's sheet
+  is the centred dialog every sheet already is; `TareaNueva` and the AI's paths draw nothing new. Decided 2026-10-05 by
+  the coordinator with the boards' approval.
+
+- **The critic's cut: what draws no new board.** Evidence below its threshold stays `empty`: there is no partial for a
+  source. The page titles, the Mes link, the 360 controls, «sin monto», the row alignment, the `/metas` plan rows and
+  «nov–nov» each match the board they already had. Dark is the token table's; the desktop dialog is unchanged. Decided
+  2026-10-06 by the coordinator with the boards' approval.
 
 ## Decisions taken here
 
@@ -627,7 +678,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   grabado · 3 min · pide el número». An evidence row keeps its source and never says either; a quiet
   row met in its period says neither. Drawn on `HoyEscritorio.dc.html` and `HoyHechas.dc.html`
   since the first boards; decided 2026-09-30 by the user, module 100.
-- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty; «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.
+- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty (superseded 2026-10-06: the mark is «done in part», `HoyEnParte`); «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.
 - **The plan by month is built as the 21 boards of «El plan» draw it.** Approved by the user 2026-09-30.
 - **A time is written «12 h 30 min»** and stored in whole minutes (RP-35). Decided 2026-09-30 by the user.
 - **A done task adds its estimate to the measure** (RP-36), knowing the same hours may count twice if
@@ -731,3 +782,45 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   a past day's «volver a hoy» keeps its name. Decided 2026-10-05 by the coordinator.
 - **Module 211, `MetaRiel`.** The rail draws one row; nothing in it shares a left edge with the header. The plan said
   otherwise and was corrected to the board. Decided 2026-10-05 by the coordinator.
+- **Notes on tasks (RP-45).** Decided by the user 2026-10-05, five answers:
+  - the note lives on the task (month task, sub-task, one-off), editable at any time, done or not;
+  - it opens from a note button at the end of the row, grey when empty, green with lines when not; no tap that exists today
+    changes (the mark marks, the name deletes, undoes or schedules as before). Boards approved: «Aprobados así»;
+  - the month's lists and `/sueltas` show up to two lines of it; Hoy shows only the button;
+  - the connected AI writes and replaces a note, never empties one;
+  - the PDF prints it under every task it lists — carried ones, and this month's once the report lists them (the second
+    answer, the same day, superseding «carried only»); it travels in on the template's import, not out as text.
+- **What the critic of 2026-10-05 (trains 6 and 7) asked.** Decided by the user 2026-10-05, four answers
+  (`private/critica-2026-10-05-tren7.md`):
+  - a quantity logged below its target is **done in part**: a fourth mark, a half-filled circle; the target stays the bar
+    and the palette stays without red. It needs its board before any screen draws it;
+  - goals and tasks follow **the plan's order**, kept as a position written at import; on Hoy alone, the goals that ask
+    something today come first. A goal's commitments follow the plan's order too (decided the same day);
+  - on the phone, **Hoy drops the section of a goal that asks nothing today**; its line under «este mes» stays, and a
+    one-off for it is written from Mes or the goal;
+  - the report carries **this month's tasks**, done and not, under each goal, and folds the weeks into the months table.
+    This changes RP-33: it is retired and succeeded.
+- **The critic's cut of trains 6 and 7, drawn.** The 13 boards above, approved by the user 2026-10-06: «confirma los
+  diseños, me da igual». What the coordinator chose while drawing stands: the partial never adds to «hechos» and is
+  named apart («· 1 en parte»); a past day steps both ways and keeps «volver a hoy»; a week sits under the month of its
+  Monday; the report is three columns at 1440 and two at 1024; the revoke sheet's words as drawn.
+
+## Decisions of 2026-10-06, after the critic of train 13
+
+- **The report has two columns from 1024, never three.** At 1440 three columns gave 299 px cards and the months table
+  (334 px) ran out of them. `ReporteMarcoEscritorio.dc.html` (three columns) is superseded on this point; the 1024 board's
+  two columns hold at every desktop width. From 1024 to 1279 the months table inside its card takes the phone's stacked face (label over
+  figures); the wide table returns at 1280, where it fits. Decided by the orchestrator 2026-10-06 (module 281): two columns
+  at 1024 leave 280 px of card and the wide table needs 382.
+- **A week that crosses two months is split in the report's months table.** Each month holds the days of that week that
+  fall in it, so the weeks under a month add up to the month. The split week shows under both months with its own span
+  («sem 5 · 28–30 sep 2026», «sem 5 · 1–4 oct 2026»).
+- **Every goal with tasks this month has its «este mes» line on Hoy, measured or not**, as `HoyTelefonoSinPedido.dc.html`
+  already draws «Mudanza · 1 de 3 tareas». A goal with no measure reads its tasks done of total; its next task follows as
+  `HoyTareaMesSubtarea.dc.html` draws it.
+  - On the phone the goal's name sits over its figures, not beside them as the board's one row does: a long name and
+    «1 de 3 tareas» do not share 328 px. Decided by the orchestrator 2026-10-06 (module 283).
+  - From 1024 a goal with no week card gets a side card of its own: its name, «Este mes», then the same lines. No
+    board draws it; it repeats the measured card's order minus the week figure. Decided by the orchestrator 2026-10-06
+    (module 283).
+- **«Correr un mes» is offered only when the month also fell short of its amount** (RP-48, succeeding RP-34).

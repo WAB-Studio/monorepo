@@ -9,6 +9,7 @@ import {
   createOneOff,
   moveTaskToMonth,
   scheduleOneOff,
+  setOneOffNote,
 } from "@/app/actions/one-offs";
 import {
   addCommitment,
@@ -113,9 +114,17 @@ export function registerWriteTools(server: McpServer): void {
       estimate: count.optional(),
       planned_month: month.optional(),
       parent_id: id.optional(),
+      note: text.optional(),
     },
     // The schema takes a missing day as a refusal; a task with none is dayless.
     (input) => createOneOff({ day: null, ...input } as Parameters<typeof createOneOff>[0]),
+  );
+
+  // A blank note would empty the task's: the person empties, the AI never does.
+  tool("set_task_note", { one_off_id: id, note: text }, (input) =>
+    typeof input.note !== "string" || input.note.trim() === ""
+      ? Promise.resolve({ ok: false, error: "mcp.errors.noteEmpty" })
+      : setOneOffNote(input as Parameters<typeof setOneOffNote>[0]),
   );
 
   tool("schedule_task", { one_off_id: id, day }, (input) =>

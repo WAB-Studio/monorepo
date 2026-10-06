@@ -89,6 +89,7 @@ test("the strict schema names every key as required and closes every object", as
   walk(importDraftStrictSchema);
   assert.ok(seen.length >= 6);
   assert.equal("$schema" in (importDraftStrictSchema as object), false);
+  assert.equal(JSON.stringify(importDraftStrictSchema).includes('"note"'), false);
 });
 
 test("a Markdown file is decoded here and sent as text", async () => {

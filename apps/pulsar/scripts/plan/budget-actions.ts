@@ -261,3 +261,16 @@ test("removeMonthBudget: an archived goal and an ended goal are refused with clo
     assert.deepEqual(await rowsOf(goalId), [{ month: `${month}-01`, amount: 45 }]);
   }
 });
+
+test("removeMonthBudget: a goalId that is no uuid and a malformed month are refused with their keys, and the amount stays", async () => {
+  const planted = await settle({ goalId: measuredGoalId, month: thisMonth, amount: 410 });
+  assert.deepEqual(planted, { ok: true });
+
+  const badGoal = await removeMonthBudget({ goalId: "not-a-uuid", month: thisMonth });
+  assert.deepEqual(badGoal, { ok: false, error: "month.errors.invalid" });
+
+  const badMonth = await removeMonthBudget({ goalId: measuredGoalId, month: "2026-13" });
+  assert.deepEqual(badMonth, { ok: false, error: "month.errors.monthInvalid" });
+
+  assert.deepEqual(await rowsOf(measuredGoalId), [{ month: `${thisMonth}-01`, amount: 410 }]);
+});

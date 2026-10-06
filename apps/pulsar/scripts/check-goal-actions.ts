@@ -83,6 +83,8 @@ let renameGoal: typeof import("@/app/actions/plan").renameGoal;
 let createGoal: typeof import("@/app/actions/plan").createGoal;
 let createOneOff: typeof import("@/app/actions/one-offs").createOneOff;
 let scheduleOneOff: typeof import("@/app/actions/one-offs").scheduleOneOff;
+let deleteOneOff: typeof import("@/app/actions/one-offs").deleteOneOff;
+let moveTaskToMonth: typeof import("@/app/actions/one-offs").moveTaskToMonth;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
 let addPhase: typeof import("@/app/actions/plan").addPhase;
 let addCommitment: typeof import("@/app/actions/plan").addCommitment;
@@ -131,7 +133,7 @@ let fixtureGoalId: string;
 before(async () => {
   installStubs(loadCookies());
   ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal, archiveGoal, retireCommitment } = await import("@/app/actions/plan"));
-  ({ createOneOff, scheduleOneOff } = await import("@/app/actions/one-offs"));
+  ({ createOneOff, scheduleOneOff, deleteOneOff, moveTaskToMonth } = await import("@/app/actions/one-offs"));
   ({ declareFact, undoFact } = await import("@/app/actions/facts"));
   ({ todayInZone } = await import("@/lib/zone"));
   ({ PAST_DAY_LIMIT } = await import("@/lib/validation/fact"));
@@ -802,5 +804,101 @@ test("archiveGoal and reopenGoal: an own goal archives and reopens; another pers
     assert.equal(await archived(created.goalId), false);
   } finally {
     await sql`delete from goals.goals where id in ${sql([created.goalId, foreignOpen.id, foreignArchived.id])}`;
+  }
+});
+
+test("createGoal: an empty name and a malformed horizon are refused with their own keys and write no goal", async () => {
+  const named = async () => {
+    const [{ n }] = await sql<{ n: number }[]>`
+      select count(*)::int as n from goals.goals where user_id = ${personId} and name = 'RP-11 horizonte roto'`;
+    return n;
+  };
+  assert.deepEqual(await createGoal({ name: "   ", horizon: shiftDay(today, 30) }), { ok: false, error: "plan.errors.nameEmpty" });
+  assert.deepEqual(await createGoal({ name: "RP-11 horizonte roto", horizon: "no-es-fecha" }), {
+    ok: false,
+    error: "plan.errors.horizonInvalid",
+  });
+  assert.equal(await named(), 0);
+});
+
+test("undoFact: a factId that is no uuid is refused with its own key, never thrown, and a fact stays", async () => {
+  const own = await addCommitment({ goalId: fixtureGoalId, name: "RP-05 id roto", cadenceKind: "daily", satisfaction: "tap" });
+  if (!own.ok) throw new Error(own.error);
+  try {
+    const fact = await declareFact({ commitmentId: own.commitmentId, day: today });
+    if (!fact.ok) throw new Error(fact.error);
+    assert.deepEqual(await undoFact({ factId: "nope" }), { ok: false, error: "day.errors.invalid" });
+    const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from goals.facts where id = ${fact.factId}`;
+    assert.equal(n, 1);
+  } finally {
+    await sql`delete from goals.commitments where id = ${own.commitmentId}`;
+  }
+});
+
+test("createOneOff: a goal nobody owns is refused as goalNotFound, an estimate on a goal with no measure as noMeasure; neither writes a row", async () => {
+  const count = async (name: string) => {
+    const [{ n }] = await sql<{ n: number }[]>`
+      select count(*)::int as n from goals.one_offs where user_id = ${personId} and name = ${name}`;
+    return n;
+  };
+  try {
+    const stranger = await createOneOff({ name: "RP-20 meta ajena", day: null, goalId: randomUUID() });
+    assert.deepEqual(stranger, { ok: false, error: "plan.errors.goalNotFound" });
+    assert.equal(await count("RP-20 meta ajena"), 0);
+
+    // The fixture goal names no measure: no commitment of it is a quantity.
+    const unmeasured = await createGoal({ name: "RP-30 sin medida", horizon: shiftDay(today, 60) });
+    if (!unmeasured.ok) throw new Error(unmeasured.error);
+    try {
+      const refused = await createOneOff({
+        name: "RP-30 estimada sin medida",
+        day: null,
+        goalId: unmeasured.goalId,
+        plannedMonth: today.slice(0, 7),
+        estimate: 5,
+      });
+      assert.deepEqual(refused, { ok: false, error: "month.errors.noMeasure" });
+      assert.equal(await count("RP-30 estimada sin medida"), 0);
+    } finally {
+      await sql`delete from goals.goals where id = ${unmeasured.goalId}`;
+    }
+  } finally {
+    await sql`delete from goals.one_offs where user_id = ${personId} and name in ('RP-20 meta ajena', 'RP-30 estimada sin medida')`;
+  }
+});
+
+test("deleteOneOff: a one-off carrying its own fact is refused as oneOffHasFact and stays; a clean one goes", async () => {
+  const made = await createOneOff({ name: "RP-22 con hecho", day: today });
+  if (!made.ok) throw new Error(made.error);
+  const clean = await createOneOff({ name: "RP-22 sin hecho", day: today });
+  if (!clean.ok) throw new Error(clean.error);
+  const exists = async (id: string) => {
+    const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from goals.one_offs where id = ${id}`;
+    return n === 1;
+  };
+  try {
+    await sql`insert into goals.facts (user_id, one_off_id, day) values (${personId}, ${made.oneOffId}, ${today})`;
+    assert.deepEqual(await deleteOneOff({ oneOffId: made.oneOffId }), { ok: false, error: "day.errors.oneOffHasFact" });
+    assert.equal(await exists(made.oneOffId), true);
+
+    assert.deepEqual(await deleteOneOff({ oneOffId: clean.oneOffId }), { ok: true });
+    assert.equal(await exists(clean.oneOffId), false);
+  } finally {
+    await sql`delete from goals.facts where one_off_id = ${made.oneOffId}`;
+    await sql`delete from goals.one_offs where id in ${sql([made.oneOffId, clean.oneOffId])}`;
+  }
+});
+
+test("moveTaskToMonth: a task nobody can see is notFound, a one-off that is no month task or an id that is no uuid is invalid", async () => {
+  const month = today.slice(0, 7);
+  assert.deepEqual(await moveTaskToMonth({ oneOffId: randomUUID(), month }), { ok: false, error: "plan.errors.notFound" });
+
+  const loose = await createOneOff({ name: "RP-31 suelta sin mes", day: null });
+  if (!loose.ok) throw new Error(loose.error);
+  try {
+    assert.deepEqual(await moveTaskToMonth({ oneOffId: loose.oneOffId, month }), { ok: false, error: "month.errors.invalid" });
+    assert.deepEqual(await moveTaskToMonth({ oneOffId: "nope", month }), { ok: false, error: "month.errors.invalid" });
+  } finally {
+    await sql`delete from goals.one_offs where id = ${loose.oneOffId}`;
   }
 });

@@ -57,6 +57,7 @@ export type ShapedTask = {
   day: string | null;
   estimate: Amount | null;
   doneOn: string | null;
+  note: string | null;
   children: ShapedTask[];
 };
 
@@ -68,6 +69,7 @@ function shapeTask(task: Task, unit: string | null, children: Task[], parent: Ta
     day: task.day,
     estimate: amountOrNull(task.estimate, unit),
     doneOn: task.doneOn,
+    note: task.note ?? null,
     children: children.map((child) => shapeTask(child, unit, [], task)),
   };
 }
@@ -246,6 +248,7 @@ export function shapeDay(loaded: LoadedDay) {
       id: oneOff.id,
       goalId: oneOff.goalId,
       name: oneOff.name,
+      note: oneOff.note,
       day: oneOff.day,
       carried: oneOff.day !== null && oneOff.day < view.day,
     })),
@@ -253,6 +256,7 @@ export function shapeDay(loaded: LoadedDay) {
       id: oneOff.id,
       goalId: oneOff.goalId,
       name: oneOff.name,
+      note: oneOff.note,
       factId: oneOff.factId,
       writtenAt: oneOff.writtenAt,
     })),
@@ -283,13 +287,32 @@ export function shapeReport(report: Report) {
           endsOn: phase.endsOn,
           current: phase.current,
         })),
+        tasks: goal.tasks.map((task) => ({
+          name: task.name,
+          from: monthOrNull(task.from),
+          done: task.done,
+          doneOn: task.doneOn,
+          estimate: amountOrNull(task.estimate, unit),
+          owes: amountOf(task.owes, unit),
+          hasAmount: task.hasAmount,
+          note: task.note,
+          children: task.children.map((child) => ({
+            name: child.name,
+            done: child.done,
+            doneOn: child.doneOn,
+            estimate: amountOrNull(child.estimate, unit),
+            note: child.note,
+          })),
+        })),
         carried: goal.carried.map((item) => ({
           name: item.name,
+          note: item.note,
           from: monthKey(item.from),
           owes: amountOf(item.owes, unit),
           hasAmount: item.hasAmount,
           children: item.children.map((child) => ({
             name: child.name,
+            note: child.note,
             owes: amountOf(child.owes, unit),
             hasAmount: child.hasAmount,
           })),
@@ -314,6 +337,7 @@ export function shapeLoose(input: { dayless: DaylessOneOff[]; scheduled: Schedul
     name: oneOff.name,
     goalId: oneOff.goalId,
     goalName: oneOff.goalName,
+    note: oneOff.note,
   });
   return {
     dayless: input.dayless.map(one),

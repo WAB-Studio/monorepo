@@ -86,12 +86,23 @@
    pushes the row past a 360px viewport. */
 .stackNote {
   margin-inline-start: auto;
-  min-inline-size: 0;
+  min-inline-size: min-content;
   font-size: var(--pulsar-text-meta-size);
   line-height: 1.4;
   text-align: end;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   color: var(--pulsar-muted);
+}
+
+/* Beside a list's own chevron the note is a short phrase («sin monto»): it
+   keeps its line, and the label gives up its fixed 100px before it does. */
+.narrow .stackNote {
+  white-space: nowrap;
+}
+
+.narrow .stackLabel {
+  flex: 0 1 100px;
+  min-inline-size: min-content;
 }
 
 /* The wide face, `RevisionEscritorio.dc.html`. */
@@ -118,6 +129,16 @@
 
 .narrow .wide {
   display: none;
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .stackInCard .phone {
+    display: block;
+  }
+
+  .stackInCard .wide {
+    display: none;
+  }
 }
 
 .hidden {
@@ -177,6 +198,10 @@
   font-size: var(--pulsar-text-meta-size);
   letter-spacing: var(--pulsar-text-measure-tracking);
   color: var(--pulsar-muted);
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .lead {

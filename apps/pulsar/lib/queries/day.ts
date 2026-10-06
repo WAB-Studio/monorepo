@@ -16,7 +16,7 @@ import type {
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
-import { estimateFacts, type Task } from "@/lib/plan/carry";
+import { estimateFacts, monthList, type Task } from "@/lib/plan/carry";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { phasePositions } from "@/lib/day/row-phrases";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
@@ -97,6 +97,7 @@ type OneOffRow = {
   goal_id: string | null;
   name: string;
   day: string | null;
+  note: string | null;
 };
 
 // The one statement's whole shape. `goals` and `one_offs` are fetched here
@@ -110,11 +111,38 @@ type DoneOneOffRow = {
   name: string;
   fact_id: string;
   written_at: string;
+  note: string | null;
 };
 
-type MonthTaskRow = { goal_id: string; id: string; name: string; estimate: number | null };
+type MonthTaskRow = {
+  goal_id: string;
+  id: string;
+  name: string;
+  estimate: number | null;
+  note: string | null;
+  parent_name: string | null;
+};
 
-export type MonthTask = { id: string; name: string; estimate: number | null };
+// Every task of an open goal with its own done day, what `monthList` counts
+// the month's tasks from (the same rule `/metas` reads).
+type GoalTaskRow = {
+  id: string;
+  goal_id: string;
+  parent_id: string | null;
+  name: string;
+  planned_month: string | null;
+  day: string | null;
+  estimate: number | null;
+  done_on: string | null;
+};
+
+export type MonthTask = {
+  id: string;
+  name: string;
+  estimate: number | null;
+  note: string | null;
+  parentName: string | null;
+};
 
 // Every evidence commitment of a goal, retired ones included: the source keys
 // a goal's measure reads, as `loadGoal` reads them.
@@ -134,6 +162,7 @@ type GoalsQueryRow = {
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
   month_tasks: MonthTaskRow[];
+  goal_tasks: GoalTaskRow[];
   dayless_count: number;
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
@@ -193,13 +222,13 @@ async function queryGoalsRow(
 ): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
     select
-      (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(g) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
-               ) order by c.created_at), '[]'::json)
+               ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${day}::date) as commitments,
@@ -228,7 +257,7 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
          where b.month = date_trunc('month', ${day}::date)::date) as month_budgets,
-      (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(o) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.day <= ${day}::date
            and not exists (
@@ -239,7 +268,8 @@ async function queryGoalsRow(
                  'goal_id', o.goal_id,
                  'name', o.name,
                  'fact_id', f.id,
-                 'written_at', f.written_at
+                 'written_at', f.written_at,
+                 'note', o.note
                ) order by f.written_at), '[]'::json)
          from "goals"."one_offs" o
          join "goals"."facts" f on f.one_off_id = o.id
@@ -248,11 +278,13 @@ async function queryGoalsRow(
                  'goal_id', t.goal_id,
                  'id', t.id,
                  'name', t.name,
-                 'estimate', t.estimate
+                 'estimate', t.estimate,
+                 'note', t.note,
+                 'parent_name', t.parent_name
                )), '[]'::json)
          from (
            select distinct on (coalesce(p.goal_id, o.goal_id))
-                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate
+                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate, o.note, p.name as parent_name
              from "goals"."one_offs" o
              left join "goals"."one_offs" p on p.id = o.parent_id
              join "goals"."goals" g on g.id = coalesce(p.goal_id, o.goal_id) and ${openGoal("g", day)}
@@ -264,9 +296,23 @@ async function queryGoalsRow(
               and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
             order by coalesce(p.goal_id, o.goal_id),
                      coalesce(p.planned_month, o.planned_month),
-                     coalesce(p.created_at, o.created_at),
-                     o.created_at
+                     coalesce(p.position, o.position),
+                     o.position,
+                     o.id
          ) t) as month_tasks,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'id', o.id,
+                 'goal_id', o.goal_id,
+                 'parent_id', o.parent_id,
+                 'name', o.name,
+                 'planned_month', o.planned_month,
+                 'day', o.day,
+                 'estimate', o.estimate,
+                 'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
+               )), '[]'::json)
+         from "goals"."one_offs" o
+         join "goals"."goals" g on g.id = o.goal_id and ${openGoal("g", day)}
+         where ${isToday}::boolean) as goal_tasks,
       (select count(*)::int
          from "goals"."one_offs" o
          where o.day is null
@@ -297,7 +343,7 @@ async function queryGoalsRow(
                  'id', g.id,
                  'name', g.name,
                  'horizon', g.horizon
-               ) order by g.horizon desc, g.created_at), '[]'::json)
+               ) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where g.archived_at is null
            and g.horizon > ${weekStart}::date
@@ -397,6 +443,7 @@ export type OneOffSummary = {
   goalId: string | null;
   name: string;
   day: string | null;
+  note: string | null;
 };
 
 // A one-off whose fact lands on the day drawn: RP-19's "done stays", read
@@ -406,12 +453,13 @@ export type DoneOneOffSummary = {
   goalId: string | null;
   name: string;
   factId: string;
+  note: string | null;
   // The instant the fact was written; the screen prints its time of day.
   writtenAt: string;
 };
 
 function toOneOffSummary(row: OneOffRow): OneOffSummary {
-  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day };
+  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note };
 }
 
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
@@ -525,11 +573,36 @@ function monthLineOf(
   return lines;
 }
 
+// The month's tasks done of total per goal, counted the way `/metas` counts
+// them (`monthList`); a goal with none has no key.
+function monthTaskCountsOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, { done: number; total: number }> {
+  const month = monthOf(day);
+  const counts: Record<string, { done: number; total: number }> = {};
+  for (const goal of goals) {
+    const tasks: Task[] = row.goal_tasks
+      .filter((task) => task.goal_id === goal.id)
+      .map((task) => ({
+        id: task.id,
+        parentId: task.parent_id,
+        name: task.name,
+        plannedMonth: task.planned_month,
+        day: task.day,
+        estimate: task.estimate,
+        doneOn: task.done_on,
+      }));
+    const items = monthList(tasks, month, day);
+    if (items.length > 0) counts[goal.id] = { done: items.filter((item) => item.done).length, total: items.length };
+  }
+  return counts;
+}
+
 function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, MonthTask | null> {
   const tasks: Record<string, MonthTask | null> = {};
   for (const goal of goals) {
     const next = row.month_tasks.find((task) => task.goal_id === goal.id);
-    tasks[goal.id] = next ? { id: next.id, name: next.name, estimate: next.estimate } : null;
+    tasks[goal.id] = next
+      ? { id: next.id, name: next.name, estimate: next.estimate, note: next.note, parentName: next.parent_name }
+      : null;
   }
   return tasks;
 }
@@ -620,6 +693,8 @@ export async function loadDay(day: string): Promise<{
   // Each open goal's next undone leaf of the month, carried first; read on
   // today alone, `{}` on any other day.
   monthTask: Record<string, MonthTask | null>;
+  // Tasks of the month, done of total, for every goal that has any; today only.
+  monthTaskCounts: Record<string, { done: number; total: number }>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
@@ -695,6 +770,7 @@ export async function loadDay(day: string): Promise<{
       name: o.name,
       factId: o.fact_id,
       writtenAt: o.written_at,
+      note: o.note,
     })),
     daylessCount: row.dayless_count,
     scheduledCount: row.scheduled_count,
@@ -707,6 +783,7 @@ export async function loadDay(day: string): Promise<{
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     monthLine: monthLineOf(goals, row, evidenceOutcome, day),
     monthTask: isToday ? monthTaskOf(goals, row) : {},
+    monthTaskCounts: isToday ? monthTaskCountsOf(goals, row, day) : {},
     commitments: row.commitments.map(toCommitmentInfo),
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),
