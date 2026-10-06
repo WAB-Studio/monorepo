@@ -126,6 +126,10 @@ test("the phone footer names the partial apart from «hechos» and draws the fou
       await expect(markOf(page, lastMonday)).toHaveAttribute("data-state", "partial");
       // One 30 of 30 day, one 29 of 30: «hechos 1 de 7 · 1 en parte».
       await expect(page.getByText("de 7 · 1 en parte", { exact: true })).toBeVisible();
+      // The figure is the done count alone: the partial day is not added to it.
+      const rest = page.getByText("de 7 · 1 en parte", { exact: true });
+      await expect(rest.locator("xpath=preceding-sibling::*[1]")).toHaveText("1");
+      await expect(rest.locator("xpath=preceding-sibling::*[2]")).toHaveText("hechos");
       const legend = page.getByTestId("week-legend");
       await expect(legend).toBeVisible();
       for (const word of ["hecho", "por evidencia", "en parte", "pendiente"]) {
