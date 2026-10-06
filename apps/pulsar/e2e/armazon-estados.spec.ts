@@ -92,8 +92,14 @@ for (const width of [390, 1440]) {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       const landed = await page.locator("main header").first().boundingBox();
 
+      // The skeleton shows only once the link's prefetch has landed `loading`
+      // in the router cache; clicking before it leaves the screen blank.
+      const prefetched = page.waitForResponse(
+        (res) => new URL(res.url()).pathname === "/mes" && res.request().headers()["next-router-prefetch"] !== undefined,
+      );
       await page.goto("/");
       await loaded(page);
+      await prefetched;
       let release!: () => void;
       const gate = new Promise<void>((done) => {
         release = done;
