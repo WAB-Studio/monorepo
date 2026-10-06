@@ -36,6 +36,8 @@ type Seed = {
   phaseName: string;
   monthTask: string;
   doneTask: string;
+  monthNote: string;
+  doneNote: string;
   taskNote: string;
   childNote: string;
 };
@@ -61,6 +63,8 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
   const phaseName = `Fase de exportar ${stamp}`;
   const monthTask = `Tarea del mes ${stamp}`;
   const doneTask = `Tarea hecha ${stamp}`;
+  const monthNote = `Nota de la tarea del mes ${stamp}`;
+  const doneNote = `Nota de la tarea hecha ${stamp}`;
 
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
@@ -95,12 +99,12 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
     values (${person.id}, ${goal.id}, ${task.id}, ${childName}, 45, ${CHILD_NOTE})
   `;
   await db`
-    insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
-    values (${person.id}, ${goal.id}, ${monthTask}, 60, ${monthStart}::date)
+    insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month, note)
+    values (${person.id}, ${goal.id}, ${monthTask}, 60, ${monthStart}::date, ${monthNote})
   `;
   const [finished] = await db<{ id: string }[]>`
-    insert into goals.one_offs (user_id, goal_id, name, planned_month)
-    values (${person.id}, ${goal.id}, ${doneTask}, ${monthStart}::date)
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, note)
+    values (${person.id}, ${goal.id}, ${doneTask}, ${monthStart}::date, ${doneNote})
     returning id
   `;
   await db`
@@ -115,6 +119,8 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
     phaseName,
     monthTask,
     doneTask,
+    monthNote,
+    doneNote,
     taskNote: TASK_NOTE,
     childNote: CHILD_NOTE,
   };
@@ -173,6 +179,15 @@ test.describe("the report page (RP-33, RP-35)", () => {
       await expect(seen(`tareas de ${monthName}`)).toHaveCount(1);
       await expect(seen(seeded.monthTask)).toHaveCount(1);
       await expect(seen(seeded.doneTask)).toHaveCount(1);
+      // RP-46: a note sits under its own task, whether the task is carried, this month's or done.
+      for (const [task, note] of [
+        [seeded.monthTask, seeded.monthNote],
+        [seeded.doneTask, seeded.doneNote],
+      ]) {
+        await expect(
+          page.getByText(task, { exact: true }).locator("visible=true").locator("xpath=following-sibling::p[1]"),
+        ).toHaveText(note);
+      }
       await expect(page.getByText(/^exportar · .* de \d{4}$/)).toBeVisible();
       await expect(page).toHaveTitle(/^pulsar · /);
       // The evidence read, so no notice.
@@ -765,6 +780,12 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-33, RP-35)",
       for (const task of [first.doneTask, first.monthTask, first.taskName]) {
         expect(block, task).toContain(task);
       }
+      // Each note prints after its own task and before the next one.
+      const at = (text: string) => block.indexOf(text);
+      expect(at(first.monthTask)).toBeGreaterThan(at(first.childName));
+      expect(at(first.monthNote)).toBeGreaterThan(at(first.monthTask));
+      expect(at(first.monthNote)).toBeLessThan(at(first.doneTask));
+      expect(at(first.doneNote)).toBeGreaterThan(at(first.doneTask));
       // A week's span sits inside its month's block: the closest month above names its start.
       const months = [
         "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -927,4 +948,33 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
     }
   });
+
+  for (const width of [360, 1280]) {
+    test(`at ${width} a sub-task's label starts to the right of its parent's`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const seeded = await seed(db, person);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 900 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        const main = page.getByRole("main");
+        const parent = await main.getByText(seeded.taskName, { exact: true }).boundingBox();
+        const child = await main.getByText(seeded.childName, { exact: true }).boundingBox();
+        expect(parent).not.toBeNull();
+        expect(child).not.toBeNull();
+        expect(child!.x - parent!.x).toBeGreaterThanOrEqual(24);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
 });
