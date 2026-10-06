@@ -6,9 +6,12 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import postgres from "postgres";
 
 import { adminSql, stubServerOnly } from "./lib/people";
+
+assertSuiteDatabase();
 
 const lane = Number(process.env.HARNESS_LANE ?? "1");
 const base = (process.env.PULSAR_BASE_URL ?? `http://localhost:${3200 + lane - 1}`).replace(/\/+$/, "");

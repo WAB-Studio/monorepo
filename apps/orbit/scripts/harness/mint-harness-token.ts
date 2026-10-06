@@ -10,6 +10,8 @@
 // no user — an unknown address there is a typo, not a lane.
 import { randomBytes, randomUUID } from "node:crypto";
 
+import { assertSuiteDatabase } from "@repo/harness-registry";
+
 import { fixtureSql } from "./fixtures";
 import {
   ensureHarnessAuthUser,
@@ -47,6 +49,7 @@ async function land(email: string, create: boolean): Promise<void> {
 
 void (async () => {
   try {
+    assertSuiteDatabase();
     const named = process.argv[2];
 
     if (named) await land(named, false);

@@ -20,7 +20,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import { registerSharedIdentity } from "@repo/harness-registry";
+import { assertSuiteDatabase, registerSharedIdentity } from "@repo/harness-registry";
 import type postgres from "postgres";
 
 import { fixtureSql } from "./fixtures";
@@ -342,6 +342,7 @@ async function newestTokenHash(userId: string): Promise<string | null> {
  * insert, so no crash between the two can leave one without the other.
  */
 export async function ensureHarnessAuthUser(email: string): Promise<string> {
+  assertSuiteDatabase();
   const [existing] = await fixtureSql<{ id: string }[]>`
     select id from auth.users where email = ${email}`;
   if (existing) {

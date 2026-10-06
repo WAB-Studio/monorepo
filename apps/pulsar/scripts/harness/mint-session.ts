@@ -25,7 +25,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import { openRun } from "@repo/harness-registry";
+import { assertSuiteDatabase, openRun } from "@repo/harness-registry";
 import postgres from "postgres";
 
 export const sql = postgres(process.env.MIGRATION_DATABASE_URL!, {
@@ -72,6 +72,7 @@ function sessionFile(): string {
  * there is a 500, not a refusal.
  */
 export async function createIdentity(runId: string): Promise<{ id: string; email: string }> {
+  assertSuiteDatabase();
   const id = randomUUID();
   const email = `harness-pulsar-${id}@example.invalid`;
 
@@ -105,6 +106,7 @@ export async function createIdentity(runId: string): Promise<{ id: string; email
 // `auth.users.recovery_token` and a matching `auth.one_time_tokens` row, the
 // only pair GoTrue's `verifyOtp` accepts for `type=magiclink`.
 export async function landRecoveryToken(userId: string, email: string): Promise<string> {
+  assertSuiteDatabase();
   const hash = randomBytes(32).toString("hex");
 
   await sql`

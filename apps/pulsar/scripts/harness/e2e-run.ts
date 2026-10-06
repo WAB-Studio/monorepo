@@ -10,7 +10,7 @@
 // inherits it through `process.env`.
 import { execFileSync } from "node:child_process";
 
-import { closeRun, openRun, registeredIdentities } from "@repo/harness-registry";
+import { assertSuiteDatabase, closeRun, openRun, registeredIdentities } from "@repo/harness-registry";
 import postgres from "postgres";
 
 export function runScript(script: string, runId: string): void {
@@ -67,6 +67,8 @@ export async function dropRun(sql: postgres.Sql): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
+  // Every spec's inline `auth.users` insert runs after this, in the same suite.
+  assertSuiteDatabase();
   // Held open for the suite's life: the heartbeat `openRun` starts writes
   // through this client.
   const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
