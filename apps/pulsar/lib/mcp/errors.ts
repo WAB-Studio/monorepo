@@ -8,10 +8,11 @@ import mcp from "../../messages/es/mcp.json";
 import month from "../../messages/es/month.json";
 import oauth from "../../messages/es/oauth.json";
 import plan from "../../messages/es/plan.json";
+import roadmap from "../../messages/es/roadmap.json";
 
 // The request config belongs to a request; a tool answers outside one, so the
 // catalogue is read here directly, in the one locale there is.
-const messages = { connections, day, goal, import: importMessages, mcp, month, oauth, plan };
+const messages = { connections, day, goal, import: importMessages, mcp, month, oauth, plan, roadmap };
 const translate = createTranslator({ locale: "es", messages });
 
 const KEY = /^[A-Za-z]+\.errors\.[A-Za-z]+$/;

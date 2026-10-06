@@ -899,9 +899,9 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
   const updatable = columns.map((row) => row.column_name).sort();
   assert(
     "P49",
-    updatable.length === 5 &&
+    updatable.length === 7 &&
       updatable.join(",") ===
-        ["archived_at", "horizon", "measure_name", "measure_unit", "name"].sort().join(","),
+        ["archived_at", "horizon", "measure_name", "measure_unit", "name", "plan_seen", "rhythm"].sort().join(","),
     `columns of goals.goals updatable by authenticated = ${updatable.join(", ") || "none"}`,
   );
 
@@ -991,7 +991,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set name = 'otro' where id = ${dayless.id}`,
       );
-      assert("P54", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+      assert("P54", renames.code === undefined, `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
 
       const movesHorizon = await attemptRows<{ id: string }>(
         tx,
@@ -1037,7 +1037,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
   const oneOffUpdatable = oneOffCols.map((r) => r.column_name).sort();
   assert(
     "P58",
-    oneOffUpdatable.join(",") === "day,note,planned_month",
+    oneOffUpdatable.join(",") === "day,estimate,name,note,planned_month",
     `columns of goals.one_offs updatable by authenticated = ${oneOffUpdatable.join(", ") || "none"}`,
   );
 
@@ -1128,7 +1128,7 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set name = 'otro' where id = ${onToday}`,
       );
-      assert("P64", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+      assert("P64", renames.code === undefined, `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
 
       throw forcedRollback;
     })
@@ -1211,7 +1211,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   assert(
     "P111",
     oneOffs ===
-      "DELETE INSERT(day,estimate,goal_id,id,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,note,planned_month)",
+      "DELETE INSERT(day,estimate,goal_id,id,in_plan,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,estimate,name,note,planned_month)",
     `one_offs: authenticated = ${oneOffs || "none"}`,
   );
 
@@ -1342,8 +1342,8 @@ async function checkPlanByMonth(): Promise<void> {
       };
       const parent = await monthTask("padre", goal.id);
       const [datedParent] = await tx<{ id: string }[]>`
-        insert into goals.one_offs (user_id, goal_id, name, planned_month, day)
-        values (${subject}, ${goal.id}, 'padre con dia', '2026-10-01', '2026-10-05') returning id`;
+        insert into goals.one_offs (user_id, goal_id, name, day)
+        values (${subject}, ${goal.id}, 'padre con dia', '2026-10-05') returning id`;
       const [estimatedParent] = await tx<{ id: string }[]>`
         insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
         values (${subject}, ${goal.id}, 'padre con estimado', '2026-10-01', 60) returning id`;
@@ -1426,7 +1426,7 @@ async function checkPlanByMonth(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set estimate = 90 where id = ${childId}`,
       );
-      assert("P88", setsEstimate.code === "42501", `update one_offs.estimate, sqlstate = ${setsEstimate.code ?? "none"}`);
+      assert("P88", setsEstimate.code === undefined, `update one_offs.estimate, sqlstate = ${setsEstimate.code ?? "none"}`);
       const setsParent = await attempt(
         tx,
         (sp) => sp`update goals.one_offs set parent_id = null where id = ${childId}`,
@@ -2081,7 +2081,7 @@ async function checkTaskNote(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set name = 'otro' where id = ${done.id}`,
       );
-      assert("P172", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+      assert("P172", renames.code === undefined, `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
 
       await tx`select set_config('role', 'anon', true)`;
       const anonNote = await attempt(
@@ -2279,6 +2279,176 @@ async function checkGoalAndOneOffPositionPerPerson(): Promise<void> {
   await sql.end();
 }
 
+// Module 334 (RP-50 to RP-55): `0013` flags plan tasks, grants `name` and
+// `estimate` an UPDATE guarded by `one_offs_guard_day`, and adds `rhythm` and
+// `plan_seen` to goals. Driven bare, own transaction, forced rollback.
+async function checkRoadmapSchema(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      const [bare] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'sin medida', '2027-12-31') returning id`;
+      const [measured] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+        values (${subject}, 'con medida', '2027-12-31', 'horas', 'h') returning id`;
+      const [theirGoal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${intruder}, ${theirGoal.id}, 'ajena', '2026-11-01') returning id`;
+
+      await enterUserContext(tx, subject);
+      const [fixed] = await tx<{ id: string; in_plan: boolean }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${subject}, ${measured.id}, 'fijada', '2026-11-01') returning id, in_plan`;
+      assert("P190", fixed.in_plan === true, `insert naming planned_month lands in_plan, got ${fixed.in_plan}`);
+
+      const [suelta] = await tx<{ id: string; in_plan: boolean }[]>`
+        insert into goals.one_offs (user_id, goal_id, name)
+        values (${subject}, ${measured.id}, 'suelta') returning id, in_plan`;
+      assert("P191", suelta.in_plan === false, `insert with neither month nor parent stays out, got ${suelta.in_plan}`);
+
+      const [unfixed] = await tx<{ id: string; in_plan: boolean }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${subject}, ${measured.id}, 'colocada', true) returning id, in_plan`;
+      assert("P192", unfixed.in_plan === true, `insert naming in_plan keeps it, got ${unfixed.in_plan}`);
+
+      const underUnfixed = await attemptRows<{ id: string; in_plan: boolean }>(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id)
+          values (${subject}, ${measured.id}, 'hija', ${unfixed.id}) returning id, in_plan`,
+      );
+      assert(
+        "P193",
+        underUnfixed.code === undefined && underUnfixed.rows[0]?.in_plan === true,
+        `sub-task under an unfixed plan task is admitted and in plan, sqlstate = ${underUnfixed.code ?? "none"}`,
+      );
+
+      const underSuelta = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id)
+          values (${subject}, ${measured.id}, 'hija de suelta', ${suelta.id}) returning id`,
+      );
+      assert("P194", underSuelta.code === "42501", `sub-task under a suelta, sqlstate = ${underSuelta.code ?? "none"}`);
+
+      // A plan task may take a day (scheduleOneOff); only a goalless one is out of the plan.
+      const goallessInPlan = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, name, in_plan)
+          values (${subject}, 'sin meta', true) returning id`,
+      );
+      assert("P195", goallessInPlan.code === "23514", `in_plan with no goal, sqlstate = ${goallessInPlan.code ?? "none"}`);
+
+      const [done] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${subject}, ${measured.id}, 'hecha', '2026-11-01') returning id`;
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${done.id}, '2026-09-22')`;
+
+      const renamed = await attemptRows<{ name: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'nueva' where id = ${fixed.id} returning name`,
+      );
+      assert(
+        "P196",
+        renamed.code === undefined && renamed.rows.length === 1 && renamed.rows[0].name === "nueva",
+        `own undone task takes a name, sqlstate = ${renamed.code ?? "none"}, rows = ${renamed.rows.length}`,
+      );
+
+      const reestimated = await attemptRows<{ estimate: number }>(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 3 where id = ${fixed.id} returning estimate`,
+      );
+      assert(
+        "P197",
+        reestimated.code === undefined && reestimated.rows.length === 1 && reestimated.rows[0].estimate === 3,
+        `own undone task takes an estimate, sqlstate = ${reestimated.code ?? "none"}, rows = ${reestimated.rows.length}`,
+      );
+
+      const doneEstimate = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 4 where id = ${done.id} returning id`,
+      );
+      assert(
+        "P198",
+        doneEstimate.code === undefined && doneEstimate.rows.length === 0,
+        `estimate on a done task, sqlstate = ${doneEstimate.code ?? "none"}, rows = ${doneEstimate.rows.length}`,
+      );
+
+      const parentEstimate = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 4 where id = ${unfixed.id} returning id`,
+      );
+      assert(
+        "P199",
+        parentEstimate.code === undefined && parentEstimate.rows.length === 0,
+        `estimate on a parent, sqlstate = ${parentEstimate.code ?? "none"}, rows = ${parentEstimate.rows.length}`,
+      );
+
+      const doneName = await attemptRows<{ name: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'hecha y renombrada' where id = ${done.id} returning name`,
+      );
+      assert(
+        "P200",
+        doneName.code === undefined && doneName.rows.length === 1,
+        `name on a done task, sqlstate = ${doneName.code ?? "none"}, rows = ${doneName.rows.length}`,
+      );
+
+      const theirName = await attemptCount(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'robada', estimate = 2 where id = ${theirs.id}`,
+      );
+      assert("P201", theirName.code === undefined && theirName.count === 0, `another person's row, sqlstate = ${theirName.code ?? "none"}, count = ${theirName.count}`);
+
+      const flip = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set in_plan = true where id = ${suelta.id} returning id`,
+      );
+      assert("P202", flip.code === "42501", `update one_offs.in_plan, sqlstate = ${flip.code ?? "none"}`);
+
+      const bareRhythm = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.goals set rhythm = 5 where id = ${bare.id} returning id`,
+      );
+      assert("P203", bareRhythm.code === "23514", `rhythm on a goal with no measure, sqlstate = ${bareRhythm.code ?? "none"}`);
+
+      const rhythm = await attemptRows<{ rhythm: number }>(
+        tx,
+        (sp) => sp`update goals.goals set rhythm = 5 where id = ${measured.id} returning rhythm`,
+      );
+      assert("P204", rhythm.code === undefined && rhythm.rows[0]?.rhythm === 5, `rhythm on a measured goal, sqlstate = ${rhythm.code ?? "none"}`);
+
+      const badSeen = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.goals set plan_seen = '2026-11-15' where id = ${measured.id} returning id`,
+      );
+      assert("P205", badSeen.code === "23514", `plan_seen off the first day, sqlstate = ${badSeen.code ?? "none"}`);
+
+      const seen = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.goals set plan_seen = '2026-11-01' where id = ${measured.id} returning id`,
+      );
+      assert("P206", seen.code === undefined && seen.rows.length === 1, `plan_seen on the first day, sqlstate = ${seen.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // The data move: nothing with a month or a parent is left outside the plan.
+  const [{ n }] = await sql<{ n: string }[]>`
+    select count(*)::text as n from goals.one_offs
+    where (planned_month is not null or parent_id is not null) and not in_plan`;
+  assert("P207", Number(n) === 0, `rows with a month or a parent outside the plan, got ${n}`);
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2306,6 +2476,7 @@ async function main(): Promise<void> {
   await checkPlanOrderBackfillTieBreak();
   await checkCommitmentPositionPerPerson();
   await checkGoalAndOneOffPositionPerPerson();
+  await checkRoadmapSchema();
 
   if (failed) process.exit(1);
 }

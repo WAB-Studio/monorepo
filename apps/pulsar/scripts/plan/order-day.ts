@@ -140,8 +140,8 @@ test("loadDay: the next month task is the first leaf in plan order and names its
   const b = REVERSED(4);
   // One statement, so created_at ties; listed against plan order, so the heap order reads wrong too.
   const rows = [
-    { id: b, name: "1b", position: base + 23, parent: cap1, goal: null, month: null },
-    { id: a, name: "1a", position: base + 22, parent: cap1, goal: null, month: null },
+    { id: b, name: "1b", position: base + 23, parent: cap1, goal: goalId, month: null },
+    { id: a, name: "1a", position: base + 22, parent: cap1, goal: goalId, month: null },
     { id: cap2, name: "Cap. 2", position: base + 21, parent: null, goal: goalId, month },
     { id: cap1, name: "Cap. 1", position: base + 20, parent: null, goal: goalId, month },
   ];

@@ -2393,6 +2393,7 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runMonthLineCheck();
   await runMonthTaskCheck();
   await runPastWeekCheck();
+  await runPlanReadCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -2730,10 +2731,11 @@ async function runMonthTaskCheck(): Promise<void> {
     day: string | null,
     createdAt: string,
     estimate: number | null = null,
+    note: string | null = null,
   ): Promise<string> {
     const [row] = await db<{ id: string }[]>`
-      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, created_at)
-      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate},
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, note, created_at)
+      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate}, ${note},
               ${createdAt}::timestamptz)
       returning id
     `;
@@ -2758,22 +2760,35 @@ async function runMonthTaskCheck(): Promise<void> {
     const own = await seed("month-task own", month, null, null, "2020-01-03T00:00:00Z", 90);
     const parent = await seed("month-task carried parent", previous, null, null, "2020-01-04T00:00:00Z");
     const first = await seed("month-task child 1", null, parent, null, "2020-01-05T00:00:00Z", 30);
-    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45);
+    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45, "month-task note");
+    const third = await seed("month-task child 3", null, parent, null, "2020-01-07T00:00:00Z", 15);
     await finish(first);
 
     const nextOf = async () => (await loadDay(today)).monthTask[goal.id];
     const carried = await nextOf();
     assert(
       "the carried parent's undone child is the goal's next task, before the month's own and any dated one-off",
-      carried?.id === second && carried.name === "month-task child 2" && carried.estimate === 45,
+      carried?.id === second &&
+        carried.name === "month-task child 2" &&
+        carried.estimate === 45 &&
+        carried.note === "month-task note" &&
+        carried.parentName === "month-task carried parent",
       `monthTask = ${JSON.stringify(carried)}`,
     );
 
     await finish(second);
+    const afterSecond = await nextOf();
+    assert(
+      "the next undone child follows in plan order, a parent's name riding with it and no note of its own",
+      afterSecond?.id === third && afterSecond.note === null && afterSecond.parentName === "month-task carried parent",
+      `monthTask = ${JSON.stringify(afterSecond)}`,
+    );
+
+    await finish(third);
     const ownNext = await nextOf();
     assert(
       "with the carried child done the month's own task is next, and a task of the month after never is",
-      ownNext?.id === own && ownNext.estimate === 90,
+      ownNext?.id === own && ownNext.estimate === 90 && ownNext.parentName === null,
       `monthTask = ${JSON.stringify(ownNext)}`,
     );
 
@@ -2869,6 +2884,104 @@ async function runPastWeekCheck(): Promise<void> {
   } finally {
     if (ids.length > 0) {
       await db`delete from goals.goals where id in ${db(ids)} and user_id = ${person.id}`;
+    }
+    await db.end();
+  }
+}
+
+// Module 341 (RP-50, RP-52, RP-53, RNP-03): Hoy reads the plan. A 30-hour task
+// at a rhythm of 10 is split across three months and gives its first part;
+// last month closed with 5 done of its 10, so the end moved and the notice
+// says so, once, today alone, until `plan_seen` reaches the closed month.
+async function runPlanReadCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { monthOf } = await import("@/lib/plan/months");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runPlanReadCheck: no verified session");
+  const userId = person.id;
+  const today = todayInZone();
+  const closed = monthOf(addDays(monthOf(today), -1));
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+
+  async function seedGoal(name: string, rhythm: number | null): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${userId}, ${name}, '2099-12-31'::date, 'hours', 'hours', ${rhythm},
+              '2020-01-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalIds.push(row.id);
+    return row.id;
+  }
+  async function seedTask(goal: string, name: string, estimate: number, createdAt: string): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, created_at)
+      values (${userId}, ${goal}, ${name}, ${estimate}, true, ${createdAt}::timestamptz)
+      returning id
+    `;
+    return row.id;
+  }
+
+  try {
+    const goal = await seedGoal("plan-read probe", 10);
+    const small = await seedTask(goal, "plan-read done in the closed month", 5, "2020-01-01T00:00:00Z");
+    const big = await seedTask(goal, "plan-read split", 30, "2020-01-02T00:00:00Z");
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day) values (${userId}, ${goal}, ${small}, ${closed}::date)
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount) values (${userId}, ${goal}, ${closed}::date, 12)
+    `;
+    const loose = await seedGoal("plan-read no rhythm", null);
+
+    const loaded = await loadDay(today);
+    const next = loaded.monthTask[goal];
+    assert(
+      "a split task is the next task and gives this month's part, not its whole estimate",
+      next?.id === big && next.part === 10 && next.estimate === 30,
+      `monthTask = ${JSON.stringify(next)}`,
+    );
+    const counts = loaded.monthTaskCounts[goal];
+    assert(
+      "the month's counts come from the plan: the split task, none done",
+      counts?.done === 0 && counts.total === 1,
+      `monthTaskCounts = ${JSON.stringify(counts)}`,
+    );
+    assert("the month line plans the rhythm", loaded.monthLine[goal]?.planned === 10, JSON.stringify(loaded.monthLine[goal]));
+
+    const notice = loaded.planNotice[goal];
+    assert(
+      "a month that closed short reads a notice with the closed month, what was done and the amount its own budget set",
+      notice !== null &&
+        notice.closedMonth === closed &&
+        notice.closedDone === 5 &&
+        notice.closedAmount === 12 &&
+        notice.movedDays > 0,
+      `planNotice = ${JSON.stringify(notice)}`,
+    );
+    assert(
+      "a goal with no rhythm reads no notice",
+      loaded.planNotice[loose] === null,
+      `planNotice = ${JSON.stringify(loaded.planNotice[loose])}`,
+    );
+    const past = await loadDay(addDays(today, -1));
+    assert("a past day reads no notice", Object.keys(past.planNotice).length === 0, JSON.stringify(past.planNotice));
+
+    await db`update goals.goals set plan_seen = ${closed}::date where id = ${goal}`;
+    const seen = await loadDay(today);
+    assert("once plan_seen reaches the closed month the notice is gone", seen.planNotice[goal] === null, JSON.stringify(seen.planNotice[goal]));
+
+    await loadDay(today);
+    const start = wireCalls.length;
+    const { overlap } = await withOverlap(() => loadDay(today));
+    reportRun("plan-read", wireCalls.slice(start), true, overlap);
+  } finally {
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
     }
     await db.end();
   }

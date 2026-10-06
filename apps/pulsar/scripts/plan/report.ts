@@ -107,6 +107,8 @@ let searchesGoalId: string;
 let archivedGoalId: string;
 let foreignGoalId: string;
 let sharesGoalId: string;
+let rhythmGoalId: string;
+let partialGoalId: string;
 let loadReport: typeof import("@/lib/queries/report").loadReport;
 let loadGoal: typeof import("@/lib/queries/goal").loadGoal;
 
@@ -217,6 +219,35 @@ before(async () => {
   await task("RP-46 cuota: sin monto", {});
   const whole = await task("RP-46 cuota: toda hecha", {});
   await doneOn(await task("RP-46 cuota: toda hecha hija", { parent: whole, month: false, estimate: 20 }), `${monthFrom(today, -1)}-06`);
+
+  // A goal with a rhythm and no month on its tasks: the plan places them.
+  const rhythm = await goal("RP-49 fixture: ritmo", "minutos");
+  rhythmGoalId = rhythm.goalId;
+  await sql`update goals.goals set rhythm = 20 where id = ${rhythmGoalId}`;
+  for (const [position, name, estimate] of [
+    [1, "RP-49 ritmo: primera", 8],
+    [2, "RP-49 ritmo: segunda", 8],
+    [3, "RP-49 ritmo: tercera", 8],
+  ] as const) {
+    await sql`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, position)
+      values (${owner.user_id}, ${rhythmGoalId}, ${name}, ${estimate}, true, ${position})`;
+  }
+
+  // Parents whose children are only partly estimated: one carried, one of this month.
+  partialGoalId = (await goal("RP-46 fixture: parcial", "minutos")).goalId;
+  for (const [name, month] of [
+    ["RP-46 parcial: arrastrada", lastMonth],
+    ["RP-46 parcial: del mes", `${monthFrom(today, 0)}-01`],
+  ] as const) {
+    const [parent] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${owner.user_id}, ${partialGoalId}, ${name}, ${month}) returning id`;
+    await sql`
+      insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
+      values (${owner.user_id}, ${partialGoalId}, ${`${name} con monto`}, ${parent.id}, 5),
+             (${owner.user_id}, ${partialGoalId}, ${`${name} sin monto`}, ${parent.id}, null)`;
+  }
 
   const archivedResult = await plan.archiveGoal({ goalId: archivedGoalId });
   if (!archivedResult.ok) throw new Error(`archiveGoal: ${archivedResult.error}`);
@@ -375,4 +406,44 @@ test("loadReport: a closed month reads its share carried; the current and future
   assert.equal(byMonth.get(monthFrom(today, -2))!.carried, null);
   assert.equal(byMonth.get(today.slice(0, 7))!.carried, null);
   assert.equal(byMonth.get(monthFrom(today, 1))!.carried, null);
+});
+
+test("loadReport: a goal with a rhythm lists this month's placed tasks, the plan's order, none carried", async () => {
+  const report = await loadReport(today);
+  const entry = report.goals.find((goal) => goal.id === rhythmGoalId)!;
+  // 20 a month holds the first two (8 + 8) whole and 4 of the third.
+  assert.deepEqual(
+    entry.tasks.map((item) => ({ name: item.name, from: item.from, done: item.done })),
+    [
+      { name: "RP-49 ritmo: primera", from: null, done: false },
+      { name: "RP-49 ritmo: segunda", from: null, done: false },
+      { name: "RP-49 ritmo: tercera", from: null, done: false },
+    ],
+  );
+  assert.deepEqual(entry.carried, []);
+});
+
+test("loadReport: this month's list of a goal with fixed months keeps carried first, then its own, done and not", async () => {
+  const report = await loadReport(today);
+  const minutes = report.goals.find((goal) => goal.id === minutesGoalId)!;
+  assert.deepEqual(
+    minutes.tasks.map((item) => ({ name: item.name, from: item.from, done: item.done })),
+    [
+      { name: "RP-46 fixture: arrastrada", from: `${monthFrom(today, -1)}-01`, done: false },
+      { name: "RP-46 fixture: hecha", from: null, done: true },
+    ],
+  );
+});
+
+test("loadReport: a parent with any estimated child has an amount, carried or of the month", async () => {
+  const report = await loadReport(today);
+  const entry = report.goals.find((goal) => goal.id === partialGoalId)!;
+  assert.deepEqual(
+    entry.tasks.map((item) => [item.name, item.hasAmount]),
+    [
+      ["RP-46 parcial: arrastrada", true],
+      ["RP-46 parcial: del mes", true],
+    ],
+  );
+  assert.deepEqual(entry.carried.map((item) => [item.name, item.hasAmount]), [["RP-46 parcial: arrastrada", true]]);
 });

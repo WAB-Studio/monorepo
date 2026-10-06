@@ -891,6 +891,17 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
     hours are split between the two.
   - The end date is the plan's: «a este ritmo terminas en …», set against the goal's end.
   - Built before wave 3 of the UX slice: the edit sheet and the plan's words wait for these boards.
+- **Boards III of the roadmap, approved by the user 2026-10-06** on the page «El plan por mes», second row:
+  `RoadmapTramoMedio`, `RoadmapTareaNueva`, `RoadmapRitmoHoja`, `RoadmapSinMedida`, `MetaVerPlan`,
+  `RoadmapHoyMovidoDias`. `RoadmapFijar` asks the estimate in hours and minutes, the task form's two fields (RP-35).
+- **Five more, taken by the user the same day** (the orchestrator's picks):
+  - A goal's first rhythm releases its pending fixed tasks into the plan; «Armar el plan» says first how many will
+    move. Fixed after that stays fixed. That line is not on `RoadmapSinRitmo`; its words come with module 346.
+  - A task the plan carried keeps «de septiembre · falta 3 h», fixed or not. RP-31 stays.
+  - The AI fixes a task to a month and returns it to the plan; it never changes a rhythm. RP-40 retired for **RP-56**.
+  - «Septiembre cerró con 6 h de 12 h» counts the estimates of the tasks done that month, never the measure reached:
+    what is missing is exactly what moved.
+  - A one-off with no goal is renamed from the same sheet: **RP-57**.
 - **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
   - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
     on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».

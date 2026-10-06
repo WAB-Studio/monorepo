@@ -21,7 +21,9 @@ import { readEvidenceOutcome } from "@/lib/queries/day";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
-import { estimateFacts, monthList, type Task } from "@/lib/plan/carry";
+import { estimateFacts } from "@/lib/plan/carry";
+import { fillPlan, type PlanInput, type PlanTask, type Roadmap } from "@/lib/plan/roadmap";
+import { planMonthList } from "@/lib/plan/roadmap-read";
 import {
   monthLine,
   monthOf,
@@ -49,6 +51,10 @@ export type GoalRow = {
   // raw select and `queryGoalRow`'s `to_jsonb(g)` both fill it, so one type
   // covers a single goal and a list of them alike.
   archived_at: string | null;
+  // Optional so a caller that builds a row by hand keeps compiling; both ride
+  // in on `to_jsonb(g)`.
+  rhythm?: number | null;
+  plan_seen?: string | null;
 };
 
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
@@ -98,6 +104,10 @@ export type TaskRow = {
   // The id of its own fact, what `undoFact` takes back; null while undone.
   fact_id?: string | null;
   note: string | null;
+  // All three ride in on `to_jsonb(o)`.
+  in_plan?: boolean;
+  position?: number;
+  created_at?: string;
 };
 
 // What a commitment reads as on the goal's own screen: its cadence and what
@@ -165,10 +175,36 @@ export type GoalView = {
   // Every month of the span, a month with nothing included (RP-16).
   months: MonthRow[];
   budgets: MonthBudget[];
-  tasks: Task[];
+  tasks: PlanTask[];
+  // Units a month the person plans at (RP-52); null falls back to the budgets.
+  rhythm: number | null;
+  // The month whose notice the person dismissed (RP-53).
+  planSeen: string | null;
+  // What the plan reads: the tasks, the amounts and the span, as of `today`.
+  plan: PlanInput;
+  roadmap: Roadmap;
   // The months of this goal already shifted (RP-48).
   shifts: string[];
 };
+
+// A one-off as the plan reads it. A row without `created_at` counts as made
+// the day the goal opened.
+function toPlanTask(task: TaskRow, openedOn: string): PlanTask {
+  return {
+    id: task.id,
+    parentId: task.parent_id,
+    name: task.name,
+    plannedMonth: task.planned_month,
+    day: task.day,
+    estimate: task.estimate,
+    doneOn: task.done_on,
+    factId: task.fact_id ?? null,
+    note: task.note,
+    inPlan: task.in_plan ?? false,
+    position: task.position ?? 0,
+    createdOn: task.created_at ? civilDateInZone(new Date(task.created_at)) : openedOn,
+  };
+}
 
 export type GoalSummary = {
   id: string;
@@ -372,7 +408,8 @@ export function goalFigures(input: {
   evidence: Record<string, EvidenceDay[]> | null;
   today: string;
 }): {
-  tasks: Task[];
+  tasks: PlanTask[];
+  plan: PlanInput;
   measureTotal: number;
   months: MonthRow[];
   month: GoalView["month"];
@@ -392,17 +429,9 @@ export function goalFigures(input: {
   // one row this statement already carries: week 1 opens the day the goal
   // was created (decided by the user 2026-09-28), never a second query.
   const openedOn = civilDateInZone(new Date(goal.created_at));
-  const tasks: Task[] = input.tasks.map((task) => ({
-    id: task.id,
-    parentId: task.parent_id,
-    name: task.name,
-    plannedMonth: task.planned_month,
-    day: task.day,
-    estimate: task.estimate,
-    doneOn: task.done_on,
-    factId: task.fact_id ?? null,
-    note: task.note,
-  }));
+  const tasks = input.tasks.map((task) => toPlanTask(task, openedOn));
+  const rhythm = goal.rhythm ?? null;
+  const plan: PlanInput = { rhythm, budgets, tasks, openedOn, horizon: goal.horizon, today };
   // A done task's estimate counts as declared quantity (RP-36): feeds the
   // measure alone, never a commitment's slot.
   const measureFacts = [...facts, ...estimateFacts(tasks, goal.measure_unit)];
@@ -419,6 +448,7 @@ export function goalFigures(input: {
     horizon: goal.horizon,
     today,
     budgets,
+    rhythm,
     reached: reachedByMonth({ unit: goal.measure_unit, facts: measureFacts, evidence: evidenceDays }),
   });
   const thisMonth = months.find((entry) => entry.current);
@@ -432,6 +462,7 @@ export function goalFigures(input: {
             today,
             budget: budgets.find((budget) => budget.month === monthOf(today)) ?? null,
             reached: thisMonth.reached,
+            rhythm,
           }),
         };
 
@@ -447,6 +478,7 @@ export function goalFigures(input: {
 
   return {
     tasks,
+    plan,
     measureTotal: declaredTotal + evidenceTotal,
     months,
     month,
@@ -497,7 +529,7 @@ export async function loadGoal(
   const commitments = row.commitments.map((commitment) =>
     toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
   );
-  const { tasks, measureTotal, months, month: currentMonth, weeks } = goalFigures({
+  const { tasks, plan, measureTotal, months, month: currentMonth, weeks } = goalFigures({
     goal: row.goal,
     phases,
     commitments: row.commitments,
@@ -526,6 +558,10 @@ export async function loadGoal(
     months,
     budgets: row.budgets,
     tasks,
+    rhythm: row.goal.rhythm ?? null,
+    planSeen: row.goal.plan_seen ?? null,
+    plan,
+    roadmap: fillPlan(plan),
     shifts: row.shifts,
   };
 }
@@ -580,6 +616,7 @@ export type MetasMonth =
 export type MetasOpenGoal = GoalSummary & { month: MetasMonth | null };
 
 type MetasRow = GoalRow & {
+  created_at: string;
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
@@ -605,6 +642,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
     withGoalsDb((tx) =>
       tx.execute<MetasRow>(sql`
         select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
+          g.rhythm, g.created_at,
           (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                      'commitment_unit', c.unit
                    )), '[]'::json)
@@ -614,7 +652,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
                and f.day between ${month}::date and ${today}::date) as facts,
           (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
              from "goals"."month_budgets" b
-             where b.goal_id = g.id and b.month = ${month}::date) as budgets,
+             where b.goal_id = g.id) as budgets,
           (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                      'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
                    ) order by o.position, o.created_at, o.id), '[]'::json)
@@ -636,19 +674,19 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
 
   const toMonth = (row: MetasRow): MetasMonth | null => {
     const unit = row.measure_unit;
-    const tasks: Task[] = row.tasks.map((task) => ({
-      id: task.id,
-      parentId: task.parent_id,
-      name: task.name,
-      plannedMonth: task.planned_month,
-      day: task.day,
-      estimate: task.estimate,
-      doneOn: task.done_on,
-      factId: null,
-      note: task.note,
-    }));
+    const openedOn = civilDateInZone(new Date(row.created_at));
+    const tasks = row.tasks.map((task) => toPlanTask(task, openedOn));
+    const rhythm = row.rhythm ?? null;
+    const plan: PlanInput = {
+      rhythm,
+      budgets: row.budgets,
+      tasks,
+      openedOn,
+      horizon: row.horizon,
+      today,
+    };
     if (unit === null) {
-      const items = monthList(tasks, month, today);
+      const items = planMonthList(plan, month);
       if (items.length === 0) return null;
       return { kind: "tasks", month, done: items.filter((item) => item.done).length, total: items.length };
     }
@@ -661,7 +699,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       facts: [...declared, ...doneTasks],
       evidence: evidenceDaysFor(unit, row.measure_sources, evidenceOutcome.bySourceKey),
     }).get(month) ?? 0;
-    const planned = row.budgets.find((budget) => budget.month === month)?.amount ?? null;
+    const planned = row.budgets.find((budget) => budget.month === month)?.amount ?? rhythm;
     if (planned === null && reached === 0) return null;
     return { kind: "amount", month, planned, reached };
   };
