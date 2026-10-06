@@ -10,7 +10,8 @@ export { daysBetween };
 // own `weekIndexOf`, under the name every caller here already uses.
 export const weekIndex = weekIndexOf;
 
-// How many goal weeks a horizon holds — `lib/day/weeks.ts`'s `horizonWeeksOf`.
+// How many goal weeks a horizon holds, its partial last week included —
+// `lib/day/weeks.ts`'s `horizonWeeksOf`.
 export function horizonWeeks(openedOn: string, horizon: string): number {
   return horizonWeeksOf(openedOn, horizon);
 }
@@ -23,14 +24,15 @@ export function weeksToPhaseSpan(
   openedOn: string,
   fromWeek: number,
   toWeek: number,
+  horizon?: string,
 ): { startsOn: string; endsOn: string } {
-  return weekSpan(openedOn, fromWeek, toWeek);
+  return weekSpan(openedOn, fromWeek, toWeek, horizon);
 }
 
 // The span the new-phase form opens on (RP-15): from the week after the last
 // phase, up to four weeks long, every week of it ending within the horizon —
-// so the default passes the form's own checks. `null` when not even one week
-// fits (the goal's partial last week never does): the form opens empty.
+// so the default passes the form's own checks; the partial last week fits and
+// ends on the goal's last day. `null` when no week is left: the form opens empty.
 export function defaultPhaseWeeks({
   openedOn,
   horizon,
@@ -45,7 +47,7 @@ export function defaultPhaseWeeks({
     null,
   );
   const from = lastEndsOn ? weekIndexOf(openedOn, lastEndsOn) + 1 : 1;
-  const fits = (week: number) => phaseWithinHorizon(weekSpan(openedOn, from, week), horizon);
+  const fits = (week: number) => phaseWithinHorizon(weekSpan(openedOn, from, week, horizon), horizon);
   if (!fits(from)) return null;
   let to = from;
   while (to < from + 3 && fits(to + 1)) to += 1;
