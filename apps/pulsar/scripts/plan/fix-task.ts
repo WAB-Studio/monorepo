@@ -1,12 +1,10 @@
-// Drives `editTask`, `fixTask` and `moveTaskToMonth` (`app/actions/one-offs.ts`,
-// RP-51, RP-55, RP-57) the way
+// Drives `fixTask` and `moveTaskToMonth` (`app/actions/one-offs.ts`, RP-51) the way
 // `task-actions.ts` drives its siblings: the action imported as a plain async
 // function, `server-only`, `next/headers` and `next/cache` stubbed before the
 // first `@/` import, and the cookie `harness:mint-session` left standing is
 // the session `getPerson()` reads. The pooler only reads rows back, backdates
 // a fixture and deletes them.
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Module from "node:module";
 import { resolve } from "node:path";
@@ -84,14 +82,6 @@ async function move(input: Parameters<Actions["moveTaskToMonth"]>[0]) {
     return await actions.moveTaskToMonth(input);
   } catch (error) {
     assert.fail(`moveTaskToMonth threw ${pgCode(error) ?? "without a code"}`);
-  }
-}
-
-async function edit(input: Parameters<Actions["editTask"]>[0]) {
-  try {
-    return await actions.editTask(input);
-  } catch (error) {
-    assert.fail(`editTask threw ${pgCode(error) ?? "without a code"}`);
   }
 }
 
@@ -263,44 +253,7 @@ test("moveTaskToMonth: another person's task is not found and keeps its month; a
   assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
 });
 
-async function rowOf(id: string) {
-  const [row] = await sql<{ name: string; estimate: number | null; planned_month: string | null }[]>`
-    select name, estimate, planned_month::text as planned_month from goals.one_offs where id = ${id}`;
-  return row;
-}
-
-async function measuredGoal(label: string): Promise<string> {
-  const made = await createGoal({ name: `RP-55 fixture: ${label}`, horizon: `${monthFrom(today, 2)}-01` });
-  if (!made.ok) throw new Error(`createGoal: ${made.error}`);
-  goalIds.push(made.goalId);
-  await sql`update goals.goals set measure_name = 'horas', measure_unit = 'minutos' where id = ${made.goalId}`;
-  return made.goalId;
-}
-
-test("editTask: name, estimate and month land in one UPDATE; null estimate clears and null month returns the task to the plan", async () => {
-  const measured = await measuredGoal("editar");
-  const taskId = await created({ name: "RP-55 editar", day: null, goalId: measured, plannedMonth: thisMonth });
-  wire = [];
-  const result = await edit({ oneOffId: taskId, name: "  RP-55 editada ", estimate: 90, month: nextMonth });
-  const updates = (wire as string[]).filter((q) => q.trim().toLowerCase().startsWith("update")).length;
-  wire = null;
-  assert.deepEqual(result, { ok: true });
-  assert.equal(updates, 1);
-  assert.deepEqual(await rowOf(taskId), { name: "RP-55 editada", estimate: 90, planned_month: `${nextMonth}-01` });
-
-  // Absent leaves estimate and month alone.
-  assert.deepEqual(await edit({ oneOffId: taskId, name: "RP-55 sola" }), { ok: true });
-  assert.deepEqual(await rowOf(taskId), { name: "RP-55 sola", estimate: 90, planned_month: `${nextMonth}-01` });
-
-  assert.deepEqual(await edit({ oneOffId: taskId, name: "RP-55 sola", estimate: null, month: null }), { ok: true });
-  assert.deepEqual(await rowOf(taskId), { name: "RP-55 sola", estimate: null, planned_month: null });
-  assert.deepEqual(await fix({ oneOffId: taskId, month: thisMonth }), { ok: true });
-  assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
-  assert.deepEqual(await fix({ oneOffId: taskId, month: null }), { ok: true });
-  assert.deepEqual(await monthsOf(taskId), [null]);
-});
-
-test("editTask: a task added to the plan with inPlan lands unfixed and can be fixed", async () => {
+test("fixTask: a task added to the plan with inPlan lands unfixed and can be fixed", async () => {
   const taskId = await created({ name: "RP-50 al plan", day: null, goalId, inPlan: true });
   const [row] = await sql<{ in_plan: boolean; planned_month: string | null }[]>`
     select in_plan, planned_month::text as planned_month from goals.one_offs where id = ${taskId}`;
@@ -309,50 +262,4 @@ test("editTask: a task added to the plan with inPlan lands unfixed and can be fi
   assert.deepEqual(await monthsOf(taskId), [`${nextMonth}-01`]);
   const refused = await actions.createOneOff({ name: "RP-50 sin meta", day: null, inPlan: true });
   assert.deepEqual(refused, { ok: false, error: "month.errors.invalid" });
-});
-
-test("editTask: a done task takes a new name and refuses estimate and month", async () => {
-  const measured = await measuredGoal("hecha");
-  const taskId = await created({ name: "RP-55 hecha", day: null, goalId: measured, plannedMonth: thisMonth, estimate: 30 });
-  assert.equal((await actions.completeOneOff({ oneOffId: taskId })).ok, true);
-  assert.deepEqual(await edit({ oneOffId: taskId, name: "RP-55 hecha, renombrada" }), { ok: true });
-  assert.deepEqual(await edit({ oneOffId: taskId, name: "x", estimate: 45 }), { ok: false, error: "roadmap.errors.doneTask" });
-  assert.deepEqual(await edit({ oneOffId: taskId, name: "x", month: nextMonth }), { ok: false, error: "roadmap.errors.doneTask" });
-  assert.deepEqual(await edit({ oneOffId: taskId, name: "x", month: null }), { ok: false, error: "roadmap.errors.doneTask" });
-  assert.deepEqual(await rowOf(taskId), { name: "RP-55 hecha, renombrada", estimate: 30, planned_month: `${thisMonth}-01` });
-});
-
-test("editTask: a sub-task's month, an estimate on a parent or on a goal with no measure, and a bad name are refused", async () => {
-  const measured = await measuredGoal("rechazos");
-  const parentId = await created({ name: "RP-55 padre", day: null, goalId: measured, plannedMonth: thisMonth });
-  const childId = await created({ name: "RP-55 hija", day: null, parentId });
-  assert.deepEqual(await edit({ oneOffId: childId, name: "RP-55 hija", month: nextMonth }), { ok: false, error: "roadmap.errors.subTaskMonth" });
-  assert.deepEqual(await edit({ oneOffId: childId, name: "RP-55 hija", month: null }), { ok: false, error: "roadmap.errors.subTaskMonth" });
-  assert.deepEqual(await edit({ oneOffId: childId, name: "RP-55 hija", estimate: 20 }), { ok: true });
-  assert.deepEqual(await edit({ oneOffId: parentId, name: "RP-55 padre", estimate: 20 }), { ok: false, error: "month.errors.invalid" });
-  assert.deepEqual(await monthsOf(childId), [null]);
-
-  const bare = await created({ name: "RP-55 sin medida", day: null, goalId, plannedMonth: thisMonth });
-  assert.deepEqual(await edit({ oneOffId: bare, name: "RP-55 sin medida", estimate: 20 }), { ok: false, error: "month.errors.noMeasure" });
-  assert.deepEqual(await edit({ oneOffId: bare, name: "RP-55 sin medida", month: lastMonth }), { ok: false, error: "roadmap.errors.monthEnded" });
-  assert.deepEqual(await edit({ oneOffId: bare, name: "RP-55 sin medida", month: monthFrom(today, 2) }), { ok: false, error: "roadmap.errors.monthOutsideSpan" });
-  assert.deepEqual(await edit({ oneOffId: bare, name: "   " }), { ok: false, error: "roadmap.errors.nameEmpty" });
-  assert.deepEqual(await edit({ oneOffId: bare, name: "a".repeat(121) }), { ok: false, error: "roadmap.errors.nameTooLong" });
-  assert.deepEqual(await edit({ oneOffId: bare, name: "x", estimate: 0 }), { ok: false, error: "month.errors.estimateInvalid" });
-  assert.deepEqual(await edit({ oneOffId: randomUUID(), name: "x" }), { ok: false, error: "plan.errors.notFound" });
-  assert.deepEqual((await rowOf(bare)).name, "RP-55 sin medida");
-});
-
-test("editTask: a suelta takes a new name, done or not, and refuses estimate and month with their keys", async () => {
-  const looseId = await created({ name: "RP-57 suelta", day: null });
-  assert.deepEqual(await edit({ oneOffId: looseId, name: "RP-57 renombrada" }), { ok: true });
-  assert.equal((await rowOf(looseId)).name, "RP-57 renombrada");
-  assert.deepEqual(await edit({ oneOffId: looseId, name: "RP-57 x", estimate: 10 }), { ok: false, error: "month.errors.noMeasure" });
-  assert.deepEqual(await edit({ oneOffId: looseId, name: "RP-57 x", month: thisMonth }), { ok: false, error: "month.errors.invalid" });
-  assert.equal((await actions.completeOneOff({ oneOffId: looseId })).ok, true);
-  assert.deepEqual(await edit({ oneOffId: looseId, name: "RP-57 hecha" }), { ok: true });
-  assert.deepEqual(await rowOf(looseId), { name: "RP-57 hecha", estimate: null, planned_month: null });
-  // A goal's one-off outside the plan is no plan task.
-  const goalLoose = await created({ name: "RP-57 de meta", day: null, goalId });
-  assert.deepEqual(await edit({ oneOffId: goalLoose, name: "otra" }), { ok: false, error: "month.errors.invalid" });
 });

@@ -8,7 +8,7 @@ import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
-import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import {
   createOneOffSchema,
   completeOneOffSchema,
@@ -332,12 +332,26 @@ type TaskWrite = {
   month?: string | null;
 };
 
+const REFUSALS: Record<string, MessageKey> = {
+  noMeasure: "month.errors.noMeasure",
+  invalid: "month.errors.invalid",
+  closed: "month.errors.closed",
+  doneTask: "roadmap.errors.doneTask",
+  subTaskMonth: "roadmap.errors.subTaskMonth",
+  dayInMonth: "roadmap.errors.dayInMonth",
+  parentEstimate: "roadmap.errors.parentEstimate",
+  monthOutsideSpan: "roadmap.errors.monthOutsideSpan",
+  monthEnded: "roadmap.errors.monthEnded",
+};
+
 /**
- * The one write behind `editTask` and `fixTask` (RP-51, RP-55, RP-57). The
- * row is read first only to name the refusal; the UPDATE is the act. A fact
- * or a child landing in between makes `one_offs_guard_day` return 0 rows for
- * an estimate or a month, reported as `doneTask`. A one-off of no goal takes
- * its name alone.
+ * The one write behind `editTask` and `fixTask` (RP-51, RP-55, RP-57), in one
+ * statement. The CTEs read one snapshot: `chk` names the first refusal and
+ * `upd` writes only when there is none, so a refusal writes nothing and needs
+ * no rollback. A task is done when it, or a child, has a fact. A fact or a
+ * child landing in between makes `one_offs_guard_day` return 0 rows for an
+ * estimate or a month, reported as `doneTask`. A one-off of no goal (RP-57)
+ * takes its name alone.
  */
 async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
   const person = await getPerson();
@@ -346,91 +360,73 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
   const { oneOffId, name, estimate, month } = input;
   const touchesEstimate = estimate !== undefined;
   const touchesMonth = month !== undefined;
+  const today = todayInZone();
 
-  try {
-    const written = await withGoalsDb(async (tx) => {
-      const [row] = await tx
-        .select({
-          goalId: oneOffs.goalId,
-          parentId: oneOffs.parentId,
-          inPlan: oneOffs.inPlan,
-          plannedMonth: oneOffs.plannedMonth,
-          // Itself or any child; `${oneOffs}.id`, never `${oneOffs.id}` (see scheduleOneOff).
-          hasFact: sql<boolean>`exists (
-            select 1 from ${facts} f
-            where f.one_off_id = ${oneOffs}.id
-              or f.one_off_id in (select c.id from ${oneOffs} c where c.parent_id = ${oneOffs}.id)
-          )`,
-          hasChildren: sql<boolean>`exists (select 1 from ${oneOffs} c where c.parent_id = ${oneOffs}.id)`,
-          horizon: goals.horizon,
-          archivedAt: goals.archivedAt,
-          measureUnit: goals.measureUnit,
-          createdAt: goals.createdAt,
-        })
-        .from(oneOffs)
-        .leftJoin(goals, eq(goals.id, oneOffs.goalId))
-        .where(eq(oneOffs.id, oneOffId));
-      if (!row) throw new NamedError("plan.errors.notFound");
+  const rows = await withGoalsDb((tx) =>
+    tx.execute<{ goal_id: string | null; refusal: string | null; updated: number }>(sql`
+      with t as (
+        select o.id, o.goal_id, o.parent_id, o.in_plan, o.day,
+               exists (
+                 select 1 from facts f
+                 where f.one_off_id = o.id
+                    or f.one_off_id in (select c.id from one_offs c where c.parent_id = o.id)
+               ) as has_fact,
+               exists (select 1 from one_offs c where c.parent_id = o.id) as has_children,
+               g.horizon, g.archived_at, g.measure_unit,
+               (g.created_at at time zone ${TIME_ZONE})::date as opened
+        from one_offs o left join goals g on g.id = o.goal_id
+        where o.id = ${oneOffId} and o.user_id = ${person.id}
+      ),
+      chk as (
+        select t.*,
+          case
+            when goal_id is null then
+              case when ${estimate ?? null}::int is not null then 'noMeasure'
+                   when ${touchesMonth}::boolean then 'invalid' end
+            when not in_plan then 'invalid'
+            when ${touchesEstimate || touchesMonth}::boolean then
+              case
+                when has_fact then 'doneTask'
+                when ${touchesMonth}::boolean and parent_id is not null then 'subTaskMonth'
+                when ${touchesMonth}::boolean and day is not null then 'dayInMonth'
+                when archived_at is not null or horizon <= ${today}::date then 'closed'
+                when ${estimate ?? null}::int is not null and has_children then 'parentEstimate'
+                when ${estimate ?? null}::int is not null and measure_unit is null then 'noMeasure'
+                when ${month ?? null}::text is not null and (
+                  ${month ? monthStart(month) : null}::date < date_trunc('month', opened)
+                  or ${month ? monthStart(month) : null}::date > date_trunc('month', horizon - 1)
+                ) then 'monthOutsideSpan'
+                when ${month ?? null}::text is not null and ${month ?? null}::text < ${today.slice(0, 7)}::text then 'monthEnded'
+              end
+          end as refusal
+        from t
+      ),
+      upd as (
+        update one_offs set
+          name = coalesce(${name ?? null}::text, name),
+          estimate = case when ${touchesEstimate}::boolean then ${estimate ?? null}::int else estimate end,
+          planned_month = case when ${touchesMonth}::boolean then ${month ? monthStart(month) : null}::date else planned_month end
+        where id in (select id from chk where refusal is null)
+        returning id
+      )
+      select goal_id, refusal, (select count(*) from upd)::int as updated from chk
+    `),
+  );
 
-      if (row.goalId === null) {
-        // A suelta (RP-57): a name, done or not, and nothing else.
-        if (estimate != null) throw new NamedError("month.errors.noMeasure");
-        if (touchesMonth) throw new NamedError("month.errors.invalid");
-      } else {
-        if (!row.inPlan || row.horizon === null || row.createdAt === null) {
-          throw new NamedError("month.errors.invalid");
-        }
-        if (touchesEstimate || touchesMonth) {
-          if (row.hasFact) throw new NamedError("roadmap.errors.doneTask");
-          if (touchesMonth && row.parentId !== null) throw new NamedError("roadmap.errors.subTaskMonth");
-          if (isClosed({ horizon: row.horizon, archivedAt: row.archivedAt })) {
-            throw new NamedError("month.errors.closed");
-          }
-          if (estimate != null) {
-            if (row.hasChildren) throw new NamedError("month.errors.invalid");
-            if (row.measureUnit === null) throw new NamedError("month.errors.noMeasure");
-          }
-          if (month != null) {
-            if (
-              monthOutsideSpan({
-                month,
-                openedOn: civilDateInZone(row.createdAt),
-                horizon: row.horizon,
-              })
-            ) {
-              throw new NamedError("roadmap.errors.monthOutsideSpan");
-            }
-            if (month < todayInZone().slice(0, 7)) throw new NamedError("roadmap.errors.monthEnded");
-          }
-        }
-      }
-
-      const set: Partial<typeof oneOffs.$inferInsert> = {};
-      if (name !== undefined) set.name = name;
-      if (touchesEstimate) set.estimate = estimate;
-      if (touchesMonth) set.plannedMonth = month === null ? null : monthStart(month);
-      const updated = await tx
-        .update(oneOffs)
-        .set(set)
-        .where(and(eq(oneOffs.id, oneOffId), eq(oneOffs.userId, person.id)))
-        .returning({ id: oneOffs.id });
-      if (updated.length === 0) {
-        throw new NamedError(touchesEstimate || touchesMonth ? "roadmap.errors.doneTask" : "plan.errors.notFound");
-      }
-      return { goalId: row.goalId };
-    });
-
-    revalidatePath("/");
-    revalidatePath("/sueltas");
-    if (written.goalId !== null) {
-      revalidatePath("/mes");
-      revalidatePath(`/metas/${written.goalId}`, "layout");
-    }
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
-    throw error;
+  const row = rows[0];
+  if (!row) return { ok: false, error: "plan.errors.notFound" };
+  if (row.refusal !== null) return { ok: false, error: REFUSALS[row.refusal] };
+  if (row.updated === 0) {
+    return { ok: false, error: touchesEstimate || touchesMonth ? "roadmap.errors.doneTask" : "plan.errors.notFound" };
   }
+
+  revalidatePath("/");
+  revalidatePath("/sueltas");
+  if (row.goal_id !== null) {
+    revalidatePath("/mes");
+    revalidatePath(`/metas/${row.goal_id}`, "layout");
+  }
+  return { ok: true };
 }
 
 /**
