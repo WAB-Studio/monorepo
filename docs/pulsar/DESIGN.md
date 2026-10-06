@@ -760,3 +760,13 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   - the month's lists and `/sueltas` show up to two lines of it; Hoy shows only the button;
   - the connected AI writes and replaces a note, never empties one;
   - the PDF prints it under carried tasks only; it travels in on the template's import, not out as text.
+- **What the critic of 2026-10-05 (trains 6 and 7) asked.** Decided by the user 2026-10-05, four answers
+  (`private/critica-2026-10-05-tren7.md`):
+  - a quantity logged below its target is **done in part**: a fourth mark, a half-filled circle; the target stays the bar
+    and the palette stays without red. It needs its board before any screen draws it;
+  - goals and tasks follow **the plan's order**, kept as a position written at import; on Hoy alone, the goals that ask
+    something today come first;
+  - on the phone, **Hoy drops the section of a goal that asks nothing today**; its line under «este mes» stays, and a
+    one-off for it is written from Mes or the goal;
+  - the report carries **this month's tasks**, done and not, under each goal, and folds the weeks into the months table.
+    This changes RP-33: it is retired and succeeded.
