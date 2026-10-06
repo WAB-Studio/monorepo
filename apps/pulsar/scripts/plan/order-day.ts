@@ -135,12 +135,28 @@ test("loadDay: the next month task is the first leaf in plan order and names its
   const month = `${today.slice(0, 7)}-01`;
   const cap1 = REVERSED(1);
   const cap2 = REVERSED(2);
-  await oneOffAt({ id: cap1, name: "Cap. 1", position: base + 20, goalId, month });
-  await oneOffAt({ id: cap2, name: "Cap. 2", position: base + 21, goalId, month });
   const a = REVERSED(3);
   const b = REVERSED(4);
-  await oneOffAt({ id: a, name: "1a", position: base + 22, parentId: cap1 });
-  await oneOffAt({ id: b, name: "1b", position: base + 23, parentId: cap1 });
+  // One statement, so created_at ties; listed against plan order, so the heap order reads wrong too.
+  const rows = [
+    { id: b, name: "1b", position: base + 23, parent: cap1, goal: null, month: null },
+    { id: a, name: "1a", position: base + 22, parent: cap1, goal: null, month: null },
+    { id: cap2, name: "Cap. 2", position: base + 21, parent: null, goal: goalId, month },
+    { id: cap1, name: "Cap. 1", position: base + 20, parent: null, goal: goalId, month },
+  ];
+  await sql`
+    insert into goals.one_offs ${sql(
+      rows.map((r) => ({
+        id: r.id,
+        user_id: userId,
+        goal_id: r.goal,
+        name: r.name,
+        position: r.position,
+        planned_month: r.month,
+        parent_id: r.parent,
+      })),
+    )}`;
+  oneOffIds.push(...rows.map((r) => r.id));
 
   const { loadDay } = await import("@/lib/queries/day");
   for (let i = 0; i < 20; i += 1) {
