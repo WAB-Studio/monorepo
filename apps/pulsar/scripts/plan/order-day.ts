@@ -127,8 +127,8 @@ test("loadDay: goals inserted at positions 2, 1 come back 1, 2", async () => {
   await goalAt("RP-47 primera", base + 1, id(5002));
   const { loadDay } = await import("@/lib/queries/day");
   const loaded = await loadDay(today);
-  const names = loaded.goals.map((g) => g.name).filter((n) => n.startsWith("RP-47 ") && !n.startsWith("RP-47 fixture"));
-  assert.deepEqual(names.slice(0, 2), ["RP-47 primera", "RP-47 segunda"]);
+  const ours = [id(5001), id(5002)];
+  assert.deepEqual(loaded.goals.map((g) => g.id).filter((i) => ours.includes(i)), [id(5002), id(5001)]);
 });
 
 test("loadDay: the next month task is the first leaf in plan order and names its parent, on twenty loads", async () => {
@@ -179,9 +179,9 @@ test("listDaylessOneOffs and listScheduledOneOffs order by position before creat
   await oneOffAt({ id: id(6003), name: "RP-47 agendada b", position: base + 33, day: later });
   await oneOffAt({ id: id(6004), name: "RP-47 agendada a", position: base + 32, day: later });
   const { listDaylessOneOffs, listScheduledOneOffs } = await import("@/lib/queries/one-offs");
-  const dayless = (await listDaylessOneOffs()).filter((o) => o.name.startsWith("RP-47 suelta"));
+  const dayless = (await listDaylessOneOffs()).filter((o) => [id(6001), id(6002)].includes(o.id));
   assert.deepEqual(dayless.map((o) => o.name), ["RP-47 suelta a", "RP-47 suelta b"]);
-  const scheduled = (await listScheduledOneOffs(today)).filter((o) => o.name.startsWith("RP-47 agendada"));
+  const scheduled = (await listScheduledOneOffs(today)).filter((o) => [id(6003), id(6004)].includes(o.id));
   assert.deepEqual(scheduled.map((o) => o.name), ["RP-47 agendada a", "RP-47 agendada b"]);
 });
 
@@ -209,11 +209,11 @@ test("loadDay: today's one-offs and a goal's commitments read in plan order, tie
   const { loadDay } = await import("@/lib/queries/day");
   const loaded = await loadDay(today);
   assert.deepEqual(
-    loaded.oneOffs.filter((o) => o.name.startsWith("RP-47 hoy")).map((o) => o.name),
+    loaded.oneOffs.filter((o) => rows.some((row) => row.id === o.id)).map((o) => o.name),
     ["RP-47 hoy x", "RP-47 hoy y", "RP-47 hoy empate 1", "RP-47 hoy empate 2"],
   );
   assert.deepEqual(
-    loaded.commitments.filter((c) => c.goalId === goalId).map((c) => c.name),
+    loaded.commitments.filter((c) => commitmentRows.some((row) => row.id === c.id)).map((c) => c.name),
     ["RP-47 hábito a", "RP-47 hábito b", "RP-47 hábito empate", "RP-47 hábito empate 2"],
   );
 });
@@ -228,7 +228,7 @@ test("loadDay: the goals ended this week read in plan order, against their horiz
   goalIds.push(id(5101), id(5102));
   const { loadDay } = await import("@/lib/queries/day");
   const names = (await loadDay("2010-09-10")).endedThisWeek
-    .map((g) => g.name)
-    .filter((n) => n.startsWith("RP-47 terminada"));
+    .filter((g) => [id(5101), id(5102)].includes(g.id))
+    .map((g) => g.name);
   assert.deepEqual(names, ["RP-47 terminada primera", "RP-47 terminada segunda"]);
 });
