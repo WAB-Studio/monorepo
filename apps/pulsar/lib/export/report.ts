@@ -3,10 +3,11 @@ import type { MonthRow } from "@/lib/plan/months";
 
 export type CarriedReport = {
   name: string;
+  note: string | null;
   from: string;
   owes: number;
   hasAmount: boolean;
-  children: { name: string; owes: number; hasAmount: boolean }[];
+  children: { name: string; note: string | null; owes: number; hasAmount: boolean }[];
 };
 
 export type GoalReport = {

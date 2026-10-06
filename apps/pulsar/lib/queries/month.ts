@@ -127,6 +127,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
       estimate: task.estimate,
       doneOn: task.done_on,
       factId: task.fact_id ?? null,
+      note: task.note,
     }));
     const unit = row.goal.measure_unit;
 
