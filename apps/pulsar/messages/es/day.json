@@ -122,7 +122,8 @@
     "markTask": "Marcar hecha: {name}",
     "of": "de",
     "parent": "de {name}",
-    "pace": "día {day} · {percent} %, bajo el {threshold} %"
+    "pace": "día {day} ·",
+    "paceUnder": ", bajo el {threshold} %"
   },
   "tally": "hechos {done} de {total}",
   "tallyPartial": "hechos {done} de {total} · {partial} en parte",

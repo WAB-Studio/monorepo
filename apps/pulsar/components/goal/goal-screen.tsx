@@ -197,22 +197,33 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       {shiftOffer}
     </section>
   ) : null;
+  // Under 60 % from the 20th the pace line holds reached «de» planned itself.
+  const paceLine = planned !== null && planned > 0 && Boolean(month?.underPace) && goal.evidence !== "unreadable";
   const monthBlock =
     goal.measureUnit && month ? (
       <section>
         <SectionLabel>{monthName}</SectionLabel>
-        <Flex align="baseline" gap="2" wrap="wrap">
-          <Figure value={month.reached} unit={figureUnit} variant="measure" />
-          {planned !== null ? (
-            <Text variant="meta" tone="muted">
-              {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
-            </Text>
-          ) : (
-            <Text variant="meta" tone="muted">
-              {t("goal.detail.monthNoPlan")}
-            </Text>
-          )}
-        </Flex>
+        {paceLine ? (
+          <Text as="p" variant="meta">
+            {t("goal.detail.monthPace", { day: Number(today.slice(8, 10)) })}{" "}
+            <Figure value={month.reached} unit={figureUnit} variant="meta" />{" "}
+            {t("day.monthLine.of")} <Figure value={planned as number} unit={figureUnit} variant="meta" />
+            {t("goal.detail.monthPaceUnder", { threshold: 60 })}
+          </Text>
+        ) : (
+          <Flex align="baseline" gap="2" wrap="wrap">
+            <Figure value={month.reached} unit={figureUnit} variant="measure" />
+            {planned !== null ? (
+              <Text variant="meta" tone="muted">
+                {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
+              </Text>
+            ) : (
+              <Text variant="meta" tone="muted">
+                {t("goal.detail.monthNoPlan")}
+              </Text>
+            )}
+          </Flex>
+        )}
         {planned !== null && planned > 0 ? (
           <>
             <Progress percent={percent} />
@@ -220,15 +231,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               <Text as="p" variant="meta" tone="muted">
                 {t("goal.detail.monthDeclaredOnly")}
               </Text>
-            ) : month.underPace ? (
-              <Text as="p" variant="meta">
-                {t("goal.detail.monthPace", {
-                  day: Number(today.slice(8, 10)),
-                  percent,
-                  threshold: 60,
-                })}
-              </Text>
-            ) : (
+            ) : paceLine ? null : (
               <Text as="p" variant="meta" tone="muted">
                 {t("goal.detail.monthProgress", { percent, days: daysLeft })}
               </Text>

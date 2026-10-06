@@ -116,9 +116,9 @@ test("the goal says the month's amount, moves with a done task, and links to its
       values (${person.id}, ${goalId}, ${`Tarea ${stamp}`}, ${monthStart}::date, 15) returning id
     `;
 
-    const line = (percent: number) =>
+    const line = (percent: number, reached: string) =>
       late
-        ? `día ${day} · ${percent} %, bajo el 60 %`
+        ? `día ${day} · ${reached} de 12 h, bajo el 60 %`
         : `llevas ${percent} % · faltan ${daysLeft === 1 ? "1 día" : `${daysLeft} días`}`;
 
     for (const width of [360, 1280]) {
@@ -127,9 +127,10 @@ test("the goal says the month's amount, moves with a done task, and links to its
       await page.goto(`/metas/${goalId}`);
       await expect(seen(page, monthName)).toHaveCount(1);
       // The total and the month's reached figure both say 6 h 30 min.
+      // From the 20th the month's «de 12 h» sits inside the pace line.
       await expect(seen(page, "6 h 30 min")).toHaveCount(2);
-      await expect(seen(page, "de 12 h")).toHaveCount(1);
-      await expect(seen(page, line(54))).toHaveCount(1);
+      await expect(seen(page, "de 12 h")).toHaveCount(late ? 0 : 1);
+      await expect(seen(page, line(54, "6 h 30 min"))).toHaveCount(1);
 
       await db`
         insert into goals.facts (user_id, goal_id, one_off_id, day)
@@ -138,10 +139,11 @@ test("the goal says the month's amount, moves with a done task, and links to its
       await page.goto(`/metas/${goalId}`);
       await expect(seen(page, "6 h 45 min")).toHaveCount(2);
       await expect(seen(page, "6 h 30 min")).toHaveCount(0);
-      await expect(seen(page, line(56))).toHaveCount(1);
+      await expect(seen(page, line(56, "6 h 45 min"))).toHaveCount(1);
       // Pace speaks from the 20th alone, in ink words, never before.
       await expect(visible(page, /bajo el 60 %/)).toHaveCount(late ? 1 : 0);
       await expect(visible(page, /llevas \d+ %/)).toHaveCount(late ? 0 : 1);
+      if (late) await expect(visible(page, /\d+ %/).filter({ hasNotText: /60 %/ })).toHaveCount(0);
       await expect(seen(page, "sin monto planeado")).toHaveCount(0);
       await expect(page.getByRole("link", { name: `Planear ${monthName}` })).toHaveCount(0);
 
@@ -267,7 +269,8 @@ test("an archived or ended goal reads its month and offers no way to plan it (RP
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/metas/${archived}`);
       await expect(seen(page, "5 h")).toHaveCount(2);
-      await expect(seen(page, "de 12 h")).toHaveCount(1);
+      await expect(seen(page, "de 12 h")).toHaveCount(late ? 0 : 1);
+      if (late) await expect(seen(page, `día ${day} · 5 h de 12 h, bajo el 60 %`)).toHaveCount(1);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toBeVisible();
 
       await page.goto(`/metas/${archivedBare}`);

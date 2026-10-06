@@ -72,7 +72,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
   const bare = await seedGoal(bareName, null);
   await quantity(bare, `Sesión D ${stamp}`, 100, monthStart);
 
-  const pace = `día ${Number(today.slice(8, 10))} · 56 %, bajo el 60 %`;
+  const pace = `día ${Number(today.slice(8, 10))} · 6 h 45 min de 12 h, bajo el 60 %`;
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
     const page = await context.newPage();
@@ -80,12 +80,16 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     const lines = async (weekSays: number) => {
       await expect(page.locator("main")).toHaveCount(1);
       await expect(seen(underName).first()).toBeVisible();
+      // From the 20th the under-60 goal's «de 12 h» sits inside its pace line.
+      const inLine = late ? 1 : 0;
       await expect(seen("6 h 45 min")).toHaveCount(1 + weekSays);
       await expect(seen("7 h 12 min")).toHaveCount(1 + weekSays);
-      await expect(seen("de 12 h")).toHaveCount(2);
+      await expect(seen("de 12 h")).toHaveCount(2 - inLine);
       // From the 20th the under-60 goal says its pace and the 60 % one does not;
       // before it, neither does.
       if (late) await expect(seen(pace)).toHaveCount(1);
+      // No percentage of its own: «60 %» is the only one on the screen.
+      await expect(page.getByText(/\d+ %/).locator("visible=true").filter({ hasNotText: /60 %/ })).toHaveCount(0);
       await expect(page.getByText(/bajo el 60 %/).locator("visible=true")).toHaveCount(late ? 1 : 0);
     };
 
@@ -95,7 +99,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     await expect(seen("este mes")).toHaveCount(1);
     await expect(seen(bareName).first()).toBeVisible();
     // The goal with no amount is a row of the day, never a line of the block.
-    await expect(page.getByText("de 12 h", { exact: true }).locator("visible=true")).toHaveCount(2);
+    await expect(page.getByText("de 12 h", { exact: true }).locator("visible=true")).toHaveCount(late ? 1 : 2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     await page.setViewportSize({ width: 1280, height: 800 });
