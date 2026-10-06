@@ -357,3 +357,23 @@ test("a task done in its own fixed month, or before it, stays in that month, car
   assert.equal(partIn(roadmap, NOV, "early").carriedFrom, null);
   assert.equal(roadmap.months.find((m) => m.month === OCT)?.items.some((i) => i.task.id === "early"), false);
 });
+
+test("with no rhythm every task fixed to a month reads in the month it had", () => {
+  const roadmap = plan(
+    [
+      task("past", { estimate: 3, plannedMonth: SEP }),
+      task("now", { estimate: 2, plannedMonth: OCT }),
+      task("doneNow", { estimate: 1, plannedMonth: OCT, doneOn: "2026-10-05" }),
+      task("future", { estimate: 4, plannedMonth: DEC }),
+      task("donePast", { estimate: 1, plannedMonth: SEP, doneOn: "2026-09-10" }),
+    ],
+    { rhythm: null },
+  );
+  assert.deepEqual(roadmap.unplaced, []);
+  assert.deepEqual(ids(roadmap, OCT).sort(), ["doneNow", "now", "past"]);
+  assert.deepEqual(ids(roadmap, DEC), ["future"]);
+  assert.equal(partIn(roadmap, OCT, "past").carriedFrom, SEP);
+  assert.equal(partIn(roadmap, OCT, "now").carriedFrom, null);
+  assert.equal(partIn(roadmap, OCT, "doneNow").done, true);
+  assert.equal(partIn(roadmap, DEC, "future").fixed, true);
+});

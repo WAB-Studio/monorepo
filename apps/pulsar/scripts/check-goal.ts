@@ -1514,6 +1514,55 @@ async function runPlanRoadmapCheck(): Promise<void> {
       statements === 4,
       `${statements} application statement(s)`,
     );
+
+    // Goal D: a migrated goal with a task in every position relative to today (2010-10-20).
+    const d = await open("D", false);
+    await migrationDb`
+      update goals.goals set created_at = ${new Date("2010-09-15T12:00:00-05:00")}, horizon = '2011-08-15'
+      where id = ${d}`;
+    const dPast = await task(d, "dPast", 60, "2010-08-01", 1);
+    const dDonePast = await task(d, "dDonePast", 30, "2010-09-01", 2);
+    const dNow = await task(d, "dNow", 45, "2010-10-01", 3);
+    const dDoneNow = await task(d, "dDoneNow", 15, "2010-10-01", 4);
+    const dFuture = await task(d, "dFuture", 90, "2010-12-01", 5);
+    await migrationDb`
+      insert into goals.facts (user_id, one_off_id, goal_id, day) values
+        (${person.id}, ${dDonePast}, ${d}, '2010-09-20'), (${person.id}, ${dDoneNow}, ${d}, '2010-10-10')`;
+    const viewD = await loadGoal(d, today);
+    const placed = new Map<string, string>();
+    for (const m of viewD?.roadmap.months ?? []) {
+      for (const item of m.items) {
+        placed.set(item.task.id, `${m.month}|done=${item.done}|from=${item.carriedFrom}`);
+      }
+    }
+    const got = (id: string) => placed.get(id) ?? "absent";
+    assert(
+      "a migrated goal: an undone task of a past month reads in the current month, carried from its own (RP-31)",
+      viewD?.rhythm === null && got(dPast) === "2010-10-01|done=false|from=2010-08-01",
+      got(dPast),
+    );
+    assert(
+      "a migrated goal: a task of the current month stays there, done or not, never carried",
+      got(dNow) === "2010-10-01|done=false|from=null" && got(dDoneNow) === "2010-10-01|done=true|from=null",
+      `${got(dNow)} / ${got(dDoneNow)}`,
+    );
+    assert(
+      "a migrated goal: a task of a future month reads in that month",
+      got(dFuture) === "2010-12-01|done=false|from=null" && viewD?.roadmap.unplaced.length === 0,
+      `${got(dFuture)} unplaced=${viewD?.roadmap.unplaced.length}`,
+    );
+    assert(
+      "a migrated goal: a task done in a past month is not listed in the current one",
+      got(dDonePast) === "absent",
+      got(dDonePast),
+    );
+    const metasD = await listGoalsForMetas(today);
+    assert(
+      "/metas: a migrated goal's month line counts the carried and the current month's tasks, done and total",
+      JSON.stringify(metasD.open.find((goal) => goal.id === d)?.month) ===
+        JSON.stringify({ kind: "tasks", month: "2010-10-01", done: 1, total: 3 }),
+      JSON.stringify(metasD.open.find((goal) => goal.id === d)?.month),
+    );
   } finally {
     for (const id of seeded) await migrationDb`delete from goals.goals where id = ${id}`;
     await migrationDb.end();
