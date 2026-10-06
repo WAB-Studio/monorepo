@@ -7,7 +7,6 @@ type TallyInput = {
   view: WeekView;
   goals: { id: string; horizon: string; createdAt: string }[];
   commitments: { id: string; goalId: string; cadence?: Cadence }[];
-  oneOffFacts: { day: string; goalId: string | null }[];
 };
 
 export function isFlexible(cadence: Cadence): boolean {
@@ -19,15 +18,12 @@ export type DayTally = { day: string; done: number; total: number; partial: numb
 type OpenGoal = { id: string; openedOn: string; horizon: string };
 
 // One day's tally: the commitment slots of goals open that day
-// (`openedOn <= d < horizon`) plus the one-off facts whose goal is none or
-// open that day. `done` counts the satisfied slots and every such one-off
-// fact. `partial` counts the partial slots among those; they never add to
-// `done`. Hoy and the Semana both count through here, so they never disagree.
+// (`openedOn <= d < horizon`). One-off facts never count here. `partial`
+// counts the partial slots among those; they never add to `done`. Hoy and the Semana both count through here, so they never disagree.
 export function tallyDay(input: {
   view: DayView;
   goals: OpenGoal[];
   commitments: { id: string; goalId: string; cadence?: Cadence }[];
-  oneOffFacts: { day: string; goalId: string | null }[];
 }): DayTally {
   const { view } = input;
   const goalOf = new Map(input.commitments.map((c) => [c.id, c.goalId]));
@@ -47,13 +43,10 @@ export function tallyDay(input: {
     const goalId = goalOf.get(slot.commitmentId);
     return goalId !== undefined && openOn(goalId);
   });
-  const oneOffs = input.oneOffFacts.filter(
-    (fact) => fact.day === view.day && (fact.goalId === null || openOn(fact.goalId)),
-  );
   return {
     day: view.day,
-    done: slots.filter((slot) => slot.satisfied).length + oneOffs.length,
-    total: slots.length + oneOffs.length,
+    done: slots.filter((slot) => slot.satisfied).length,
+    total: slots.length,
     partial: slots.filter((slot) => slot.partial).length,
   };
 }
@@ -67,6 +60,6 @@ export function tallyDays(week: TallyInput): DayTally[] {
     horizon: g.horizon,
   }));
   return week.view.days.map((view) =>
-    tallyDay({ view, goals, commitments: week.commitments, oneOffFacts: week.oneOffFacts }),
+    tallyDay({ view, goals, commitments: week.commitments }),
   );
 }
