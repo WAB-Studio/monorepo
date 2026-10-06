@@ -287,6 +287,23 @@ export function shapeReport(report: Report) {
           endsOn: phase.endsOn,
           current: phase.current,
         })),
+        tasks: goal.tasks.map((task) => ({
+          name: task.name,
+          from: monthOrNull(task.from),
+          done: task.done,
+          doneOn: task.doneOn,
+          estimate: amountOrNull(task.estimate, unit),
+          owes: amountOf(task.owes, unit),
+          hasAmount: task.hasAmount,
+          note: task.note,
+          children: task.children.map((child) => ({
+            name: child.name,
+            done: child.done,
+            doneOn: child.doneOn,
+            estimate: amountOrNull(child.estimate, unit),
+            note: child.note,
+          })),
+        })),
         carried: goal.carried.map((item) => ({
           name: item.name,
           note: item.note,
