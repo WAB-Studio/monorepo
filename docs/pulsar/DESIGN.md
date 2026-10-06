@@ -727,3 +727,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 - **`/metas` at 1440, rows.** Each open goal's row shows its current month and figure («octubre · 2 h 41 min de 12 h»; «octubre · 86 páginas» with no plan; «octubre · 2 de 5 tareas» with no measure) and its last day at the end. The figure counts declared facts, done tasks and evidence readings, read in parallel with the goals statement as Hoy's month line does. A goal with nothing this month shows its last day alone. Decided by the coordinator 2026-10-05 against the approved board `MetasCentroEscritorio`.
 - **`/metas` at 1440, proportions.** The plan column is two parts of five at every width from 1024 (`Split`'s `twoFifths`), and «Abrir otra meta» sits inline under the open goals. Decided by the coordinator 2026-10-05 against the approved board `MetasCentroEscritorio`.
 - **`/metas` at 1440, the figure.** 2026-10-05: la cifra de cada meta en /metas incluye la evidencia, como Hoy. Decided by the coordinator against the approved board `MetasCentroEscritorio`.
+- **Module 218, the forms' caps.** `/conexiones` and the 404 keep the 560 px form cap; `/metas/importar` keeps its 640 px;
+  a past day's «volver a hoy» keeps its name. Decided 2026-10-05 by the coordinator.
+- **Module 211, `MetaRiel`.** The rail draws one row; nothing in it shares a left edge with the header. The plan said
+  otherwise and was corrected to the board. Decided 2026-10-05 by the coordinator.
