@@ -12,6 +12,7 @@ export function Split({
   tail,
   aside = 360,
   twoFifths = false,
+  even = false,
 }: {
   main: ReactNode;
   before?: ReactNode;
@@ -24,11 +25,15 @@ export function Split({
   // Keeps the right column at two parts of five at every width from 1024px,
   // where `aside` would fix it at a number of pixels from 1280.
   twoFifths?: boolean;
+  // `main` alone, its children in two equal columns from 1024: the past day
+  // (`DiaPasadoEscritorio.dc.html`), which never narrows as the screen widens.
+  even?: boolean;
 }) {
   const className = [
     styles.split,
     aside === 380 ? styles.asideWide : undefined,
     twoFifths ? styles.twoFifths : undefined,
+    even ? styles.even : undefined,
     before ? undefined : styles.noBefore,
   ]
     .filter(Boolean)
