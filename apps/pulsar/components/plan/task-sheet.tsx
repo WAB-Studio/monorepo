@@ -1,0 +1,329 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+
+import { createOneOff, editTask } from "@/app/actions/one-offs";
+import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
+import {
+  Button,
+  Chip,
+  ChipRow,
+  Field,
+  FieldPair,
+  Flex,
+  Mark,
+  Row,
+  Separator,
+  Sheet,
+  SheetActions,
+  Text,
+} from "@/components/ui";
+import { messageKey, type MessageKey } from "@/i18n/translator";
+import { isTimeUnit, splitMinutes } from "@/lib/units/time";
+import { createOneOffSchema, editTaskSchema } from "@/lib/validation/one-off";
+
+const WHOLE = /^\d+$/;
+const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
+
+/** «diciembre», or «diciembre de 2027» when it is not this year's. */
+export function monthName(month: string, thisYear: string): string {
+  const name = monthFormat.format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
+  return month.slice(0, 4) === thisYear ? name : `${name} de ${month.slice(0, 4)}`;
+}
+
+export type TaskSheetProps = {
+  mode: "create" | "edit";
+  goalId: string;
+  goalName: string;
+  oneOffId?: string;
+  name?: string;
+  // In the goal's unit; null while the task has none.
+  estimate?: number | null;
+  // Null for a goal that measures nothing: the sheet then asks no estimate.
+  unit: string | null;
+  // "YYYY-MM" the task is fixed to; null when the plan places it.
+  fixedMonth: string | null;
+  // "YYYY-MM" the plan gives it, or would give it unfixed; null when it gives none.
+  planMonth: string | null;
+  // "YYYY-MM" of every open month of the goal's span.
+  months: string[];
+  done: boolean;
+  kind: "task" | "parent" | "child";
+  // RP-22: nothing done under it.
+  canDelete: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+/**
+ * `RoadmapFijar` and `RoadmapTareaNueva` (RP-51, RP-55): a task's name, its
+ * estimate and its month, saved through `editTask`, or a new task of the plan
+ * through `createOneOff`. A done task takes its name alone, a sub-task and a
+ * parent never take the field the plan reads off their parts. Runs the
+ * actions' own schema before them.
+ */
+export function TaskSheet({
+  mode,
+  goalId,
+  goalName,
+  oneOffId,
+  name: current = "",
+  estimate = null,
+  unit,
+  fixedMonth,
+  planMonth,
+  months,
+  done,
+  kind,
+  canDelete,
+  open,
+  onOpenChange,
+}: TaskSheetProps) {
+  const t = useTranslations();
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const timed = isTimeUnit(unit);
+  const thisYear = String(new Date().getFullYear());
+
+  const initial = estimate === null ? { hours: "", minutes: "", single: "" } : timed
+    ? { hours: String(splitMinutes(estimate).h), minutes: String(splitMinutes(estimate).min), single: "" }
+    : { hours: "", minutes: "", single: String(estimate) };
+  const start = fixedMonth ?? months.find((month) => planMonth === null || month >= planMonth) ?? months[0] ?? "";
+
+  const [name, setName] = useState(current);
+  const [hours, setHours] = useState(initial.hours);
+  const [minutes, setMinutes] = useState(initial.minutes);
+  const [single, setSingle] = useState(initial.single);
+  const [pin, setPin] = useState(fixedMonth !== null);
+  const [month, setMonth] = useState(start);
+  const [error, setError] = useState<{ key: MessageKey; field: "name" | "estimate" | "month" } | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [wasOpen, setWasOpen] = useState(open);
+
+  // Every open starts from what the task holds, never a leftover.
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setName(current);
+      setHours(initial.hours);
+      setMinutes(initial.minutes);
+      setSingle(initial.single);
+      setPin(fixedMonth !== null);
+      setMonth(start);
+      setError(null);
+    }
+  }
+
+  const asksEstimate = unit !== null && kind !== "parent" && !done;
+  const asksMonth = kind !== "child" && !done;
+
+  // Minutes (or the unit's count) typed; null while blank; a key for a figure the sheet refuses.
+  function typed(): number | null | MessageKey {
+    if (timed) {
+      if (hours.trim() === "" && minutes.trim() === "") return null;
+      const h = hours.trim() === "" ? "0" : hours.trim();
+      const min = minutes.trim() === "" ? "0" : minutes.trim();
+      if (!WHOLE.test(h)) return "month.errors.estimateInvalid";
+      if (!WHOLE.test(min) || Number(min) > 59) return "month.errors.minutesInvalid";
+      return Number(h) * 60 + Number(min);
+    }
+    if (single.trim() === "") return null;
+    return WHOLE.test(single.trim()) ? Number(single.trim()) : "month.errors.estimateInvalid";
+  }
+
+  function refuse(key: MessageKey) {
+    const field = key === "roadmap.errors.nameEmpty" || key === "roadmap.errors.nameTooLong" ? "name" : key.startsWith("roadmap.errors.month") ? "month" : "estimate";
+    setError({ key, field });
+  }
+
+  function finish(result: { ok: boolean; error?: MessageKey }) {
+    if (result.ok) {
+      onOpenChange(false);
+      router.refresh();
+    } else refuse(result.error ?? "month.errors.invalid");
+  }
+
+  function save() {
+    if (pending) return;
+    setError(null);
+
+    let amount: number | null = null;
+    if (asksEstimate) {
+      const value = typed();
+      if (typeof value === "string") return refuse(value);
+      amount = value;
+    }
+    const fixes = asksMonth && pin ? month : null;
+
+    if (mode === "create") {
+      const parsed = createOneOffSchema.safeParse({
+        name,
+        day: null,
+        goalId,
+        estimate: amount,
+        ...(fixes ? { plannedMonth: fixes } : { inPlan: true }),
+      });
+      if (!parsed.success) return refuse(messageKey(parsed.error.issues[0].message));
+      startTransition(() => void createOneOff(parsed.data).then(finish));
+      return;
+    }
+
+    const parsed = editTaskSchema.safeParse({
+      oneOffId,
+      name,
+      ...(asksEstimate && amount !== (estimate ?? null) ? { estimate: amount } : {}),
+      ...(asksMonth && (fixes ?? null) !== fixedMonth ? { month: fixes } : {}),
+    });
+    if (!parsed.success) return refuse(messageKey(parsed.error.issues[0].message));
+    startTransition(() => void editTask(parsed.data).then(finish));
+  }
+
+  const plans = planMonth !== null ? monthName(planMonth, thisYear) : null;
+  const refused = (field: "name" | "estimate" | "month") => (error?.field === field ? error : null);
+
+  return (
+    <>
+      <Sheet
+        open={open}
+        onOpenChange={onOpenChange}
+        label={t("roadmap.fijar.eyebrow", { goal: goalName })}
+        title={mode === "create" ? t("roadmap.fijar.newTitle") : current}
+      >
+        <Flex direction="column" gap="5">
+          <Field
+            label={t("roadmap.fijar.name")}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            invalid={refused("name") !== null}
+            hint={refused("name") ? t(refused("name")!.key) : undefined}
+            autoFocus={mode === "create"}
+          />
+
+          {asksEstimate && timed ? (
+            <FieldPair>
+              <Field
+                label={t("roadmap.fijar.estimate")}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                value={hours}
+                onChange={(event) => setHours(event.target.value)}
+                suffix={t("roadmap.fijar.hours")}
+              />
+              <Field
+                label={t("roadmap.fijar.minutes")}
+                hideLabel
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={59}
+                step={1}
+                value={minutes}
+                onChange={(event) => setMinutes(event.target.value)}
+                suffix={t("roadmap.fijar.minutes")}
+                invalid={refused("estimate") !== null}
+                hint={refused("estimate") ? t(refused("estimate")!.key) : undefined}
+              />
+            </FieldPair>
+          ) : null}
+          {asksEstimate && !timed && unit ? (
+            <Field
+              label={t("roadmap.fijar.estimate")}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={1}
+              value={single}
+              onChange={(event) => setSingle(event.target.value)}
+              suffix={unit}
+              invalid={refused("estimate") !== null}
+              hint={refused("estimate") ? t(refused("estimate")!.key) : undefined}
+            />
+          ) : null}
+
+          {asksMonth ? (
+            <Flex direction="column" gap="2" role="radiogroup" aria-label={t("roadmap.fijar.month")}>
+              <Text variant="name">{t("roadmap.fijar.month")}</Text>
+              <Row
+                role="radio"
+                aria-checked={!pin}
+                leading={<Mark state={pin ? "empty" : "declared"} />}
+                name={t("roadmap.fijar.planPicks")}
+                trailing={
+                  plans !== null ? (
+                    <Text variant="meta" tone="muted">
+                      {t(mode === "create" ? "roadmap.fijar.goesTo" : "roadmap.fijar.today", { month: plans })}
+                    </Text>
+                  ) : undefined
+                }
+                onClick={() => setPin(false)}
+              />
+              <Row
+                role="radio"
+                aria-checked={pin}
+                leading={<Mark state={pin ? "declared" : "empty"} />}
+                name={t("roadmap.fijar.pinIn")}
+                rule={false}
+                onClick={() => setPin(true)}
+              />
+              {pin ? (
+                <ChipRow>
+                  {months.map((value) => (
+                    <Chip key={value} radio selected={month === value} onClick={() => setMonth(value)}>
+                      {monthName(value, thisYear)}
+                    </Chip>
+                  ))}
+                </ChipRow>
+              ) : null}
+              {refused("month") ? (
+                <Text as="p" variant="sentence" role="alert">
+                  {t(refused("month")!.key)}
+                </Text>
+              ) : null}
+              <Text as="p" variant="sentence">
+                {t("roadmap.fijar.pinHint")}
+              </Text>
+            </Flex>
+          ) : null}
+
+          {error && ((error.field === "estimate" && !asksEstimate) || (error.field === "month" && !asksMonth)) ? (
+            <Text as="p" variant="sentence" role="alert">
+              {t(error.key)}
+            </Text>
+          ) : null}
+        </Flex>
+
+        <SheetActions>
+          <Button block onClick={save} disabled={pending} aria-busy={pending || undefined}>
+            {t("roadmap.fijar.save")}
+          </Button>
+          <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+            {t("roadmap.fijar.cancel")}
+          </Button>
+        </SheetActions>
+
+        {mode === "edit" && canDelete ? <Separator /> : null}
+        {mode === "edit" && canDelete ? (
+          <Flex justify="start">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                onOpenChange(false);
+                setDeleteOpen(true);
+              }}
+              disabled={pending}
+            >
+              {t("roadmap.fijar.delete")}
+            </Button>
+          </Flex>
+        ) : null}
+      </Sheet>
+      {mode === "edit" && oneOffId ? (
+        <OneOffDeleteSheet open={deleteOpen} onOpenChange={setDeleteOpen} oneOffId={oneOffId} name={current} />
+      ) : null}
+    </>
+  );
+}

@@ -2,16 +2,17 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, File, FileText } from "lucide-react";
+import { ChevronRight, File, FileText, Pin } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { undoFact } from "@/app/actions/facts";
 import { completeOneOff } from "@/app/actions/one-offs";
-import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
 import { ShiftSheet, type ShiftSheetProps } from "@/components/month/shift-sheet";
+import { monthName, TaskSheet } from "@/components/plan/task-sheet";
 import { Button, Flex, IconButton, Mark, Panel, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
+import { formatQuantity, type TimeWords } from "@/lib/units/time";
 
 export type TaskRowProps = {
   oneOffId: string;
@@ -31,12 +32,27 @@ export type TaskRowProps = {
   note?: string | null;
   // The note sheet's label: «nota · {goal} · {month}».
   noteEyebrow?: string;
+  // RP-54: the hours this month holds of a task that runs over several; `from`
+  // and `to` are the months it comes from and goes on in, "YYYY-MM" or null.
+  part?: { part: number; hours: number; from: string | null; to: string | null };
+  // "YYYY-MM" the task is fixed to (RP-51).
+  fixedMonth?: string;
+  // What the task's sheet reads besides the row's own props (RP-55).
+  sheet: {
+    goalId: string;
+    goalName: string;
+    unit: string | null;
+    estimate: number | null;
+    planMonth: string | null;
+    months: string[];
+    canDelete: boolean;
+  };
 };
 
 /**
  * One task of a month (RP-30): a leaf marks itself done with its mark and is
- * taken back by tapping it done; its name opens the delete sheet. A parent
- * has no mark of its own.
+ * taken back by tapping it done; its name opens the task's sheet (RP-55). A
+ * parent has no mark of its own.
  */
 export function TaskRow({
   oneOffId,
@@ -50,12 +66,16 @@ export function TaskRow({
   markLabel,
   note = null,
   noteEyebrow,
+  part,
+  fixedMonth,
+  sheet,
 }: TaskRowProps) {
   const t = useTranslations();
+  const units = useTranslations("units");
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
 
   function run(act: () => Promise<{ ok: boolean; error?: MessageKey }>) {
@@ -69,9 +89,43 @@ export function TaskRow({
     });
   }
 
-  const trail = trailing ? (
+  const thisYear = String(new Date().getFullYear());
+  const words: TimeWords = {
+    h: (h) => units("h", { h }),
+    min: (min) => units("min", { min }),
+    join: (h, min) => units("join", { h, min }),
+  };
+  const say = (n: number) => (sheet.unit ? formatQuantity(n, sheet.unit, words) : String(n));
+  const partLine = part
+    ? part.from !== null && part.to !== null
+      ? t("roadmap.plan.continues", { from: monthName(part.from, thisYear), to: monthName(part.to, thisYear) })
+      : part.to !== null
+        ? t("roadmap.plan.startsHere", { hours: say(part.part), month: monthName(part.to, thisYear) })
+        : part.from !== null
+          ? t("roadmap.plan.comesFrom", { month: monthName(part.from, thisYear) })
+          : null
+    : null;
+  const pinLine =
+    fixedMonth && !done ? (
+      <Flex asChild align="center" gap="1">
+        <Text as="span" variant="sentence" tone="accent">
+          <Pin size={14} aria-hidden />
+          {t("roadmap.plan.fixedIn", { month: monthName(fixedMonth, thisYear) })}
+        </Text>
+      </Flex>
+    ) : null;
+  const lines = [meta, partLine, pinLine].filter(Boolean);
+  const stacked =
+    lines.length > 1 ? (
+      <Flex asChild direction="column">
+        <span>{lines.map((line, index) => <span key={index}>{line}</span>)}</span>
+      </Flex>
+    ) : (lines[0] as ReactNode);
+  const shownTrailing = part ? t("roadmap.plan.part", { part: say(part.part), total: say(part.hours) }) : trailing;
+
+  const trail = shownTrailing ? (
     <Text variant="meta" tone="muted">
-      {trailing}
+      {shownTrailing}
     </Text>
   ) : undefined;
 
@@ -100,11 +154,11 @@ export function TaskRow({
             {name}
           </Text>
         }
-        meta={meta}
+        meta={stacked}
         metaVariant="sentence"
         trailing={trail}
         data-done={done}
-        onClick={() => setDeleteOpen(true)}
+        onClick={() => setSheetOpen(true)}
         disabled={pending}
       />
     );
@@ -112,18 +166,19 @@ export function TaskRow({
     row = (
       <Row
         leading={<Mark state="declared" />}
-        aria-label={t("day.doneOneOffs.undoLabel", { name })}
+        leadingLabel={t("day.doneOneOffs.undoLabel", { name })}
         name={
           <Text as="span" tone="muted">
             {name}
           </Text>
         }
-        meta={meta}
+        meta={stacked}
         metaVariant="sentence"
         trailing={trail}
         {...noteProps}
-        onClick={() => factId && run(() => undoFact({ factId }))}
-        disabled={pending || factId === null}
+        onLeadingClick={() => factId && run(() => undoFact({ factId }))}
+        onClick={() => setSheetOpen(true)}
+        disabled={pending}
       />
     );
   } else {
@@ -132,12 +187,12 @@ export function TaskRow({
         leading={<Mark state="empty" />}
         leadingLabel={markLabel ?? t("day.oneOffs.markLabel")}
         name={name}
-        meta={meta}
+        meta={stacked}
         metaVariant="sentence"
         trailing={trail}
         {...noteProps}
         onLeadingClick={() => run(() => completeOneOff({ oneOffId }))}
-        onClick={() => setDeleteOpen(true)}
+        onClick={() => setSheetOpen(true)}
         disabled={pending}
       />
     );
@@ -151,11 +206,22 @@ export function TaskRow({
           {t(error)}
         </Text>
       ) : null}
-      <OneOffDeleteSheet
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+      <TaskSheet
+        mode="edit"
+        goalId={sheet.goalId}
+        goalName={sheet.goalName}
         oneOffId={oneOffId}
         name={name}
+        estimate={sheet.estimate}
+        unit={sheet.unit}
+        fixedMonth={fixedMonth ?? null}
+        planMonth={sheet.planMonth}
+        months={sheet.months}
+        done={done}
+        kind={parent ? "parent" : child ? "child" : "task"}
+        canDelete={sheet.canDelete}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
       />
       {parent ? null : (
         <NoteSheet

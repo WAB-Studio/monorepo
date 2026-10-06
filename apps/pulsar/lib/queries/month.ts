@@ -27,6 +27,8 @@ export type MonthAcrossGoal = {
   line: MonthLine | null;
   items: MonthAcrossItem[];
   open: boolean;
+  // What the goal's tasks are placed from; the task sheet reads their plan month off it.
+  plan: PlanInput;
 };
 
 // The screen's `MonthItem` plus what the plan says of the task: its part of
@@ -201,6 +203,7 @@ export async function loadMonthAcross(today: string = todayInZone()): Promise<Mo
         }),
       ),
       open: true,
+      plan,
     };
   });
 

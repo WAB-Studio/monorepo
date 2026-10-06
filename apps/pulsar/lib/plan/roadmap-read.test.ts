@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { carryShare } from "./carry";
 import type { PlanInput, PlanTask } from "./roadmap";
-import { planMonthList, planMoved, planShare, rhythmToMeet } from "./roadmap-read";
+import { openMonthsOf, planMonthList, planMonthOf, planMoved, planShare, rhythmToMeet } from "./roadmap-read";
 
 const SEP = "2026-09-01";
 const OCT = "2026-10-01";
@@ -197,4 +197,15 @@ test("rhythmToMeet: a total that is no multiple of the step rounds up to the ste
   const tasks = [task("hundred", { estimate: 100 })];
   const tight = input(tasks, { rhythm: 60, today: "2026-10-15", horizon: NOV });
   assert.equal(rhythmToMeet(tight, 60), 120);
+});
+
+test("planMonthOf: a task fixed to December reads the month the plan would give it", () => {
+  const tasks = [task("a", { estimate: 6 }), task("pinned", { plannedMonth: "2026-12-01", estimate: 4 })];
+  assert.equal(planMonthOf(input(tasks), "pinned"), OCT);
+  assert.equal(planMonthOf(input([task("none", { estimate: 4 })], { rhythm: null }), "none"), null);
+});
+
+test("openMonthsOf: from this month to the goal's last, nothing once the goal ended", () => {
+  assert.deepEqual(openMonthsOf(input([], { horizon: "2027-01-01" })), ["2026-10", "2026-11", "2026-12"]);
+  assert.deepEqual(openMonthsOf(input([], { horizon: "2026-10-02" })), []);
 });

@@ -9,6 +9,7 @@ import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Se
 import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
 import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
+import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { monthAmount, shiftOffered, shiftPlan } from "@/lib/plan/shift";
 import { listGoals, loadGoal, type GoalSummary, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
@@ -119,6 +120,17 @@ export async function MonthDetail({
     note = t.rich("month.list.includesDone", { done: say(doneInMonth), ...fig });
   }
 
+  const openMonths = openMonthsOf(goal.plan);
+  const sheetOf = (task: Task, kids: Task[]) => ({
+    goalId: goal.id,
+    goalName: goal.name,
+    unit,
+    estimate: task.estimate,
+    planMonth: goal.roadmap.state === "planned" ? (planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null) : null,
+    months: task.parentId === null ? openMonths : [],
+    canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),
+  });
+
   function item(entry: MonthItem) {
     const { task, children } = entry;
     const childTotal = sum(children, (child) => child.estimate ?? 0);
@@ -163,6 +175,8 @@ export async function MonthDetail({
           trailing={unit && owes > 0 ? say(owes) : undefined}
           note={task.note}
           noteEyebrow={noteEyebrow}
+          fixedMonth={task.plannedMonth?.slice(0, 7)}
+          sheet={sheetOf(task, children)}
         />
         {children.map((child) => (
           <TaskRow
@@ -175,6 +189,7 @@ export async function MonthDetail({
             trailing={unit && child.estimate ? say(child.estimate) : undefined}
             note={child.note}
             noteEyebrow={noteEyebrow}
+            sheet={sheetOf(child, [])}
           />
         ))}
         {subtaskable ? (
