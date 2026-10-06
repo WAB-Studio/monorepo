@@ -930,3 +930,10 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - A goal with no rhythm: the row's first line reads «Armar el plan», with no second line; it still links to the plan.
   - A goal with no task in the plan: no «el plan» section.
   - The plan's end carries the year only when it is not the current year, as the rest of the screen does.
+
+- **The plan's months, module 349** (2026-10-06, decided by the orchestrator):
+  - A task past the goal's end appears only under «después de tu final», never again in the month holding its hours.
+  - A month past the goal's last month with no rows is dropped.
+  - A goal with no measure draws no figure and no bar on the plan's months.
+  - «Añadir una tarea» opens the sheet with no «va a» hint.
+  - A plan that ends on the goal's last day reads «A este ritmo terminas el {date}, el día de tu final.», never «0 días antes».

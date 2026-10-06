@@ -2,6 +2,7 @@
   "plan": {
     "title": "El plan",
     "finish": "A este ritmo terminas el {date}, {days, plural, one {# día} other {# días}} antes de tu final.",
+    "finishOnEnd": "A este ritmo terminas el {date}, el día de tu final.",
     "rhythm": "Ritmo {hours} al mes",
     "change": "Cambiar",
     "currentMonth": "{month} · en curso",
