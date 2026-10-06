@@ -5,10 +5,34 @@
   flex-direction: column;
   align-items: flex-start;
   /* Gaps are margins, so a part that is absent leaves none behind:
-     back 4, eyebrow 6, title 12 to its line, 8 more under it to make the
-     32 the page's own gap leaves before the first section. */
+     back 4, eyebrow 6, title 12 to its line. The page's own gap is the 32
+     before the first section. */
   gap: 0;
-  margin-block-end: 8px;
+}
+
+/* The controls' row: the eyebrow at its start, the controls filling the rest. */
+.top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  inline-size: 100%;
+  margin-block-end: 6px;
+}
+
+.top > .eyebrow {
+  margin-block-end: 0;
+  flex: 0 1 auto;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.controls > * {
+  flex: 1 1 auto;
 }
 
 .back {
@@ -45,6 +69,12 @@
   font-size: var(--pulsar-text-line-size);
   font-weight: var(--pulsar-text-name-weight);
   text-decoration: none;
+  /* 44px target; the negative margin keeps the text where it stood. */
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 44px;
+  line-height: 1.2;
+  margin-block: calc((1.2em - 44px) / 2);
 }
 
 .eyebrowLink:hover,

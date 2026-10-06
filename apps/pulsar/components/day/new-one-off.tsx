@@ -135,12 +135,12 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
         />
       ) : null}
       {nameError ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(nameError)}
         </Text>
       ) : null}
       {saved ? (
-        <Text as="p" role="status" tone="accent" variant="meta">
+        <Text as="p" role="status" tone="accent" variant="sentence">
           {saved}
         </Text>
       ) : null}

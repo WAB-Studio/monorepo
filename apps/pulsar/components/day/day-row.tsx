@@ -176,12 +176,12 @@ export function DayRow({
         disabled={!tappable || pending}
       />
       {note ? (
-        <Text as="p" tone="quiet" variant="meta">
+        <Text as="p" variant="sentence">
           {note}
         </Text>
       ) : null}
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}
