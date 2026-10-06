@@ -39,8 +39,9 @@ test("the example reads into the draft it describes, minutes and all", () => {
             name: "Tutor",
             month: "2026-10",
             estimate: null,
+            note: "Preguntar por la tarifa por hora.\nPedir una clase de prueba antes de pagar.",
             children: [
-              { name: "Elegir tutor", estimate: 60 },
+              { name: "Elegir tutor", estimate: 60, note: "Comparar tres perfiles." },
               { name: "Sesiones 1–4", estimate: 360 },
             ],
           },
