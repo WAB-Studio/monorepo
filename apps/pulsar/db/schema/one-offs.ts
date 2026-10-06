@@ -51,7 +51,7 @@ export const oneOffs = goalsSchema.table(
     check("one_offs_estimate_needs_goal", sql`${t.estimate} is null or ${t.goalId} is not null`),
     // A sub-task takes its parent's month.
     check("one_offs_child_has_no_month", sql`${t.parentId} is null or ${t.plannedMonth} is null`),
-    check("one_offs_in_plan_shape", sql`not ${t.inPlan} or (${t.goalId} is not null and ${t.day} is null)`),
+    check("one_offs_in_plan_shape", sql`not ${t.inPlan} or ${t.goalId} is not null`),
     check("one_offs_planned_month_in_plan", sql`${t.plannedMonth} is null or ${t.inPlan}`),
     check("one_offs_child_in_plan", sql`${t.parentId} is null or ${t.inPlan}`),
     check("one_offs_not_own_parent", sql`${t.parentId} <> ${t.id}`),
