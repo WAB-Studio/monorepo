@@ -106,6 +106,7 @@ test("RP-46 monthsWithWeeks: the weeks under a month add up to the month's reach
 
 test("RP-46 civilSpan: every span carries its year, both ends across a year", () => {
   assert.equal(civilSpan("2026-08-31", "2026-09-06"), "31 ago–6 sep 2026");
+  assert.equal(civilSpan("2026-08-31", "2026-08-31"), "31 ago 2026");
   assert.equal(civilSpan("2026-10-05", "2026-10-11"), "5–11 oct 2026");
   assert.equal(civilSpan("2026-12-28", "2027-01-03"), "28 dic 2026–3 ene 2027");
 });

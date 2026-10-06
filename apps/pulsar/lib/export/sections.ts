@@ -53,6 +53,7 @@ const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "s
 export function civilSpan(startsOn: string, endsOn: string): string {
   const [startYear, startMonth, startDay] = startsOn.split("-").map(Number);
   const [endYear, endMonth, endDay] = endsOn.split("-").map(Number);
+  if (startsOn === endsOn) return `${endDay} ${SHORT_MONTHS[endMonth - 1]} ${endYear}`;
   const start = SHORT_MONTHS[startMonth - 1];
   const end = SHORT_MONTHS[endMonth - 1];
   if (startYear !== endYear) return `${startDay} ${start} ${startYear}–${endDay} ${end} ${endYear}`;
