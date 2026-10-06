@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { File, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
-import { Mark, Row, Text } from "@/components/ui";
+import { IconButton, Mark, Row, Text } from "@/components/ui";
 
+import { NoteSheet } from "./note-sheet";
 import { ScheduleSheet } from "./schedule-sheet";
 import { type MessageKey } from "@/i18n/translator";
 
@@ -19,18 +21,20 @@ export type DaylessRowProps = {
   scheduled?: { day: string; label: string };
   // Called once the one-off is done, before the list drops its row.
   onDone?: (name: string) => void;
+  note: string | null;
 };
 
 /**
  * A row of `/sueltas`: the mark finishes it today (`completeOneOff`), the
  * name opens the sheet that gives it a day, or moves it when it has one.
  */
-export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone }: DaylessRowProps) {
+export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }: DaylessRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
 
   function handleComplete() {
     if (pending) return;
@@ -49,6 +53,19 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone }: Dayl
   else if (scheduled) meta = scheduled.label;
   else if (goalName) meta = t("oneOffs.fromGoal", { goal: goalName });
 
+  const noteButton = (
+    <IconButton
+      tap={44}
+      variant="ghost"
+      tone={note ? "accent" : undefined}
+      aria-label={t(note ? "oneOffs.note.view" : "oneOffs.note.open", { name })}
+      onClick={() => setNoteOpen(true)}
+      disabled={pending}
+    >
+      {note ? <FileText size={18} aria-hidden /> : <File size={18} aria-hidden />}
+    </IconButton>
+  );
+
   return (
     <>
       <Row
@@ -57,6 +74,8 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone }: Dayl
         name={name}
         meta={meta}
         onLeadingClick={handleComplete}
+        preview={note}
+        end={noteButton}
         onClick={() => setScheduleOpen(true)}
         disabled={pending}
       />
@@ -76,6 +95,14 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone }: Dayl
           setScheduleOpen(false);
           setDeleteOpen(true);
         }}
+      />
+      <NoteSheet
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        oneOffId={oneOffId}
+        name={name}
+        note={note}
+        eyebrow={goalName ? t("oneOffs.note.eyebrowGoal", { goal: goalName }) : t("oneOffs.note.eyebrowLoose")}
       />
       <OneOffDeleteSheet
         open={deleteOpen}

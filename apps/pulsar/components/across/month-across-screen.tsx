@@ -82,6 +82,8 @@ export async function MonthAcrossScreen() {
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
           : null;
 
+    const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: thisName });
+
     function item(entry: MonthItem) {
       const { task, children } = entry;
       const childTotal = sum(children.map((child) => child.estimate ?? 0));
@@ -115,6 +117,8 @@ export async function MonthAcrossScreen() {
             meta={sub}
             trailing={unit && owes > 0 ? say(owes) : undefined}
             markLabel={t("month.across.mark", { name: task.name })}
+            note={task.note}
+            noteEyebrow={noteEyebrow}
           />
           {children.map((child) => (
             <TaskRow
@@ -126,6 +130,8 @@ export async function MonthAcrossScreen() {
               child
               trailing={unit && child.estimate ? say(child.estimate) : undefined}
               markLabel={t("month.across.mark", { name: child.name })}
+              note={child.note}
+              noteEyebrow={noteEyebrow}
             />
           ))}
         </Flex>

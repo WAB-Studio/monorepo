@@ -41,7 +41,7 @@ export async function listDaylessOneOffs(): Promise<DaylessOneOff[]> {
             select 1 from "goals"."facts" f where f.one_off_id = o.id
           )
           and (o.goal_id is null or (${openGoal(todayInZone())}))
-        order by o.created_at
+        order by o.position, o.created_at, o.id
     `),
   );
 
@@ -71,7 +71,7 @@ export async function listScheduledOneOffs(today: string): Promise<ScheduledOneO
             select 1 from "goals"."facts" f where f.one_off_id = o.id
           )
           and (o.goal_id is null or (${openGoal(today)}))
-        order by o.day, o.created_at
+        order by o.day, o.position, o.created_at, o.id
     `),
   );
 

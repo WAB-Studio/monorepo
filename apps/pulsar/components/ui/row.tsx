@@ -47,6 +47,12 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // carries the goal's month and its last day (`MetasCentroEscritorio`).
   wideMeta?: ReactNode;
   wideTrailing?: ReactNode;
+  // Up to two lines of free text under the name and its meta, line breaks
+  // kept, clipped with an ellipsis (`TareaNotaGuardada`).
+  preview?: string | null;
+  // A control of its own at the row's end, a sibling of the row's button
+  // because a button cannot hold one (`TareaNotaGuardada`'s note button).
+  end?: ReactNode;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -63,6 +69,8 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     href,
     wideMeta,
     wideTrailing,
+    preview,
+    end,
     className,
     type = "button",
     disabled,
@@ -74,7 +82,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
   const merged = [
     styles.row,
     rule ? undefined : styles.flush,
-    onLeadingClick ? styles.split : undefined,
+    onLeadingClick || end ? styles.split : undefined,
     className,
   ]
     .filter(Boolean)
@@ -94,6 +102,11 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
         {wideMeta ? (
           <Text as="span" variant="meta" className={styles.wideOnly}>
             {wideMeta}
+          </Text>
+        ) : null}
+        {preview ? (
+          <Text as="span" variant="meta" tone="secondary" className={styles.preview}>
+            {preview}
           </Text>
         ) : null}
       </span>
@@ -122,10 +135,10 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     );
   }
 
-  if (onLeadingClick) {
+  if (onLeadingClick || end) {
     return (
       <div className={merged}>
-        {leading ? (
+        {leading && onLeadingClick ? (
           <button
             type="button"
             className={styles.leadingButton}
@@ -144,8 +157,10 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
           disabled={disabled}
           {...props}
         >
+          {onLeadingClick || !leading ? null : <span className={styles.leading}>{leading}</span>}
           {body}
         </button>
+        <span className={styles.end}>{end}</span>
       </div>
     );
   }

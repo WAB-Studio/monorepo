@@ -76,13 +76,13 @@ export const Button = forwardRef<HTMLButtonElement, Narrowed<ButtonProps> & Puls
 export const IconButton = forwardRef<
   HTMLButtonElement,
   Narrowed<IconButtonProps> & PulsarControlProps
->(function IconButton({ tap, block, variant = "solid", className, ...props }, ref) {
+>(function IconButton({ tap, block, variant = "solid", tone, className, ...props }, ref) {
   return (
     <ThemesIconButton
       ref={ref}
       {...props}
       variant={variant}
-      className={classes({ tap, block, variant }, className)}
+      className={classes({ tap, block, variant, tone }, className)}
     />
   );
 });

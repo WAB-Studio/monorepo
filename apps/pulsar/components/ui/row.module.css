@@ -179,3 +179,22 @@
     display: flex;
   }
 }
+
+/* A note's preview: two lines at most, its line breaks kept. */
+.preview.preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: pre-line;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* A control at the row's end, centred against a row that stretches its parts. */
+.end {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
