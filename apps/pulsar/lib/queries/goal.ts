@@ -197,7 +197,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                  'source_key', s.key,
                  'source_unit', s.unit,
                  'source_label_key', s.label_key
-               )), '[]'::json)
+               ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.goal_id = ${goalId}) as commitments,
@@ -214,7 +214,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
       (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id),
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
-               ) order by o.created_at, o.id), '[]'::json)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.goal_id = ${goalId}) as tasks,
       (select coalesce(json_agg(m.month order by m.month), '[]'::json)
@@ -544,7 +544,7 @@ export async function listGoals(): Promise<GoalSummary[]> {
       select id, name, horizon, measure_name, measure_unit, archived_at
       from "goals"."goals"
       where archived_at is null
-      order by created_at
+      order by position, created_at, id
     `),
   );
 
@@ -602,7 +602,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
              where b.goal_id = g.id and b.month = ${month}::date) as budgets,
           (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                      'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-                   ) order by o.created_at, o.id), '[]'::json)
+                   ) order by o.position, o.created_at, o.id), '[]'::json)
              from "goals"."one_offs" o where o.goal_id = g.id) as tasks,
           (select coalesce(json_agg(jsonb_build_object(
                      'satisfaction', c.satisfaction,
@@ -613,7 +613,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
              join "goals"."evidence_sources" s on s.id = c.source_id
              where c.goal_id = g.id and c.satisfaction = 'evidence') as measure_sources
         from "goals"."goals" g
-        order by g.created_at
+        order by g.position, g.created_at, g.id
       `),
     ),
     readEvidenceOutcome(person.id, month, today),

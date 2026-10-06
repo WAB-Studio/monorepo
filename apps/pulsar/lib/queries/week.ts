@@ -115,7 +115,7 @@ async function queryGoalsRow(
 ): Promise<WeekQueryRow> {
   const [row] = await tx.execute<WeekQueryRow>(sql`
     select
-      (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(g) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where (g.created_at at time zone ${TIME_ZONE})::date <= ${weekEnd}::date
            and g.horizon > ${weekStart}::date
@@ -125,7 +125,7 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
-               )), '[]'::json)
+               ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${weekStart}::date) as commitments,
