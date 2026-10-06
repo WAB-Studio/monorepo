@@ -1,0 +1,183 @@
+import type { Page } from "@playwright/test";
+import type postgres from "postgres";
+
+import { monthOf, nextMonth } from "@/lib/plan/months";
+import { todayInZone } from "@/lib/zone";
+
+import { test, expect } from "./fixtures";
+
+// RP-50, RP-53: `/metas/<id>/plan` asks a goal with tasks and no rhythm for
+// one, then names the plan's end. Every goal is seeded under this spec's own
+// identity and deleted by id in `finally`.
+
+const today = todayInZone();
+const horizon = `${Number(today.slice(0, 4)) + 1}-${today.slice(5, 7)}-01`;
+const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
+// Five tasks of 4 h: 20 h, so 12 h a month ends next month and 20 h this one.
+const THIS_MONTH = monthFormat.format(new Date(`${monthOf(today)}T12:00:00Z`));
+const NEXT_MONTH = monthFormat.format(new Date(`${nextMonth(monthOf(today))}T12:00:00Z`));
+
+async function seedGoal(db: postgres.Sql, personId: string, rhythm: number | null) {
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
+    values (${personId}, ${`Meta ritmo ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', ${rhythm})
+    returning id
+  `;
+  for (let index = 1; index <= 5; index++) {
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan)
+      values (${personId}, ${goal.id}, ${`Tarea ${index}`}, 240, ${index}, true)
+    `;
+  }
+  return goal.id;
+}
+
+async function rhythmOf(db: postgres.Sql, goalId: string): Promise<number | null> {
+  const [row] = await db<{ rhythm: number | null }[]>`select rhythm from goals.goals where id = ${goalId}`;
+  return row.rhythm;
+}
+
+async function drop(db: postgres.Sql, personId: string, goalId: string) {
+  await db`delete from goals.month_budgets where goal_id = ${goalId} and user_id = ${personId}`;
+  await db`delete from goals.one_offs where goal_id = ${goalId} and user_id = ${personId}`;
+  await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+}
+
+const LEAD = /^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, \d+ días? antes de tu final\.$/u;
+
+function planned(page: Page) {
+  return page.getByText(LEAD);
+}
+
+for (const width of [390, 1440]) {
+  test.describe(`at ${width}`, () => {
+    test.use({ viewport: { width, height: 900 } });
+
+    test("a goal with tasks and no rhythm draws the state: intro, chips, button, tasks without a month", async ({
+      page,
+      db,
+      personId,
+    }) => {
+      const goalId = await seedGoal(db, personId, null);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await expect(page.getByRole("heading", { level: 1, name: "El plan" })).toBeVisible();
+        await expect(
+          page.getByText("Dile al plan cuántas horas al mes le das a esta meta, y él pone cada tarea en su mes."),
+        ).toBeVisible();
+        await expect(page.getByText("Horas al mes", { exact: true })).toBeVisible();
+        for (const chip of ["8 h", "12 h", "20 h"]) {
+          await expect(page.getByRole("radio", { name: chip })).toBeVisible();
+        }
+        await expect(page.getByPlaceholder("otra")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Armar el plan" })).toBeVisible();
+        await expect(page.getByText("tareas, sin mes todavía")).toBeVisible();
+        await expect(page.getByText("5 · 20 h")).toBeVisible();
+        await expect(page.getByText("Tarea 3", { exact: true })).toBeVisible();
+        await expect(page.getByText("Tarea 4", { exact: true })).toHaveCount(0);
+        await expect(
+          page.getByText("Y 2 más. Una tarea sin estimación cuenta como 0 h hasta que le pongas una."),
+        ).toBeVisible();
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("choosing a chip rewrites the hint from the plan filled at that rhythm", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, null);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await expect(
+          page.getByText(`Con 12 h al mes, tus 20 h de tareas terminan en ${NEXT_MONTH}. Puedes cambiar un mes puntual después.`),
+        ).toBeVisible();
+        await page.getByRole("radio", { name: "20 h" }).click();
+        await expect(page.getByRole("radio", { name: "20 h" })).toHaveAttribute("aria-checked", "true");
+        await expect(page.getByText(new RegExp(`^Con 20 h al mes, tus 20 h de tareas terminan en ${THIS_MONTH}\\.`))).toBeVisible();
+        await expect(page.getByText(/^Con 12 h al mes/)).toHaveCount(0);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("«Armar el plan» saves the rhythm and the lead names the end", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, null);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: "Armar el plan" }).click();
+        await expect(planned(page)).toBeVisible();
+        await expect(page.getByText("Ritmo 12 h al mes")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Armar el plan" })).toHaveCount(0);
+        expect(await rhythmOf(db, goalId)).toBe(720);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("«Cambiar» opens the sheet and a new rhythm changes the end", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 720);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        const before = await planned(page).innerText();
+        await page.getByRole("button", { name: "Cambiar", exact: true }).click();
+        const sheet = page.getByRole("dialog");
+        await expect(sheet.getByRole("heading", { name: "¿Cuántas horas al mes?" })).toBeVisible();
+        await expect(sheet.getByRole("radio", { name: "12 h" })).toHaveAttribute("aria-checked", "true");
+        await sheet.getByRole("radio", { name: "20 h" }).click();
+        await sheet.getByRole("button", { name: "Guardar el ritmo" }).click();
+        await expect(sheet).toBeHidden();
+        await expect(page.getByText("Ritmo 20 h al mes")).toBeVisible();
+        await expect(planned(page)).not.toHaveText(before);
+        expect(await rhythmOf(db, goalId)).toBe(1200);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("the selected chip is a soft fill, not the solid of the primary button", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, null);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        const paint = (selector: ReturnType<Page["locator"]>) =>
+          selector.evaluate((el) => {
+            const style = getComputedStyle(el);
+            return { background: style.backgroundColor, border: style.borderTopColor, color: style.color };
+          });
+        const selected = await paint(page.getByRole("radio", { name: "12 h" }));
+        const other = await paint(page.getByRole("radio", { name: "8 h" }));
+        const solid = await paint(page.getByRole("button", { name: "Armar el plan" }));
+        expect(selected.background).not.toBe(solid.background);
+        expect(selected.background).not.toBe(other.background);
+        expect(selected.border).not.toBe(other.border);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("the way to the month record lands on /meses", async ({ page, db, personId }) => {
+      const goalId = await seedGoal(db, personId, 720);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        const link = page.getByRole("link", { name: "Ver mes por mes" });
+        await expect(link).toBeVisible();
+        await link.click();
+        await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses$`));
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    if (width === 1440) {
+      test("the column is at most 640 wide at 1440", async ({ page, db, personId }) => {
+        const goalId = await seedGoal(db, personId, 720);
+        try {
+          await page.goto(`/metas/${goalId}/plan`);
+          const box = await planned(page).boundingBox();
+          expect(box!.width).toBeLessThanOrEqual(640);
+          expect(box!.width).toBeGreaterThan(400);
+        } finally {
+          await drop(db, personId, goalId);
+        }
+      });
+    }
+  });
+}
