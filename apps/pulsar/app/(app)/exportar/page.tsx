@@ -10,7 +10,7 @@ import { civilDateShort, todayInZone } from "@/lib/zone";
 // The browser proposes the title as the PDF's file name.
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("export");
-  return { title: `${t("printBrand")} · ${civilDateShort(todayInZone())}` };
+  return { title: { absolute: `${t("printBrand")} · ${civilDateShort(todayInZone())}` } };
 }
 
 // Inside the shell: the nav hides itself in print (`print.module.css`) and the

@@ -320,6 +320,62 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
   assert.equal(shaped.evidence, "read");
 });
 
+test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes as whole minutes", () => {
+  const base = {
+    id: ID(10),
+    name: "Estudiar",
+    horizon: "2027-01-01",
+    endedOn: null,
+    unit: "minutos",
+    thisMonth: { planned: 750, reached: 0, underPace: false },
+    toDate: { planned: 0, reached: 0 },
+    phases: [],
+    carried: [],
+    months: [],
+    weeks: [],
+  };
+  const report: Report = {
+    today: "2026-10-05",
+    evidence: "read",
+    goals: [
+      {
+        ...base,
+        tasks: [
+          { name: "Arrastrada", from: "2026-09-01", done: false, doneOn: null, estimate: 90, owes: 90, hasAmount: true, note: "Del mes pasado", children: [] },
+          {
+            name: "Madre",
+            from: null,
+            done: true,
+            doneOn: "2026-10-03",
+            estimate: null,
+            owes: 0,
+            hasAmount: true,
+            note: null,
+            children: [{ name: "Hija", done: true, doneOn: "2026-10-03", estimate: 750, note: "Nota hija" }],
+          },
+        ],
+      },
+      {
+        ...base,
+        unit: null,
+        tasks: [{ name: "Sin medida", from: null, done: false, doneOn: null, estimate: null, owes: 0, hasAmount: false, note: null, children: [] }],
+      },
+    ],
+  };
+  const [timed, bare] = shapeReport(report).goals;
+  assert.deepEqual(timed.tasks.map((task) => task.name), ["Arrastrada", "Madre"]);
+  assert.deepEqual(timed.tasks.map((task) => task.from), ["2026-09", null]);
+  assert.deepEqual(timed.tasks[0].estimate, { value: 90, unit: "minutos", text: "1 h 30 min" });
+  assert.deepEqual(timed.tasks[0].owes, { value: 90, unit: "minutos", text: "1 h 30 min" });
+  assert.equal(timed.tasks[0].note, "Del mes pasado");
+  assert.deepEqual(timed.tasks[1].children, [
+    { name: "Hija", done: true, doneOn: "2026-10-03", estimate: { value: 750, unit: "minutos", text: "12 h 30 min" }, note: "Nota hija" },
+  ]);
+  assert.equal(timed.tasks[1].doneOn, "2026-10-03");
+  assert.deepEqual(bare.tasks[0].estimate, null);
+  assert.deepEqual(bare.tasks[0].owes, { value: 0, unit: null });
+});
+
 test("loose one-offs keep the two lists apart, the scheduled with their day", () => {
   const shaped = shapeLoose({
     dayless: [{ id: ID(30), name: "Ordenar", goalId: null, goalName: null, note: "Empezar por el estante" }],
