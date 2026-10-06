@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { shortMonth } from "@/lib/dates/short-month";
 import { loadGoal } from "@/lib/queries/goal";
-import { Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
+import { Page, ScreenHeader, Section, Table, Text, type TableRow } from "@/components/ui";
 
 // «21–27 sep», «31 ago–6 sep».
 function weekSpan(startsOn: string, endsOn: string): string {
@@ -41,9 +41,6 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
           <Text as="p" variant="sentence">
             {t("goal.review.noMeasure")}
           </Text>
-          <div>
-            <TextLink href={`/metas/${goal.id}/compromisos/nuevo`}>{t("goal.commitments.add")}</TextLink>
-          </div>
         </Section>
       </Page>
     );

@@ -132,7 +132,7 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     const measureLine = page.getByText(`mide en ${unit}`, { exact: true });
     await expect(measureLine).toBeVisible();
     // A sentence is Archivo, never mono (`SistemaTipo`).
-    expect(await measureLine.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+    expect.soft(await measureLine.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
     await expect(page.getByLabel(`Volver a ${goalName}`)).toHaveAttribute("href", `/metas/${goalId}`);
     await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
     await expect(page.getByText("la única cifra que predice el progreso")).toHaveCount(0);
@@ -180,9 +180,9 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await expect(week3Row).toHaveAttribute("data-current", "");
 
     // A phase is named on the week it starts, not again on each week it spans.
-    await expect(week1Row.getByRole("cell").nth(2)).toHaveText("Fase única");
-    await expect(rows.nth(2).getByRole("cell").nth(2)).toHaveText("");
-    await expect(week3Row.getByRole("cell").nth(2)).toHaveText("");
+    await expect.soft(week1Row.getByRole("cell").nth(2)).toHaveText("Fase única");
+    await expect.soft(rows.nth(2).getByRole("cell").nth(2)).toHaveText("");
+    await expect.soft(week3Row.getByRole("cell").nth(2)).toHaveText("");
 
     // From 1024 the table spans the main column, past the old 1020 cap.
     const tableWidth = (await table.boundingBox())!.width;
@@ -224,10 +224,7 @@ test("a goal with no measure yet says so on its review, with no way in and no ta
     await expect(page.getByRole("table")).toHaveCount(0);
     await expect(page.getByRole("listitem")).toHaveCount(0);
 
-    // The way out: the commitment that gives the goal its figure.
-    await page.getByRole("link", { name: "Añadir un compromiso" }).click();
-    await page.waitForURL(`**/metas/${goalId}/compromisos/nuevo`);
-    await page.goBack();
+    await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveCount(0);
 
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
