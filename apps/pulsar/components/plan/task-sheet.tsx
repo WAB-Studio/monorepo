@@ -134,7 +134,7 @@ export function TaskSheet({
   }
 
   function refuse(key: MessageKey) {
-    const field = key === "roadmap.errors.nameEmpty" || key === "roadmap.errors.nameTooLong" ? "name" : key.startsWith("roadmap.errors.month") ? "month" : "estimate";
+    const field = key === "roadmap.errors.nameEmpty" || key === "roadmap.errors.nameTooLong" ? "name" : key.startsWith("roadmap.errors.month") || key === "roadmap.errors.dayInMonth" || key === "roadmap.errors.subTaskMonth" ? "month" : "estimate";
     setError({ key, field });
   }
 

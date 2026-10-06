@@ -158,6 +158,46 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("a month change on a task with a day is refused at the month field (RP-51)", async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const { goalId } = await seedGoal(db, person.id, stamp, 600);
+      const name = `Tarea con día ${stamp}`;
+      const taskId = await seedTask(db, person.id, goalId, name, 60, thisMonth);
+      await db`update goals.one_offs set day = ${today}::date where id = ${taskId}`;
+      const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/meses/${seg(thisMonth)}`);
+      try {
+        await nameButton(page, name).click();
+        const sheet = page.getByRole("dialog");
+        await sheet.getByRole("radio", { name: label(last) }).click();
+        await sheet.getByRole("button", { name: "Guardar" }).click();
+        await expect(sheet.getByRole("radiogroup").getByRole("alert")).toContainText("Esa tarea tiene día");
+        expect((await row(db, taskId)).planned_month).toBe(thisMonth);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("saving a rename on a done task lands (RP-55)", async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const { goalId } = await seedGoal(db, person.id, stamp, null);
+      const name = `Tarea hecha renombrar ${stamp}`;
+      const taskId = await seedTask(db, person.id, goalId, name, 60, thisMonth);
+      await db`insert into goals.facts (user_id, goal_id, one_off_id, day) values (${person.id}, ${goalId}, ${taskId}, ${today}::date)`;
+      const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${goalId}/meses/${seg(thisMonth)}`);
+      try {
+        await nameButton(page, name).click();
+        const sheet = page.getByRole("dialog");
+        await sheet.getByLabel("Nombre").fill(`${name} nueva`);
+        await sheet.getByRole("button", { name: "Guardar" }).click();
+        await expect(sheet).toBeHidden();
+        const saved = await row(db, taskId);
+        expect(saved.name).toBe(`${name} nueva`);
+        expect(saved.estimate).toBe(60);
+      } finally {
+        await context.close();
+      }
+    });
+
     test("a done task's sheet offers its name alone (RP-55)", async ({ person, browser, baseURL, db }) => {
       const stamp = Date.now();
       const { goalId } = await seedGoal(db, person.id, stamp, null);
