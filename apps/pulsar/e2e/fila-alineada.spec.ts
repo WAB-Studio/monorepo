@@ -59,14 +59,14 @@ test("on Hoy a one-off's mark and name sit where a commitment's do, and its mark
     await expect(page.getByText(oneOff, { exact: true })).toBeVisible();
     await expect(page.getByText(commitment, { exact: true })).toBeVisible();
 
+    const button = await page.getByRole("button", { name: "Marcar como hecho" }).first().boundingBox();
+    expect(button!.width).toBeGreaterThanOrEqual(48);
+    expect(button!.height).toBeGreaterThanOrEqual(56);
+
     const plain = await lefts(page, commitment);
     const split = await lefts(page, oneOff);
     expect(Math.abs(split.mark - plain.mark)).toBeLessThanOrEqual(0.5);
     expect(Math.abs(split.name - plain.name)).toBeLessThanOrEqual(0.5);
-
-    const button = await page.getByRole("button", { name: "Marcar como hecho" }).first().boundingBox();
-    expect(button!.width).toBeGreaterThanOrEqual(48);
-    expect(button!.height).toBeGreaterThanOrEqual(56);
 
     // Two acts: the name opens the delete sheet, the mark completes.
     await page.getByRole("button", { name: oneOff, exact: true }).click();
