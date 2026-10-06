@@ -112,9 +112,12 @@ test("at 1280 the side card of a goal with no month plan is titled by the goal's
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const card = page.locator("div").filter({ hasText: "esta semana" }).filter({ hasText: name }).last();
-    await expect(card.getByText(name, { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("kilómetros", { exact: true }).locator("visible=true")).toHaveCount(0);
+    const card = page
+      .getByText("esta semana", { exact: true })
+      .locator("xpath=ancestor::div[.//a][1]")
+      .filter({ hasText: name });
+    await expect(card.locator("[class*='section-label']").first()).toHaveText(name);
+    await expect(page.locator("[class*='section-label']").filter({ hasText: /^kilómetros$/i })).toHaveCount(0);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;

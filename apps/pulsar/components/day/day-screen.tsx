@@ -6,7 +6,6 @@ import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
 import { tallyDay } from "@/lib/day/tally";
-import { isTimeUnit } from "@/lib/units/time";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -431,7 +430,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           <Face on="desktop">
             <SectionLabel>{goal.name}</SectionLabel>
             <Flex align="baseline" gap="2">
-              <Figure value={weekMeasure[goal.id]} unit={isTimeUnit(goal.measureUnit) ? goal.measureUnit ?? undefined : undefined} />
+              <Figure value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
               <Text variant="meta" tone="muted">
                 {t("day.weekFigure.caption")}
               </Text>
