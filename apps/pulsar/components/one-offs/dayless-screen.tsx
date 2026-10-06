@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { Button, Flex, Page, Text } from "@/components/ui";
+import { Page, ScreenHeader } from "@/components/ui";
 import { dayWords } from "@/lib/day/day-words";
 import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
 import { todayInZone } from "@/lib/zone";
@@ -33,22 +32,11 @@ export async function DaylessScreen() {
   };
 
   return (
-    <Page>
-      <Flex justify="between" align="center" gap="2">
-        <Text as="p" variant="meta" tone="muted">
-          {t("oneOffs.kicker")}
-        </Text>
-        <Button asChild tap={44} variant="ghost">
-          <Link href="/">
-            <Text variant="meta" tone="accent">
-              {t("oneOffs.toToday")}
-            </Text>
-          </Link>
-        </Button>
-      </Flex>
-      <Text as="p" variant="title">
-        {t("oneOffs.title")}
-      </Text>
+    <Page width="full">
+      <ScreenHeader
+        title={t("oneOffs.title")}
+        back={{ href: "/", place: t("common.nav.today") }}
+      />
       <WaitingList
         dayless={dayless.map((oneOff) => ({
           id: oneOff.id,
