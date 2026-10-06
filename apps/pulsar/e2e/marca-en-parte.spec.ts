@@ -2,9 +2,10 @@ import type { Page } from "@playwright/test";
 
 import { test, expect } from "./fixtures";
 
-// RP-16 at the kit's level: `Mark` and the week's dot have no screen drawing
-// `partial` yet, so the spec borrows the class each module's CSS defines for it
-// and reads what a browser paints.
+// RP-16, the stylesheet's half: the `.partial` rules of `mark.module.css` and
+// `week-table.module.css` paint the accent ring and lower half. No screen
+// renders a partial yet, so this does not prove the primitives map the state
+// to that class; the specs of the modules that consume it do.
 type Painted = { image: string; ring: string; accent: string; backgroundColor: string };
 
 // Hashed module classes carry the source name, so the stylesheet says which
@@ -47,7 +48,7 @@ const rgb = (hex: string) => {
 };
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`a partial mark and dot paint the accent ring and lower half on ${scheme} (RP-16)`, async ({ page }) => {
+  test(`the .partial CSS rules of mark and week dot paint the accent ring and lower half on ${scheme} (RP-16)`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/semana");
@@ -86,7 +87,7 @@ for (const scheme of ["light", "dark"] as const) {
     expect(dot.evidence.ring).toContain(accent);
 
     await page.goto("/");
-    await expect(page.locator("main")).toBeVisible();
+    await expect(page.getByRole("main").first()).toBeVisible();
     const mark = {
       partial: await paint(page, "mark", "partial", ["mark", "ring"]),
       empty: await paint(page, "mark", "empty", ["mark", "ring"]),
