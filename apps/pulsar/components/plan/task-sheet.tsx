@@ -26,6 +26,14 @@ import { isTimeUnit, splitMinutes } from "@/lib/units/time";
 import { createOneOffSchema, editTaskSchema } from "@/lib/validation/one-off";
 
 const WHOLE = /^\d+$/;
+
+// A loose task's name refusals speak of «lo suelto»; a goal's task has its own.
+function own(key: MessageKey): MessageKey {
+  if (key === "day.errors.oneOffNameEmpty") return "roadmap.errors.nameEmpty";
+  if (key === "day.errors.oneOffNameTooLong") return "roadmap.errors.nameTooLong";
+  return key;
+}
+
 export type TaskSheetProps = {
   mode: "create" | "edit";
   goalId: string;
@@ -126,7 +134,8 @@ export function TaskSheet({
     return WHOLE.test(single.trim()) ? Number(single.trim()) : "month.errors.estimateInvalid";
   }
 
-  function refuse(key: MessageKey) {
+  function refuse(raw: MessageKey) {
+    const key = own(raw);
     const field = key === "roadmap.errors.nameEmpty" || key === "roadmap.errors.nameTooLong" ? "name" : key.startsWith("roadmap.errors.month") || key === "roadmap.errors.dayInMonth" || key === "roadmap.errors.subTaskMonth" ? "month" : "estimate";
     setError({ key, field });
   }
@@ -173,6 +182,8 @@ export function TaskSheet({
     startTransition(() => void editTask(parsed.data).then(finish));
   }
 
+  // The month a task is held in stays a chip once it closes, offered to no one else.
+  const offered = fixedMonth !== null && !months.includes(fixedMonth) ? [...months, fixedMonth].sort() : months;
   const plans = planMonth !== null ? monthName(planMonth, thisYear) : null;
   const refused = (field: "name" | "estimate" | "month") => (error?.field === field ? error : null);
 
@@ -190,12 +201,12 @@ export function TaskSheet({
             value={name}
             onChange={(event) => setName(event.target.value)}
             invalid={refused("name") !== null}
-            hint={refused("name") ? t(refused("name")!.key) : undefined}
+            hint={refused("name") ? t(refused("name")!.key) : kind === "parent" ? t("roadmap.fijar.parentSum") : undefined}
             autoFocus={mode === "create"}
           />
 
           {asksEstimate && timed ? (
-            <FieldPair>
+            <FieldPair baseline>
               <Field
                 label={t("roadmap.fijar.estimate")}
                 type="number"
@@ -218,9 +229,13 @@ export function TaskSheet({
                 onChange={(event) => setMinutes(event.target.value)}
                 suffix={t("roadmap.fijar.minutes")}
                 invalid={refused("estimate") !== null}
-                hint={refused("estimate") ? t(refused("estimate")!.key) : undefined}
               />
             </FieldPair>
+          ) : null}
+          {asksEstimate && timed && refused("estimate") ? (
+            <Text as="p" variant="sentence" role="alert">
+              {t(refused("estimate")!.key)}
+            </Text>
           ) : null}
           {asksEstimate && !timed && unit ? (
             <Field
@@ -264,7 +279,7 @@ export function TaskSheet({
               />
               {pin ? (
                 <ChipRow>
-                  {months.map((value) => (
+                  {offered.map((value) => (
                     <Chip key={value} radio selected={month === value} onClick={() => setMonth(value)}>
                       {monthName(value, thisYear)}
                     </Chip>
