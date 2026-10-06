@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { getTranslations } from "next-intl/server";
 
+import { type MessageKey, type Translator } from "@/i18n/translator";
 import { Face, Panel, WeekFold, WeekTable } from "@/components/ui";
 import type { WeekTableCell, WeekTableColumn } from "@/components/ui/week-table";
 import { tallyDays } from "@/lib/day/tally";
@@ -9,10 +9,14 @@ import type { GoalSummary, loadWeek } from "@/lib/queries/week";
 import { civilDateInZone, civilDateToDate, civilDayMonthShort } from "@/lib/zone";
 
 import { goalWeekProgress } from "./week-progress";
-import { flexibleWords } from "@/lib/day/row-phrases";
+import { flexibleWords, type FlexibleKey } from "@/lib/day/row-phrases";
 
-type Translate = Awaited<ReturnType<typeof getTranslations>>;
 type Week = Awaited<ReturnType<typeof loadWeek>>;
+
+const PAST_KEY: Partial<Record<FlexibleKey, MessageKey>> = {
+  "week.flexible.weekProgress": "week.flexible.weekProgressPast",
+  "week.flexible.monthProgress": "week.flexible.monthProgressPast",
+};
 
 /**
  * `SemanaEscritorio.dc.html` from 1024, `SemanaPlegada.dc.html` below it: the
@@ -33,7 +37,7 @@ export function WeekTableFace({
   today: string;
   past: boolean;
   columns: readonly WeekTableColumn[];
-  t: Translate;
+  t: Translator;
   endedNote: (goal: GoalSummary) => ReactNode;
 }) {
   const { view, goals, commitments, oneOffFacts } = week;
@@ -61,8 +65,8 @@ export function WeekTableFace({
   }
 
   // The week's own counts say «esa semana» once it is over.
-  const say = (key: string, values?: Record<string, number | string>) =>
-    t(past && key.endsWith("Progress") ? `${key}Past` : key, values);
+  const say = (key: FlexibleKey, values?: Record<string, number | string>) =>
+    t(past ? (PAST_KEY[key] ?? key) : key, values);
 
   const commitmentRows = (goalId: string) =>
     commitments

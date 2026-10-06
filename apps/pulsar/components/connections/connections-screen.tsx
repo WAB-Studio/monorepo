@@ -17,6 +17,7 @@ import {
   Separator,
   Text,
 } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type ConnectionRow = {
   id: string;
@@ -92,7 +93,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
   const router = useRouter();
   const [created, setCreated] = useState<Created | null>(null);
   const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [pending, startTransition] = useTransition();
 
   const keys = rows.filter((row) => row.kind === "personal");

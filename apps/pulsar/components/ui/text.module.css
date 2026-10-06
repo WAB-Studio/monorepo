@@ -76,3 +76,16 @@
     line-height: var(--pulsar-text-line-leading);
   }
 }
+
+.rule.rule {
+  margin: 0;
+  padding-block-start: 18px;
+  border-block-start: 2px solid var(--pulsar-ink);
+}
+
+@media (min-width: 1024px) {
+  .rule.rule {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+}

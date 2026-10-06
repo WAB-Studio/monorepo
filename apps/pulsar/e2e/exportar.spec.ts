@@ -6,6 +6,7 @@ import { test, expect, type Person } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import {
   civilDateToDate,
+  civilDateShort,
   civilDayMonthShort,
   dateToCivilDate,
   todayInZone,
@@ -166,7 +167,7 @@ test.describe("the report page (RP-33, RP-35)", () => {
       await expect(page.locator("html")).toHaveClass(/\bdark\b/);
       const button = page.getByRole("button", { name: "Descargar PDF" });
       await expect(button).toBeVisible();
-      await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
 
       const prints = () =>
         page.evaluate(
@@ -179,7 +180,7 @@ test.describe("the report page (RP-33, RP-35)", () => {
       const ground = () =>
         page.evaluate(() => getComputedStyle(document.body).backgroundColor);
       const ink = () =>
-        page
+        page.getByRole("main")
           .getByText(seeded.name, { exact: true })
           .evaluate((node) => getComputedStyle(node).color);
       expect(await ground(), "screen ground under dark").not.toBe(
@@ -189,7 +190,7 @@ test.describe("the report page (RP-33, RP-35)", () => {
       await page.emulateMedia({ media: "print" });
       await expect(button).toBeHidden();
       await expect(page.locator("nav").locator("visible=true")).toHaveCount(0);
-      await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
       expect(await ground()).toBe("rgb(255, 255, 255)");
       expect(await ink()).toBe("rgb(0, 0, 0)");
 
@@ -234,7 +235,7 @@ test.describe("the report page (RP-33, RP-35)", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByText(name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
       await expect(page.getByText(phaseName)).toBeVisible();
       await expect(page.getByText(/^no mide nada · hasta el /)).toBeVisible();
       for (const absent of ["hasta hoy", "por mes", "por semana"]) {
@@ -266,12 +267,67 @@ test.describe("the report page (RP-33, RP-35)", () => {
       await expect(
         page.getByRole("button", { name: "Descargar PDF" }),
       ).toHaveCount(0);
-      await page.getByRole("link", { name: "volver a metas" }).click();
+      await page.getByRole("link", { name: "Volver a Metas" }).click();
       await page.waitForURL(/\/metas/);
     } finally {
       await context.close();
     }
   });
+
+  for (const [width, height] of [
+    [360, 740],
+    [390, 844],
+    [1280, 800],
+    [1440, 900],
+  ] as const) {
+    test(`stands in the shell at ${width}: one h1, the way back to Metas, the nav, and bare paper`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const seeded = await seed(db, person);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+        await expect(page.locator("h1")).toHaveCount(1);
+        await expect(page.locator("h1")).toHaveText("Tu plan");
+
+        const nav = page.getByRole("navigation");
+        await expect(nav).toBeVisible();
+        await expect(
+          nav.locator("a[aria-current='page']").first(),
+        ).toHaveText(/Metas/);
+        if (width >= 1024) {
+          const box = await page.getByRole("main").boundingBox();
+          expect(box!.width).toBeGreaterThan(640);
+        }
+
+        const back = page.getByRole("link", { name: "Volver a Metas" });
+        await expect(back).toBeVisible();
+
+        await page.emulateMedia({ media: "print" });
+        await expect(back).toBeHidden();
+        await expect(nav).toBeHidden();
+        await expect(page).toHaveTitle(
+          `pulsar · ${civilDateShort(todayInZone())}`,
+        );
+        await page.emulateMedia({ media: "screen" });
+
+        await back.click();
+        await page.waitForURL(/\/metas$/);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
 
   test("an unreadable dictionary says so once and every figure is only what was declared", async ({
     person,
@@ -290,7 +346,7 @@ test.describe("the report page (RP-33, RP-35)", () => {
     try {
       const page = await context.newPage();
       await page.goto("/exportar");
-      await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
       await expect(
         page.getByText(
           "No pudimos leer el diccionario de lectura. Las cifras que salen de él son solo lo que dijiste tú.",
@@ -352,9 +408,9 @@ test.describe("the way in from /metas (RP-33, RP-37)", () => {
 
       await exportLink.click();
       await page.waitForURL(/\/exportar$/);
-      await expect(page.getByText(seeded.name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
       await expect(
-        page.getByText(seeded.taskName, { exact: true }),
+        page.getByRole("main").getByText(seeded.taskName, { exact: true }),
       ).toBeVisible();
     } finally {
       await context.close();

@@ -47,6 +47,7 @@ import { sql, type SQL } from "drizzle-orm";
 // `DATABASE_URL` role, and loaded here (a plain npm package, static import)
 // before `installStubs` ever runs, so it is never the wrapped, counted
 // `postgres` `installStubs` hands `loadGoal` itself.
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import postgres from "postgres";
 
 function laneNumber(): number {
@@ -1420,6 +1421,7 @@ async function runMain(): Promise<void> {
 
 void (async () => {
   try {
+    assertSuiteDatabase();
     const childArg = process.argv.find((arg) => arg.startsWith("--child="));
     const goalArg = process.argv.find((arg) => arg.startsWith("--goal="));
     if (childArg) {

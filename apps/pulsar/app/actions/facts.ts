@@ -17,9 +17,10 @@ import {
   type UndoFactInput,
 } from "@/lib/validation/fact";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
-export type DeclareFactResult = { ok: true; factId: string } | { ok: false; error: string };
-export type UndoFactResult = { ok: true } | { ok: false; error: string };
+export type DeclareFactResult = { ok: true; factId: string } | { ok: false; error: MessageKey };
+export type UndoFactResult = { ok: true } | { ok: false; error: MessageKey };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -33,7 +34,7 @@ class NamedError extends Error {}
  */
 export async function declareFact(input: DeclareFactInput): Promise<DeclareFactResult> {
   const parsed = declareFactSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
@@ -218,7 +219,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
     revalidatePath(`/dia/${written.day}`);
     return { ok: true, factId: written.id };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     // `declareFactSchema`'s own `.max()` (`lib/validation/fact.ts`) refuses a
     // quantity this large before the insert ever runs; this is the second
     // line, not the first — a number the schema missed for any reason still
@@ -240,7 +241,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
  */
 export async function undoFact(input: UndoFactInput): Promise<UndoFactResult> {
   const parsed = undoFactSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };

@@ -46,7 +46,7 @@ function goalView(unit: string | null): GoalView {
         cadence: { kind: "daily" },
         satisfiedBy: { kind: "evidence", threshold: 10, unit: "páginas" },
         retiredAt: "2026-10-01",
-        sourceLabelKey: "sources.reading",
+        sourceLabelKey: "sources.readingLookups",
         factDayCount: 0,
       },
       {
@@ -177,7 +177,7 @@ test("commitments keep cadence, retirement and what satisfies them; evidence is 
   assert.deepEqual(quantity.satisfiedBy, { kind: "quantity", target: { value: 30, unit: "minutos", text: "30 min" } });
   assert.equal(evidence.retiredAt, "2026-10-01");
   assert.deepEqual(evidence.satisfiedBy.target, { value: 10, unit: "páginas" });
-  assert.equal(evidence.evidenceSource, "sources.reading");
+  assert.equal(evidence.evidenceSource, "sources.readingLookups");
   assert.equal(tap.satisfiedBy.target, null);
   assert.equal(shaped.evidence, "unreadable");
   assert.equal(shaped.openedOn, "2026-08-15");

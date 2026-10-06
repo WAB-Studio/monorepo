@@ -12,10 +12,11 @@ import type { TaskRow } from "@/lib/queries/goal";
 import { acceptShiftSchema, monthStart, type AcceptShiftInput } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
 import { todayInZone } from "@/lib/zone";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type AcceptShiftResult =
   | { ok: true; moved: { budgets: number; phases: number; tasks: number; horizon: string | null } }
-  | { ok: false; error: string };
+  | { ok: false; error: MessageKey };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
@@ -48,7 +49,7 @@ function asJson(rows: unknown[]): SQL {
  */
 export async function acceptShift(input: AcceptShiftInput): Promise<AcceptShiftResult> {
   const parsed = acceptShiftSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "month.errors.signedOut" };
@@ -167,7 +168,7 @@ export async function acceptShift(input: AcceptShiftInput): Promise<AcceptShiftR
       };
     }));
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     // The UNIQUE on (goal_id, month): a second accept that raced the first.
     if (pgCode(error) === "23505") return { ok: false, error: "month.errors.shiftNotOffered" };
     throw error;

@@ -6,7 +6,8 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { readSource, saveDraft } from "@/lib/import/draft-store";
 import type { ImportDraft } from "@/lib/import/draft";
-import { Button, CodeBlock, FilePick, Flex, Notice, Page, SectionLabel, Text, TextArea } from "@/components/ui";
+import { Button, CodeBlock, FilePick, Flex, Notice, Page, ScreenHeader, SectionLabel, Text, TextArea } from "@/components/ui";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -25,7 +26,7 @@ const KNOWN_ERRORS = new Set([
 
 type Failure =
   | { kind: "templateLine"; line: number; expected: string; text: string }
-  | { kind: "key"; key: string; values?: Record<string, string> };
+  | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
 const subscribeNothing = () => () => {};
 
@@ -76,7 +77,7 @@ export function ImportScreen() {
   }
 
   // `source` is the text a template line is quoted from; `saved` is what the box holds again next time.
-  async function send(form: FormData, source: string, saved: string | null) {
+  async function send(form: FormData, source: string, saved: string | null, fileName: string | null = null) {
     setBusy(true);
     setFailure(null);
     try {
@@ -90,7 +91,7 @@ export function ImportScreen() {
       } | null;
 
       if (response.ok && body?.draft && body.via) {
-        saveDraft({ via: body.via, draft: body.draft, source: saved });
+        saveDraft({ via: body.via, draft: body.draft, source: saved, sourceName: fileName });
         router.push("/metas/importar/revisar");
         return;
       }
@@ -102,7 +103,7 @@ export function ImportScreen() {
           text: source.split("\n")[body.line - 1] ?? "",
         });
       } else if (body?.error && KNOWN_ERRORS.has(body.error)) {
-        fail({ kind: "key", key: body.error });
+        fail({ kind: "key", key: messageKey(body.error) });
       } else {
         fail({ kind: "key", key: "import.errors.modelFailed" });
       }
@@ -137,7 +138,7 @@ export function ImportScreen() {
     form.set("file", file);
     // Only a text file can fail on a template line; its text is the line's source.
     const binary = file.type === "application/pdf" || file.type.startsWith("image/") || /\.pdf$/i.test(file.name);
-    await send(form, binary ? "" : await file.text().catch(() => ""), null);
+    await send(form, binary ? "" : await file.text().catch(() => ""), null, file.name);
   }
 
   function copyTemplate() {
@@ -160,72 +161,74 @@ export function ImportScreen() {
   ) : null;
 
   return (
-    <Page>
-      <div>
-        <Text as="p" variant="meta" tone="muted">
-          {t("import.eyebrow")}
-        </Text>
-        <Text as="p" variant="title">
-          {t("import.title")}
-        </Text>
-      </div>
-
-      {placed?.place === "top" ? notice : null}
-
-      <TextArea
-        label={t("import.textLabel")}
-        placeholder={t("import.placeholder")}
-        rows={failure ? 8 : 10}
-        value={text}
-        disabled={busy}
-        invalid={failure?.kind === "templateLine"}
-        onChange={(event) => setTyped(event.target.value)}
+    <Page width="full">
+      <ScreenHeader
+        title={t("import.title")}
+        back={{ href: "/metas", place: t("common.nav.goals") }}
+        eyebrow={
+          <Text as="p" variant="meta" tone="muted">
+            {t("import.eyebrow")}
+          </Text>
+        }
       />
+      <Flex direction="column" gap="5" maxWidth="640px">
+        {placed?.place === "top" ? notice : null}
 
-      <FilePick
-        label={t("import.upload")}
-        hint={t("import.uploadHint")}
-        disabled={busy || modelShut}
-        onPick={(file) => void readFile(file)}
-      />
+        <TextArea
+          label={t("import.textLabel")}
+          placeholder={t("import.placeholder")}
+          rows={failure ? 8 : 10}
+          value={text}
+          disabled={busy}
+          invalid={failure?.kind === "templateLine"}
+          onChange={(event) => setTyped(event.target.value)}
+        />
 
-      {placed?.place === "upload" ? notice : null}
+        <FilePick
+          label={t("import.upload")}
+          hint={t("import.uploadHint")}
+          disabled={busy || modelShut}
+          onPick={(file) => void readFile(file)}
+        />
 
-      <Text as="p" variant="meta" tone="muted">
-        {t("import.privacy")}
-      </Text>
+        {placed?.place === "upload" ? notice : null}
 
-      {placed?.place === "below" ? notice : null}
-
-      <Button block onClick={readText} disabled={busy} aria-busy={busy || undefined}>
-        {busy ? t("import.reading") : retry ? t("import.retry") : t("import.read")}
-      </Button>
-      {busy ? (
         <Text as="p" variant="meta" tone="muted">
-          {t("import.slow")}
+          {t("import.privacy")}
         </Text>
-      ) : null}
 
-      {placed?.template && !showTemplate ? (
-        <Button variant="ghost" tone="accent" onClick={() => setShowTemplate(true)}>
-          {t("import.template.show")}
+        {placed?.place === "below" ? notice : null}
+
+        <Button block onClick={readText} disabled={busy} aria-busy={busy || undefined}>
+          {busy ? t("import.reading") : retry ? t("import.retry") : t("import.read")}
         </Button>
-      ) : null}
+        {busy ? (
+          <Text as="p" variant="meta" tone="muted">
+            {t("import.slow")}
+          </Text>
+        ) : null}
 
-      {showTemplate ? (
-        <Flex asChild direction="column" gap="2" align="start">
-          <section aria-label={t("import.template.label")}>
-            <SectionLabel>{t("import.template.label")}</SectionLabel>
-            <Text as="p" variant="meta" tone="muted">
-              {t("import.template.note")}
-            </Text>
-            <CodeBlock>{t("import.template.example")}</CodeBlock>
-            <Button variant="ghost" tone="accent" onClick={copyTemplate}>
-              {copied ? t("import.template.copied") : t("import.template.copy")}
-            </Button>
-          </section>
-        </Flex>
-      ) : null}
+        {placed?.template && !showTemplate ? (
+          <Button variant="ghost" tone="accent" onClick={() => setShowTemplate(true)}>
+            {t("import.template.show")}
+          </Button>
+        ) : null}
+
+        {showTemplate ? (
+          <Flex asChild direction="column" gap="2" align="start">
+            <section aria-label={t("import.template.label")}>
+              <SectionLabel>{t("import.template.label")}</SectionLabel>
+              <Text as="p" variant="meta" tone="muted">
+                {t("import.template.note")}
+              </Text>
+              <CodeBlock>{t("import.template.example")}</CodeBlock>
+              <Button variant="ghost" tone="accent" onClick={copyTemplate}>
+                {copied ? t("import.template.copied") : t("import.template.copy")}
+              </Button>
+            </section>
+          </Flex>
+        ) : null}
+      </Flex>
     </Page>
   );
 }

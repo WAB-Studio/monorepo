@@ -9,6 +9,7 @@ import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { quantitySchema } from "@/lib/validation/fact";
 import { useTimeWords } from "@/components/ui/figure";
 import { Button, Chip, Field, Flex, Sheet, Text } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type QuantitySheetProps = {
   open: boolean;
@@ -69,7 +70,7 @@ export function QuantitySheet({
   const t = useTranslations();
   const words = useTimeWords();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [selected, setSelected] = useState(loggedQuantity ?? target);
   const [customMode, setCustomMode] = useState(false);
   const [customValue, setCustomValue] = useState("");
@@ -114,7 +115,7 @@ export function QuantitySheet({
   // the props from before the write: a tap in that gap reopened the sheet as
   // undone, and it never re-read the fact once it landed. Inside the same
   // transition the close commits together with the fresh row.
-  function settle(result: { ok: true } | { ok: false; error: string }) {
+  function settle(result: { ok: true } | { ok: false; error: MessageKey }) {
     startTransition(() => {
       if (result.ok) onOpenChange(false);
       else setError(result.error);

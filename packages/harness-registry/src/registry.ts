@@ -53,6 +53,31 @@ export function applicationName(suite: Suite): string {
   return `harness:${suite}:${harnessLane()}`;
 }
 
+/**
+ * Stops a run that would write harness rows to a database that is not the local
+ * stack, unless `HARNESS_DATABASE=remote` says that is meant (the RNF-09 timing).
+ * Names the host alone: the URL carries the password.
+ */
+export function assertSuiteDatabase(
+  url: string | undefined = process.env.MIGRATION_DATABASE_URL ??
+    process.env.DATABASE_URL,
+): void {
+  if (process.env.HARNESS_DATABASE === "remote") return;
+
+  let host: string | undefined;
+  try {
+    host = url ? new URL(url).hostname : undefined;
+  } catch {
+    host = undefined;
+  }
+
+  if (host === "127.0.0.1" || host === "localhost") return;
+
+  throw new Error(
+    `harness: ${host || "an unreadable database URL"} is not the local stack — run through scripts/supabase-local.sh exec, or set HARNESS_DATABASE=remote`,
+  );
+}
+
 let currentRunId: string | undefined;
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 let closed = false;
@@ -65,6 +90,7 @@ let closed = false;
  */
 export async function openRun(suite: Suite, sql: Sql): Promise<string> {
   if (currentRunId) return currentRunId;
+  assertSuiteDatabase();
 
   const id = randomUUID();
   await sql`
@@ -105,6 +131,7 @@ export async function registerEphemeralIdentity(
   sql: Sql,
   user: { id: string; email: string },
 ): Promise<void> {
+  assertSuiteDatabase();
   const run = runId();
 
   await sql`
@@ -129,6 +156,7 @@ export async function registerSharedIdentity(
   sql: Sql,
   user: { id: string; email: string },
 ): Promise<void> {
+  assertSuiteDatabase();
   await sql`
     insert into harness.identities (user_id, run_id, email, disposition)
     values (${user.id}, null, ${user.email}, 'shared')

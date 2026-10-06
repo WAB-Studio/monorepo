@@ -1,6 +1,9 @@
 {
   "name": "@repo/harness-registry",
   "private": true,
+  "scripts": {
+    "check:unit": "node --import tsx --test src/registry.test.ts"
+  },
   "exports": {
     ".": "./src/index.ts"
   },

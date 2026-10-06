@@ -3,7 +3,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
@@ -23,15 +22,19 @@ import {
   Field,
   Figure,
   Flex,
-  IconButton,
+  ListDetail,
   Notice,
   Page,
   Panel,
+  PanelGrid,
+  ScreenHeader,
   SectionLabel,
   Sheet,
   SheetActions,
   Text,
+  TextArea,
 } from "@/components/ui";
+import { messageKey } from "@/i18n/translator";
 
 type Goal = ImportDraft["goals"][number];
 type Commitment = Goal["commitments"][number];
@@ -157,7 +160,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const refused = useMemo(() => new Set(refusals.map((refusal) => refusal.path)), [refusals]);
   const sent = useMemo(() => (work ? markedDraft(work, unmarked, refused) : null), [work, unmarked, refused]);
 
-  if (!loaded || !stored || !draft || !work || !sent) return <Page />;
+  if (!loaded || !stored || !draft || !work || !sent) return <Page width="full" />;
 
   const monthWord = (month: string, long = false) =>
     format.dateTime(civilDateToDate(`${month}-01`), long ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" });
@@ -227,7 +230,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       case "import.errors.quantityNoMeasure":
         return t("import.review.blocked.quantityNoMeasure");
       default:
-        return t(key);
+        return t(messageKey(key));
     }
   }
 
@@ -286,28 +289,32 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   const eyebrow = stored.via === "template" ? t("import.review.eyebrowTemplate") : t("import.review.eyebrow");
 
-  return (
-    <Page>
-      <Flex align="center" gap="1" ml="-3">
-        <IconButton asChild tap={44} variant="ghost">
-          <Link href="/metas/importar" aria-label={t("import.review.backAria")}>
-            <ChevronLeft size={20} aria-hidden />
-          </Link>
-        </IconButton>
-        <Button asChild tap={44} variant="ghost">
-          <Link href="/metas/importar">
-            <Text variant="meta" tone="accent">
-              {t("import.review.back")}
-            </Text>
-          </Link>
-        </Button>
-      </Flex>
+  // What the review was read from sits beside it from 1024; a file leaves no text to show.
+  const source = (
+    <Flex direction="column" gap="3">
+      {stored.source !== null ? (
+        <TextArea label={t("import.review.sourceLabel")} readOnly rows={16} value={stored.source} />
+      ) : (
+        <>
+          <SectionLabel>{t("import.review.sourceLabel")}</SectionLabel>
+          <Text as="p" variant="meta" tone="muted">
+            {stored.sourceName
+              ? t("import.review.sourceFile", { name: stored.sourceName })
+              : t("import.review.sourceFileAnon")}
+          </Text>
+        </>
+      )}
+      <Button asChild block variant="outline">
+        <Link href="/metas/importar">{t("import.review.change")}</Link>
+      </Button>
+    </Flex>
+  );
+
+  const review = (
+    <Flex direction="column" gap="5">
       <div>
         <Text as="p" variant="meta" tone="muted">
           {eyebrow}
-        </Text>
-        <Text asChild variant="title">
-          <h1>{t("import.review.title")}</h1>
         </Text>
         <Text as="p" variant="meta" tone="muted">
           {t("import.review.hint")}
@@ -332,6 +339,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         </section>
       ) : null}
 
+      <PanelGrid>
       {work.goals.map((goal, g) => {
         const at = goalPath(g);
         if (refused.has(`${at}.horizon`)) return null;
@@ -344,7 +352,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         const commitments = goal.commitments.map((commitment, c) => ({ commitment, path: `${at}.commitments.${c}` })).filter((item) => ok(item.path));
         const tasks = goal.tasks.map((task, i) => ({ task, path: `${at}.tasks.${i}` })).filter((item) => ok(item.path));
         return (
-          <section key={at} aria-label={goal.name}>
+          <Panel key={at} stacked label={goal.name}>
             <Text asChild variant="heading">
               <h2>{goal.name}</h2>
             </Text>
@@ -451,9 +459,10 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                 </Fragment>
               );
             })}
-          </section>
+          </Panel>
         );
       })}
+      </PanelGrid>
 
       {failure ? <Notice>{failure}</Notice> : null}
 
@@ -462,6 +471,13 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
           {pending ? t("import.review.creating") : t("import.review.create", { count: goalsKept })}
         </Button>
       </ActionBar>
+    </Flex>
+  );
+
+  return (
+    <Page width="full">
+      <ScreenHeader title={t("import.review.title")} back={{ href: "/metas/importar", place: t("import.review.place") }} />
+      <ListDetail show="detail" list={source} detail={review} />
 
       {editing ? (
         <AmountSheet
@@ -523,7 +539,7 @@ function AmountSheet({
     }
     const parsed = (editing.schema === "month" ? monthAmount : taskEstimate).safeParse(typed);
     if (!parsed.success) {
-      setError(t(parsed.error.issues[0].message));
+      setError(t(messageKey(parsed.error.issues[0].message)));
       return;
     }
     onSave(typed);

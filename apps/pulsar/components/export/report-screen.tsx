@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { type Translator } from "@/i18n/translator";
 import { dayBefore } from "@/lib/day/weeks";
 import { goalSections, type Section } from "@/lib/export/sections";
 import type { GoalReport, Report } from "@/lib/export/report";
@@ -10,14 +10,16 @@ import {
   civilDateShort,
 } from "@/lib/zone";
 import {
-  Button,
   Figure,
   Flex,
   Page,
+  Panel,
+  PanelGrid,
   PrintBlock,
   PrintHidden,
   PrintOnly,
   PrintPage,
+  ScreenHeader,
   SectionLabel,
   Table,
   Text,
@@ -26,7 +28,6 @@ import {
 
 import { PrintButton } from "./print-button";
 
-type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 const monthName = new Intl.DateTimeFormat("es-CO", {
   month: "long",
@@ -52,7 +53,7 @@ function MonthFigures({
 }: {
   goal: GoalReport;
   declaredOnly: boolean;
-  t: Translator;
+  t: Translator<"export">;
 }) {
   const unit = goal.unit as string;
   return (
@@ -80,7 +81,7 @@ function Owes({
 }: {
   owes: number;
   unit: string | null;
-  t: Translator;
+  t: Translator<"export">;
 }) {
   return (
     <>
@@ -102,7 +103,7 @@ function GoalPart({
 }: {
   goal: GoalReport;
   declaredOnly: boolean;
-  t: Translator;
+  t: Translator<"export">;
 }) {
   const sections = goalSections(goal);
   const unit = goal.unit;
@@ -301,8 +302,8 @@ function GoalPart({
     <Flex direction="column" gap="3">
       <PrintBlock>
         <Flex direction="column" gap="3">
-          <Text as="p" variant="name">
-            {goal.name}
+          <Text asChild variant="name" rule>
+            <h2>{goal.name}</h2>
           </Text>
           <Text as="p" variant="meta" tone="muted">
             {measureLine}
@@ -318,7 +319,7 @@ function GoalPart({
 }
 
 /**
- * `Reporte.dc.html`, `ReporteImpreso.dc.html`, `ReporteSinEvidencia.dc.html`
+ * `Reporte.dc.html`, `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html`, `ReporteImpreso.dc.html`, `ReporteSinEvidencia.dc.html`
  * and `ReporteVacio.dc.html` (RP-33, RP-35): the whole report as one page the
  * browser prints. A goal prints the sections `goalSections` names and no
  * others, so one that measures nothing never prints a zero.
@@ -326,20 +327,25 @@ function GoalPart({
 export async function ReportScreen({ report }: { report: Report }) {
   const t = await getTranslations("export");
 
+  const back = { href: "/metas", place: t("place") };
+
   if (report.goals.length === 0) {
     return (
-      <Page>
+      <Page width="full">
         <PrintPage>
           <Flex direction="column" gap="3">
-            <Text as="p" variant="meta" tone="muted">
-              {t("eyebrowEmpty")}
-            </Text>
+            <ScreenHeader
+              title={t("title")}
+              back={back}
+              eyebrow={
+                <Text as="p" variant="meta" tone="muted">
+                  {t("eyebrowEmpty")}
+                </Text>
+              }
+            />
             <Text as="p" tone="secondary">
               {t("empty")}
             </Text>
-            <Button asChild variant="ghost">
-              <Link href="/metas">{t("back")}</Link>
-            </Button>
           </Flex>
         </PrintPage>
       </Page>
@@ -349,25 +355,31 @@ export async function ReportScreen({ report }: { report: Report }) {
   const declaredOnly = report.evidence === "unreadable";
 
   return (
-    <Page>
+    <Page width="full">
       <PrintPage>
         <Flex direction="column" gap="2">
-          <PrintHidden>
-            <Text as="p" variant="meta" tone="muted">
-              {t("eyebrow", { date: civilDateShort(report.today) })}
-            </Text>
-          </PrintHidden>
-          <PrintOnly>
-            <Text as="p" variant="meta" tone="muted">
-              {t("printHead", {
-                brand: t("printBrand"),
-                date: dateWithYear.format(civilDateToDate(report.today)),
-              })}
-            </Text>
-          </PrintOnly>
-          <Text as="p" variant="title">
-            {t("title")}
-          </Text>
+          <ScreenHeader
+            title={t("title")}
+            back={back}
+            eyebrow={
+              <>
+                <PrintHidden>
+                  <Text as="p" variant="meta" tone="muted">
+                    {t("eyebrow", { date: civilDateShort(report.today) })}
+                  </Text>
+                </PrintHidden>
+                <PrintOnly>
+                  <Text as="p" variant="meta" tone="muted">
+                    {t("printHead", {
+                      brand: t("printBrand"),
+                      date: dateWithYear.format(civilDateToDate(report.today)),
+                    })}
+                  </Text>
+                </PrintOnly>
+              </>
+            }
+            actions={<PrintButton label={t("download")} />}
+          />
           <Text as="p" variant="meta" tone="muted">
             {t("openGoals", { count: report.goals.length })}
           </Text>
@@ -376,16 +388,14 @@ export async function ReportScreen({ report }: { report: Report }) {
               {t("unreadable")}
             </Text>
           ) : null}
-          <PrintButton label={t("download")} />
         </Flex>
-        {report.goals.map((goal) => (
-          <GoalPart
-            key={goal.id}
-            goal={goal}
-            declaredOnly={declaredOnly}
-            t={t}
-          />
-        ))}
+        <PanelGrid columns={3}>
+          {report.goals.map((goal) => (
+            <Panel key={goal.id}>
+              <GoalPart goal={goal} declaredOnly={declaredOnly} t={t} />
+            </Panel>
+          ))}
+        </PanelGrid>
       </PrintPage>
     </Page>
   );

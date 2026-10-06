@@ -1,3 +1,6 @@
+import type { SourceKey } from "@/i18n/translator";
+
+
 /**
  * Every `goals.evidence_sources` row the app declares, next to the readers
  * in `registry.ts`. `npm run source:add` upserts these; a second source is
@@ -6,7 +9,7 @@
  */
 export type EvidenceSourceRow = {
   key: string;
-  labelKey: string;
+  labelKey: SourceKey;
   unit: string;
 };
 

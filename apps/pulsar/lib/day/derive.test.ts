@@ -101,25 +101,25 @@ test("deriveDay: a quantity commitment is unsatisfied below target and satisfied
 test("deriveDay: an evidence commitment is satisfied at or above its threshold, and names its source", () => {
   const plan = tapPlan("reading", { satisfiedBy: { kind: "evidence", threshold: 5, unit: "min" } });
   const below: Record<string, EvidenceDay[]> = {
-    reading: [{ day: "2026-03-01", quantity: 3, unit: "min", labelKey: "sources.dictionary" }],
+    reading: [{ day: "2026-03-01", quantity: 3, unit: "min", labelKey: "sources.readingLookups" }],
   };
   const short = deriveDay({ commitments: [plan], phases: [], facts: [], evidence: below, day: "2026-03-01" });
   assert.equal(short.slots[0].satisfied, false);
   assert.equal(short.slots[0].labelKey, null);
 
   const atThreshold: Record<string, EvidenceDay[]> = {
-    reading: [{ day: "2026-03-01", quantity: 5, unit: "min", labelKey: "sources.dictionary" }],
+    reading: [{ day: "2026-03-01", quantity: 5, unit: "min", labelKey: "sources.readingLookups" }],
   };
   const enough = deriveDay({ commitments: [plan], phases: [], facts: [], evidence: atThreshold, day: "2026-03-01" });
   assert.equal(enough.slots[0].satisfied, true);
   assert.equal(enough.slots[0].satisfiedBy, "evidence");
-  assert.equal(enough.slots[0].labelKey, "sources.dictionary");
+  assert.equal(enough.slots[0].labelKey, "sources.readingLookups");
 });
 
 test("deriveDay: evidence on another day does not satisfy today's slot", () => {
   const plan = tapPlan("reading", { satisfiedBy: { kind: "evidence", threshold: 1, unit: "min" } });
   const evidence: Record<string, EvidenceDay[]> = {
-    reading: [{ day: "2026-02-28", quantity: 30, unit: "min", labelKey: "sources.dictionary" }],
+    reading: [{ day: "2026-02-28", quantity: 30, unit: "min", labelKey: "sources.readingLookups" }],
   };
   const view = deriveDay({ commitments: [plan], phases: [], facts: [], evidence, day: "2026-03-01" });
   assert.equal(view.slots[0].satisfied, false);

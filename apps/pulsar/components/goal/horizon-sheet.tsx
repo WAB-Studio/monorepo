@@ -10,6 +10,7 @@ import { dayBefore, horizonForWeeks, weekIndexOf } from "@/lib/day/weeks";
 import { horizonRefusal, moveHorizonSchema } from "@/lib/validation/horizon";
 import { civilDateLabel, todayInZone } from "@/lib/zone";
 import { Button, Field, Sheet, SheetActions } from "@/components/ui";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 // The new-goal rule (`new-goal-form.tsx`): a whole number of weeks, 1 to 520.
 const weeksSchema = z.coerce.number().int().positive().max(520);
@@ -55,7 +56,7 @@ export function MoveHorizonAction({
 
   const typed = weeksSchema.safeParse(value);
 
-  function refusalText(key: string, count: number): string {
+  function refusalText(key: MessageKey, count: number): string {
     return t(key, {
       weeks: count,
       name: lastPhase?.name ?? "",
@@ -80,7 +81,7 @@ export function MoveHorizonAction({
     const horizon = horizonForWeeks(openedOn, typed.data);
     const parsed = moveHorizonSchema.safeParse({ goalId, horizon });
     if (!parsed.success) {
-      setError(t(parsed.error.issues[0].message));
+      setError(t(messageKey(parsed.error.issues[0].message)));
       return;
     }
 

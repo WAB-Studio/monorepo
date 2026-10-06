@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { type Translator } from "@/i18n/translator";
 
 import {
   ArchiveGoalAction,
@@ -31,13 +32,14 @@ import {
   Panel,
   Progress,
   Row,
+  ScreenHeader,
   SectionLabel,
   Separator,
   Split,
   Text,
 } from "@/components/ui";
 
-import { CommitmentList, countWord, type Translator } from "./commitment-list";
+import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { MoveHorizonAction } from "./horizon-sheet";
 import { RenameGoalAction } from "./rename-sheet";
@@ -234,16 +236,13 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </>
         ) : null}
         {shiftOffer}
-        <Flex gap="2" wrap="wrap">
-          {planned === null && !archived && !ended ? (
-            <Button asChild variant="outline">
-              <Link href={`/metas/${goal.id}/meses?planear=${today.slice(0, 7)}`}>
-                {t("goal.detail.monthPlanLink", { month: monthName })}
-              </Link>
-            </Button>
-          ) : null}
-          {monthsLink}
-        </Flex>
+        {planned === null && !archived && !ended ? (
+          <Button asChild variant="outline">
+            <Link href={`/metas/${goal.id}/meses?planear=${today.slice(0, 7)}`}>
+              {t("goal.detail.monthPlanLink", { month: monthName })}
+            </Link>
+          </Button>
+        ) : null}
       </section>
     ) : null;
 
@@ -293,13 +292,14 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
           {monthBlock}
 
-          {goal.measureUnit ? (
+          <Flex gap="5" wrap="wrap">
+            {month ? monthsLink : null}
             <Button asChild variant="ghost">
               <Link href={`/metas/${goal.id}/revision`}>
                 {t("goal.detail.reviewLink")}
               </Link>
             </Button>
-          ) : null}
+          </Flex>
 
           {goal.measureUnit && goal.evidence === "unreadable" ? (
             <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
@@ -383,35 +383,25 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   return (
     <Page width="full">
-      <Text as="p" variant="meta" tone="muted">
-        {goal.archivedAt
-          ? t("goal.detail.archivedOverline", { date: longDateLabel(goal.archivedAt) })
-          : t("goal.detail.overline", { date: longDateLabel(goal.createdAt) })}
-      </Text>
-      <Panel as="div" row>
-        <Text as="p" variant="title">
-          {goal.name}
-        </Text>
-        <Face on="desktop">
-          <Flex gap="2">
-            {archived ? null : (
-              <RenameGoalAction
-                goalId={goal.id}
-                name={goal.name}
-                variant="outline"
-              />
-            )}
-            {archived ? null : (
-              <ArchiveGoalAction
-                goalId={goal.id}
-                name={goal.name}
-                block={false}
-                short
-              />
-            )}
-          </Flex>
-        </Face>
-      </Panel>
+      <ScreenHeader
+        title={goal.name}
+        back={{ href: "/metas", place: t("common.nav.goals") }}
+        meta={
+          goal.archivedAt
+            ? t("goal.detail.archivedOverline", { date: longDateLabel(goal.archivedAt) })
+            : t("goal.detail.overline", { date: longDateLabel(goal.createdAt) })
+        }
+        actions={
+          archived ? null : (
+            <Face on="desktop">
+              <Flex gap="2">
+                <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
+                <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short />
+              </Flex>
+            </Face>
+          )
+        }
+      />
       {archived ? null : (
         <Face on="phone">
           <RenameGoalAction goalId={goal.id} name={goal.name} />

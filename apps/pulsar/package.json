@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint --cache",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsgo --noEmit --incremental false",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env.local ../../node_modules/drizzle-kit/bin.cjs migrate",
     "check:unit": "node --experimental-test-module-mocks --import tsx --test \"{lib,components,scripts}/**/*.test.ts\"",

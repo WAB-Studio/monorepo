@@ -11,10 +11,11 @@ import { draftRefusals, importDraftSchema } from "@/lib/import/draft";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthStart } from "@/lib/validation/budget";
 import { todayInZone } from "@/lib/zone";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
 export type ConfirmImportResult =
   | { ok: true; goalIds: string[] }
-  | { ok: false; error: string; at?: string };
+  | { ok: false; error: MessageKey; at?: string };
 
 // One parenthesised row per entry, joined into a single multi-row VALUES.
 function rows(entries: SQL[]): SQL {
@@ -50,13 +51,13 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   if (!parsed.success) {
     const [issue] = parsed.error.issues;
     // A zod default message (an unknown field, a wrong type) is no catalogue key.
-    const error = issue.message.includes(".errors.") ? issue.message : "import.errors.draftInvalid";
+    const error = issue.message.includes(".errors.") ? messageKey(issue.message) : "import.errors.draftInvalid";
     return { ok: false, error, at: issue.path.join(".") };
   }
   const draft = parsed.data;
 
   const [refusal] = draftRefusals(draft, todayInZone());
-  if (refusal) return { ok: false, error: refusal.key, at: refusal.path };
+  if (refusal) return { ok: false, error: messageKey(refusal.key), at: refusal.path };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "import.errors.signedOut" };

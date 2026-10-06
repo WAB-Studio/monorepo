@@ -23,6 +23,7 @@ import Module from "node:module";
 import { resolve } from "node:path";
 import { after, before, test } from "node:test";
 
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import postgres from "postgres";
 
 function laneNumber(): number {
@@ -103,6 +104,8 @@ function shiftDay(day: string, delta: number): string {
   date.setUTCDate(date.getUTCDate() + delta);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(date);
 }
+
+assertSuiteDatabase();
 
 // The session pooler, bypassing RLS the same way `e2e/fixtures.ts` does for
 // its own fixtures — never the app's own `DATABASE_URL` role. Only fixture

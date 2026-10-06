@@ -7,6 +7,7 @@ import { completeOneOff } from "@/app/actions/one-offs";
 import { Mark, Row, Text } from "@/components/ui";
 
 import { OneOffDeleteSheet } from "./one-off-delete-sheet";
+import { type MessageKey } from "@/i18n/translator";
 
 export type OneOffRowProps = {
   oneOffId: string;
@@ -29,7 +30,7 @@ export type OneOffRowProps = {
 export function OneOffRow({ oneOffId, name, carriedFrom }: OneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   function handleComplete() {

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { archiveGoal, reopenGoal } from "@/app/actions/plan";
 import { Button, Sheet, SheetActions, Text } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type ArchiveGoalActionProps = {
   goalId: string;
@@ -35,7 +36,7 @@ export function ArchiveGoalAction({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   async function handleArchive() {
     if (pending) return;
@@ -91,7 +92,7 @@ export function ReopenGoalButton({ goalId }: { goalId: string }) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   async function handleReopen() {
     if (pending) return;

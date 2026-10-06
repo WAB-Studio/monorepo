@@ -2,7 +2,8 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { Button, Face, Figure, Flex, Page, Panel, SectionLabel, Split, Text } from "@/components/ui";
-import { dayPhrase as dayPhraseOf, endedPhrase } from "@/lib/day/day-phrase";
+import type { Translator } from "@/i18n/translator";
+import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
 import { tallyDay } from "@/lib/day/tally";
 import { isTimeUnit } from "@/lib/units/time";
@@ -18,9 +19,9 @@ import { EmptyDay } from "./empty-day";
 import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import { NewOneOff } from "./new-one-off";
+import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
 
-type Translate = Awaited<ReturnType<typeof getTranslations>>;
 
 // Goes through `Date` and back rather than subtracting on the string: a
 // civil date crosses months and years, and a digit subtraction does not.
@@ -37,13 +38,13 @@ export function oldestPastDay(today: string): string {
 }
 
 // Monday first, as `day.weekdayLong` lists them; `getUTCDay` is 0 for Sunday.
-function weekdayOf(day: string, t: Translate): string {
+function weekdayOf(day: string, t: Translator): string {
   const names = t.raw("day.weekdayLong") as string[];
   return names[(civilDateToDate(day).getUTCDay() + 6) % 7];
 }
 
 // «sábado 26 de septiembre»: the header's own date.
-function dateLabel(day: string, t: Translate): string {
+function dateLabel(day: string, t: Translator): string {
   const date = civilDateToDate(day);
   const months = t.raw("day.monthLong") as string[];
   return t("day.date", {
@@ -53,7 +54,7 @@ function dateLabel(day: string, t: Translate): string {
   });
 }
 
-function dayPhrase(key: string, day: string, t: Translate, extra: Record<string, string> = {}): string {
+function dayPhrase(key: DayPhraseKey, day: string, t: Translator, extra: Record<string, string> = {}): string {
   return dayPhraseOf(
     (phraseKey, values) => t(phraseKey, values),
     key,
@@ -324,6 +325,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const monthLines = (goal: (typeof goals)[number]) => {
     const line = loaded.monthLine[goal.id];
     const planned = line.planned as number;
+    const task = loaded.monthTask[goal.id];
     return (
       <>
         <Flex align="baseline" gap="2" wrap="wrap">
@@ -340,6 +342,15 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               threshold: 60,
             })}
           </Text>
+        ) : null}
+        {task ? (
+          <MonthTaskLine
+            key={task.id}
+            oneOffId={task.id}
+            name={task.name}
+            estimate={task.estimate}
+            unit={goal.measureUnit as string}
+          />
         ) : null}
       </>
     );
