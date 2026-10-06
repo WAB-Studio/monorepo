@@ -7,7 +7,7 @@
     "footer": "hechos"
   },
   "summary": {
-    "rest": "de {total} · {partial} en parte"
+    "rest": "de <fig>{total}</fig> · <fig>{partial}</fig> en parte"
   },
   "legend": {
     "done": "hecho",

@@ -1,6 +1,4 @@
-import Link from "next/link";
-
-import { Button, Flex, Text } from "@/components/ui";
+import { Flex, Text, TextLink } from "@/components/ui";
 
 // «terminó el miércoles 23 · ver», under a goal's name (`SemanaMetaTerminada.dc.html`).
 export function EndedLine({
@@ -15,17 +13,13 @@ export function EndedLine({
   seeLabel: string;
 }) {
   return (
-    <Flex align="center" gap="1" wrap="wrap">
-      <Text as="p" variant="meta" tone="muted">
+    <Flex align="center" gap="2" wrap="wrap">
+      <Text as="p" variant="sentence">
         {text}
       </Text>
-      <Button asChild tap={44} variant="ghost">
-        <Link href={href} aria-label={seeLabel}>
-          <Text variant="meta" tone="accent">
-            {see}
-          </Text>
-        </Link>
-      </Button>
+      <TextLink href={href} aria-label={seeLabel}>
+        {see}
+      </TextLink>
     </Flex>
   );
 }

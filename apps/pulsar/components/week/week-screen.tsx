@@ -125,11 +125,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
     <Page width="full">
       <ScreenHeader
         title={formatWeekRange(view.start, view.days[6]?.day ?? view.start, t)}
-        eyebrow={
-          <Text as="p" variant="meta" tone="muted">
-            {eyebrowFor(view.start, thisMonday, week.firstMonday, t)}
-          </Text>
-        }
+        eyebrow={eyebrowFor(view.start, thisMonday, week.firstMonday, t)}
         actions={
           <Flex align="center" gap="1">
             {step(prev, t("week.nav.prev"), "prev")}
@@ -139,7 +135,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
       />
 
       {evidence === "unreadable" ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t("week.unreadableEvidence")}
         </Text>
       ) : null}

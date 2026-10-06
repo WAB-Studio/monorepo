@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { type MessageKey, type Translator } from "@/i18n/translator";
-import { Face, Flex, Mark, Panel, SectionLabel, Text, WeekFold, WeekTable } from "@/components/ui";
+import { Face, Figure, Flex, Mark, Panel, Section, SectionLabel, Text, WeekFold, WeekTable } from "@/components/ui";
 import type { WeekTableCell, WeekTableColumn } from "@/components/ui/week-table";
 import { tallyDays } from "@/lib/day/tally";
 import type { DaySlot } from "@/lib/day/types";
@@ -165,37 +165,41 @@ export function WeekTableFace({
         </Face>
       ) : null}
       <Face on="phone">
-        <WeekFold columns={columns} groups={foldGroups} footer={footer} />
-        {halfDrawn ? (
-          <Flex direction="column" gap="3" mt="4">
-            {partial > 0 ? (
-              <Flex align="baseline" gap="2">
-                <SectionLabel>{t("week.table.footer")}</SectionLabel>
-                <Text variant="name">{sum((tally) => tally.done)}</Text>
-                <Text variant="meta" tone="muted">
-                  {t("week.summary.rest", { total: sum((tally) => tally.total), partial })}
-                </Text>
-              </Flex>
-            ) : null}
-            <Flex wrap="wrap" gap="3" data-testid="week-legend">
-              {(
-                [
-                  ["declared", "week.legend.done"],
-                  ["evidence", "week.legend.evidence"],
-                  ["partial", "week.legend.partial"],
-                  ["empty", "week.legend.pending"],
-                ] as const
-              ).map(([state, key]) => (
-                <Flex key={state} align="center" gap="2">
-                  <Mark state={state} size="dot" />
-                  <Text variant="meta" tone="muted">
-                    {t(key)}
+        <Section as="div">
+          <WeekFold columns={columns} groups={foldGroups} footer={footer} />
+          {halfDrawn ? (
+            <>
+              {partial > 0 ? (
+                <Flex align="baseline" gap="2">
+                  <SectionLabel>{t("week.table.footer")}</SectionLabel>
+                  <Figure variant="meta" value={sum((tally) => tally.done)} />
+                  <Text variant="sentence">
+                    {t.rich("week.summary.rest", {
+                      total: sum((tally) => tally.total),
+                      partial,
+                      fig: (chunks) => <Figure variant="meta" value={chunks} />,
+                    })}
                   </Text>
                 </Flex>
-              ))}
-            </Flex>
-          </Flex>
-        ) : null}
+              ) : null}
+              <Flex wrap="wrap" gap="3" data-testid="week-legend">
+                {(
+                  [
+                    ["declared", "week.legend.done"],
+                    ["evidence", "week.legend.evidence"],
+                    ["partial", "week.legend.partial"],
+                    ["empty", "week.legend.pending"],
+                  ] as const
+                ).map(([state, key]) => (
+                  <Flex key={state} align="center" gap="2">
+                    <Mark state={state} size="dot" />
+                    <Text variant="sentence">{t(key)}</Text>
+                  </Flex>
+                ))}
+              </Flex>
+            </>
+          ) : null}
+        </Section>
       </Face>
     </>
   );
