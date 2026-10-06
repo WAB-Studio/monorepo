@@ -288,7 +288,7 @@ test("a goal with no measure opens its months, its current month and the task fo
       await expect(seen(page, "2 tareas · 1 hecha")).toHaveCount(1);
       await page.getByRole("link", { name: "Ver por mes", exact: true }).click();
       await expect(page).toHaveURL(`/metas/${bare}/meses`);
-      await page.getByRole("link", { name: monthName, exact: true }).first().click();
+      await page.locator("main ol a", { hasText: monthName }).first().click();
       await expect(page).toHaveURL(`/metas/${bare}/meses/${today.slice(0, 7)}`);
       await expect(page.getByText(`Hecha ${stamp}`)).toBeVisible();
       await page.getByRole("link", { name: /^Otra tarea de /}).click();

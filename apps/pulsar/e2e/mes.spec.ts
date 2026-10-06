@@ -99,11 +99,12 @@ test("this month lists the carried parent first, then its own task; marking the 
 
     await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText(`meta mes ${stamp}`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: `Volver a Meta mes ${stamp}` })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     const title = label(thisMonth).charAt(0).toUpperCase() + label(thisMonth).slice(1);
     await expect(page.getByText(title, { exact: true })).toBeVisible();
     await expect(page.getByText("este mes", { exact: true })).toBeVisible();
-    await expect(page.getByText("de 12 h", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "de 12 h", exact: true })).toBeVisible();
 
     // Carried first: its section precedes the month's own, and the parent
     // reads what it still owes.
@@ -172,7 +173,8 @@ test("an empty month says so and offers the first task (RP-30)", async ({
     const page = await context.newPage();
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
-    await expect(page.getByText("0 min", { exact: true })).toBeVisible();
+    // The list beside the month is in the markup and hidden at 360.
+    await expect(page.getByText("0 min", { exact: true }).and(page.locator(":visible"))).toBeVisible();
     await expect(page.getByText(/no tiene tareas\. Las que escribas aquí suman su tiempo a la meta/)).toBeVisible();
     await expect(page.getByRole("link", { name: "Escribir una tarea" })).toHaveAttribute(
       "href",
@@ -217,7 +219,7 @@ test("a carried task with no estimate reads «de <mes>» alone and one with time
   }
 });
 
-test("a goal with no measure's empty month promises no time; the back arrow, the eyebrow and «Todos los meses» each reach their page (RP-30, RP-31)", async ({
+test("a goal with no measure's empty month promises no time; the back and «Todos los meses» each reach their page (RP-30, RP-31)", async ({
   person,
   browser,
   baseURL,
@@ -237,7 +239,7 @@ test("a goal with no measure's empty month promises no time; the back arrow, the
       await expect(page.locator("main")).not.toContainText(/tiempo/i);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
-      const back = page.getByRole("link", { name: "Volver a la meta" });
+      const back = page.getByRole("link", { name: `Volver a Meta lisa ${stamp}` });
       const arrow = (await back.boundingBox())!;
       expect(arrow.width).toBeGreaterThanOrEqual(44);
       expect(arrow.height).toBeGreaterThanOrEqual(44);
@@ -245,9 +247,6 @@ test("a goal with no measure's empty month promises no time; the back arrow, the
       expect((await all.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 
       await back.click();
-      await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
-      await page.goto(url);
-      await page.getByRole("main").getByRole("link", { name: `meta lisa ${stamp}` }).click();
       await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
       await page.goto(url);
       await all.click();
@@ -322,6 +321,55 @@ test("a closed month over half carried proposes the shift; the sheet lists the m
       `${seg(following)}:600`,
       `${seg(nextMonth(following))}:300`,
     ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("from 1024 the goal's months stand beside the month and tapping another swaps the detail while the list stays; every month row is a whole 48 px link in ink (RP-31, RP-32, RNP-16)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalId = await seedGoal(db, person.id, `Meta lado ${stamp}`);
+  await seedBudget(db, person.id, goalId, lastMonth, 720);
+  await seedBudget(db, person.id, goalId, thisMonth, 720);
+  await seedTask(db, person.id, goalId, `Pasada ${stamp}`, lastMonth, 60);
+  await seedTask(db, person.id, goalId, `Propia ${stamp}`, thisMonth, 120);
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    for (const width of [360, 390, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      const rows = page.locator("main ol a:visible");
+      if (width < 1024) {
+        await expect(rows).toHaveCount(0);
+        continue;
+      }
+      await expect(rows).toHaveCount(3);
+      for (const row of await rows.all()) {
+        expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+        expect(await row.evaluate((node) => getComputedStyle(node).color)).not.toBe("rgb(0, 0, 238)");
+      }
+      const opened = page.locator("main ol a[aria-current=page]");
+      await expect(opened).toContainText(label(thisMonth));
+      await expect(page.getByText(`Propia ${stamp}`)).toBeVisible();
+      const listBox = (await rows.first().boundingBox())!;
+      const detailBox = (await page.getByText(`Propia ${stamp}`).boundingBox())!;
+      expect(listBox.x + listBox.width).toBeLessThan(detailBox.x);
+
+      await page.locator("main ol a", { hasText: label(lastMonth) }).click();
+      await page.waitForURL(`**/meses/${seg(lastMonth)}`);
+      await expect(page.getByText(`Pasada ${stamp}`)).toBeVisible();
+      await expect(page.getByText(`Propia ${stamp}`)).toHaveCount(0);
+      await expect(rows).toHaveCount(3);
+      await expect(page.locator("main ol a[aria-current=page]")).toContainText(label(lastMonth));
+    }
   } finally {
     await context.close();
   }

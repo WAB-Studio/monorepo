@@ -45,6 +45,12 @@ type TableProps = {
   // Index into `rows`. Marked `data-current` only: the boards draw the
   // current week by its note alone, never by a fill or a weight.
   current?: number;
+  // Draws the phone's stack at every width, for a table living in a narrow
+  // column (`MesesListaDetalle.dc.html`'s 320px list).
+  narrow?: boolean;
+  // Index into `rows` of the row whose page is open beside the table: its link
+  // is `aria-current`, filled, its name bold.
+  open?: number;
 };
 
 function isEmpty(cell: ReactNode): boolean {
@@ -57,7 +63,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -98,18 +104,26 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
   );
 
   return (
-    <div className={styles.table}>
+    <div className={narrow ? `${styles.table} ${styles.narrow}` : styles.table}>
       <div className={styles.phone}>
         <span className={styles.caption}>{caption}</span>
         <ol className={styles.stack}>
           {rows.map((row, index) => (
             <li
               key={row.key}
-              className={row.href ? `${styles.stackRow} ${styles.linked}` : styles.stackRow}
+              className={
+                row.href
+                  ? `${styles.stackRow} ${styles.linked}${index === open ? ` ${styles.open}` : ""}`
+                  : styles.stackRow
+              }
               data-current={index === current ? "" : undefined}
             >
               {row.href ? (
-                <Link href={row.href} className={styles.rowLink}>
+                <Link
+                  href={row.href}
+                  className={styles.rowLink}
+                  aria-current={index === open ? "page" : undefined}
+                >
                   {phoneRow(row)}
                   <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.chevron} />
                 </Link>

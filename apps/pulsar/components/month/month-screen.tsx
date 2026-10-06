@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { ShiftProposal, TaskRow } from "@/components/month/task-row";
-import { Button, Flex, Figure, IconButton, Mark, Page, SectionLabel, Separator, Text } from "@/components/ui";
+import { MonthsList } from "@/components/month/months-screen";
+import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, SectionLabel, Separator, Text } from "@/components/ui";
 import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
 import { nextMonth } from "@/lib/plan/months";
 import { shiftOffered, shiftPlan } from "@/lib/plan/shift";
-import { listGoals, loadGoal } from "@/lib/queries/goal";
+import { listGoals, loadGoal, type GoalSummary, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 import { todayInZone } from "@/lib/zone";
 
@@ -41,15 +41,23 @@ function AddRow({ href, label, child }: { href: string; label: string; child?: b
 
 /**
  * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (RP-30, RP-31,
- * RP-32, RP-34): one month of a goal. The amount comes from `loadGoal`'s
- * `months`, the tasks from 126's `monthList` (carried ones first), the closed
- * month's share from `carryShare`, and the proposal from 142's `shiftOffered`
- * and `shiftPlan`. `listGoals` rides in the same fan-out for the sheet's
- * «las demás metas».
+ * RP-32, RP-34): the month's own content, as `loadGoal`'s `months` and 126's
+ * `monthList` read it (carried ones first), the closed month's share from
+ * `carryShare`, and the proposal from 142's `shiftOffered` and `shiftPlan`.
+ * `heading` draws the month's name as an `h2`, for the screen whose `h1` is
+ * the list's title (`MesesListaDetalle.dc.html`).
  */
-export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {
-  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
-  if (!goal) notFound();
+export async function MonthDetail({
+  goal,
+  goals,
+  month,
+  heading,
+}: {
+  goal: GoalView;
+  goals: GoalSummary[];
+  month: string;
+  heading?: boolean;
+}) {
   const mes = `${month}-01`;
   const row = goal.months.find((entry) => entry.month === mes);
   if (!row) notFound();
@@ -68,31 +76,6 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
-  const eyebrow = (
-    <Flex align="center" gap="1" ml="-3">
-      <IconButton asChild tap={44} variant="ghost">
-        <Link href={`/metas/${goal.id}`} aria-label={t("goal.review.back")}>
-          <ChevronLeft size={20} aria-hidden />
-        </Link>
-      </IconButton>
-      <Button asChild tap={44} variant="ghost">
-        <Link href={`/metas/${goal.id}`}>
-          <Text variant="meta" tone="accent">
-            {goal.name.toLowerCase()}
-          </Text>
-        </Link>
-      </Button>
-    </Flex>
-  );
-  const allMonths = (
-    <Button asChild tap={44} variant="ghost">
-      <Link href={`/metas/${goal.id}/meses`}>
-        <Text variant="meta" tone="accent">
-          {t("month.list.allMonths")}
-        </Text>
-      </Link>
-    </Button>
-  );
 
   const items = monthList(goal.tasks, mes, today);
   const carried = items.filter((item) => item.carriedFrom !== null);
@@ -109,6 +92,8 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
     (task) => task.estimate ?? 0,
   );
 
+  const planned =
+    row.planned === null ? t("month.noPlan") : t("month.months.of", { planned: say(row.planned) });
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: string | null = null;
   if (closed) {
@@ -217,22 +202,24 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
   );
 
   return (
-    <Page>
-      {eyebrow}
-      <Text as="p" variant="title">
-        {capitalised(name)}
-      </Text>
+    <Flex direction="column" gap="5" maxWidth="720px">
+      {heading ? (
+        <Text asChild variant="title">
+          <h2>{capitalised(name)}</h2>
+        </Text>
+      ) : null}
       {unit ? (
         <Flex direction="column" gap="1">
-          <Flex align="center" justify="between" gap="2">
-            <SectionLabel>{label}</SectionLabel>
-            {allMonths}
-          </Flex>
+          <SectionLabel>{label}</SectionLabel>
           <Flex align="baseline" gap="2">
             <Figure value={row.reached} unit={unit} />
-            <Text tone="secondary">
-              {row.planned === null ? t("month.noPlan") : t("month.months.of", { planned: say(row.planned) })}
-            </Text>
+            {open && !closed ? (
+              <Text asChild tone="accent">
+                <Link href={`/metas/${goal.id}/meses?planear=${month}`}>{planned}</Link>
+              </Text>
+            ) : (
+              <Text tone="secondary">{planned}</Text>
+            )}
           </Flex>
           {note ? (
             <Text as="p" variant="meta" tone="muted">
@@ -241,12 +228,9 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
           ) : null}
         </Flex>
       ) : (
-        <Flex align="center" justify="between" gap="2">
-          <Text as="p" tone="secondary">
-            {t("month.list.noMeasure")}
-          </Text>
-          {allMonths}
-        </Flex>
+        <Text as="p" tone="secondary">
+          {t("month.list.noMeasure")}
+        </Text>
       )}
       <Separator />
 
@@ -306,6 +290,43 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
           until={t("month.shift.until", { date: dayFormat.format(lastDayOfToday) })}
         />
       ) : null}
+    </Flex>
+  );
+}
+
+/**
+ * `ArmazonEncabezado.dc.html` case 2 (RP-31, RP-32): the month screen. The
+ * header names the month and leads back to the goal, with «Todos los meses»
+ * for the phone; from 1024 `ListDetail` draws the goal's months beside it, the
+ * month open.
+ */
+export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {
+  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
+  if (!goal) notFound();
+  const mes = `${month}-01`;
+  if (!goal.months.some((entry) => entry.month === mes)) notFound();
+
+  const t = await getTranslations();
+  return (
+    <Page width="full">
+      <ScreenHeader
+        title={capitalised(monthLabel(mes))}
+        back={{ href: `/metas/${goal.id}`, place: goal.name }}
+        eyebrow={
+          <Button asChild tap={44} variant="ghost">
+            <Link href={`/metas/${goal.id}/meses`}>
+              <Text variant="meta" tone="accent">
+                {t("month.list.allMonths")}
+              </Text>
+            </Link>
+          </Button>
+        }
+      />
+      <ListDetail
+        show="detail"
+        list={<MonthsList goal={goal} open={mes} />}
+        detail={<MonthDetail goal={goal} goals={goals} month={month} />}
+      />
     </Page>
   );
 }
