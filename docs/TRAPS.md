@@ -2752,3 +2752,16 @@ branch could pass until it was restored.
 - **Do.** Wrap every suite, seed and `harness:token` in `scripts/supabase-local.sh exec`. Run the RNF-09 timing against the
   remote with `HARNESS_DATABASE=remote` — exactly `remote`, nothing else passes. `census` and `reap` stay unguarded on
   purpose: one reads, the other prunes registered rows.
+
+## `check:mcp` needs a dev server started a certain way, and CI never runs it
+
+- `scripts/mcp/route.ts` and `oauth-flow.ts` read the server log at `apps/pulsar/private/dev<port>.log` (port `3200 + lane - 1`)
+  and assert a `[outbound]` line. Nothing in the app writes it: the server must start with the fetch hook
+  `NODE_OPTIONS='--import data:text/javascript,const%20f=fetch;globalThis.fetch=(i,o)=>{console.log(%22[outbound]%22,String(i.url??i));return%20f(i,o)}'`.
+  Without it, 23 tests fail with «the server log does not show outbound calls»; without the server, 39 fail with `fetch failed`.
+- `scripts/harness/checks-run.ts` runs `check:day`, `check:goal`, `check:goal-actions`, `check:plan` — not `check:mcp`.
+  Measured 2026-10-05: `read-tools.ts` expected `list_goals` at 2 statements; module 210 (tren 5) made `/metas` read the
+  evidence beside the goals, 4 statements, and the red sat unseen through trains 5, 6 and 7.
+- A lane opened with `--app pulsar` has no member identity until `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run
+  harness:token -w apps/orbit` runs from the main checkout; `harness:mint-session` makes the person only. Without it
+  `check:plan` reports 14 reds («no member identity») that read like regressions. Measured the same day in lanes 4 and 5.
