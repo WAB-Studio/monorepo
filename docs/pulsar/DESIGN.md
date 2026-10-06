@@ -919,6 +919,30 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board still to draw.
 - **The goal at 1024 draws its phases on a full-width row under the two columns** (2026-10-06, decided by the
   orchestrator): a 260 px phases column broke an aim into one word per line.
+- **Decided by the user 2026-10-06, after the roadmap and wave-2 critics:**
+  - A goal holds no fact before the day it opened. The AI refuses such a fact and says why; the past day never draws
+    the goal before it opened.
+  - A month's figure on the goal and the plan is the hours of the tasks done that month against its room, as Hoy's
+    notice counts («septiembre cerró con 6 h de 12 h»). The measure's total stays on its own line.
+  - «Mover el final» asks first: a sheet names the old and the new end («Mover el final del 29 de noviembre al 20 de
+    febrero»), «Moverlo» and «Cancelar». Supersedes the one tap of `RoadmapPasaElFinal`. Board still to draw.
+  - When several plans moved, Hoy draws one card: «N planes se movieron», a line per goal (how far, «Ver el plan»), one
+    «Entendido». Supersedes one card per goal (`RoadmapHoyMovido`) and the stacking decided earlier today. Board still
+    to draw.
+- **Decided by the orchestrator 2026-10-06, same reviews:**
+  - A task past the goal's end that starts inside it reads its part in its month («Empieza aquí con 10 h y sigue en
+    diciembre.»); only what falls after the end is listed under «después de tu final» (RP-54).
+  - A row under «después de tu final» opens the task's sheet, as every task row does.
+  - A month's header says which figure it is: the current month «5 h hechas de 12 h», a later one «12 h planeadas de
+    12 h». Board still to draw.
+  - Setting a goal's first rhythm raises no «se movió» notice: the plan starts there.
+  - A task with no estimate reads «sin estimar» as its trailing, muted, in every list of the plan.
+  - A parent's sheet says under «Nombre» why it has no estimate: «Suma lo de sus sub-tareas.»
+  - A task fixed to a month that has closed shows that month as the selected chip, closed, in its sheet.
+  - On `/sueltas` a suelta's name opens the RP-57 sheet; «Darle un día» is a row inside that sheet (W3-Q1).
+  - A goal's own dated one-off opens the same sheet with its name alone (W3-Q2).
+  - Figures use a plain zero, never the slashed one (W3-Q3).
+  - An imported phase that ends before its goal opens is dropped and listed in the import's review (W3-Q4).
 - **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
   - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
     on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
