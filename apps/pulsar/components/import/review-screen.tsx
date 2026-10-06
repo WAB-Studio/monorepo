@@ -27,9 +27,8 @@ import {
   Notice,
   Page,
   Panel,
-  PanelGrid,
   ScreenHeader,
-  SectionLabel,
+  Section,
   Sheet,
   SheetActions,
   Text,
@@ -297,18 +296,17 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   // What the review was read from sits beside it from 1024; a file leaves no text to show.
   const source = (
-    <Flex direction="column" gap="3">
+    <Flex direction="column" gap="5">
       {stored.source !== null ? (
         <TextArea label={t("import.review.sourceLabel")} readOnly rows={16} value={stored.source} />
       ) : (
-        <>
-          <SectionLabel>{t("import.review.sourceLabel")}</SectionLabel>
-          <Text as="p" variant="meta" tone="muted">
+        <Section label={t("import.review.sourceLabel")}>
+          <Text as="p" variant="sentence" tone="muted">
             {stored.sourceName
               ? t("import.review.sourceFile", { name: stored.sourceName })
               : t("import.review.sourceFileAnon")}
           </Text>
-        </>
+        </Section>
       )}
       <Button asChild block variant="outline">
         <Link href="/metas/importar">{t("import.review.change")}</Link>
@@ -317,24 +315,20 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   );
 
   const review = (
-    <Flex direction="column" gap="5">
-      <div>
-        <Text as="p" variant="meta" tone="muted">
-          {eyebrow}
-        </Text>
-        <Text as="p" variant="meta" tone="muted">
-          {t("import.review.hint")}
-        </Text>
-      </div>
+    <Flex direction="column" gap="6" maxWidth="640px">
+      <Text as="p" variant="sentence" tone="muted">
+        {t("import.review.hint")}
+      </Text>
 
       {refusals.length > 0 ? (
-        <section>
+        <Section>
           <Text asChild variant="heading">
             <h2>{t("import.review.blocked.title")}</h2>
           </Text>
-          <Text as="p" variant="meta" tone="muted">
+          <Text as="p" variant="sentence" tone="muted">
             {t("import.review.blocked.hint")}
           </Text>
+          <div>
           {refusals
             // A goal refused whole says so once; what lies under it is not listed.
             .filter((refusal) => {
@@ -342,10 +336,11 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
               return refusal.path.endsWith(".horizon") || !refused.has(`goals.${g}.horizon`);
             })
             .map((refusal) => blockedRow(refusal.path, refusal.key, refusal.values))}
-        </section>
+          </div>
+        </Section>
       ) : null}
 
-      <PanelGrid>
+      <Flex direction="column" gap="4">
       {work.goals.map((goal, g) => {
         const at = goalPath(g);
         if (refused.has(`${at}.horizon`)) return null;
@@ -359,118 +354,141 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         const tasks = goal.tasks.map((task, i) => ({ task, path: `${at}.tasks.${i}` })).filter((item) => ok(item.path));
         return (
           <Panel key={at} stacked label={goal.name}>
-            <Text asChild variant="heading">
-              <h2>{goal.name}</h2>
-            </Text>
-            {repeated.has(g) ? (
-              <div role="note">
-                <Panel as="div" bordered>
-                  <Text as="p" variant="body">
-                    {t("import.review.repeated")}
-                  </Text>
-                </Panel>
-              </div>
-            ) : null}
-            <CheckRow
-              checked={goalOn}
-              onCheckedChange={(value) => toggle(at, value)}
-              name={t("import.review.horizonUntil", { date: dayLabel(dayBefore(goal.horizon)) })}
-              meta={t("import.review.horizon")}
-            />
-            {goal.measure ? (
-              <CheckRow
-                checked={goalOn}
-                onCheckedChange={(value) => toggle(at, value)}
-                name={goal.measure.name}
-                meta={t("import.review.measure")}
-                trailing={goal.measure.unit}
-              />
-            ) : null}
-
-            {phases.length > 0 ? <GroupLabel>{t("import.review.groups.phases")}</GroupLabel> : null}
-            {phases.map(({ phase, path }) => (
-              <CheckRow
-                key={path}
-                checked={goalOn && on(path)}
-                disabled={!goalOn}
-                onCheckedChange={(value) => toggle(path, value)}
-                name={phase.aim}
-                trailing={phaseSpan(phase.startsOn, phase.endsOn)}
-              />
-            ))}
-
-            {months.length > 0 ? <GroupLabel>{t("import.review.groups.months")}</GroupLabel> : null}
-            {months.map(({ entry, path }) => (
-              <CheckRow
-                key={path}
-                checked={goalOn && on(path)}
-                disabled={!goalOn}
-                onCheckedChange={(value) => toggle(path, value)}
-                name={monthWord(entry.month)}
-                {...amountProps(path, monthWord(entry.month), unit ?? "", entry.amount, "month")}
-              />
-            ))}
-
-            {commitments.length > 0 ? <GroupLabel>{t("import.review.groups.commitments")}</GroupLabel> : null}
-            {commitments.map(({ commitment, path }) => (
-              <CheckRow
-                key={path}
-                checked={goalOn && on(path)}
-                disabled={!goalOn}
-                onCheckedChange={(value) => toggle(path, value)}
-                name={commitment.name}
-                meta={commitment.satisfaction === "tap" ? `${cadenceText(commitment)} · ${t("goal.satisfaction.tap")}` : cadenceText(commitment)}
-                trailing={commitment.targetQuantity !== null ? figure(commitment.targetQuantity, commitment.unit) : undefined}
-              />
-            ))}
-
-            {tasks.length > 0 ? <GroupLabel>{t("import.review.groups.tasks")}</GroupLabel> : null}
-            {tasks.map(({ task, path }) => {
-              const taskOn = goalOn && on(path);
-              const children = task.children
-                .map((child, c) => ({ child, path: `${path}.children.${c}` }))
-                .filter((item) => ok(item.path));
-              const sum = children.reduce((total, item) => total + (on(item.path) && taskOn ? (item.child.estimate ?? 0) : 0), 0);
-              return (
-                <Fragment key={path}>
+            <Flex direction="column" gap="6">
+              <Section as="div">
+                <Text asChild variant="heading">
+                  <h2>{goal.name}</h2>
+                </Text>
+                {repeated.has(g) ? (
+                  <div role="note">
+                    <Panel as="div" bordered>
+                      <Text as="p" variant="body">
+                        {t("import.review.repeated")}
+                      </Text>
+                    </Panel>
+                  </div>
+                ) : null}
+                <CheckRow
+                  checked={goalOn}
+                  onCheckedChange={(value) => toggle(at, value)}
+                  name={t("import.review.horizonUntil", { date: dayLabel(dayBefore(goal.horizon)) })}
+                  meta={t("import.review.horizon")}
+                />
+                {goal.measure ? (
                   <CheckRow
-                    checked={taskOn}
-                    disabled={!goalOn}
-                    onCheckedChange={(value) => toggle(path, value)}
-                    name={task.name}
-                    note={task.note}
-                    meta={
-                      task.children.length > 0
-                        ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
-                        : strays.has(path)
-                          ? `${monthWord(task.month)} · ${t("import.notices.estimateDropped")}`
-                          : monthWord(task.month)
-                    }
-                    {...(task.children.length === 0 && task.estimate !== null
-                      ? amountProps(path, task.name, unit ?? "", task.estimate, "task")
-                      : {})}
-                    trailing={task.children.length > 0 ? figure(sum, unit) : undefined}
+                    checked={goalOn}
+                    onCheckedChange={(value) => toggle(at, value)}
+                    name={goal.measure.name}
+                    meta={t("import.review.measure")}
+                    trailing={goal.measure.unit}
                   />
-                  {children.map(({ child, path: childPath }) => (
-                    <CheckRow
-                      key={childPath}
-                      indent
-                      checked={taskOn && on(childPath)}
-                      disabled={!taskOn}
-                      onCheckedChange={(value) => toggle(childPath, value)}
-                      name={child.name}
-                      note={child.note}
-                      meta={strays.has(childPath) ? t("import.notices.estimateDropped") : undefined}
-                      {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
-                    />
-                  ))}
-                </Fragment>
-              );
-            })}
+                ) : null}
+              </Section>
+              {phases.length > 0 ? (
+                <Section label={t("import.review.groups.phases")} as="div">
+                  <div>
+                    {phases.map(({ phase, path }) => (
+                      <CheckRow
+                        key={path}
+                        checked={goalOn && on(path)}
+                        disabled={!goalOn}
+                        onCheckedChange={(value) => toggle(path, value)}
+                        name={phase.aim}
+                        trailing={phaseSpan(phase.startsOn, phase.endsOn)}
+                      />
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
+
+              {months.length > 0 ? (
+                <Section label={t("import.review.groups.months")} as="div">
+                  <div>
+                    {months.map(({ entry, path }) => (
+                      <CheckRow
+                        key={path}
+                        checked={goalOn && on(path)}
+                        disabled={!goalOn}
+                        onCheckedChange={(value) => toggle(path, value)}
+                        name={monthWord(entry.month)}
+                        {...amountProps(path, monthWord(entry.month), unit ?? "", entry.amount, "month")}
+                      />
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
+
+              {commitments.length > 0 ? (
+                <Section label={t("import.review.groups.commitments")} as="div">
+                  <div>
+                    {commitments.map(({ commitment, path }) => (
+                      <CheckRow
+                        key={path}
+                        checked={goalOn && on(path)}
+                        disabled={!goalOn}
+                        onCheckedChange={(value) => toggle(path, value)}
+                        name={commitment.name}
+                        meta={commitment.satisfaction === "tap" ? `${cadenceText(commitment)} · ${t("goal.satisfaction.tap")}` : cadenceText(commitment)}
+                        trailing={commitment.targetQuantity !== null ? figure(commitment.targetQuantity, commitment.unit) : undefined}
+                      />
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
+
+              {tasks.length > 0 ? (
+                <Section label={t("import.review.groups.tasks")} as="div">
+                  <div>
+                    {tasks.map(({ task, path }) => {
+                      const taskOn = goalOn && on(path);
+                      const children = task.children
+                        .map((child, c) => ({ child, path: `${path}.children.${c}` }))
+                        .filter((item) => ok(item.path));
+                      const sum = children.reduce((total, item) => total + (on(item.path) && taskOn ? (item.child.estimate ?? 0) : 0), 0);
+                      return (
+                        <Fragment key={path}>
+                          <CheckRow
+                            checked={taskOn}
+                            disabled={!goalOn}
+                            onCheckedChange={(value) => toggle(path, value)}
+                            name={task.name}
+                            note={task.note}
+                            meta={
+                              task.children.length > 0
+                                ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
+                                : strays.has(path)
+                                  ? `${monthWord(task.month)} · ${t("import.notices.estimateDropped")}`
+                                  : monthWord(task.month)
+                            }
+                            {...(task.children.length === 0 && task.estimate !== null
+                              ? amountProps(path, task.name, unit ?? "", task.estimate, "task")
+                              : {})}
+                            trailing={task.children.length > 0 ? figure(sum, unit) : undefined}
+                          />
+                          {children.map(({ child, path: childPath }) => (
+                            <CheckRow
+                              key={childPath}
+                              indent
+                              checked={taskOn && on(childPath)}
+                              disabled={!taskOn}
+                              onCheckedChange={(value) => toggle(childPath, value)}
+                              name={child.name}
+                              note={child.note}
+                              meta={strays.has(childPath) ? t("import.notices.estimateDropped") : undefined}
+                              {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
+                            />
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                </Section>
+              ) : null}
+            </Flex>
           </Panel>
         );
       })}
-      </PanelGrid>
+      </Flex>
 
       {failure ? <Notice>{failure}</Notice> : null}
 
@@ -484,7 +502,11 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   return (
     <Page width="full">
-      <ScreenHeader title={t("import.review.title")} back={{ href: "/metas/importar", place: t("import.review.place") }} />
+      <ScreenHeader
+        title={t("import.review.title")}
+        back={{ href: "/metas/importar", place: t("import.review.place") }}
+        eyebrow={eyebrow}
+      />
       <ListDetail show="detail" list={source} detail={review} />
 
       {editing ? (
@@ -501,14 +523,6 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         />
       ) : null}
     </Page>
-  );
-}
-
-function GroupLabel({ children }: { children: ReactNode }) {
-  return (
-    <Flex pt="4">
-      <SectionLabel>{children}</SectionLabel>
-    </Flex>
   );
 }
 

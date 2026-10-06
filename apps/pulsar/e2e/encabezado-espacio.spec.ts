@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 
 // Module 306: the header spaces eyebrow -> title at 6 px (`SistemaEspacio.dc.html`).
 
-for (const path of ["/metas/nueva", "/metas/importar", "/semana"]) {
+for (const path of ["/metas/nueva", "/semana"]) {
   test(`${path} holds 6 px between its eyebrow and its title`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(path);

@@ -359,4 +359,24 @@ test.describe("the import screen (RP-37)", () => {
       }
     });
   }
+
+  for (const width of [360, 1280]) {
+    test(`the header repeats nothing and the quiet lines read in Archivo at ${width}`, async ({ person, browser, baseURL }) => {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 800 } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/metas/importar");
+        await settled(page);
+        // The way back and the title line: no eyebrow that says «metas» twice.
+        await expect(page.locator("main > header > *")).toHaveCount(2);
+        for (const line of [messages.privacy, messages.template.note]) {
+          const family = await page.getByText(line, { exact: true }).evaluate((el) => getComputedStyle(el).fontFamily);
+          expect(family).not.toMatch(/mono/i);
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      } finally {
+        await context.close();
+      }
+    });
+  }
 });

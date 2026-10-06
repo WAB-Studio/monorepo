@@ -339,7 +339,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     });
   }
 
-  test("at 1440 two goals' cards sit side by side, and a file import shows its name where the text would be", async ({ person, browser, baseURL }) => {
+  test("at 1440 two goals' cards stack 16 apart at the width of the confirm bar, and a file import shows its name where the text would be", async ({ person, browser, baseURL }) => {
     const { horizon } = monthsFromToday();
     const two = `${template()}\n\n# Trámites\nhorizonte: ${horizon}\n\n## Compromisos\n- Pagar la luz · cada día · toque`;
     await asPerson(
@@ -348,8 +348,13 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
         await toReview(page, two);
         const first = (await page.getByRole("region", { name: "IA aplicada" }).boundingBox())!;
         const second = (await page.getByRole("region", { name: "Trámites" }).boundingBox())!;
-        expect(Math.abs(first.y - second.y)).toBeLessThan(2);
-        expect(second.x).toBeGreaterThan(first.x + first.width - 1);
+        expect(Math.abs(first.x - second.x)).toBeLessThan(1);
+        expect(Math.abs(first.width - second.width)).toBeLessThan(1);
+        expect(second.y - (first.y + first.height)).toBeGreaterThanOrEqual(15);
+        expect(second.y - (first.y + first.height)).toBeLessThanOrEqual(17);
+        const bar = (await page.getByRole("button", { name: "Crear 2 metas" }).locator("xpath=..").boundingBox())!;
+        expect(Math.abs(bar.width - first.width)).toBeLessThan(1);
+        expect(first.width).toBeLessThanOrEqual(640);
 
         await page.goto("/metas/importar");
         await page.getByLabel(messages.upload).setInputFiles({ name: "mi-plan.txt", mimeType: "text/plain", buffer: Buffer.from(template()) });
@@ -361,4 +366,21 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       { width: 1440, height: 900 },
     );
   });
+
+  for (const width of [360, 1280]) {
+    test(`its provenance is the header's one eyebrow and its sentences read in Archivo at ${width}`, async ({ person, browser, baseURL }) => {
+      await asPerson(
+        { person, browser, baseURL },
+        async (page) => {
+          await toReview(page, template());
+          const header = page.locator("main > header");
+          await expect(header.getByText(messages.review.eyebrowTemplate, { exact: true })).toBeVisible();
+          await expect(page.locator("main > :not(header)").getByText(messages.review.eyebrowTemplate, { exact: true })).toHaveCount(0);
+          const hint = page.getByText(messages.review.hint, { exact: true });
+          expect(await hint.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+        },
+        { width, height: 800 },
+      );
+    });
+  }
 });
