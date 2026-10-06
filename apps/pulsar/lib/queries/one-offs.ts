@@ -10,6 +10,7 @@ export type DaylessOneOff = {
   name: string;
   goalId: string | null;
   goalName: string | null;
+  note: string | null;
 };
 
 type DaylessRow = {
@@ -17,6 +18,7 @@ type DaylessRow = {
   name: string;
   goal_id: string | null;
   goal_name: string | null;
+  note: string | null;
 };
 
 // A goal is open on `day` while it is not archived and its horizon, the
@@ -30,7 +32,7 @@ function openGoal(day: string) {
 export async function listDaylessOneOffs(): Promise<DaylessOneOff[]> {
   const rows = await withGoalsDb((tx) =>
     tx.execute<DaylessRow>(sql`
-      select o.id, o.name, o.goal_id, g.name as goal_name
+      select o.id, o.name, o.goal_id, g.name as goal_name, o.note
         from "goals"."one_offs" o
         left join "goals"."goals" g on g.id = o.goal_id
         where o.day is null
@@ -48,6 +50,7 @@ export async function listDaylessOneOffs(): Promise<DaylessOneOff[]> {
     name: row.name,
     goalId: row.goal_id,
     goalName: row.goal_name,
+    note: row.note,
   }));
 }
 
@@ -60,7 +63,7 @@ type ScheduledRow = DaylessRow & { day: string };
 export async function listScheduledOneOffs(today: string): Promise<ScheduledOneOff[]> {
   const rows = await withGoalsDb((tx) =>
     tx.execute<ScheduledRow>(sql`
-      select o.id, o.name, o.goal_id, g.name as goal_name, o.day
+      select o.id, o.name, o.goal_id, g.name as goal_name, o.note, o.day
         from "goals"."one_offs" o
         left join "goals"."goals" g on g.id = o.goal_id
         where o.day > ${today}::date
@@ -77,6 +80,7 @@ export async function listScheduledOneOffs(today: string): Promise<ScheduledOneO
     name: row.name,
     goalId: row.goal_id,
     goalName: row.goal_name,
+    note: row.note,
     day: row.day,
   }));
 }
