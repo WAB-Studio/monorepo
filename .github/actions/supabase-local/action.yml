@@ -9,7 +9,7 @@ inputs:
 runs:
   using: composite
   steps:
-    # Keyed by the CLI version the wrapper pins: a bump of it is a new key.
+    # The wrapper pins the CLI version, so hashing it with the config keys both.
     - name: Cache the stack's images
       id: images
       uses: actions/cache@v4
@@ -38,8 +38,10 @@ runs:
       if: steps.images.outputs.cache-hit != 'true'
       shell: bash
       run: |
+        start=$SECONDS
         docker images --format '{{.Repository}}:{{.Tag}}' | grep -E 'supabase|mailpit|kong' | grep -v '<none>' \
           | xargs docker save -o ~/supabase-images.tar
+        echo "images saved in $((SECONDS - start))s"
 
     - name: Write .env.local for the apps and export the same values
       shell: bash
