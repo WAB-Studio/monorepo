@@ -220,3 +220,45 @@ test("a fact written at 23:40 in the person's zone lands on that civil day, not 
   const nextDay = deriveDay({ commitments: [plan], phases: [], facts, evidence: {}, day: "2026-03-02" });
   assert.equal(nextDay.slots[0].satisfied, false);
 });
+
+// --- partial ---
+
+function quantityPlan(id: string, target: number): CommitmentPlan {
+  return tapPlan(id, { satisfiedBy: { kind: "quantity", target, unit: "minutos" } });
+}
+
+function slotFor(plan: CommitmentPlan, quantity: number | null, evidence = {}) {
+  const facts = quantity === null ? [] : [fact(plan.id, "2026-03-01", { quantity, unit: "minutos" })];
+  return deriveDay({ commitments: [plan], phases: [], facts, evidence, day: "2026-03-01" }).slots[0];
+}
+
+test("deriveDay: 29 of 30 is partial and not satisfied", () => {
+  const slot = slotFor(quantityPlan("q", 30), 29);
+  assert.equal(slot.partial, true);
+  assert.equal(slot.satisfied, false);
+});
+
+test("deriveDay: 30 of 30 is satisfied and not partial", () => {
+  const slot = slotFor(quantityPlan("q", 30), 30);
+  assert.equal(slot.partial, false);
+  assert.equal(slot.satisfied, true);
+});
+
+test("deriveDay: zero is neither partial nor satisfied", () => {
+  const none = slotFor(quantityPlan("q", 30), null);
+  const zero = slotFor(quantityPlan("q", 30), 0);
+  for (const slot of [none, zero]) {
+    assert.equal(slot.partial, false);
+    assert.equal(slot.satisfied, false);
+  }
+});
+
+test("deriveDay: evidence below its threshold and a tap are never partial", () => {
+  const plan = tapPlan("e", { satisfiedBy: { kind: "evidence", threshold: 1, unit: "páginas" } });
+  assert.equal(slotFor(plan, null).partial, false);
+  const some = slotFor(plan, null, {
+    e: [{ day: "2026-03-01", quantity: 0.5, unit: "páginas", labelKey: "x" }],
+  });
+  assert.equal(some.partial, false);
+  assert.equal(slotFor(tapPlan("t"), 1).partial, false);
+});

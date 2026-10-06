@@ -79,6 +79,7 @@ function deriveSlot(
         satisfiedBy: declared.length > 0 ? "declared" : null,
         labelKey: null,
         quantity: null,
+        partial: false,
       };
 
     case "quantity": {
@@ -90,6 +91,7 @@ function deriveSlot(
         satisfiedBy: satisfied ? "declared" : null,
         labelKey: null,
         quantity,
+        partial: quantity > 0 && quantity < plan.satisfiedBy.target,
       };
     }
 
@@ -103,6 +105,7 @@ function deriveSlot(
         satisfiedBy: satisfied ? "evidence" : null,
         labelKey: satisfied ? (rows[0]?.labelKey ?? null) : null,
         quantity,
+        partial: false,
       };
     }
   }
