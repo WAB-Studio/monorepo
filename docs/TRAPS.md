@@ -2765,3 +2765,13 @@ branch could pass until it was restored.
 - A lane opened with `--app pulsar` has no member identity until `HARNESS_LANE=<n> scripts/supabase-local.sh exec npm run
   harness:token -w apps/orbit` runs from the main checkout; `harness:mint-session` makes the person only. Without it
   `check:plan` reports 14 reds («no member identity») that read like regressions. Measured the same day in lanes 4 and 5.
+
+## A DDL mutant on the local stack breaks every other lane
+
+- Every lane and every suite share the one local Supabase in Docker. A negative control that drops a trigger, a grant or a
+  check there drops it for every lane at once, not only for the branch that proves it.
+- Measured 2026-10-05: module 252's control dropped `one_offs_fill_position`; four `exportar.spec.ts` tests in lane 4 failed
+  `null value in column "position" of relation "one_offs"` on their seed and passed on the next run.
+- Run a DDL mutant only when no other lane runs a suite, or inside one transaction that rolls back (and see «A policy
+  mutant proved inside a rollback…» for what that costs). A red that names a column another branch owns is that branch's
+  mutant until proved otherwise.
