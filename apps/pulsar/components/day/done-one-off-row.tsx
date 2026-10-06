@@ -72,7 +72,7 @@ export function DoneOneOffRow({ factId, name, time, note, oneOffId, noteEyebrow 
         disabled={pending}
       />
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

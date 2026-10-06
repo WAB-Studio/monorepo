@@ -4,7 +4,7 @@ import { Text } from "@/components/ui";
 // never a red, never an error page, never a blank day.
 export function EvidenceNote({ text }: { text: string }) {
   return (
-    <Text as="p" tone="muted" variant="meta">
+    <Text as="p" variant="sentence">
       {text}
     </Text>
   );
