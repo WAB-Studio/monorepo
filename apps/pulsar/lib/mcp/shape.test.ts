@@ -237,8 +237,8 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     view: {
       day: "2026-10-05",
       slots: [
-        { commitmentId: ID(12), satisfied: true, satisfiedBy: "declared", labelKey: null, quantity: 45 },
-        { commitmentId: ID(14), satisfied: false, satisfiedBy: null, labelKey: null, quantity: null },
+        { commitmentId: ID(12), satisfied: true, satisfiedBy: "declared", labelKey: null, quantity: 45, partial: false },
+        { commitmentId: ID(14), satisfied: false, satisfiedBy: null, labelKey: null, quantity: null, partial: false },
       ],
       phase: { id: ID(11), name: "Arranque", startsOn: "2026-08-17", endsOn: null },
     },
