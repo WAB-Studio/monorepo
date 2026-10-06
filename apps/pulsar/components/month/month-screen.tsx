@@ -75,6 +75,7 @@ export async function MonthDetail({
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
+  const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
 
   const items = monthList(goal.tasks, mes, today);
@@ -150,6 +151,8 @@ export async function MonthDetail({
           parent={isParent}
           meta={meta}
           trailing={unit && owes > 0 ? say(owes) : undefined}
+          note={task.note}
+          noteEyebrow={noteEyebrow}
         />
         {children.map((child) => (
           <TaskRow
@@ -160,6 +163,8 @@ export async function MonthDetail({
             done={child.doneOn !== null}
             child
             trailing={unit && child.estimate ? say(child.estimate) : undefined}
+            note={child.note}
+            noteEyebrow={noteEyebrow}
           />
         ))}
         {subtaskable ? (

@@ -2,14 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, File, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { undoFact } from "@/app/actions/facts";
 import { completeOneOff } from "@/app/actions/one-offs";
 import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
+import { NoteSheet } from "@/components/one-offs/note-sheet";
 import { ShiftSheet, type ShiftSheetProps } from "@/components/month/shift-sheet";
-import { Button, Flex, Mark, Panel, Row, Text } from "@/components/ui";
+import { Button, Flex, IconButton, Mark, Panel, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 
 export type TaskRowProps = {
@@ -25,6 +26,10 @@ export type TaskRowProps = {
   trailing?: string;
   // Names the open mark; absent, the month page's «Marcar como hecho».
   markLabel?: string;
+  // The task's note, null when it has none (RP-45). A parent carries none.
+  note?: string | null;
+  // The note sheet's label: «nota · {goal} · {month}».
+  noteEyebrow?: string;
 };
 
 /**
@@ -42,12 +47,15 @@ export function TaskRow({
   meta,
   trailing,
   markLabel,
+  note = null,
+  noteEyebrow,
 }: TaskRowProps) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
 
   function run(act: () => Promise<{ ok: boolean; error?: MessageKey }>) {
     if (pending) return;
@@ -65,6 +73,21 @@ export function TaskRow({
       {trailing}
     </Text>
   ) : undefined;
+
+  // A parent is done by its children and carries no note of its own.
+  const noteButton = parent ? undefined : (
+    <IconButton
+      tap={44}
+      variant="ghost"
+      tone={note ? "accent" : undefined}
+      aria-label={t(note ? "oneOffs.note.view" : "oneOffs.note.open", { name })}
+      onClick={() => setNoteOpen(true)}
+      disabled={pending}
+    >
+      {note ? <FileText size={18} aria-hidden /> : <File size={18} aria-hidden />}
+    </IconButton>
+  );
+  const noteProps = parent ? {} : { preview: note, end: noteButton };
 
   let row;
   if (parent) {
@@ -95,6 +118,7 @@ export function TaskRow({
         }
         meta={meta}
         trailing={trail}
+        {...noteProps}
         onClick={() => factId && run(() => undoFact({ factId }))}
         disabled={pending || factId === null}
       />
@@ -107,6 +131,7 @@ export function TaskRow({
         name={name}
         meta={meta}
         trailing={trail}
+        {...noteProps}
         onLeadingClick={() => run(() => completeOneOff({ oneOffId }))}
         onClick={() => setDeleteOpen(true)}
         disabled={pending}
@@ -128,6 +153,16 @@ export function TaskRow({
         oneOffId={oneOffId}
         name={name}
       />
+      {parent ? null : (
+        <NoteSheet
+          open={noteOpen}
+          onOpenChange={setNoteOpen}
+          oneOffId={oneOffId}
+          name={name}
+          note={note}
+          eyebrow={noteEyebrow ?? t("oneOffs.note.eyebrowLoose")}
+        />
+      )}
     </Flex>
   );
 }
