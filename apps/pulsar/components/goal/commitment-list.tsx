@@ -6,7 +6,7 @@ import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
-import { Button, Flex, SectionLabel, Text } from "@/components/ui";
+import { Button, Flex, Section, Text } from "@/components/ui";
 
 import { CommitmentRow } from "./retire-sheet";
 
@@ -107,13 +107,12 @@ export async function CommitmentList({
   const activeCount = commitments.filter((commitment) => commitment.retiredAt === null).length;
 
   return (
-    <section>
-      <SectionLabel>
-        {t("goal.detail.commitmentsCount", {
-          word: countWord(activeCount, t),
-          count: activeCount,
-        })}
-      </SectionLabel>
+    <Section
+      label={t("goal.detail.commitmentsCount", {
+        word: countWord(activeCount, t),
+        count: activeCount,
+      })}
+    >
       {commitments.map((commitment) => (
         <CommitmentRow
           key={commitment.id}
@@ -123,8 +122,8 @@ export async function CommitmentList({
           retiredLabel={t("goal.commitments.retired")}
           factDayCount={commitment.factDayCount}
           trailing={
-            <Flex direction="column" align="end" gap="1">
-              <Text as="span" variant="meta" tone="muted">
+            <Flex direction="column" align="end">
+              <Text as="span" variant="sentence" tone="muted">
                 {cadenceWords(commitment.cadence, t)}
               </Text>
               <Text as="span" variant="meta" tone="muted">
@@ -139,6 +138,6 @@ export async function CommitmentList({
           <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>
         </Button>
       ) : null}
-    </section>
+    </Section>
   );
 }

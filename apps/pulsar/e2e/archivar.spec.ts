@@ -97,13 +97,13 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
   await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
 
   // Open, before archiving: `listGoalsForMetas` (`lib/queries/goal.ts`)
-  // draws the open list bare, outside the "Archivadas" `<section>`
+  // draws the open list in its own «abiertas» `<section>`, never the "Archivadas" one
   // (`app/metas/page.tsx`) — a swapped open/archived split would instead
   // land this goal inside that section while it is still open.
   await page.goto("/metas");
   const openLink = page.getByRole("link", { name: marker });
   await expect(openLink).toBeVisible();
-  await expect(openLink.locator("xpath=ancestor::section")).toHaveCount(0);
+  await expect(openLink.locator("xpath=ancestor::section[.//span[normalize-space()='Archivadas']]")).toHaveCount(0);
 
   // A fact this goal carries, so "its facts stay" has something real to
   // check — a one-off's, never a commitment's: this goal may or may not
@@ -141,7 +141,7 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
     // same split `listGoalsForMetas` draws its two arrays from.
     const archivedLink = page.getByRole("link", { name: marker });
     await expect(archivedLink).toBeVisible();
-    const archivedSection = archivedLink.locator("xpath=ancestor::section");
+    const archivedSection = archivedLink.locator("xpath=ancestor::section[1]");
     await expect(archivedSection).toHaveCount(1);
     await expect(archivedSection.getByText("Archivadas")).toBeVisible();
 
