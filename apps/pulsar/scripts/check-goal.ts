@@ -1096,7 +1096,7 @@ async function runLateNightOpenCheck(): Promise<void> {
 }
 
 /**
- * RP-26: a goal ends on the day before its horizon. `horizon = today` is the
+ * RP-27: a goal ends on the day before its horizon. `horizon = today` is the
  * edge both comparisons must cross; archived wins over ended.
  */
 async function runEndedCheck(): Promise<void> {
@@ -1109,7 +1109,7 @@ async function runEndedCheck(): Promise<void> {
   const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   try {
     for (const name of ["terminada", "en curso", "archivada"]) {
-      const goal = await createGoal({ name: `check-goal.ts probe — RP-26 ${name}`, horizon: addDays(today, 60) });
+      const goal = await createGoal({ name: `check-goal.ts probe — RP-27 ${name}`, horizon: addDays(today, 60) });
       if (!goal.ok) throw new Error(`runEndedCheck: createGoal failed: ${goal.error}`);
       seeded.push(goal.goalId);
     }

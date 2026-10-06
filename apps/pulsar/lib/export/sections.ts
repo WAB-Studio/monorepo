@@ -5,7 +5,7 @@ import type { GoalReport } from "./report";
 export type Section = "month" | "toDate" | "phases" | "tasks" | "months";
 
 // A goal with no unit measures nothing, so it prints no figure section
-// rather than a zero (RP-33). `month` stays with a unit even when this month
+// rather than a zero (RP-46). `month` stays with a unit even when this month
 // has no amount: the page then prints the reached figure alone. `tasks` is
 // every task of the month, carried first, so a goal with none prints no head.
 export function goalSections(goal: GoalReport): Section[] {

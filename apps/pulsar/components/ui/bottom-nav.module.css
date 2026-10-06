@@ -67,7 +67,7 @@
   display: none;
 }
 
-/* RNP-11, `ArmazonRiel.dc.html`: from 1024px the four tabs are a rail down the
+/* RNP-17, `ArmazonRiel.dc.html`: from 1024px the four tabs are a rail down the
    screen's left edge. The nav is the rail's ground and stretches the page's whole
    height; `.inner` is what sticks to the viewport while the screen scrolls. */
 @media (min-width: 1024px) {

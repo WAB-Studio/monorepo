@@ -29,7 +29,7 @@
   }
 }
 
-/* RNP-11: beside the rail, `app/theme.css`'s row frame. The column fills what
+/* RNP-17: beside the rail, `app/theme.css`'s row frame. The column fills what
    the rail leaves and starts at its edge; the board's padding is 44 over 56. */
 @media (min-width: 1024px) {
   .page {

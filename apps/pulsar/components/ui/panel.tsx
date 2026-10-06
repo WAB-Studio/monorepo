@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import styles from "./panel.module.css";
 
-// The desktop card that groups one part of a screen (RNP-11): white ground,
+// The desktop card that groups one part of a screen (RNP-17): white ground,
 // 1px line, radius 14. Below 1024px it draws nothing, so the phone face is the
 // page's own column. Stack panels as siblings: consecutive ones sit 18px apart.
 export function Panel({

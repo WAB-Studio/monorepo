@@ -1,4 +1,4 @@
-// Drives `loadReport` (`lib/queries/report.ts`, RP-33) the way `scripts/check-
+// Drives `loadReport` (`lib/queries/report.ts`, RP-46) the way `scripts/check-
 // goal.ts` drives `loadGoal`: statements counted off the driver's own wire,
 // the session `harness:mint-session` left standing, `server-only`,
 // `next/headers` and `next/cache` stubbed before the first `@/` import. Every
@@ -128,7 +128,7 @@ before(async () => {
     goalIds.push(created.goalId);
     const commitment = await plan.addCommitment({
       goalId: created.goalId,
-      name: "RP-33 fixture: cantidad",
+      name: "RP-46 fixture: cantidad",
       cadenceKind: "daily",
       satisfaction: "quantity",
       targetQuantity: 10,
@@ -138,11 +138,11 @@ before(async () => {
     return { goalId: created.goalId, commitmentId: commitment.commitmentId };
   }
 
-  const minutes = await goal("RP-33 fixture: minutos", "minutos");
+  const minutes = await goal("RP-46 fixture: minutos", "minutos");
   minutesGoalId = minutes.goalId;
-  const searches = await goal("RP-33 fixture: búsquedas", "searches");
+  const searches = await goal("RP-46 fixture: búsquedas", "searches");
   searchesGoalId = searches.goalId;
-  const archived = await goal("RP-33 fixture: archivada", "minutos");
+  const archived = await goal("RP-46 fixture: archivada", "minutos");
   archivedGoalId = archived.goalId;
 
   for (const [goalId, month, amount] of [
@@ -154,7 +154,7 @@ before(async () => {
   }
   const evidence = await plan.addCommitment({
     goalId: searchesGoalId,
-    name: "RP-33 fixture: evidencia",
+    name: "RP-46 fixture: evidencia",
     cadenceKind: "daily",
     satisfaction: "evidence",
     sourceKey: "reading_lookups",
@@ -163,7 +163,7 @@ before(async () => {
   if (!evidence.ok) throw new Error(`addCommitment(evidence): ${evidence.error}`);
   const phase = await plan.addPhase({
     goalId: minutesGoalId,
-    aim: "RP-33 fixture: fase",
+    aim: "RP-46 fixture: fase del plan",
     startsOn: today,
     endsOn: `${monthFrom(today, 1)}-01`,
   });
@@ -177,21 +177,21 @@ before(async () => {
   // month), and one done task this month whose estimate counts (RP-36).
   const [parent] = await sql<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
-    values (${owner.user_id}, ${minutesGoalId}, 'RP-33 fixture: arrastrada', ${`${monthFrom(today, -1)}-01`})
+    values (${owner.user_id}, ${minutesGoalId}, 'RP-46 fixture: arrastrada', ${`${monthFrom(today, -1)}-01`})
     returning id`;
   await sql`
     insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
-    values (${owner.user_id}, ${minutesGoalId}, 'RP-33 fixture: hija', ${parent.id}, 40)`;
+    values (${owner.user_id}, ${minutesGoalId}, 'RP-46 fixture: hija', ${parent.id}, 40)`;
   const [done] = await sql<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-    values (${owner.user_id}, ${minutesGoalId}, 'RP-33 fixture: hecha', ${`${thisMonth}-01`}, 25)
+    values (${owner.user_id}, ${minutesGoalId}, 'RP-46 fixture: hecha', ${`${thisMonth}-01`}, 25)
     returning id`;
   await sql`
     insert into goals.facts (user_id, goal_id, one_off_id, day)
     values (${owner.user_id}, ${minutesGoalId}, ${done.id}, ${today})`;
 
   // A goal opened two months ago, so last month is closed and has a share.
-  const shares = await goal("RP-33 fixture: cuota", "minutos");
+  const shares = await goal("RP-46 fixture: cuota", "minutos");
   sharesGoalId = shares.goalId;
   await sql`
     update goals.goals set created_at = now() - interval '70 days'
@@ -209,14 +209,14 @@ before(async () => {
     await sql`insert into goals.facts (user_id, goal_id, one_off_id, day)
               values (${owner.user_id}, ${sharesGoalId}, ${id}, ${day})`;
   }
-  await doneOn(await task("RP-33 cuota: hecha", { estimate: 60 }), `${monthFrom(today, -1)}-05`);
-  await task("RP-33 cuota: debe", { estimate: 40 });
-  const half = await task("RP-33 cuota: mitad", {});
-  await doneOn(await task("RP-33 cuota: mitad hecha", { parent: half, month: false, estimate: 10 }), `${monthFrom(today, -1)}-06`);
-  await task("RP-33 cuota: mitad pendiente", { parent: half, month: false, estimate: 15 });
-  await task("RP-33 cuota: sin monto", {});
-  const whole = await task("RP-33 cuota: toda hecha", {});
-  await doneOn(await task("RP-33 cuota: toda hecha hija", { parent: whole, month: false, estimate: 20 }), `${monthFrom(today, -1)}-06`);
+  await doneOn(await task("RP-46 cuota: hecha", { estimate: 60 }), `${monthFrom(today, -1)}-05`);
+  await task("RP-46 cuota: debe", { estimate: 40 });
+  const half = await task("RP-46 cuota: mitad", {});
+  await doneOn(await task("RP-46 cuota: mitad hecha", { parent: half, month: false, estimate: 10 }), `${monthFrom(today, -1)}-06`);
+  await task("RP-46 cuota: mitad pendiente", { parent: half, month: false, estimate: 15 });
+  await task("RP-46 cuota: sin monto", {});
+  const whole = await task("RP-46 cuota: toda hecha", {});
+  await doneOn(await task("RP-46 cuota: toda hecha hija", { parent: whole, month: false, estimate: 20 }), `${monthFrom(today, -1)}-06`);
 
   const archivedResult = await plan.archiveGoal({ goalId: archivedGoalId });
   if (!archivedResult.ok) throw new Error(`archiveGoal: ${archivedResult.error}`);
@@ -226,7 +226,7 @@ before(async () => {
   if (!member) throw new Error("no member identity — run harness:token for this lane");
   const [foreign] = await sql<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)
-    values (${member.id}, 'RP-33 ajena', ${horizon}) returning id`;
+    values (${member.id}, 'RP-46 ajena', ${horizon}) returning id`;
   foreignGoalId = foreign.id;
 });
 
@@ -296,16 +296,16 @@ test("loadReport: phases and the carried task read as the goal holds them", asyn
   const minutes = report.goals.find((goal) => goal.id === minutesGoalId)!;
   assert.deepEqual(
     minutes.phases.map(({ aim, current }) => ({ aim, current })),
-    [{ aim: "RP-33 fixture: fase", current: true }],
+    [{ aim: "RP-46 fixture: fase del plan", current: true }],
   );
   assert.deepEqual(minutes.carried, [
     {
-      name: "RP-33 fixture: arrastrada",
+      name: "RP-46 fixture: arrastrada",
       note: null,
       from: `${monthFrom(today, -1)}-01`,
       owes: 40,
       hasAmount: true,
-      children: [{ name: "RP-33 fixture: hija", note: null, owes: 40, hasAmount: true }],
+      children: [{ name: "RP-46 fixture: hija", note: null, owes: 40, hasAmount: true }],
     },
   ]);
 });
@@ -351,19 +351,19 @@ test("loadReport: a carried parent lists only what is undone, owing its estimate
   const entry = report.goals.find((goal) => goal.id === sharesGoalId)!;
   const from = `${monthFrom(today, -1)}-01`;
   assert.deepEqual(entry.carried, [
-    { name: "RP-33 cuota: debe", note: null, from, owes: 40, hasAmount: true, children: [] },
+    { name: "RP-46 cuota: debe", note: null, from, owes: 40, hasAmount: true, children: [] },
     {
-      name: "RP-33 cuota: mitad",
+      name: "RP-46 cuota: mitad",
       note: null,
       from,
       owes: 15,
       hasAmount: true,
-      children: [{ name: "RP-33 cuota: mitad pendiente", note: null, owes: 15, hasAmount: true }],
+      children: [{ name: "RP-46 cuota: mitad pendiente", note: null, owes: 15, hasAmount: true }],
     },
-    { name: "RP-33 cuota: sin monto", note: null, from, owes: 0, hasAmount: false, children: [] },
+    { name: "RP-46 cuota: sin monto", note: null, from, owes: 0, hasAmount: false, children: [] },
   ]);
   // «toda hecha» finished its children before this month: it is not listed at all.
-  assert.ok(!entry.carried.some((item) => item.name === "RP-33 cuota: toda hecha"));
+  assert.ok(!entry.carried.some((item) => item.name === "RP-46 cuota: toda hecha"));
 });
 
 test("loadReport: a closed month reads its share carried; the current and future months read null", async () => {

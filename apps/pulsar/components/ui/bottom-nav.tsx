@@ -52,7 +52,7 @@ const serverWide = () => false;
 // already-translated strings, never a function, since a Server Component cannot
 // hand this Client one anything but a serializable prop.
 //
-// From 1024px the same links are the desktop rail (RNP-11): the props below
+// From 1024px the same links are the desktop rail (RNP-17): the props below
 // `labels` fill the parts only the rail draws, and none of them renders below
 // that width. The visual mark of a goal's page is CSS from the first paint;
 // `aria-current` follows the width once the page hydrates.

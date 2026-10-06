@@ -31,7 +31,7 @@ type ReportRow = {
   tasks: TaskRow[];
 };
 
-// One statement over every goal not archived (RP-33). RLS narrows it to the
+// One statement over every goal not archived (RP-46). RLS narrows it to the
 // caller's own rows (RNP-05).
 async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
   const rows = await tx.execute<ReportRow>(sql`
@@ -137,7 +137,7 @@ function withinGoal(
 }
 
 /**
- * The export's data (RP-33): every goal not archived, in two transactions
+ * The export's data (RP-46): every goal not archived, in two transactions
  * fanned with `Promise.all` — one over the goals, one over the evidence — so
  * the goal count never lengthens the chain (RNP-03). An evidence rejection
  * degrades to `"unreadable"` and every goal keeps its declared half (RNP-04).

@@ -146,7 +146,7 @@ test("with every goal ended and none open and a suelta due, Hoy names the goal a
   }
 });
 
-test("at 1280 the all-ended message stands in a card, its title and buttons padded inside it (RNP-11)", async ({
+test("at 1280 the all-ended message stands in a card, its title and buttons padded inside it (RNP-17)", async ({
   person,
   browser,
   db,

@@ -3,7 +3,7 @@ import { request as playwrightRequest, type APIResponse, type Page } from "@play
 import messages from "../messages/es/connections.json";
 import { test, expect, type Person } from "./fixtures";
 
-// RP-38, RNP-11 (`ConexionesVacio`, `ConexionesUna`, `ConexionesCreada`,
+// RP-38, RNP-17 (`ConexionesVacio`, `ConexionesUna`, `ConexionesCreada`,
 // `ConexionesRevocada`, `ConexionesFallo`): the key is drawn once, right after
 // it is made, and no later render holds it.
 const NAME = "Claude Code";

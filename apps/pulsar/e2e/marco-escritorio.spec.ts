@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateShort, todayInZone } from "@/lib/zone";
 
-// RNP-11: every signed-in screen stands in the desktop frame — the rail's
+// RNP-17: every signed-in screen stands in the desktop frame — the rail's
 // name, its four entries, today's date and the face toggle at its foot.
 const PLACES = /^(Hoy|Semana|Mes|Metas)$/;
 const ROUTES = [

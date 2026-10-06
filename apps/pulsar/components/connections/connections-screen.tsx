@@ -87,7 +87,7 @@ function Keys({ rows, section, onAsk, busy }: {
 /**
  * `/conexiones` (RP-38): the list of keys and connections, the form that mints
  * one, and the one render that shows its value. The key is state, never props
- * and never storage: leaving or refreshing the page loses it for good (RNP-11).
+ * and never storage: leaving or refreshing the page loses it for good (RNP-17).
  */
 export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; siteUrl: string }) {
   const t = useTranslations("connections");
