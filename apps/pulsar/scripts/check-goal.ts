@@ -50,6 +50,8 @@ import { sql, type SQL } from "drizzle-orm";
 import { assertSuiteDatabase } from "@repo/harness-registry";
 import postgres from "postgres";
 
+import { proveOverlap, wrapPostgres, type DebugCall, type PostgresFactory } from "./plan/wire";
+
 function laneNumber(): number {
   const raw = process.env.HARNESS_LANE?.trim();
   if (!raw) return 1;
@@ -82,11 +84,7 @@ function loadCookies(): StoredCookie[] {
   return state.cookies.map(({ name, value }) => ({ name, value }));
 }
 
-type DebugCall = { at: number; connection: number; query: string; parameters: unknown[] };
-
 const wireCalls: DebugCall[] = [];
-
-type PostgresFactory = (url: string, options?: Record<string, unknown>) => unknown;
 
 // "none": the real registry reader, against the real (empty, for a fresh
 // identity) `reading.lookups`. "stub": the reader replaced with three known
@@ -151,14 +149,7 @@ function installStubs(cookies: StoredCookie[], mode: StubMode): void {
     // untouched, the pool under measurement stays the pool `loadGoal` gets.
     if (request === "postgres") {
       const real = originalLoad(request, parent, isMain) as PostgresFactory;
-      const wrapped: PostgresFactory = (url, options) =>
-        real(url, {
-          ...options,
-          debug: (connection: number, query: string, parameters: unknown[]) => {
-            wireCalls.push({ at: Date.now(), connection, query, parameters });
-          },
-        });
-      return wrapped;
+      return wrapPostgres(real, (call) => wireCalls.push(call));
     }
     return originalLoad(request, parent, isMain);
   };
@@ -207,7 +198,6 @@ function groupByConnection(calls: DebugCall[]): Map<number, DebugCall[]> {
 type GroupAnalysis = {
   connection: number;
   label: string;
-  window: { start: number; end: number };
   beginCount: number;
   commitCount: number;
   rollbackCount: number;
@@ -223,8 +213,6 @@ type GroupAnalysis = {
 
 function analyzeGroup(connection: number, calls: DebugCall[]): GroupAnalysis {
   const label = labelConnection(calls);
-  const times = calls.map((call) => call.at);
-  const window = { start: Math.min(...times), end: Math.max(...times) };
 
   const beginCount = calls.filter((call) => normalizeStatement(call.query).startsWith("begin")).length;
   const commitCount = calls.filter((call) => normalizeStatement(call.query) === "commit").length;
@@ -233,10 +221,35 @@ function analyzeGroup(connection: number, calls: DebugCall[]): GroupAnalysis {
   const applicationCount = calls.length - beginCount - commitCount - rollbackCount - typeFetchCount;
   const bracketOk = beginCount === 1 && commitCount === 1 && rollbackCount === 0;
 
-  return { connection, label, window, beginCount, commitCount, rollbackCount, typeFetchCount, applicationCount, bracketOk };
+  return { connection, label, beginCount, commitCount, rollbackCount, typeFetchCount, applicationCount, bracketOk };
 }
 
 let failed = false;
+
+type OverlapOutcome = { ok: boolean; detail: string };
+
+// Runs one loader with its first transaction held; a chained loader never asks
+// for the second, so the deadline turns into a failed assertion, not a hang.
+async function withOverlap<T>(run: () => Promise<T>): Promise<{ result: T; overlap: OverlapOutcome }> {
+  let result!: T;
+  let loaderError: unknown;
+  try {
+    await proveOverlap(
+      async () => {
+        try {
+          result = await run();
+        } catch (error) {
+          loaderError = error;
+        }
+      },
+      { deadlineMs: 10_000 },
+    );
+  } catch (error) {
+    return { result, overlap: { ok: false, detail: error instanceof Error ? error.message : String(error) } };
+  }
+  if (loaderError) throw loaderError;
+  return { result, overlap: { ok: true, detail: "" } };
+}
 
 function assert(label: string, ok: boolean, detail: string): void {
   console.log(`${ok ? "PASS" : "FAIL"}  ${label} — ${detail}`);
@@ -440,17 +453,18 @@ async function assertBoundsResolveToGoalRow(goalId: string, calls: DebugCall[]):
 }
 
 /**
- * Prints every connection's own window, bracket and statement counts, and
+ * Prints every connection's own bracket and statement counts, and
  * asserts on all of it — the same shape `check-day.ts`'s `reportRun` asserts,
  * plus `assertReadingBounds` above: every connection brackets exactly one
  * `begin` and one `commit`, never a `rollback`, never a second one of
  * either; at most one type-fetch statement per connection, none at all on a
  * warm run; the application statements, net of that bracket and of any
  * legitimate type-fetch, total exactly four — asserted on the cold run too;
- * only when `isWarm`, the two windows overlap in wall-clock time; and the
+ * when the caller passed `overlap`, the second transaction started while the
+ * first was held (decided by call order, cold run included); and the
  * reading statement's own `from`/`to` bounds each name the goal's row.
  */
-function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
+function reportRun(label: string, calls: DebugCall[], isWarm: boolean, overlap?: OverlapOutcome): void {
   const groups = [...groupByConnection(calls).entries()].map(([connection, groupCalls]) =>
     analyzeGroup(connection, groupCalls),
   );
@@ -465,22 +479,10 @@ function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
   for (const group of groups) {
     console.log(
       `  ${group.label.padEnd(8)} cid=${group.connection} ` +
-        `${new Date(group.window.start).toISOString()} -> ${new Date(group.window.end).toISOString()} ` +
-        `(${(group.window.end - group.window.start).toFixed(1)}ms), ` +
         `begin=${group.beginCount} commit=${group.commitCount} rollback=${group.rollbackCount}, ` +
         `application=${group.applicationCount}, type-fetch=${group.typeFetchCount}`,
     );
   }
-
-  const [a, b] = groups.map((group) => group.window);
-  const overlaps = a !== undefined && b !== undefined && Math.max(a.start, b.start) < Math.min(a.end, b.end);
-  const gapMs =
-    a !== undefined && b !== undefined
-      ? a.start <= b.start
-        ? b.start - a.end
-        : a.start - b.end
-      : NaN;
-  console.log(`  overlap = ${overlaps}${overlaps ? "" : `, gap = ${gapMs.toFixed(1)}ms`}`);
 
   const badBrackets = groups.filter((group) => !group.bracketOk);
   assert(
@@ -524,11 +526,11 @@ function reportRun(label: string, calls: DebugCall[], isWarm: boolean): void {
     `${totalApplication} application statement(s) of ${calls.length} on the wire, ${totalTypeFetch} netted out as type-fetch`,
   );
 
-  if (isWarm) {
+  if (overlap) {
     assert(
-      `${label} run's two transactions overlap in wall-clock time`,
-      overlaps,
-      overlaps ? "the second starts before the first ends" : `no overlap, gap = ${gapMs.toFixed(1)}ms`,
+      `${label} run's two transactions overlap: the second starts while the first is held`,
+      overlap.ok,
+      overlap.ok ? "the second began before the first was released" : overlap.detail,
     );
   }
 
@@ -948,9 +950,9 @@ async function runWeeksCheck(): Promise<void> {
     });
 
     const start = wireCalls.length;
-    const view = await loadGoal(goalId);
+    const { result: view, overlap } = await withOverlap(() => loadGoal(goalId));
     const calls = wireCalls.slice(start);
-    reportRun("weeks", calls, true);
+    reportRun("weeks", calls, true, overlap);
     await assertBoundsResolveToGoalRow(goalId, calls);
     if (!view) throw new Error(`runWeeksCheck: loadGoal(${goalId}) returned null — the seeded goal is gone`);
 
@@ -1219,9 +1221,9 @@ async function runPlanMonthsCheck(): Promise<void> {
 
     const today = "2010-10-20";
     const start = wireCalls.length;
-    const before = await loadGoal(goalId, today);
+    const { result: before, overlap } = await withOverlap(() => loadGoal(goalId, today));
     const calls = wireCalls.slice(start);
-    reportRun("plan-months", calls, true);
+    reportRun("plan-months", calls, true, overlap);
     await assertBoundsResolveToGoalRow(goalId, calls);
     if (!before) throw new Error("runPlanMonthsCheck: loadGoal returned null");
 
@@ -1305,24 +1307,19 @@ async function runPlanMonthsCheck(): Promise<void> {
 
 /**
  * `/metas` reads the goals and the evidence on two connections at once, never
- * one after the other. A warm call (the first pays the dial) must show the
- * two transactions' wall-clock windows overlapping, the way `check-day.ts`
- * asserts it for `loadDay`.
+ * one after the other. A warm call must start the second transaction while
+ * the first is held, the way `check-day.ts` asserts it for `loadDay`.
  */
 async function runMetasOverlapCheck(): Promise<void> {
   const { listGoalsForMetas } = await import("@/lib/queries/goal");
   await listGoalsForMetas();
   const start = wireCalls.length;
-  await listGoalsForMetas();
-  const groups = [...groupByConnection(wireCalls.slice(start)).entries()].map(([connection, calls]) =>
-    analyzeGroup(connection, calls),
-  );
-  const [a, b] = groups.map((group) => group.window);
-  const overlaps = a !== undefined && b !== undefined && Math.max(a.start, b.start) < Math.min(a.end, b.end);
+  const { overlap } = await withOverlap(() => listGoalsForMetas());
+  const groups = groupByConnection(wireCalls.slice(start));
   assert(
-    "listGoalsForMetas' two transactions overlap in wall-clock time (warm)",
-    groups.length === 2 && overlaps,
-    `${groups.length} connection(s), overlap = ${overlaps}`,
+    "listGoalsForMetas' two transactions overlap: the second starts while the first is held (warm)",
+    groups.size === 2 && overlap.ok,
+    `${groups.size} connection(s), ${overlap.ok ? "overlapped" : overlap.detail}`,
   );
 }
 
@@ -1336,13 +1333,12 @@ async function runMain(): Promise<void> {
 
   // First call: whatever the pool's connections happen to be, cold after
   // this process's own startup. Its bracket, its type-fetch cap, its
-  // statement count and its reading bounds are asserted like any other run;
-  // only its overlap is not — the user's own decided note names the cold
-  // dial, never a free pass on the rest.
+  // statement count, its overlap and its reading bounds are asserted like
+  // any other run: the barrier holds the first transaction before any dial.
   const coldStart = wireCalls.length;
-  const cold = await loadGoal(goalId);
+  const { result: cold, overlap: coldOverlap } = await withOverlap(() => loadGoal(goalId));
   const coldCalls = wireCalls.slice(coldStart);
-  reportRun("cold", coldCalls, false);
+  reportRun("cold", coldCalls, false, coldOverlap);
   await assertBoundsResolveToGoalRow(goalId, coldCalls);
   if (!cold) throw new Error(`runMain: loadGoal(${goalId}) returned null on the cold call — the seeded goal is gone`);
 
@@ -1354,8 +1350,8 @@ async function runMain(): Promise<void> {
   const warmResults: NonNullable<Awaited<ReturnType<typeof loadGoal>>>[] = [];
   for (let i = 1; i <= WARM_CALLS; i++) {
     const start = wireCalls.length;
-    const result = await loadGoal(goalId);
-    reportRun(`warm-${i}`, wireCalls.slice(start), true);
+    const { result, overlap } = await withOverlap(() => loadGoal(goalId));
+    reportRun(`warm-${i}`, wireCalls.slice(start), true, overlap);
     if (!result) throw new Error(`runMain: loadGoal(${goalId}) returned null on warm-${i} — the seeded goal is gone`);
     warmResults.push(result);
     assert(`the warm-${i} run reads the source`, result.evidence === "read", `evidence = ${result.evidence}`);
