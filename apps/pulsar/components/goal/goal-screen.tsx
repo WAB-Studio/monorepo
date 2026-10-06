@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { type Translator } from "@/i18n/translator";
@@ -11,12 +13,11 @@ import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
 import { planHrefFrom } from "@/lib/plan/return-to";
-import { ShiftProposal } from "@/components/month/task-row";
-import { monthList } from "@/lib/plan/carry";
-import { shiftOfferNow } from "@/lib/plan/shift-offer";
-import { listGoals, loadGoal } from "@/lib/queries/goal";
+import { amountOf } from "@/lib/plan/roadmap";
+import { planMonthList } from "@/lib/plan/roadmap-read";
+import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
-import { isTimeUnit } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 import {
   civilDateInZone,
   civilDayMonthShort,
@@ -90,7 +91,7 @@ function phaseSpanLabel(
  * show and nothing to sum.
  */
 export async function GoalScreen({ goalId }: { goalId: string }) {
-  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
   const t = await getTranslations();
@@ -142,42 +143,55 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   // A goal with no measure has no amount to read, but its months and their
   // tasks stay reachable (`MetaSinMedida.dc.html`).
   const bareMonth = !goal.measureUnit && goal.months.some((row) => row.current);
-  const own = bareMonth
-    ? monthList(goal.tasks, `${today.slice(0, 7)}-01`, today).filter((item) => item.carriedFrom === null)
-    : [];
-  const offer =
-    (month || bareMonth) && !archived && !ended
-      ? shiftOfferNow({
-          today,
-          horizon: goal.horizon,
-          budgets: goal.budgets,
-          months: goal.months,
-          phases: goal.phases,
-          tasks: goal.tasks,
-          shifts: goal.shifts,
-        })
-      : null;
+  const monthKey = `${today.slice(0, 7)}-01`;
+  const own = planMonthList(goal.plan, monthKey).filter((item) => item.carriedFrom === null);
+  const units = await getTranslations("units");
+  const words: TimeWords = {
+    h: (h) => units("h", { h }),
+    min: (min) => units("min", { min }),
+    join: (h, min) => units("join", { h, min }),
+  };
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const monthNames = t.raw("day.monthLong") as string[];
-  const closedName = offer ? monthNames[Number(offer.closedMonth.slice(5, 7)) - 1] : "";
-  const shiftOffer = offer ? (
-    <ShiftProposal
-      goalId={goal.id}
-      goalName={goal.name}
-      month={offer.closedMonth.slice(0, 7)}
-      plan={offer.plan}
-      currentPhase={currentPhase?.name ?? null}
-      hasDoneTasks={goal.tasks.some((task) => task.doneOn !== null)}
-      otherGoals={goals.filter((other) => other.id !== goal.id).map((other) => other.name)}
-      proposal={t("month.shift.carriedOver", {
-        month: closedName.charAt(0).toUpperCase() + closedName.slice(1),
-        share: Math.floor((offer.share.carried * 100) / offer.share.planned),
-      })}
-      see={t("month.shift.see")}
-      until={t("month.shift.until", {
-        date: `${Number(offer.until.slice(8, 10))} de ${monthNames[Number(offer.until.slice(5, 7)) - 1]}`,
-      })}
-    />
-  ) : null;
+  const planEnd = goal.roadmap.end;
+  const planAmount = amountOf(monthKey, goal.plan);
+  const planReached = planMonthList(goal.plan, monthKey)
+    .filter((item) => item.done)
+    .reduce((sum, item) => sum + item.part, 0);
+  // The end carries its year only when it is not this one, as `endLabel` does.
+  const planEndLabel = planEnd
+    ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]}${
+        planEnd.slice(0, 4) === today.slice(0, 4) ? "" : ` de ${planEnd.slice(0, 4)}`
+      }`
+    : null;
+  const planSection =
+    goal.roadmap.state === "empty" ? null : (
+      <Section label={t("roadmap.meta.planLabel")}>
+        <Row
+          href={`/metas/${goal.id}/plan`}
+          name={
+            goal.roadmap.state === "noRhythm"
+              ? t("roadmap.meta.build")
+              : planEndLabel
+                ? t("roadmap.meta.finish", { date: planEndLabel })
+                : t("roadmap.plan.title")
+          }
+          meta={
+            goal.roadmap.state === "planned" && planAmount !== null
+              ? t.rich("roadmap.meta.rhythmLine", {
+                  amount: formatQuantity(planAmount, goal.measureUnit ?? "", words),
+                  reached: formatQuantity(planReached, goal.measureUnit ?? "", words),
+                  planned: formatQuantity(planAmount, goal.measureUnit ?? "", words),
+                  month: monthName,
+                  ...fig,
+                })
+              : undefined
+          }
+          metaVariant="sentence"
+          trailing={<ChevronRight size={16} strokeWidth={1.5} aria-hidden />}
+        />
+      </Section>
+    );
   const monthsLink = (
     <TextLink href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</TextLink>
   );
@@ -190,7 +204,6 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             done: own.filter((item) => item.done).length,
           })}
         </Text>
-        {shiftOffer}
         {monthsLink}
       </Section>
     </Panel>
@@ -233,7 +246,6 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             )}
           </>
         ) : null}
-        {shiftOffer}
         {planned === null && !archived && !ended ? (
           <Button asChild variant="outline">
             <Link href={planHrefFrom(goal.id, today.slice(0, 7), `/metas/${goal.id}`)}>
@@ -246,6 +258,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const before = (
     <>
+      {planSection}
       <Panel>
         <Face on="desktop">
           <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>

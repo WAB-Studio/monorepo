@@ -336,66 +336,83 @@ test("a goal with no measure opens its months, its current month and the task fo
   }
 });
 
-// Calendar-bound as `mes.spec.ts`: «last month» is the month before today, so
-// the window to shift is always open.
-test("a goal whose last month carried over half offers the shift on its month block; accepting moves the plan and the line is gone; at half or archived there is none (RP-48)", async ({
+// `MetaVerPlan.dc.html` (RP-50): the goal leads to its plan with one link row —
+// the plan's end, the rhythm and the month's part. Tasks are in the plan by
+// `in_plan`; the end the row says is the plan's, never read here.
+async function task(
+  db: postgres.Sql,
+  person: Person,
+  goalId: string,
+  name: string,
+  estimate: number,
+  doneOn: string | null,
+) {
+  const [row] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+    values (${person.id}, ${goalId}, ${name}, ${estimate}, true) returning id
+  `;
+  if (doneOn) {
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${goalId}, ${row.id}, ${doneOn}::date)
+    `;
+  }
+}
+
+test("a goal with a rhythm leads to its plan: «el plan», the end, the rhythm and the month's part, one link, no shift line (RP-50)", async ({
   person,
   browser,
   baseURL,
   db,
 }) => {
   const stamp = Date.now();
-  const lastMonth = `${dateToCivilDate(new Date(civilDateToDate(monthStart).getTime() - 86400000)).slice(0, 7)}-01`;
-  const lastName = MONTHS[Number(lastMonth.slice(5, 7)) - 1];
-  const task = async (goalId: string, name: string, month: string, doneOn: string | null) => {
-    const [row] = await db<{ id: string }[]>`
-      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-      values (${person.id}, ${goalId}, ${name}, ${month}::date, 100) returning id
-    `;
-    if (doneOn) {
-      await db`
-        insert into goals.facts (user_id, goal_id, one_off_id, day)
-        values (${person.id}, ${goalId}, ${row.id}, ${doneOn}::date)
-      `;
-    }
-  };
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   const page = await context.newPage();
   try {
-    const moved = await seedGoal(db, person, { name: `Meta corre ${stamp}`, budget: 600 });
-    await task(moved, `Sigue ${stamp}`, lastMonth, null);
-    const half = await seedGoal(db, person, { name: `Meta mitad ${stamp}`, budget: 600 });
-    await task(half, `Hecha ${stamp}`, lastMonth, lastMonth);
-    await task(half, `Falta ${stamp}`, lastMonth, null);
-    const archived = await seedGoal(db, person, { name: `Meta archivada ${stamp}`, budget: 600, archived: true });
-    await task(archived, `Sigue ${stamp}`, lastMonth, null);
+    const id = await seedGoal(db, person, { name: `Meta plan ${stamp}`, budget: null, horizon: plusDays(900) });
+    await db`update goals.goals set rhythm = 720 where id = ${id}`;
+    await task(db, person, id, `Hecha ${stamp}`, 300, today);
+    await task(db, person, id, `Falta ${stamp}`, 600, null);
 
-    const line = `${lastName.charAt(0).toUpperCase()}${lastName.slice(1)} arrastró 100 %. Puedes correr un mes lo que sigue de esta meta.`;
     for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 800 });
-      for (const none of [half, archived]) {
-        await page.goto(`/metas/${none}`);
-        await expect(seen(page, monthName)).toHaveCount(1);
-        await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
-      }
+      await page.goto(`/metas/${id}`);
+      await expect(seen(page, "el plan")).toHaveCount(1);
+      const row = page.locator(`a[href="/metas/${id}/plan"]`);
+      await expect(row).toHaveCount(1);
+      await expect(row).toContainText(/^A este ritmo terminas el \d+ de \p{L}+/u);
+      await expect(row).toContainText(`Ritmo 12 h al mes · 5 h de 12 h en ${monthName}`);
+      await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
 
-    await page.setViewportSize({ width: 360, height: 800 });
-    await page.goto(`/metas/${moved}`);
-    await expect(seen(page, line)).toHaveCount(1);
-    await expect(page.getByText(/^se puede hasta el \d+ de /)).toBeVisible();
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await expect(seen(page, line)).toHaveCount(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
-    await page.getByRole("button", { name: "ver qué se corre" }).click();
-    const sheet = page.getByRole("dialog");
-    await expect(sheet.getByRole("heading", { name: "Correr un mes lo que sigue" })).toBeVisible();
-    await sheet.getByRole("button", { name: "Correr un mes" }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await page.reload();
-    await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
+test("a goal with tasks and no rhythm reads «Armar el plan» with no second line; one with no task in the plan has no «el plan» section (RP-50)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  const page = await context.newPage();
+  try {
+    const bare = await seedGoal(db, person, { name: `Meta sin ritmo ${stamp}`, budget: null });
+    await task(db, person, bare, `Falta ${stamp}`, 600, null);
+    const empty = await seedGoal(db, person, { name: `Meta vacía ${stamp}`, budget: null });
+    await db`update goals.goals set rhythm = 720 where id = ${empty}`;
+
+    await page.goto(`/metas/${bare}`);
+    const row = page.locator(`a[href="/metas/${bare}/plan"]`);
+    await expect(row).toHaveText("Armar el plan");
+    await page.goto(`/metas/${empty}`);
+    await expect(seen(page, "el plan")).toHaveCount(0);
+    await expect(page.locator(`a[href="/metas/${empty}/plan"]`)).toHaveCount(0);
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
