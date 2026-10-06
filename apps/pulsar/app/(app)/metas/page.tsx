@@ -19,10 +19,10 @@ export default async function GoalsIndexPage() {
     getTranslations("connections.entry"),
   ]);
   const connect = (
-    <Button asChild variant="outline" block>
+    <Button asChild variant="outline" block stack>
       <Link href="/conexiones">
         {t("title")}
-        <Text variant="meta" end>
+        <Text variant="meta">
           {t("hint")}
         </Text>
       </Link>

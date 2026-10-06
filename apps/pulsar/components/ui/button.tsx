@@ -32,6 +32,9 @@ type PulsarControlProps = {
   tap?: TapSize;
   // Runs the control to the row's full width, for a sheet's own commit button.
   block?: boolean;
+  // Lays the label and a hint under it in a column, left-aligned: a control
+  // that names an act and says what it does (`MetasCentro`'s plan cards).
+  stack?: boolean;
   variant?: Variant;
   tone?: Tone;
 };
@@ -45,7 +48,7 @@ const variants: Record<Variant, string | undefined> = {
 };
 
 function classes(
-  { tap, block, variant = "solid", tone }: PulsarControlProps,
+  { tap, block, stack, variant = "solid", tone }: PulsarControlProps,
   className: string | undefined,
 ): string {
   return [
@@ -54,6 +57,7 @@ function classes(
     variants[variant],
     tone === "accent" ? styles.accentTone : undefined,
     block ? styles.block : undefined,
+    stack ? styles.stack : undefined,
     className,
   ]
     .filter(Boolean)
@@ -61,13 +65,13 @@ function classes(
 }
 
 export const Button = forwardRef<HTMLButtonElement, Narrowed<ButtonProps> & PulsarControlProps>(
-  function Button({ tap, block, variant = "solid", tone, className, ...props }, ref) {
+  function Button({ tap, block, stack, variant = "solid", tone, className, ...props }, ref) {
     return (
       <ThemesButton
         ref={ref}
         {...props}
         variant={variant}
-        className={classes({ tap, block, variant, tone }, className)}
+        className={classes({ tap, block, stack, variant, tone }, className)}
       />
     );
   },
