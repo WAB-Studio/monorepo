@@ -162,12 +162,19 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     (a, b) => Number(!isCarried(a, day)) - Number(!isCarried(b, day)),
   );
 
+  function noteEyebrow(goalId: string | null) {
+    const goal = goals.find((candidate) => candidate.id === goalId);
+    return goal ? t("oneOffs.note.eyebrowGoal", { goal: goal.name }) : t("oneOffs.note.eyebrowLoose");
+  }
+
   function oneOffRow(oneOff: OneOffSummary) {
     return (
       <OneOffRow
         key={oneOff.id}
         oneOffId={oneOff.id}
         name={oneOff.name}
+        note={oneOff.note}
+        noteEyebrow={noteEyebrow(oneOff.goalId)}
         carriedFrom={
           isCarried(oneOff, day)
             ? dayPhrase("day.oneOffs.carriedFrom", oneOff.day, t)
@@ -350,6 +357,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             name={task.name}
             estimate={task.estimate}
             unit={goal.measureUnit as string}
+            note={task.note}
+            noteEyebrow={noteEyebrow(goal.id)}
           />
         ) : null}
       </>
@@ -431,6 +440,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 key={done.id}
                 factId={done.factId}
                 name={done.name}
+                oneOffId={done.id}
+                note={done.note}
+                noteEyebrow={noteEyebrow(done.goalId)}
                 time={timeInZone(done.writtenAt)}
               />
             ))}

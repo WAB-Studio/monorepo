@@ -42,11 +42,13 @@ export async function DaylessScreen() {
           id: oneOff.id,
           name: oneOff.name,
           goalName: oneOff.goalName ?? undefined,
+          note: oneOff.note,
         }))}
         scheduled={scheduled.map((oneOff) => ({
           id: oneOff.id,
           name: oneOff.name,
           goalName: oneOff.goalName ?? undefined,
+          note: oneOff.note,
           scheduled: { day: oneOff.day, label: when(oneOff.day) },
         }))}
       />

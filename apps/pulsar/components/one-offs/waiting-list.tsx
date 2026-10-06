@@ -12,6 +12,7 @@ export type WaitingItem = {
   id: string;
   name: string;
   goalName?: string;
+  note: string | null;
   // Present for a scheduled one-off: its day and that day in words.
   scheduled?: { day: string; label: string };
 };
@@ -41,6 +42,7 @@ export function WaitingList({ dayless, scheduled }: WaitingListProps) {
         oneOffId={item.id}
         name={item.name}
         goalName={item.goalName}
+        note={item.note}
         scheduled={item.scheduled}
         onDone={setDoneName}
       />
