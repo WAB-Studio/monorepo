@@ -97,6 +97,7 @@ type OneOffRow = {
   goal_id: string | null;
   name: string;
   day: string | null;
+  note: string | null;
 };
 
 // The one statement's whole shape. `goals` and `one_offs` are fetched here
@@ -110,11 +111,18 @@ type DoneOneOffRow = {
   name: string;
   fact_id: string;
   written_at: string;
+  note: string | null;
 };
 
-type MonthTaskRow = { goal_id: string; id: string; name: string; estimate: number | null };
+type MonthTaskRow = {
+  goal_id: string;
+  id: string;
+  name: string;
+  estimate: number | null;
+  note: string | null;
+};
 
-export type MonthTask = { id: string; name: string; estimate: number | null };
+export type MonthTask = { id: string; name: string; estimate: number | null; note: string | null };
 
 // Every evidence commitment of a goal, retired ones included: the source keys
 // a goal's measure reads, as `loadGoal` reads them.
@@ -239,7 +247,8 @@ async function queryGoalsRow(
                  'goal_id', o.goal_id,
                  'name', o.name,
                  'fact_id', f.id,
-                 'written_at', f.written_at
+                 'written_at', f.written_at,
+                 'note', o.note
                ) order by f.written_at), '[]'::json)
          from "goals"."one_offs" o
          join "goals"."facts" f on f.one_off_id = o.id
@@ -248,11 +257,12 @@ async function queryGoalsRow(
                  'goal_id', t.goal_id,
                  'id', t.id,
                  'name', t.name,
-                 'estimate', t.estimate
+                 'estimate', t.estimate,
+                 'note', t.note
                )), '[]'::json)
          from (
            select distinct on (coalesce(p.goal_id, o.goal_id))
-                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate
+                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate, o.note
              from "goals"."one_offs" o
              left join "goals"."one_offs" p on p.id = o.parent_id
              join "goals"."goals" g on g.id = coalesce(p.goal_id, o.goal_id) and ${openGoal("g", day)}
@@ -397,6 +407,7 @@ export type OneOffSummary = {
   goalId: string | null;
   name: string;
   day: string | null;
+  note: string | null;
 };
 
 // A one-off whose fact lands on the day drawn: RP-19's "done stays", read
@@ -406,12 +417,13 @@ export type DoneOneOffSummary = {
   goalId: string | null;
   name: string;
   factId: string;
+  note: string | null;
   // The instant the fact was written; the screen prints its time of day.
   writtenAt: string;
 };
 
 function toOneOffSummary(row: OneOffRow): OneOffSummary {
-  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day };
+  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note };
 }
 
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
@@ -529,7 +541,7 @@ function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, Month
   const tasks: Record<string, MonthTask | null> = {};
   for (const goal of goals) {
     const next = row.month_tasks.find((task) => task.goal_id === goal.id);
-    tasks[goal.id] = next ? { id: next.id, name: next.name, estimate: next.estimate } : null;
+    tasks[goal.id] = next ? { id: next.id, name: next.name, estimate: next.estimate, note: next.note } : null;
   }
   return tasks;
 }
@@ -695,6 +707,7 @@ export async function loadDay(day: string): Promise<{
       name: o.name,
       factId: o.fact_id,
       writtenAt: o.written_at,
+      note: o.note,
     })),
     daylessCount: row.dayless_count,
     scheduledCount: row.scheduled_count,
