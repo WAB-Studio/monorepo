@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Archivo, DM_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
+import { getTranslations } from "next-intl/server";
 import { Theme } from "@radix-ui/themes";
 
 import { ThemeScript } from "@/components/theme-script";
@@ -23,6 +25,13 @@ const mono = DM_Mono({
   fallback: ["ui-monospace", "monospace"],
   display: "swap",
 });
+
+// Every page names its place; the template adds the brand. A page without a
+// title reads the default.
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common");
+  return { title: { template: `%s · ${t("brand")}`, default: t("brand") } };
+}
 
 // No dynamic API here on purpose: `app/(app)/layout.tsx` is what calls
 // `getPerson()` and draws the nav, scoped to the signed-in screens alone —

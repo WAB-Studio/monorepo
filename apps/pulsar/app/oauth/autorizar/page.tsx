@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
@@ -34,6 +35,12 @@ function ownUrl(query: Query): string {
   }
 
   return `/oauth/autorizar?${params.toString()}`;
+}
+
+// Static per route: no title reads a goal or costs a statement (RNP-01).
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common.titles");
+  return { title: t("authorize") };
 }
 
 export default async function AuthorizePage({ searchParams }: { searchParams: Promise<Query> }) {

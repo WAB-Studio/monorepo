@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 
 import { TaskForm } from "@/components/month/task-form";
@@ -13,6 +15,12 @@ const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UT
  * answer `notFound()` — the screens draw no way in to them, so a direct visit
  * is refused the way `fases/nueva` refuses an archived goal.
  */
+// Static per route: no title reads a goal or costs a statement (RNP-01).
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common.titles");
+  return { title: t("newTask") };
+}
+
 export default async function NewTaskPage({
   params,
   searchParams,

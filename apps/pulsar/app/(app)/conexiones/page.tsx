@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -8,6 +9,12 @@ import { getPerson } from "@/lib/session";
 import { civilDateInZone, civilDayMonthShort, timeInZone, todayInZone } from "@/lib/zone";
 
 const dayOf = (instant: string) => civilDayMonthShort(civilDateInZone(new Date(instant)));
+
+// Static per route: no title reads a goal or costs a statement (RNP-01).
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common.titles");
+  return { title: t("connections") };
+}
 
 // The auth gate, the list, and the words each row reads. The key a person just
 // made is not here: it lives in the screen's state and nowhere a render reaches.
