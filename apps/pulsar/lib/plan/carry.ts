@@ -13,6 +13,8 @@ export type Task = {
   doneOn: string | null;
   // The one-off's own fact, for `undoFact`; absent where a caller never reads it.
   factId?: string | null;
+  // Absent where a builder never reads it.
+  note?: string | null;
 };
 
 export type MonthItem = {

@@ -296,7 +296,7 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
         toDate: { planned: 1350, reached: 570 },
         phases: [{ aim: "Arrancar", startsOn: "2026-08-17", endsOn: "2026-11-01", current: true }],
         carried: [
-          { name: "Capítulo 1", from: "2026-09-01", owes: 300, hasAmount: true, children: [{ name: "Leer", owes: 300, hasAmount: true }] },
+          { name: "Capítulo 1", note: null, from: "2026-09-01", owes: 300, hasAmount: true, children: [{ name: "Leer", note: null, owes: 300, hasAmount: true }] },
         ],
         months: [{ month: "2026-09-01", planned: 600, reached: 450, current: false, past: true, carried: 50 }],
         weeks: [],

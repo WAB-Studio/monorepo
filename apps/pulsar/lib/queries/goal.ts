@@ -96,6 +96,7 @@ export type TaskRow = {
   done_on: string | null;
   // The id of its own fact, what `undoFact` takes back; null while undone.
   fact_id?: string | null;
+  note: string | null;
 };
 
 // What a commitment reads as on the goal's own screen: its cadence and what
@@ -397,6 +398,7 @@ export function goalFigures(input: {
     estimate: task.estimate,
     doneOn: task.done_on,
     factId: task.fact_id ?? null,
+    note: task.note,
   }));
   // A done task's estimate counts as declared quantity (RP-36): feeds the
   // measure alone, never a commitment's slot.
@@ -628,6 +630,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       estimate: task.estimate,
       doneOn: task.done_on,
       factId: null,
+      note: task.note,
     }));
     if (unit === null) {
       const items = monthList(tasks, month, today);

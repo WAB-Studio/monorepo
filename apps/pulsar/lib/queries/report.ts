@@ -163,12 +163,14 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
             .filter((child) => child.doneOn === null)
             .map((child) => ({
               name: child.name,
+              note: child.note ?? null,
               owes: child.estimate ?? 0,
               hasAmount: child.estimate !== null,
             }));
           const leaf = item.children.length === 0;
           return {
             name: item.task.name,
+            note: item.task.note ?? null,
             from: item.carriedFrom as string,
             owes: leaf ? (item.task.estimate ?? 0) : children.reduce((sum, c) => sum + c.owes, 0),
             hasAmount: leaf ? item.task.estimate !== null : children.some((c) => c.hasAmount),
