@@ -61,18 +61,15 @@ export function DoneOneOffRow({ factId, name, time, note, oneOffId, noteEyebrow 
       <Row
         leading={<Mark state="declared" />}
         aria-label={t("day.doneOneOffs.undoLabel", { name })}
-        name={
-          <Text as="span" tone="muted">
-            {name}
-          </Text>
-        }
+        name={name}
+        quiet
         meta={time}
         onClick={handleUndo}
         end={noteButton}
         disabled={pending}
       />
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" tone="muted" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

@@ -76,7 +76,7 @@ export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow }: On
         disabled={pending}
       />
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" tone="muted" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

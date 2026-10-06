@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { File, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
-import { IconButton, Mark, Row, Text } from "@/components/ui";
+import { Figure, IconButton, Mark, Row, Text } from "@/components/ui";
 
 import { NoteSheet } from "./note-sheet";
 import { ScheduleSheet } from "./schedule-sheet";
@@ -48,9 +48,16 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }
     });
   }
 
-  let meta: string | undefined;
-  if (scheduled && goalName) meta = t("oneOffs.whenWithGoal", { when: scheduled.label, goal: goalName });
-  else if (scheduled) meta = scheduled.label;
+  // A goal's name is a word, so a line that carries it is a sentence; the day
+  // inside it stays a figure.
+  let meta: ReactNode;
+  if (scheduled && goalName) {
+    meta = t.rich("oneOffs.whenWithGoal", {
+      when: scheduled.label,
+      goal: goalName,
+      fig: (chunks) => <Figure value={chunks} variant="meta" />,
+    });
+  } else if (scheduled) meta = scheduled.label;
   else if (goalName) meta = t("oneOffs.fromGoal", { goal: goalName });
 
   const noteButton = (
@@ -73,6 +80,7 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }
         leadingLabel={t("oneOffs.markLabel", { name })}
         name={name}
         meta={meta}
+        metaVariant={goalName ? "sentence" : "meta"}
         onLeadingClick={handleComplete}
         preview={note}
         end={noteButton}
@@ -80,7 +88,7 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }
         disabled={pending}
       />
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" tone="muted" variant="sentence">
           {t(error)}
         </Text>
       ) : null}
