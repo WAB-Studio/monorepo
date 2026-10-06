@@ -113,6 +113,8 @@ type WorkerFixtures = {
 // one-off and a fact with no goal hang off the person alone. Sources are the
 // app's catalogue, not a person's rows.
 async function clearPerson(sql: postgres.Sql, id: string): Promise<void> {
+  await sql`delete from goals.access_tokens where user_id = ${id}`;
+  await sql`delete from goals.model_calls where user_id = ${id}`;
   await sql`delete from goals.facts where user_id = ${id}`;
   await sql`delete from goals.one_offs where user_id = ${id}`;
   await sql`delete from goals.commitments where user_id = ${id}`;

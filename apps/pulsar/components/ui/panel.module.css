@@ -37,3 +37,50 @@
     margin-block-start: 0;
   }
 }
+
+/* `MesCorrer.dc.html`'s proposal: a box at every width, phone included. */
+.bordered,
+.bordered.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 16px;
+  background: var(--pulsar-raised);
+  border: 1.5px solid var(--pulsar-border);
+  border-radius: 12px;
+}
+
+.stacked {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .stacked.panel {
+    display: flex;
+    gap: 0;
+  }
+}
+
+.grid {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+
+  .grid > .panel + .panel {
+    margin-block-start: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

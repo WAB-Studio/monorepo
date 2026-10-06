@@ -3,7 +3,7 @@ import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import postgres from "postgres";
 
 import { test, expect, mintDisposablePerson } from "./fixtures";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // RNP-11 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
 // `RevisionEscritorio`, `HojaEscritorio`): at 1280 × 800 every route is the
@@ -24,6 +24,8 @@ function shift(day: string, by: number): string {
 
 const today = todayInZone();
 const yesterday = shift(today, -1);
+// Days of the Monday-to-Sunday week already behind today: 0 on a Monday, 6 on a Sunday.
+const daysBehind = weekOf(today).indexOf(today);
 const stamp = Date.now();
 const LONG_GOAL = `Meta de medición a 1280 con un nombre bastante largo para forzar el ajuste ${stamp}`;
 const QUANTITY = `Leer páginas del libro con un nombre largo ${stamp}`;
@@ -187,7 +189,9 @@ const ROUTES: Route[] = [
     ready: (p) => expect(p.getByText(TAP).first()).toBeVisible(),
     min: 4,
   },
-  { name: "/semana", path: () => "/semana", ready: (p) => expect(p.getByRole("table")).toBeVisible(), min: 5 },
+  // Four fixed controls plus one link per past day of the week (RP-06):
+  // a Monday draws none, today is never a link.
+  { name: "/semana", path: () => "/semana", ready: (p) => expect(p.getByRole("table")).toBeVisible(), min: 4 + daysBehind },
   { name: "/sueltas", path: () => "/sueltas", ready: (p) => expect(p.getByText(SCHEDULED).first()).toBeVisible(), min: 5 },
   { name: "/metas", path: () => "/metas", ready: (p) => expect(p.getByText(ENDED).first()).toBeVisible(), min: 5 },
   { name: "/metas/nueva", path: () => "/metas/nueva", ready: (p) => expect(p.getByLabel("nombre")).toBeVisible(), min: 5 },
@@ -239,7 +243,9 @@ for (const route of ROUTES) {
       const rail = await railBox(page);
       expect(rail).toMatchObject({ x: 0, y: 0, width: RAIL });
       expect(rail.height).toBeGreaterThan(400);
-      await expect(page.getByRole("navigation").getByRole("link")).toHaveCount(3);
+      await expect(
+        page.getByRole("navigation").getByRole("link").filter({ hasText: /^(Hoy|Semana|Mes|Metas)$/ }),
+      ).toHaveCount(4);
       await expect(page.getByRole("navigation").getByText("Bitácora")).toBeVisible();
 
       // Two toggles would be the phone face drawn beside the rail's own.
@@ -306,7 +312,7 @@ worldTest("the move sheet on /sueltas opens centred at 480 px at 1280 (RNP-11)",
   }
 });
 
-// The phone face runs to 1023: the nav a bar at the foot, no table, one toggle.
+// The phone face runs to 1023: the nav four tabs fixed at the foot, no table, one toggle.
 for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
   worldTest(`${path} is still the phone face at 1023 (RNP-11)`, async ({ browser, baseURL, world }) => {
     const { context, page } = await signedIn(browser, baseURL, world, 1023, 740);
@@ -316,9 +322,8 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
 
       const nav = await railBox(page);
       expect(nav).toMatchObject({ x: 0, width: 1023 });
-      // The bar closes the column: under the screen, never beside it.
-      const main = (await page.getByRole("main").boundingBox())!;
-      expect(nav.y).toBeGreaterThanOrEqual(main.y + main.height - 1);
+      // The bar is fixed to the viewport's foot, under the screen, never beside it.
+      expect(nav.y + nav.height).toBe(740);
       expect(nav.height).toBeLessThan(100);
       await expect(page.getByRole("table")).toHaveCount(0);
       await expect(page.getByRole("navigation").getByText("Bitácora")).toBeHidden();
@@ -521,8 +526,8 @@ deskTest("at 1024 no day header and no tally on Semana wraps (module 88)", async
           return { text: (el.textContent ?? "").trim(), lines: tops.size };
         }),
     );
-    // Seven day headers and the tallies of the days up to today.
-    expect(lines.length).toBeGreaterThanOrEqual(9);
+    // Seven day headers and the tallies of the days up to and including today.
+    expect(lines.length).toBeGreaterThanOrEqual(7 + daysBehind + 1);
     expect(lines.filter((entry) => entry.lines > 1)).toEqual([]);
   } finally {
     await context.close();

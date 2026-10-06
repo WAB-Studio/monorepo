@@ -44,7 +44,7 @@ async function addQuantityCommitment(
   await openNewCommitmentForm(page, goalId);
   await page.getByLabel("qué es").fill(name);
   await page.getByRole("button", { name: "un número", exact: true }).click();
-  await page.getByLabel("cantidad").fill(String(target));
+  await page.getByLabel("cantidad", { exact: true }).fill(String(target));
   await page.getByLabel("unidad").fill(unit);
   await page.getByRole("button", { name: "Añadirlo" }).click();
   await page.waitForURL(`**/metas/${goalId}`);
@@ -119,9 +119,35 @@ test("two rapid taps on an undone row leave exactly one fact (RNP-02's own guard
     await page.goto("/");
     const row = page.locator("button", { hasText: name });
 
-    await Promise.all([row.click(), row.click()]);
+    // The first tap's action is held in flight, so the second tap lands while
+    // the row is pending whatever the database's speed. Racing two clicks
+    // proved nothing: Playwright's second click waits for the button to be
+    // enabled and, on a fast database, undoes the first.
+    const actionCalls: string[] = [];
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST" || !request.headers()["next-action"]) {
+        await route.continue();
+        return;
+      }
+      actionCalls.push(request.url());
+      if (actionCalls.length === 1) await held;
+      await route.continue();
+    });
+
+    await row.click();
+    await expect(row).toBeDisabled();
+    await expect.poll(() => actionCalls.length).toBe(1);
+    await row.click({ force: true });
+    release();
+
     await expect(row.locator("svg")).toBeVisible();
     await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
+    expect(actionCalls).toHaveLength(1);
   } finally {
     await deleteGoal(db, personId, goalId);
   }
@@ -136,7 +162,8 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
   const goalId = await createGoal(page, `Meta cantidad ${Date.now()}`);
   await addQuantityCommitment(page, goalId, name, 10, "minutos");
   const note = `nota de prueba ${Date.now()}`;
-  const chosen = 25;
+  // Off the 10-minute spread's chips, so the sheet reopens on its own field.
+  const chosen = 27;
 
   try {
     const id = await commitmentId(db, personId, name);
@@ -148,13 +175,13 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
     await expect(sheet).toBeVisible();
 
     await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
-    await sheet.getByLabel("Otra cantidad").fill(String(chosen));
+    await sheet.getByLabel("otro número, en minutos").fill(String(chosen));
     await sheet.getByLabel("Una línea, si quieres").fill(note);
     await sheet.getByRole("button", { name: "Anotar" }).click();
     await expect(sheet).toBeHidden();
 
     // What was logged, never the plan's own target (RP-04's own "done row").
-    await expect(row).toContainText(`${chosen} minutos`);
+    await expect(row).toContainText(`${chosen} min`);
     await expect(page.getByText(note)).toBeVisible();
     await expect.poll(() => factsFor(db, id).then((rows) => rows.length)).toBe(1);
 
@@ -162,7 +189,7 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
     // «Deshacer» beside «Cambiar».
     await row.click();
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByLabel("Otra cantidad")).toHaveValue(String(chosen));
+    await expect(sheet.getByLabel("otro número, en minutos")).toHaveValue(String(chosen));
     await expect(sheet.getByLabel("Una línea, si quieres")).toHaveValue(note);
     await expect(sheet.getByRole("button", { name: "Cambiar" })).toBeVisible();
 
@@ -196,7 +223,7 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
-    await sheet.getByLabel("Otra cantidad").fill("25");
+    await sheet.getByLabel("otro número, en minutos").fill("25");
     await sheet.getByRole("button", { name: "Anotar" }).click();
     await expect(sheet).toBeHidden();
 
@@ -211,7 +238,9 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     // goal reading 55).
     await row.click();
     await expect(sheet).toBeVisible();
-    await sheet.getByLabel("Otra cantidad").fill("30");
+    // 25 is one of the 10-minute spread's chips, so the sheet reopens on chips.
+    await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
+    await sheet.getByLabel("otro número, en minutos").fill("30");
     await sheet.getByRole("button", { name: "Cambiar" }).click();
     await expect(sheet).toBeHidden();
 
@@ -219,11 +248,14 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     expect(rows).toHaveLength(1);
     expect(rows[0].quantity).toBe(30);
 
-    await expect(row).toContainText("30 minutos");
+    await expect(row).toContainText("30 min");
 
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText(/30\s*minutos/)).toBeVisible();
-    await expect(page.getByText(/55\s*minutos/)).toHaveCount(0);
+    // The goal's total, in hours and minutes (RP-35): the figure reads the
+    // one fact, never both summed into «55 min».
+    // First of the two: the total, then the month's reached figure under it (RP-28).
+    await expect(page.getByText("30 min", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("55 min", { exact: true })).toHaveCount(0);
   } finally {
     await deleteGoal(db, personId, goalId);
   }

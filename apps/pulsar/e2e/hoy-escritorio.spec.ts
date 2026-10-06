@@ -82,17 +82,21 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     await expect(page.locator("main")).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
 
-    const goalLeft = await box(page.getByText(`Meta con cifra ${stamp}`, { exact: true }));
-    const goalPlain = await box(page.getByText(`Meta sin cifra ${stamp}`, { exact: true }));
-    // The figure is named by its unit, never by the goal's `measure_name`.
-    const label = page.getByText("min", { exact: true });
+    // The goal's name also heads its figure card: the first match is the left column's.
+    const goalLeft = await box(page.getByRole("main").getByText(`Meta con cifra ${stamp}`, { exact: true }).first());
+    const goalPlain = await box(page.getByRole("main").getByText(`Meta sin cifra ${stamp}`, { exact: true }));
+    // A time-unit card is headed by the goal's name, never the unit word (RP-35).
+    const card = page.getByText("esta semana", { exact: true }).locator("xpath=ancestor::div[.//a][1]");
+    const label = card.getByText(`Meta con cifra ${stamp}`, { exact: true });
+    await expect(label).toBeVisible();
+    await expect(card.locator("[class*='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
+    await expect(card.locator("[class*='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
     const figure = await box(label);
     const sueltas = await box(page.getByText("Sueltas", { exact: true }));
     const waiting = await box(page.getByRole("link", { name: "2 esperan" }));
     const doneLabel = await box(page.getByText("Hechas hoy", { exact: true }));
 
     // The figure card carries the number the review's current week reads.
-    const card = page.locator("section, div").filter({ has: label }).last();
     await expect(card).toContainText(`${revisionNumber}`);
     await expect(card).toContainText("esta semana");
     await expect(card.getByRole("link", { name: "Ver por semana" })).toHaveAttribute(
@@ -112,6 +116,9 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     // A goal with no measure draws no card of its own.
     await expect(page.getByText("esta semana", { exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1, name: "Hoy" })).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
@@ -225,6 +232,53 @@ test("a one-off done at a known instant reads its HH:mm in «hechas hoy» (RP-19
     await expect(row).toContainText("19:40");
   } finally {
     await context.close();
+    await db`delete from goals.one_offs where user_id = ${person.id}`;
+  }
+});
+
+test("at 1280 a goal in a time unit heads its card with its name and one in kilómetros keeps the unit word (RP-35)", async ({
+  person,
+  browser,
+  db,
+}) => {
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  const stamp = Date.now();
+  await seedGoals(db, person.id, stamp);
+  const [km] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+    values (${person.id}, ${`Meta rodaje ${stamp}`}, ${plusDays(90)}, ${`rodaje ${stamp}`}, 'kilómetros') returning id
+  `;
+  const [rodaje] = await db<{ id: string }[]>`
+    insert into goals.commitments
+      (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+    values (${person.id}, ${km.id}, ${`Rodar ${stamp}`}, 'daily', 'quantity', 5, 'kilómetros') returning id
+  `;
+  await db`
+    insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
+    values (${person.id}, ${rodaje.id}, ${km.id}, ${todayInZone()}, 7)
+  `;
+
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    await expect(page.getByText("esta semana", { exact: true })).toHaveCount(2);
+    const timeCard = page
+      .getByText("esta semana", { exact: true })
+      .locator("xpath=ancestor::div[.//a][1]")
+      .filter({ hasText: "12 min" });
+    await expect(timeCard.getByText(`Meta con cifra ${stamp}`, { exact: true })).toBeVisible();
+    await expect(timeCard.locator("[class*='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
+    await expect(timeCard.locator("[class*='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
+    const kmCard = page
+      .getByText("esta semana", { exact: true })
+      .locator("xpath=ancestor::div[.//a][1]")
+      .filter({ hasText: "7" })
+      .filter({ hasText: "kilómetros" });
+    await expect(kmCard.getByText("kilómetros", { exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
     await db`delete from goals.one_offs where user_id = ${person.id}`;
   }
 });

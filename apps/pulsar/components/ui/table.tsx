@@ -1,6 +1,11 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { formatFigureValue } from "./format-figure";
+import { isTimeUnit, type TimeWords } from "@/lib/units/time";
+
+import { TimeParts, useTimeWords } from "./figure";
+import { formatFigureValue, isTimeFigure } from "./format-figure";
 import styles from "./table.module.css";
 
 // docs/pulsar/DESIGN.md, the review (RP-17): one set of props, two faces. The
@@ -18,6 +23,10 @@ export type TableRow = {
   note?: ReactNode;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
+  // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
+  // The lead cell must then be plain text: it is what the link names, so a
+  // link of its own there would nest. Every other cell stays text.
+  href?: string;
 };
 
 type TableProps = {
@@ -29,24 +38,36 @@ type TableProps = {
   // Indexes into `columns` set as figures. The first is the one figure the
   // phone shows and the one the wide face sets at the measure's size.
   figures?: readonly number[];
-  // Beside the phone's figure; the wide face names it in its header.
+  // Beside the phone's figure; the wide face names it in its header. A unit
+  // of time (RP-35) is spelled out in every figure cell instead, as
+  // `RevisionHoras.dc.html` draws: no unit word beside them, none in the header.
   unit?: string;
   // Index into `rows`. Marked `data-current` only: the boards draw the
   // current week by its note alone, never by a fill or a weight.
   current?: number;
+  // Draws the phone's stack at every width, for a table living in a narrow
+  // column (`MesesListaDetalle.dc.html`'s 320px list).
+  narrow?: boolean;
+  // Index into `rows` of the row whose page is open beside the table: its link
+  // is `aria-current`, filled, its name bold.
+  open?: number;
 };
 
 function isEmpty(cell: ReactNode): boolean {
   return cell === null || cell === undefined;
 }
 
-function figureCell(cell: ReactNode): ReactNode {
-  return isEmpty(cell) ? <span className={styles.pending}>—</span> : formatFigureValue(cell);
+function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords): ReactNode {
+  if (isEmpty(cell)) return <span className={styles.pending}>—</span>;
+  const formatted = formatFigureValue(cell, unit, words);
+  return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open }: TableProps) {
+  const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
+  const unitWord = unit && !isTimeUnit(unit) ? unit : undefined;
 
   const cellClass = (column: number): string => {
     if (column === 0) return styles.label;
@@ -66,30 +87,49 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
 
   const join = (...names: (string | undefined)[]) => names.filter(Boolean).join(" ");
 
+  const phoneRow = (row: TableRow): ReactNode => (
+    <>
+      <span className={styles.stackLabel}>
+        {row.cells[0]}
+        {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
+      </span>
+      {lead === undefined ? null : (
+        <span className={styles.stackFigure}>
+          {figureCell(row.cells[lead], unit, words)}
+          {unitWord && !isEmpty(row.cells[lead]) ? <span className={styles.unit}>{unitWord}</span> : null}
+        </span>
+      )}
+      {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
+    </>
+  );
+
   return (
-    <div className={styles.table}>
+    <div className={narrow ? `${styles.table} ${styles.narrow}` : styles.table}>
       <div className={styles.phone}>
         <span className={styles.caption}>{caption}</span>
         <ol className={styles.stack}>
           {rows.map((row, index) => (
             <li
               key={row.key}
-              className={styles.stackRow}
+              className={
+                row.href
+                  ? `${styles.stackRow} ${styles.linked}${index === open ? ` ${styles.open}` : ""}`
+                  : styles.stackRow
+              }
               data-current={index === current ? "" : undefined}
             >
-              <span className={styles.stackLabel}>
-                {row.cells[0]}
-                {row.detail ? <span className={styles.detail}>{row.detail}</span> : null}
-              </span>
-              {lead === undefined ? null : (
-                <span className={styles.stackFigure}>
-                  {figureCell(row.cells[lead])}
-                  {unit && !isEmpty(row.cells[lead]) ? (
-                    <span className={styles.unit}>{unit}</span>
-                  ) : null}
-                </span>
+              {row.href ? (
+                <Link
+                  href={row.href}
+                  className={styles.rowLink}
+                  aria-current={index === open ? "page" : undefined}
+                >
+                  {phoneRow(row)}
+                  <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.chevron} />
+                </Link>
+              ) : (
+                phoneRow(row)
               )}
-              {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
             </li>
           ))}
         </ol>
@@ -102,17 +142,31 @@ export function Table({ caption, columns, rows, figures = [], unit, current }: T
             {columns.map((header, column) => (
               <th key={column} scope="col" className={join(styles.header, widthClass(column))}>
                 {header}
-                {column === lead && unit ? <span className={styles.headerUnit}>{unit}</span> : null}
+                {column === lead && unitWord ? (
+                  <span className={styles.headerUnit}>{unitWord}</span>
+                ) : null}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={row.key} data-current={index === current ? "" : undefined}>
+            <tr
+              key={row.key}
+              className={row.href ? styles.linkedRow : undefined}
+              data-current={index === current ? "" : undefined}
+            >
               {columns.map((_, column) => (
                 <td key={column} className={join(styles.cell, cellClass(column))}>
-                  {figures.includes(column) ? figureCell(row.cells[column]) : row.cells[column]}
+                  {column === 0 && row.href ? (
+                    <Link href={row.href} className={styles.cellLink}>
+                      {row.cells[column]}
+                    </Link>
+                  ) : figures.includes(column) ? (
+                    figureCell(row.cells[column], unit, words)
+                  ) : (
+                    row.cells[column]
+                  )}
                   {column === 0 && row.detail ? (
                     <span className={styles.detailWide}>{row.detail}</span>
                   ) : null}

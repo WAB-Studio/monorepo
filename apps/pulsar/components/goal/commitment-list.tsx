@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import type { Translator } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
@@ -8,7 +9,6 @@ import { Button, Flex, SectionLabel, Text } from "@/components/ui";
 
 import { CommitmentRow } from "./retire-sheet";
 
-export type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 // The count in words, section-label style ("ocho compromisos", "tres
 // fases"): `goal.countWords` covers what a real plan holds; past its length
@@ -59,7 +59,8 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): string {
       const { threshold, unit } = commitment.satisfiedBy;
       const labelKey = commitment.sourceLabelKey;
       const source = labelKey ? t(labelKey) : "";
-      return `${threshold} ${evidenceUnitWords({ labelKey: labelKey ?? "", unit }, threshold, t)} · ${source}`;
+      const words = labelKey ? evidenceUnitWords({ labelKey, unit }, threshold, t) : unit;
+      return `${threshold} ${words} · ${source}`;
     }
   }
 }

@@ -4,8 +4,12 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
+import { timeChipsAround } from "@/lib/day/time-chips";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { quantitySchema } from "@/lib/validation/fact";
+import { useTimeWords } from "@/components/ui/figure";
 import { Button, Chip, Field, Flex, Sheet, Text } from "@/components/ui";
+import { type MessageKey } from "@/i18n/translator";
 
 export type QuantitySheetProps = {
   open: boolean;
@@ -38,6 +42,11 @@ function chipsAround(target: number): number[] {
   return [target - 1, target, target + 1, target + 2];
 }
 
+// A time unit offers the board's wider spread; every other unit the four neighbours.
+function chipsFor(target: number, unit: string): number[] {
+  return isTimeUnit(unit) ? timeChipsAround(target) : chipsAround(target);
+}
+
 /**
  * Takes a commitment's number in the same gesture that satisfies it (RP-03),
  * plus one optional line (RP-04). Offered as chips, the target already
@@ -59,15 +68,16 @@ export function QuantitySheet({
   day,
 }: QuantitySheetProps) {
   const t = useTranslations();
+  const words = useTimeWords();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
   const [selected, setSelected] = useState(loggedQuantity ?? target);
   const [customMode, setCustomMode] = useState(false);
   const [customValue, setCustomValue] = useState("");
   const [note, setNote] = useState(loggedNote ?? "");
   const [wasOpen, setWasOpen] = useState(open);
 
-  const chips = chipsAround(target);
+  const chips = chipsFor(target, unit);
 
   // Every open starts where today's own row stands: the logged figure and
   // note when the row is done (RP-04, RP-05), the plan's own target and a
@@ -78,7 +88,7 @@ export function QuantitySheet({
     setWasOpen(open);
     if (open) {
       setSelected(loggedQuantity ?? target);
-      setCustomMode(loggedQuantity != null && !chipsAround(target).includes(loggedQuantity));
+      setCustomMode(loggedQuantity != null && !chipsFor(target, unit).includes(loggedQuantity));
       setCustomValue(loggedQuantity != null ? String(loggedQuantity) : "");
       setNote(loggedNote ?? "");
       setError(null);
@@ -105,7 +115,7 @@ export function QuantitySheet({
   // the props from before the write: a tap in that gap reopened the sheet as
   // undone, and it never re-read the fact once it landed. Inside the same
   // transition the close commits together with the fresh row.
-  function settle(result: { ok: true } | { ok: false; error: string }) {
+  function settle(result: { ok: true } | { ok: false; error: MessageKey }) {
     startTransition(() => {
       if (result.ok) onOpenChange(false);
       else setError(result.error);
@@ -165,18 +175,21 @@ export function QuantitySheet({
             selected={!customMode && selected === value}
             onClick={() => pickChip(value)}
           >
-            {value}
+            {isTimeUnit(unit) ? formatQuantity(value, unit, words) : value}
           </Chip>
         ))}
-        {/* The heading stays neutral; a unit inside it would need a gender. */}
-        <Text variant="meta" tone="quiet">
-          {unit}
-        </Text>
+        {/* The heading stays neutral; a unit inside it would need a gender.
+            A time carries its own «h» and «min», so no word follows it. */}
+        {isTimeUnit(unit) ? null : (
+          <Text variant="meta" tone="quiet">
+            {unit}
+          </Text>
+        )}
       </Flex>
 
       {customMode ? (
         <Field
-          label={t("day.quantitySheet.customLabel")}
+          label={t(isTimeUnit(unit) ? "day.quantitySheet.customLabelMinutes" : "day.quantitySheet.customLabel")}
           type="number"
           inputMode="numeric"
           min={1}

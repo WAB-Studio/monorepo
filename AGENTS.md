@@ -36,7 +36,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Use the credential the user hands you. Configure with it and move on.
 - Never tell the user to rotate, revoke or replace a credential. Decided by the user 2026-09-10.
 - Ship one slice at a time.
-- Work five tracks at once, one per lane. See `## Parallel tracks`.
+- Work one track per lane. See `## Parallel tracks`.
 - Start the dev server on :3000 yourself and keep it running. Restart it when you must.
 - Run one instance per worktree. Take `Another next dev server is already running` as: one is up, use it.
 - Never ask whether to keep going or close the handoff. The `Stop` hook says when the window is full.
@@ -58,6 +58,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.
 - `node_modules` hoists to the root. A script that names a binary by path reaches it as `../../node_modules/...`.
 - Promote nothing to `packages/` until a second app asks for it.
+- `apps/portal` is «Universo», one static home-screen page linking the three apps, live at https://universo-apps.vercel.app.
+  It has no `package.json` and no build. Git deploys are off; deploy it by hand from `apps/portal` with
+  `npx vercel deploy --prod --yes`. Update its links when an app's URL changes. Design: `docs/portal/DESIGN.md`.
 - `apps/voyager` is the reading dictionary. Its contract is `docs/voyager/SPEC.md`; its `RL` and `RNL` codes share no number with the finances `RF`/`RNF` series.
 - Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in
   by email first deploys. Without it the link lands on orbit's Site URL.
@@ -83,6 +86,13 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   canvas shows what was drawn; only `DESIGN.md` says what was chosen.
 - When a board and its `DESIGN.md` disagree, the file wins.
 - Update the canvas in place, at its own URL. Never publish a second canvas for the same app.
+- Keep each canvas current, like a Figma file a team works from. Decided by the user 2026-10-05: «tenemos como 8 tabs
+  y nunca vamos limpiando y agrupando… siempre queda el artifact con cosas antiguas y sin resultados reales».
+  - Group pages by area of the app, one page per area. Open no page for a single module.
+  - Give every canvas an index page: each board with its state — proposed, approved, built, superseded.
+  - Replace a board's drawing with a capture of the real screen the day its module lands. Mark it built, with the PR.
+  - Move a superseded board to one «Archivo» page the same day. Never leave it beside the live one.
+  - Do it at every slice close, before the handoff. A canvas behind `integracion` is a defect.
 - Say in `DESIGN.md` which boards do not exist. A gap nobody wrote down reads as a gap nobody noticed.
 - This applies to a new screen, a new state of one, and a change a person can see. It does not apply
   to work behind the screen.
@@ -91,6 +101,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 - `apps/voyager` — «Diccionario de lectura», https://claude.ai/code/artifact/92f7291c-d0f3-4134-b652-be4affe98521
 - `apps/pulsar` — «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
+- `apps/portal` — «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
 - `apps/orbit` — **none yet.** Its screens were built before this rule. The next orbit screen opens
   one and names it here.
 - Add the URL here the day a canvas is created. A canvas nobody can find is a canvas nobody uses.
@@ -102,10 +113,15 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   Never into a second canvas.
 - Grep the saved file for `\.dc\.html` to get the board names. Never read the page in twice.
 - Name the boards a module cites from that list, in the dispatch. The worker never opens the canvas.
+- Paste the board's words and its structure (card or bare section, which line sits where) into the
+  dispatch. A board's name alone is not enough: on 2026-10-05 module 191 invented half its copy and
+  module 169 drew a card the board does not have, both because the worker could not see the board.
 
 ## Parallel tracks
 
-- Five lanes exist. Lane 1 is this checkout; lanes 2 to 5 are worktrees at `../<checkout>-l<n>`.
+- Lane 1 is this checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`. Lanes 2 to 5 may run
+  e2e specs; lanes 6 and up take only work with no e2e (docs, words, pure functions, `check:*`).
+  Decided by the user 2026-10-05. The cap is RAM and the shared Auth, not the lane count.
 - A lane's port comes from its app: finances on :300<n-1>, reading on :310<n-1>. They never collide.
 - Run an app's npm scripts from its own directory, `apps/orbit`, or from the root with `-w apps/orbit`.
 - Open a lane: `scripts/worktree.sh <lane> <branch> [base] [--app <name>]`. It costs 4 seconds.
@@ -129,7 +145,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run `npm install` at a lane's root when a workspace package landed after the lane was opened. The
   lane copied `node_modules` at birth, so the new package has no link and `typecheck` fails there
   while the main checkout and CI are clean. It is not a real red.
-- Run at most three suites at once. Nine GB of RAM holds three dev servers and three Chromiums.
+- Run at most four suites at once. Decided by the user 2026-10-05: 15 GB, 7 GB still free with three running.
+  Drop back to three when `free -g` shows under 2 GB available with four up.
 - Never run two agents that write `reading.word_texts` or spend `reading.model_spend` at once.
   `HARNESS_LANE` does not scope those tables: they are global, and two honest reports then
   contradict each other. See `docs/TRAPS.md`, "One database behind every harness lane".
@@ -156,11 +173,14 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 - Set `HARNESS_LANE=n` to give a track its own identities, session files, storage states and seeded rows.
 - Leave it unset for lane 1. `HARNESS_LANE=1` is the same lane.
-- `scripts/worktree.sh` bootstraps a lane. Bootstrap one by hand only outside a worktree: `HARNESS_LANE=2 npm run harness:token`. It creates `harness-2@example.invalid` and `harness-member-2@example.invalid` and lands their token rows.
-- Run any suite on that lane: `HARNESS_LANE=2 npm run check:http`, `HARNESS_LANE=2 npm run check:e2e`, `HARNESS_LANE=2 npm run seed:year`.
+- `scripts/worktree.sh` bootstraps a lane. Bootstrap one by hand only outside a worktree: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run harness:token`. It creates `harness-2@example.invalid` and `harness-member-2@example.invalid` and lands their token rows.
+- Run any suite on that lane through the local stack: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run check:e2e`.
+- Run pulsar specs with `PULSAR_BASE_URL=http://localhost:320<n-1>`. Its Playwright ignores `HARNESS_BASE_URL`.
+- Take `harness: <host> is not the local stack` as: wrap the command in `scripts/supabase-local.sh exec`. Set
+  `HARNESS_DATABASE=remote` only for the RNF-09 timing (`check:http`, `check:queries` against the remote).
 - Share one dev server between lanes, or point a lane at its own with `HARNESS_BASE_URL`.
 - Run the RNF-09 timing alone. A second lane on the same server inflates it.
-- Land a fresh token when a lane's session file is lost: `HARNESS_LANE=2 npm run harness:token`.
+- Land a fresh token when a lane's session file is lost: `HARNESS_LANE=2 scripts/supabase-local.sh exec npm run harness:token`.
 - Never run a lane's suite while another track holds that lane.
 - Never age a harness run by hand to make `harness:reap` fire. `heartbeat_at`, `started_at` and
   `finished_at` in `harness.runs` are written by `@repo/harness-registry` and nothing else. A check
@@ -202,9 +222,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
-- Push a worker's branch from the main session when the environment denied the worker's push.
-  A working branch only, never `main` or `integracion`; say it in the report. Decided by the user
-  2026-09-27.
+- Commit and push a worker's branch from the main session when the environment denied the worker's
+  commit or push. A working branch only, never `main` or `integracion`; say it in the report. Decided by
+  the user 2026-09-27 for the push and 2026-09-30 for the commit.
 - **Point every PR at `integracion`. Never at `main`.**
 - **Take `integracion` to `main` once per slice, at most once a day.** That merge is the deploy.
   Both apps ship from `main` alone (`apps/*/vercel.json`, `deploymentEnabled` `main` only), so every
@@ -217,7 +237,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Ride a docs-only change along with the work that produced it. A trap a module taught you belongs in
   that module's PR. It earns its own PR only when no work produced it.
   Measured 2026-09-08: 4 of the day's 17 PRs were docs alone, three of them one Markdown file, and
-  each cost two Vercel deployments per push and a place in the one-slot `e2e` queue.
+  each cost two Vercel deployments per push.
 - **`main` refuses a direct push: the deploy goes through a pull request.** Measured 2026-09-11:
   `git push origin main` is rejected with `GH013 ... Changes must be made through a pull request`,
   even fast-forward and even with every check already green. Open it `integracion` → `main` and
@@ -228,11 +248,33 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 ## Verification
 
 - Verify once at the end of a slice. Never after a micro-edit.
-- Run every `check:*` script of the app, not only the one named, when a module changes a server
-  action or a query. Measured 2026-09-29: module 88 made `addCommitment` refuse an ended goal and
-  broke three `check:day` probes; neither its worker nor its validator ran `check:day`.
+- Size the proof by what the change reaches. Decided by the user 2026-10-05: module 182 spent 22
+  minutes re-running suites its new, unimported file could not break, and each module paid the same
+  suite up to three times (worker, validator, CI).
+  - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit`, its own
+    tests and its mutations. Nothing else.
+  - A query or a server action: add every `check:*` that imports it. Grep the importers; when in doubt,
+    run them all. Measured 2026-09-29: module 88 made `addCommitment` refuse an ended goal and broke
+    three `check:day` probes nobody ran.
+  - A screen: its own specs and the specs the plan names. **The whole e2e suite runs once, in CI on
+    the pull request — never locally.** A red there is fixed on the branch before it merges. A chosen
+    list missed `deshacer.spec.ts` and `cifra-unidad.spec.ts` on 2026-09-30; CI is what caught them.
+- Have the worker save every check's output to a file under the lane's `private/` and name the paths.
+  The validator reads those logs, re-runs only the module's own tests and mutations, and asks of each
+  assertion whether it can fail. It never re-runs a suite the worker already logged green.
+- Run at most two whole suites at once against the remote pool: a third exhausts it (`EMAXCONNSESSION`,
+  15 clients). CI and the lanes run on local stacks and do not count.
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
   boxes passed 182/0 locally and failed in CI, where `loading.tsx` still stood (`docs/TRAPS.md`).
+- **Pulsar's `pulsar-e2e` runs on the push only, never on a pull request.** Decided by the user 2026-10-05,
+  twice: the second time with the suite at ~2 min on the runner's stack. Merge on `typecheck`, `lint`,
+  `pulsar-unit`, `pulsar-policies` and `pulsar-checks`.
+- **Fire the suite on a train's branch before merging it:** `gh workflow run ci.yml --ref <branch>`, and merge only
+  when that run's `pulsar-e2e` is green. Measured 2026-10-05: it caught tren 4's rail duplicates after the merge and
+  tren 5's `week.today` before it. Fix a red on `integracion` before anything else. **`integracion` → `main` only
+  with the whole suite green.**
+- Ship modules that share no file as one train: one branch merging them, one PR, one CI run. A red spec
+  names its module.
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
   2026-09-08. It runs on a pull request only when the change reaches `apps/orbit`, `packages/` or the
   lockfile, and always on the push to `main`. Merge on `typecheck`, `lint` and `voyager-e2e`; read a
@@ -273,6 +315,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - `npm run harness:reap` refuses to start while any run's heartbeat is fresh (measured
   2026-09-29: `BLOCKED a live run holds harness.runs`). Run it when every lane is quiet. It never
   touches a lane identity.
+- **Suites run against a local Supabase in Docker (`supabase start`), not the remote project.** Decided by
+  the user 2026-10-05, after PR #390 and #391 went red on 30 s timeouts and `linkTimeout` while lanes and
+  CI shared one remote Postgres and Auth. Every lane and every CI run gets that one local stack; the remote
+  project serves the apps and the RNF-09 timing alone. This is not the cloud project refused below.
 - **A separate Supabase project for e2e was measured and refused, 2026-09-09.** Do not propose it
   again without one of the two triggers below. What the numbers said: `sync.spec.ts` mints **3
   sign-ins per run** — 15 across five lanes, far under any plausible Auth rate limit; the flake that
@@ -335,6 +381,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Install only from §4. Discard the do-not-install list.
 - Leave `apps/voyager/.env.local` alone. It is gitignored, it never ships, and its keys are not
   rotated on an agent's initiative. Decided by the user 2026-09-08. Do not raise it again.
+- Copy `apps/voyager/.env.local` unchanged into a lane that runs voyager's suites, as `worktree.sh --app voyager`
+  does. Never edit it, never commit it. Decided by the user 2026-10-05.
 - Write code and identifiers in English. Write user-facing copy in the user's language.
 
 ## Comments

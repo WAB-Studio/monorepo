@@ -1,0 +1,29 @@
+{
+  "instructions": "Pulsar es el plan de metas de una persona: metas con meses, tareas, fases y compromisos. Lee con las herramientas get_ y list_; anota y reorganiza con las demás. Nunca borra ni archiva nada. Los meses van como AAAA-MM, los días como AAAA-MM-DD y cada monto como un número entero con su unidad.",
+  "tools": {
+    "list_goals": "Lista las metas de la persona en tres grupos: abiertas, terminadas y archivadas. Cada una trae su id, su nombre, su último plazo y la medida que cuenta. No cambia nada.",
+    "get_goal": "Lee una meta completa: fases, compromisos con su cadencia y su retiro, los meses con lo planeado, lo logrado y lo que pasó al siguiente, las tareas como árbol con el día en que se hicieron, los meses ya corridos y el total de la medida. Los montos son enteros con su unidad; el tiempo en minutos trae además su texto. No cambia nada.",
+    "get_month": "Lee un mes de una meta: primero las tareas que llegan arrastradas de meses anteriores y luego las propias, con sus sub-tareas, lo que cada una debe todavía y si ya está hecha. El mes va como AAAA-MM. No cambia nada.",
+    "get_today": "Lee el día de hoy: qué compromisos pregunta cada meta, cuáles ya se cumplieron y cómo, las tareas pendientes, las hechas hoy, la fase en curso y la línea del mes. No cambia nada.",
+    "get_report": "Lee el informe de todas las metas abiertas: el mes en curso, lo acumulado hasta hoy, las fases, lo arrastrado, los meses y las semanas. No cambia nada.",
+    "list_loose_one_offs": "Lista las tareas sueltas sin hacer: las que no tienen día y las que ya tienen un día por venir. Cada una dice a qué meta pertenece, si pertenece a alguna. No cambia nada.",
+    "declare_fact": "Anota que la persona hizo un compromiso un día, con la cantidad cuando el compromiso mide una. El día va como AAAA-MM-DD y no puede pasar del límite que la app ya impone. Cuenta como si la persona lo hubiera marcado. Nunca borra.",
+    "complete_task": "Marca una tarea como hecha hoy. Una tarea con sub-tareas se da por hecha cuando lo están todas; no se marca sola. Nunca borra.",
+    "create_task": "Crea una tarea: suelta, del mes con un tiempo estimado en la unidad de la meta, o una sub-tarea bajo una tarea del mes. El monto va como entero y el mes como AAAA-MM. Nunca borra.",
+    "schedule_task": "Pone un día a una tarea suelta o del mes. El día va como AAAA-MM-DD y no puede ser anterior a hoy. Nunca borra.",
+    "set_month_amount": "Fija cuánto se planea en un mes abierto de una meta que mide algo. El monto va como entero en la unidad de la meta y el mes como AAAA-MM. Un mes ya terminado no se cambia. Nunca borra.",
+    "rename_goal": "Cambia el nombre de una meta. Nunca borra ni archiva.",
+    "add_phase": "Agrega a una meta una fase de semanas con un solo objetivo. No puede cruzarse con otra fase ni pasar del plazo de la meta. Para cambiar una fase hay que agregar otra. Nunca borra.",
+    "add_commitment": "Agrega a una meta un compromiso con su cadencia: a diario, ciertos días de la semana, veces por semana, cada tantos días o veces por mes. Satisface con un toque, con una cantidad o con la evidencia de otra app. Nunca borra.",
+    "move_horizon": "Mueve el plazo de una meta a otro día. El día va como AAAA-MM-DD. Nunca borra ni archiva.",
+    "accept_shift": "Acepta correr el plan de un mes cuando la app lo ofrece: las tareas del mes pasan al siguiente. Nunca borra.",
+    "move_task_to_month": "Pasa una tarea del mes a otro mes dentro del plazo de su meta. El mes va como AAAA-MM. Nunca borra.",
+    "create_goal": "Abre una meta nueva con su nombre y su plazo; mide lo que mida su primer compromiso con cantidad. Nunca borra.",
+    "retire_commitment": "Retira un compromiso: deja de preguntar desde hoy y los días ya hechos quedan hechos. Para cambiarlo, retíralo y agrega otro. Nunca borra."
+  },
+  "errors": {
+    "goalNotFound": "Esa meta no existe o no es de esta persona.",
+    "unknown": "No se pudo completar. Revisa los datos e inténtalo otra vez.",
+    "unauthorized": "La llave no es válida o ya se revocó. Crea otra en Pulsar."
+  }
+}

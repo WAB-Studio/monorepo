@@ -109,6 +109,9 @@ with an outlier at 4121 ms. Dev is not merely slower; it is noisier, and the out
 
 ### One database, many branches
 
+Narrowed 2026-10-05 by module 227: CI no longer reads the remote schema, so a migration applied from a branch cannot redden CI.
+The rule stands for lanes and for production.
+
 A migration applied from any branch is applied for everyone, immediately, including branches
 whose schema files know nothing about it. Never apply one to reach a proof.
 
@@ -180,6 +183,9 @@ settings.spec.ts:117`.
 
 Turning it off is one command, and it is the switch that also decides which database CI seeds and
 purges: `gh variable set E2E_IN_CI --body false`.
+
+**CI half closed 2026-10-05 by module 227:** CI runs on its runner's own stack, so its runs no longer grow the remote `audit_log`.
+The lanes' own rows and the policy fix below stand.
 
 **Updated 2026-09-06.** `audit_log` sits at 105 971 rows, 110 MB, of a 136 MB database. 75
 identities are registered in `harness.identities` (72 `ephemeral`, 3 `shared`) after
@@ -943,6 +949,8 @@ reason that has nothing to do with its diff.
 It happened with #30 and #31 on 2026-09-07. Land one PR's `e2e` before opening the next when both
 touch the group, or expect to re-run by hand.
 
+Closed 2026-10-05 by module 227: CI runs on its runner's own stack.
+
 ### "Keep a retired code's tick" means leave it as it was, not tick it
 
 `AGENTS.md` says to keep a retired code's tick. RL-05 was retired on 2026-09-07 and a decision
@@ -1019,6 +1027,9 @@ green but for one write-path timeout is the shape of contention, not of a defect
 
 `AGENTS.md` allows three suites at once. Three is what produced both of these.
 
+Narrowed 2026-10-05 by module 227: CI no longer pays the shared pooler.
+The trap stands for lanes that still drive the remote database.
+
 ### Every push enters the one-slot group, not just every PR
 
 The entry above and `AGENTS.md` both frame `e2e-remote-db` as something a second **PR** disturbs. It
@@ -1048,6 +1059,9 @@ of them held the slot while PR #48 — the only PR of the day that actually need
 waited in the queue behind it.
 
 Fast-forward `integracion` when you are about to merge into it. Not after every merge to `main`.
+
+Closed 2026-10-05 by module 227: CI runs on its runner's own stack. The group is gone; a push queues nothing.
+Fast-forwarding `integracion` still spends a run, so keep the advice above.
 
 ### A lane born for one app cannot typecheck the other until typegen runs there
 
@@ -1193,6 +1207,9 @@ The two rules pull against each other: one PR at a time protects the CI queue an
 quota. When a day's work is many small landings, batch what can be batched — a docs change and a
 trap entry are one PR, not two — and check the URL of a failing Vercel check before believing it:
 `upgradeToPro=build-rate-limit` in it means quota, never code.
+
+Narrowed 2026-10-05 by module 227: `e2e-remote-db` no longer exists, so no CI rule asks for one PR at a time.
+The deployment quota above stands.
 
 ### Voyager's browser suite reads three false reds against `next dev`
 
@@ -1475,6 +1492,8 @@ No hay nada que arreglar. La cobertura existe: el mismo árbol pasó la `e2e` en
 PR #140, y `AGENTS.md` ya dice que la `e2e` de orbit es informativa y que ningún check la exige en
 `main`. Lo único que se pierde es la señal en el push cuando los runs se amontonan. **Escrito para
 que nadie lo investigue una cuarta vez.**
+
+Closed 2026-10-05 by module 227: CI runs on its runner's own stack. El grupo `e2e-remote-db` ya no existe y el push a `main` no cancela la `e2e`.
 
 ## This machine cannot test a reserved scrollbar
 
@@ -2472,6 +2491,15 @@ connection caches, not with the code.
 - **Do.** Run `HARNESS_LANE=<n> PULSAR_BASE_URL=http://localhost:<port> npm run harness:mint-session
   -w apps/pulsar` before `check:day`, `check:goal` or `check:goal-actions` when the last mint is over
   half an hour old. A red on an insert naming a `user_id` that is not the lane's is this, not the code.
+- **Its access token also dies after an hour, and then every call spends a refresh.** `getClaims()` refreshes an
+  expired token and a script never writes the new cookie back, so each server action pays one
+  `POST /token?grant_type=refresh_token`. Auth's refresh limit is per IP, and the five lanes share one.
+- **Measured 2026-10-05** on lane 3: `session-3.json`'s token had expired ten hours before. One `check:plan` logged
+  **202** `429 over_request_rate_limit` and passed 22 of 74; five runs read 21–25 of 74. After a fresh mint the same
+  code passed 74 of 74 with no 429. Logs in `private/auth-rate-limit-2026-10-05/`.
+- `mint-session` needs the lane's own server up. Without it it prints `FAILED  fetch failed`, which is not a 429.
+- **Do.** Mint before every `check:*` run, not by the half hour. Read the token's `exp` when a check reds on
+  `signedOut` or `withGoalsDb called without a verified session`.
 
 ## A spec that counts a number another spec moves in parallel is a race, not a check
 
@@ -2596,6 +2624,7 @@ A fresh identity was not the cause.
 - **Do.** Open pulsar pull requests one at a time, each after the previous one's `pulsar-e2e` started.
   Read `gh api repos/<repo>/actions/jobs/<id> -q .conclusion` before reading a `fail` as a red.
   Relaunch a cancelled one with `gh run rerun <run> --failed`, or a rebase and push.
+- Closed 2026-10-05 by module 227: CI runs on its runner's own stack. The `pulsar-e2e` group is gone; a cancelled run with no steps is no longer this queue.
 
 ## Two `voyager-e2e` runs at once fail `registro.spec.ts:568`
 
@@ -2606,3 +2635,120 @@ A fresh identity was not the cause.
   minutes before, passed. #329's rerun, alone, passed. Logs in `private/ci-reds/`.
 - **Do.** Read two simultaneous `voyager-e2e` reds on that spec as this collision, not as the branch.
   Rerun it alone. Never answer it with a retry or a longer sleep: the sleep is the defect.
+- Closed 2026-10-05 by module 227: CI runs on its runner's own stack. Two `voyager-e2e` runs no longer share a database.
+  The `waitForTimeout(2000)` in the spec is still the defect.
+
+## A policy mutant proved inside a rollback locks the shared database for everyone
+
+- **What.** Proving a policy red by applying the migration plus a mutant inside a transaction that
+  rolls back still runs DDL on the one database. `ALTER TABLE` and `CREATE POLICY` take `ACCESS
+  EXCLUSIVE` locks on `goals.one_offs`, `goals.facts` and their neighbours until the rollback. Every
+  other lane and every CI job that touches those tables waits, times out or deadlocks meanwhile.
+- **Measured 2026-09-30.** Module 123's worker ran six such mutants from 01:2x UTC, taking explicit
+  table locks after two deadlocks. In that window #345 went red on three jobs: `pulsar-checks`
+  (`Failed query` on `goals.goals` in `check:day`), `voyager-e2e` (`deadlock detected` at
+  `registro.spec.ts:568`) and `pulsar-e2e` (14 tests at the 30 s timeout, `CONNECTION_ENDED`).
+  `gh run rerun --failed`, minutes later, passed all three untouched. Logs in `private/ci-reds/pr345-*`.
+- **Do.** Run DDL mutants only while no other lane and no CI run touches the schema. Say so in the
+  dispatch, and wait for `gh run list --status in_progress` to be empty first. Never add `LOCK TABLE`
+  to a probe. Read a burst of timeouts across unrelated suites in one window as this, not as a branch.
+- Narrowed 2026-10-05 by module 227: CI jobs run on their own stack and cannot be locked by a lane's DDL.
+  The rule stands for every lane on the remote database.
+
+## A cleanup that deletes by name can take a real person's row
+
+- **What.** The harness shares one database with the people who use pulsar. A fixture's name is not
+  unique to the harness: the template example's goal is «IA aplicada», which is also a real goal's
+  name. A `delete ... where name = ...` on the owner connection (`MIGRATION_DATABASE_URL`) bypasses
+  RLS and matches every user's row of that name.
+- **Measured 2026-10-01.** Module 156's validator cleaned leftovers from three mutated runs of
+  `import-actions.ts` with `delete from goals.goals where name like 'RP-37 fixture%' or name='IA
+  aplicada'`, on the owner connection, no `user_id`. It returned 8 rows. Nobody printed their `user_id`.
+- **Do.** Delete fixtures by the ids the run collected, as `import-actions.ts`'s `after` does, or by
+  name **and** the lane identity's `user_id`. Never by name alone. Select the `user_id` before any
+  owner-connection delete. Say it in every dispatch that runs mutations against a check that writes rows.
+
+## Four lanes running suites time out Auth for CI too
+
+- **What.** `pulsar-e2e` on #390 went 292/10/1: `GET /auth/confirm redirected to …/entrar?error=linkTimeout`, rows whose
+  mark never drew, `getByRole('status')` never found — across Hoy, one-off, task and week specs the branch never touched.
+  The same hour, lane 5 measured `/auth/confirm` at 7–14 s and `Failed query` with no cause in `check:plan`/`check:day`.
+- **Measured 2026-10-05**: four lanes ran suites at once (165, 182, 204, 208) against the one database and Auth that CI
+  also uses. No `429`: a timeout, not a quota. Log in `private/ci-reds/pr390/`.
+- **Do.** Hold the three-suite cap counting CI as one. Read a red that spans unrelated specs with `linkTimeout` as load,
+  rerun only the failed job once the lanes are quiet, and keep the log.
+- Narrowed 2026-10-05 by module 227: CI no longer shares the database or Auth with lanes, so lanes cannot time it out.
+  Lanes still contend with each other on the remote project.
+
+## A local stack per runner runs `pulsar-e2e` in 1.8 min and exposes a spec the remote hid
+
+- **What.** Module 227 moved the six suite jobs of `ci.yml` onto the runner's own Supabase stack.
+  PR #396's first run on it:
+  - `pulsar-e2e`: 310 passed, 1 failed, 1.8 min. On the remote it took ~14 min.
+  - `voyager-e2e`: green.
+  - `pulsar-policies`: green.
+- **The one red was a real defect.** `deshacer.spec.ts:47` used `getByLabel("cantidad")`. Module 204's back link
+  carries `aria-label="Volver a Meta cantidad …"`, so the locator matched two elements. Fixed in PR #397.
+- **Measured 2026-10-05.** The ~14 min was contention and round trips to the remote pooler, not the suite.
+  The `linkTimeout`, `CONNECTION_ENDED` and `57014` reds listed above came from that sharing.
+- **Do.** Read a red on the local stack as the branch first: no other lane or run touches that database.
+  Skip the load explanations above for CI.
+  Keep them for lanes and for the RNF-09 timing, which still read the remote project.
+
+## «Skip unaffected projects» spends the deploy quota on branches no project builds
+
+Every app's `vercel.json` says `deploymentEnabled: { "*": false, "main": true }`, and still Vercel answered
+`Resource is limited - try again in 24 hours (more than 100, code: "api-deployments-free-per-day")` on `#395`.
+
+- **Measured 2026-10-05**, API `v6/deployments`, last 24 h: **140 deployments, all `Preview` `CANCELED`, none built.**
+  orbit 69 (60 from `pulsar-*` branches, 9 from `integracion`), reading 70 (61, 9), pulsar 2.
+- **The cause.** The three projects had `enableAffectedProjectsDeployments: true`. A push that does not touch
+  `apps/orbit` makes orbit write a cancelled deployment through the «unaffected» path, which never reads the
+  `vercel.json`. Each cancelled record counts against the 100 a day. The project the branch touches reads its
+  `vercel.json` and writes nothing — that is why pulsar had 2 and its siblings 70.
+- **Fixed the same day**: `enableAffectedProjectsDeployments: false` on orbit, reading and pulsar
+  (`PATCH /v9/projects/<name>`). Cost: a merge to `main` now builds all three apps, three deployments a day at most.
+- **Do.** Count the deployments, not the builds: `GET /v6/deployments?since=<24 h ago>` and group by project and
+  `meta.githubCommitRef`. A cancelled preview is not free.
+
+## A rate-limited route shares one bucket across every lane on the local stack
+
+Module 231 caps `/oauth/registro` at ten calls an hour per address. Every lane reaches one local stack from one address,
+so the cap is shared by every lane, every rerun and every `--repeat-each`.
+
+- **Measured 2026-10-05.** `autorizar.spec.ts` went 429 on its fourth run in an hour. A worker cleared `oauth_calls` to
+  get past it, which also reset every other lane's counters.
+- **Do.** Give each run its own address: a random /64 in `2001:db8::/32` as `x-forwarded-for`, on the spec's own API
+  calls and on the browser context's `extraHTTPHeaders`. `scripts/mcp/oauth-flow.ts` and `e2e/autorizar.spec.ts` do it.
+- **Never** wipe `goals.oauth_calls` to make a run pass.
+- **Never** assert the limit by wall-clock time (admitted calls slower than refused ones). Count the rows instead.
+
+## A lane born before the local stack breaks on its first merge of `integracion`
+
+Lanes opened before module 227 hold `scripts/supabase-local.sh` and `supabase/config.toml` as untracked copies.
+`integracion` now tracks both, so `git checkout` and `git merge` refuse: «untracked working tree files would be overwritten».
+
+- **Do.** Move the two files aside, merge, and keep `supabase/signing_keys.json`: it is gitignored and the stack needs it.
+- A branch older than 227 has no tracked script. Switching a lane back to one needs the untracked copy restored.
+- A pulsar check that needs `harness-member-<n>` reads orbit's identity. A lane opened for pulsar alone has no
+  `apps/orbit/.env.local`, so copy it in and run `HARNESS_LANE=<n> ../../scripts/supabase-local.sh exec npm run
+  harness:token` from `apps/orbit`. Check the rows landed in the local `auth.users`, not the remote one.
+
+## A `WIP:` commit can carry a mutant
+
+A session closed by the window commits what is on disk. On 2026-10-05 the voyager `WIP:` commit `89e8867` held
+`commit(pending)` commented out in `apps/voyager/lib/log/record.ts`: a negative control left mid-proof. No run on that
+branch could pass until it was restored.
+
+- **Do.** Before you finish a `WIP:` branch, read `git diff <base>..HEAD` over the app code, not only the specs.
+- **Do.** Before merging, check that the net diff against the base touches only what the module claims.
+
+## The harness refuses the remote, and the RNF-09 timing must say it means it
+
+- **What.** Since modules 228 and 235, `openRun`, the identity registrars and every script that writes `auth` call
+  `assertSuiteDatabase()`. A command run without `scripts/supabase-local.sh exec` exits with `harness: <host> is not the
+  local stack`, before any write. Measured 2026-10-05: remote `auth.users` 188 and `harness.runs` 2974, unchanged across
+  every unwrapped run of both modules.
+- **Do.** Wrap every suite, seed and `harness:token` in `scripts/supabase-local.sh exec`. Run the RNF-09 timing against the
+  remote with `HARNESS_DATABASE=remote` — exactly `remote`, nothing else passes. `census` and `reap` stay unguarded on
+  purpose: one reads, the other prunes registered rows.

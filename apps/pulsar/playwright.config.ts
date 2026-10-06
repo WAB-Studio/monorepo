@@ -17,7 +17,8 @@ const baseURL = process.env.PULSAR_BASE_URL ?? "http://localhost:3200";
 const downBaseURL = process.env.PULSAR_DOWN_BASE_URL;
 
 // A third `next start` of the same build with `PULSAR_FAULT_SEAM` set, so
-// every evidence source reads as unreadable (`e2e/fuente-caida.spec.ts`).
+// every evidence source reads as unreadable (`e2e/fuente-caida.spec.ts`) and
+// the model is a stub (`e2e/importar-modelo.spec.ts`, RNP-13).
 // Absent, the project does not exist.
 const faultBaseURL = process.env.PULSAR_FAULT_BASE_URL;
 
@@ -50,7 +51,7 @@ export default defineConfig({
     {
       name: "mobile",
       use: phone,
-      testIgnore: /(caida|fuente-caida)\.spec\.ts/,
+      testIgnore: /(caida|fuente-caida|importar-modelo)\.spec\.ts/,
     },
     ...(downBaseURL
       ? [
@@ -66,7 +67,7 @@ export default defineConfig({
       ? [
           {
             name: "fuente",
-            testMatch: /fuente-caida\.spec\.ts/,
+            testMatch: /(fuente-caida|importar-modelo)\.spec\.ts/,
             use: { ...phone, baseURL: faultBaseURL },
           },
         ]

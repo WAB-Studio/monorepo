@@ -150,7 +150,7 @@ test("a quantity row on a past day asks for that day and writes its number there
 
     expect(await factsFor(db, commitmentId)).toEqual([{ day, quantity: 10 }]);
     await expect(page.locator("button", { hasText: name })).toContainText(
-      new RegExp(`10 minutos · \\d{2}:\\d{2} · lo dijiste tú · ${writtenLabel(todayInZone())}`),
+      new RegExp(`10 min · \\d{2}:\\d{2} · lo dijiste tú · ${writtenLabel(todayInZone())}`),
     );
   } finally {
     await deleteGoal(db, personId, goalId);
@@ -173,7 +173,7 @@ test("a past day draws no one-offs and no field, and holds at 360px (RP-06, RP-1
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
     await expect(page.getByText(/hechos \d+ de \d+/).first()).toBeVisible();
-    await expect(page.getByText(name, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("main").getByText(name, { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Algo suelto")).toHaveCount(0);
 
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -205,12 +205,12 @@ test("a commitment created today and a goal opened today are absent from yesterd
     `;
 
     await page.goto("/");
-    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
     await expect(page.locator("button", { hasText: commitmentName })).toBeVisible();
 
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
-    await expect(page.getByText(goalName, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("main").getByText(goalName, { exact: true })).toHaveCount(0);
     await expect(page.locator("button", { hasText: commitmentName })).toHaveCount(0);
   } finally {
     await deleteGoal(db, personId, goal.id);
@@ -236,7 +236,7 @@ test("a day before every goal this person holds says it asked for nothing, with 
     const page = await context.newPage();
     await page.goto(`/dia/${day}`);
     await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Abrir una meta" })).toHaveCount(0);
     await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
     await expect(page.getByText(`tardía ${stamp} empezó el ${weekday} ${civilDateToDate(opened).getUTCDate()}`)).toBeVisible();
 
@@ -287,3 +287,61 @@ test("/dia/<today> is Hoy itself (RP-06)", async ({ page }) => {
   await page.waitForURL((url) => url.pathname === "/");
   await expect(page.getByRole("link", { name: "Ver ayer" })).toBeVisible();
 });
+
+// `DiaPasadoEscritorio.dc.html`: the date is the one `h1`, «volver a hoy» is the
+// way back, and from 1024 the goals share the width the rail leaves in equal
+// columns, so no section narrows as the screen widens. Three goals, each its
+// own section, so a layout with an aside would push one of them into it.
+for (const width of [360, 390, 1280, 1440]) {
+  test(`at ${width} a past day has one h1, its way back lands on Hoy and its columns hold (RP-06, RNP-16)`, async ({
+    person,
+    browser,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const names = [`Uno ${stamp}`, `Dos ${stamp}`, `Tres ${stamp}`];
+    for (const name of names) await seedGoal(db, person.id, { name, kind: "tap" });
+    const context = await browser.newContext({ storageState: person.sessionFile });
+    try {
+      const page = await context.newPage();
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/dia/${pastDay(1)}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      const date = civilDateToDate(pastDay(1));
+      const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(`${weekday} ${date.getUTCDate()}`);
+
+      if (width >= 1024) {
+        const boxes = async () => {
+          const out: { x: number; y: number; width: number }[] = [];
+          for (const name of names) {
+            const box = await page.locator("main section").filter({ hasText: name }).boundingBox();
+            if (!box) throw new Error(`no section for ${name}`);
+            out.push(box);
+          }
+          return out;
+        };
+        const wide = await boxes();
+        // The first two goals share a row: side by side, never stacked.
+        expect(Math.abs(wide[0].y - wide[1].y)).toBeLessThanOrEqual(2);
+        expect(wide[1].x).toBeGreaterThan(wide[0].x + wide[0].width);
+        // Equal columns.
+        for (const box of wide) expect(Math.abs(box.width - wide[0].width)).toBeLessThanOrEqual(2);
+
+        await page.setViewportSize({ width: 1024, height: 900 });
+        const atLimit = await boxes();
+        // Each goal, by name, at least as wide as at 1024.
+        wide.forEach((box, index) => {
+          expect(box.width).toBeGreaterThanOrEqual(atLimit[index].width - 1);
+        });
+        await page.setViewportSize({ width, height: 900 });
+      }
+
+      await page.getByRole("link", { name: "volver a hoy" }).click();
+      await page.waitForURL((url) => url.pathname === "/");
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where user_id = ${person.id}`;
+    }
+  });
+}

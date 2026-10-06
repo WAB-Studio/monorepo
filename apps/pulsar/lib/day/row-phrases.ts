@@ -1,6 +1,7 @@
+import type { MessageKey } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 
-type Translate = (key: string, values?: Record<string, string | number>) => string;
+type Translate = (key: MessageKey, values?: Record<string, string | number>) => string;
 
 export type CadenceNames = {
   // Monday first, one letter each: a weekdays cadence of several days.
@@ -79,7 +80,14 @@ export function metPhrase(
   });
 }
 
-type Say = (key: string, values?: Record<string, number | string>) => string;
+// The four phrases `flexibleWords` says.
+export type FlexibleKey =
+  | "week.flexible.week"
+  | "week.flexible.month"
+  | "week.flexible.weekProgress"
+  | "week.flexible.monthProgress";
+
+type Say = (key: FlexibleKey, values?: Record<string, number | string>) => string;
 
 /**
  * A flexible commitment's own two phrases (`SemanaFlexible.dc.html`): its
@@ -119,8 +127,8 @@ export type RowMetaPieces = {
   writtenTime: string | undefined;
   writtenLabel: string | undefined;
   // A `quantity` row with a fact that day under its target: not done, yet the
-  // person wrote a number.
-  partial?: { logged: number; target: number; unit: string } | null;
+  // person wrote a number. Both already formatted, a time as «45 min».
+  partial?: { logged: string; target: string } | null;
 };
 
 /**
@@ -136,7 +144,7 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): string | u
   const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;
   const said = loud && (done || partial) ? translate("day.row.saidByYou") : null;
   const asks = loud && !done && !partial && kind === "quantity" ? translate("day.row.asksNumber") : null;
-  const amount = partial ? translate("day.row.partial", partial) : pieces.amount;
+  const amount = partial ? translate("day.row.partialAmount", partial) : pieces.amount;
   return (
     [
       pieces.cadenceText,

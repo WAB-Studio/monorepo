@@ -1,0 +1,135 @@
+/* `ArmazonEncabezado.dc.html`. The back's box is 48px tall and pulled over the
+   page's gutter so its glyph lines up with the title's edge. */
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.back {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 48px;
+  margin: -8px 0 0 -12px;
+  padding: 0 12px 0 8px;
+  text-decoration: none;
+  font-size: var(--pulsar-text-line-size);
+  font-weight: var(--pulsar-text-name-weight);
+  color: var(--pulsar-ink-secondary);
+}
+
+.back:hover {
+  color: var(--pulsar-ink);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 0;
+  border-radius: 10px;
+}
+
+.eyebrow {
+  max-inline-size: 100%;
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.title.title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  flex: none;
+  inline-size: 100%;
+}
+
+@media print {
+  .back {
+    display: none;
+  }
+}
+
+.meta.meta {
+  margin: 4px 0 0;
+}
+
+/* The same box as `.back` (48px, pulled up 8px), holding a block in its place. */
+.backSkeleton {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  inline-size: 120px;
+  min-block-size: 48px;
+  margin: -8px 0 0;
+}
+
+/* The title's own line box: its size times the 1.15 `Text` gives it. */
+.titleSkeleton {
+  inline-size: 100%;
+  display: flex;
+  align-items: center;
+  block-size: calc(var(--pulsar-text-title-size) * 1.15);
+}
+
+@media (min-width: 700px) {
+  .titleSkeleton {
+    block-size: calc(var(--pulsar-text-title-size-wide) * 1.15);
+  }
+}
+
+@media (min-width: 1024px) {
+  .actions {
+    inline-size: auto;
+  }
+
+  .line {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    inline-size: 100%;
+  }
+}
+
+.exit {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-inline-size: 100%;
+}
+
+.exitActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exitActions > :is(a, button) {
+  inline-size: 100%;
+}
+
+@media (min-width: 1024px) {
+  .exit {
+    max-inline-size: 560px;
+  }
+
+  .exitActions {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .exitActions > :is(a, button) {
+    inline-size: auto;
+  }
+}

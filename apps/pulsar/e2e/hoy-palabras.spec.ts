@@ -91,7 +91,7 @@ test("a goal whose horizon is today is not on Hoy (RNP-07)", async ({ person, br
   try {
     const page = await context.newPage();
     await page.goto("/");
-    await expect(page.getByText("Meta abierta", { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText("Meta abierta", { exact: true })).toBeVisible();
     // Its last day was yesterday: at most the «terminó ayer» line names it, never a goal entry.
     await expect(page.getByText("Meta que terminó", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Hoy no pide nada.")).toHaveCount(0);
@@ -124,7 +124,7 @@ test("with every goal ended and none open and a suelta due, Hoy names the goal a
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "Ver las metas" })).toHaveAttribute("href", "/metas");
     await expect(page.getByRole("link", { name: "Abrir otra meta" })).toHaveAttribute("href", "/metas/nueva");
-    await expect(page.getByText("Todavía no tienes una meta abierta.")).toHaveCount(0);
+    await expect(page.getByText("Todavía no hay nada que anotar.")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Algo suelto de hoy", exact: true })).toBeVisible();
   } finally {
     await context.close();

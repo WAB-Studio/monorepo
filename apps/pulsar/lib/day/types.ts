@@ -1,3 +1,5 @@
+import type { SourceKey } from "@/i18n/translator";
+
 // The engine's own plain shapes. Nothing here comes from a drizzle schema and
 // nothing here names an app, a table or a reading-app search: RP-07 and
 // RNP-10 both require a source to be configuration the engine never inspects.
@@ -59,7 +61,7 @@ export type EvidenceDay = {
   day: string;
   quantity: number;
   unit: string;
-  labelKey: string;
+  labelKey: SourceKey;
 };
 
 // One commitment's state for a day it asked on: whether it is satisfied, and
@@ -70,7 +72,7 @@ export type DaySlot = {
   commitmentId: string;
   satisfied: boolean;
   satisfiedBy: "declared" | "evidence" | null;
-  labelKey: string | null;
+  labelKey: SourceKey | null;
   quantity: number | null;
 };
 

@@ -17,11 +17,10 @@ function weekdayIndex(day: string): number {
   return (civilDateToDate(day).getUTCDay() + 6) % 7;
 }
 
-function shortLabel(day: string): string {
-  const weekday = new Intl.DateTimeFormat("es", { weekday: "short", timeZone: "UTC" })
-    .format(civilDateToDate(day))
-    .replace(".", "");
-  return `${weekday} ${Number(day.slice(8, 10))}`;
+function longName(day: string): string {
+  const date = civilDateToDate(day);
+  const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
+  return `${weekday} ${date.getUTCDate()}`;
 }
 
 const today = todayInZone();
@@ -30,11 +29,6 @@ const weekDays = Array.from({ length: 7 }, (_, i) => shift(today, i - weekdayInd
 const creationDay = weekdayIndex(today) === 0 ? shift(today, 1) : today;
 const beforeCreation = weekDays.filter((day) => day < creationDay);
 const fromCreation = weekDays.filter((day) => day >= creationDay);
-const pastDays = weekDays.filter((day) => day < today);
-// What each lived day of the goal reads; a Monday has none, so today's row.
-const countRows: [string, string][] =
-  pastDays.length > 0 ? pastDays.map((day) => [day, "0 de 1"]) : [[today, "hoy"]];
-
 // Noon Bogotá on the civil day: the same civil day in every zone near it.
 function noonOf(day: string): Date {
   return new Date(`${day}T17:00:00Z`);
@@ -52,55 +46,54 @@ async function seedGoal(db: postgres.Sql, personId: string, name: string, create
   return { goalId: goal.id, commitmentId: commitment.id };
 }
 
-test("a goal opened this week draws no dot and no count before it, its dot from then on (RP-16)", async ({
+test("a goal opened this week asks nothing before it, its mark from then on (RP-16)", async ({
   page,
   db,
   personId,
 }) => {
   const name = `Meta creada ${Date.now()}`;
   const { goalId, commitmentId } = await seedGoal(db, personId, name, new Date(Date.now() - 30 * 86_400_000));
+  const commitment = `Compromiso ${name}`;
   try {
     await db`
       update goals.commitments set created_at = ${noonOf(creationDay)}
       where id = ${commitmentId} and user_id = ${personId}
     `;
     await page.goto("/semana");
-    const section = page.locator("section", { hasText: name });
-    await expect(section).toBeVisible();
+    await expect(page.getByText(name).locator("visible=true").first()).toBeVisible();
 
-    const row = (day: string) =>
-      section.locator("button, div").filter({ hasText: shortLabel(day) }).first();
+    const mark = (day: string) => page.getByRole("img", { name: new RegExp(`^${commitment}, ${longName(day)}: `) });
 
     for (const day of beforeCreation) {
-      await expect(row(day).locator('[role="img"]')).toHaveCount(0);
-      await expect(row(day)).not.toContainText(/\d+ de \d+/);
+      await expect(mark(day)).toHaveAccessibleName(`${commitment}, ${longName(day)}: no pedía`);
+      await expect(mark(day)).toHaveAttribute("data-state", "none");
     }
     for (const day of fromCreation) {
-      await expect(row(day).locator('[role="img"]')).toHaveCount(1);
+      await expect(mark(day)).not.toHaveAttribute("data-state", "none");
     }
-    // Today keeps "hoy" even when it holds no dot yet.
-    await expect(row(today)).toContainText("hoy");
-    // No day of this goal reads a "0 de 0".
-    await expect(section.getByText("0 de 0")).toHaveCount(0);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
 });
 
-test("a past day that asked still reads its count (RP-06)", async ({ page, db, personId }) => {
+test("a past day that asked still reads «no hecho», a day to come «todavía no» (RP-06)", async ({
+  page,
+  db,
+  personId,
+}) => {
   const name = `Meta con historia ${Date.now()}`;
   const { goalId } = await seedGoal(db, personId, name, new Date(Date.now() - 30 * 86_400_000));
+  const commitment = `Compromiso ${name}`;
   try {
     await page.goto("/semana");
-    const section = page.locator("section", { hasText: name });
-    await expect(section).toBeVisible();
-    // A Monday's week has no lived day: its own row reads «hoy», never a count.
-    for (const [day, note] of countRows) {
-      await expect(section.locator("button, div").filter({ hasText: shortLabel(day) }).first()).toContainText(note);
+    await expect(page.getByText(name).locator("visible=true").first()).toBeVisible();
+    for (const day of weekDays) {
+      const status = day > today ? "todavía no" : "no hecho";
+      await expect(page.getByRole("img", { name: `${commitment}, ${longName(day)}: ${status}` })).toHaveAttribute(
+        "data-state",
+        "empty",
+      );
     }
-    await expect(section.locator("button, div").filter({ hasText: shortLabel(today) }).first()).not.toContainText(
-      /\d+ de \d+/,
-    );
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

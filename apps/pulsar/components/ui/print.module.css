@@ -1,0 +1,56 @@
+/* On screen `.page` and `.block` draw nothing; everything is under print. */
+.only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 18mm 16mm;
+  }
+
+  /* Black on white whatever the theme: the tokens are redefined on the frame
+     for what it holds, and the shell's own dark ground is lifted off the sheet. */
+  .page {
+    --pulsar-ground: #ffffff;
+    --pulsar-raised: #ffffff;
+    --pulsar-line: #cccccc;
+    --pulsar-border: #999999;
+    --pulsar-ink: #000000;
+    --pulsar-ink-secondary: #000000;
+    --pulsar-muted: #000000;
+    --pulsar-quiet: #000000;
+    --pulsar-accent: #000000;
+    --pulsar-accent-soft: #ffffff;
+    --pulsar-on-accent: #ffffff;
+    background: #ffffff;
+    color: #000000;
+    print-color-adjust: exact;
+  }
+
+  :global(html):has(.page),
+  :global(body):has(.page),
+  :global(body):has(.page) > :global(.radix-themes) {
+    height: auto;
+    background: #ffffff;
+    color: #000000;
+  }
+
+  /* The rail and any sheet stand fixed or sticky; paper has no use for them. */
+  :global(body):has(.page) :global(nav),
+  :global(body):has(.page) :global([role="dialog"]) {
+    display: none !important;
+  }
+
+  .block {
+    break-inside: avoid;
+  }
+
+  .only {
+    display: block;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+}

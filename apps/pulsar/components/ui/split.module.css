@@ -3,8 +3,15 @@
 .split,
 .before,
 .main,
-.after {
+.after,
+.tail {
   display: contents;
+}
+
+/* On a phone the tail follows every other part of the split. */
+.tail > *,
+.tail > * > * {
+  order: 1;
 }
 
 @media (min-width: 1024px) {
@@ -25,6 +32,16 @@
     grid-column: 1;
     grid-row: 1 / span 2;
     min-inline-size: 0;
+  }
+
+  .tail {
+    display: block;
+    margin-block-start: 18px;
+  }
+
+  .tail > *,
+  .tail > * > * {
+    order: 0;
   }
 
   .before {
@@ -51,5 +68,27 @@
 
   .asideWide {
     grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .twoFifths {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .split.even {
+    display: block;
+  }
+
+  .split.even .main {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+    row-gap: 18px;
+    align-items: start;
+  }
+
+  .split.even .main > * {
+    margin-block-start: 0;
   }
 }

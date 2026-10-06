@@ -41,6 +41,12 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // The name reads muted: a commitment already met, still tappable
   // (`HoyCuenta.dc.html`).
   quiet?: boolean;
+  // The whole row is one link and nothing else: a goal in the list of goals.
+  href?: string;
+  // From 1024px these replace `meta` and join `trailing`: the desktop row
+  // carries the goal's month and its last day (`MetasCentroEscritorio`).
+  wideMeta?: ReactNode;
+  wideTrailing?: ReactNode;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -54,6 +60,9 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     leadingHref,
     leadingLabel,
     quiet,
+    href,
+    wideMeta,
+    wideTrailing,
     className,
     type = "button",
     disabled,
@@ -78,14 +87,29 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
           {name}
         </Text>
         {meta ? (
-          <Text as="span" variant="meta">
+          <Text as="span" variant="meta" className={wideMeta ? styles.narrowOnly : undefined}>
             {meta}
           </Text>
         ) : null}
+        {wideMeta ? (
+          <Text as="span" variant="meta" className={styles.wideOnly}>
+            {wideMeta}
+          </Text>
+        ) : null}
       </span>
+      {wideTrailing ? <span className={`${styles.trailing} ${styles.wideOnly}`}>{wideTrailing}</span> : null}
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
     </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className={merged}>
+        {leading ? <span className={styles.leading}>{leading}</span> : null}
+        {body}
+      </Link>
+    );
+  }
 
   if (leadingHref) {
     return (

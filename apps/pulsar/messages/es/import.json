@@ -1,0 +1,85 @@
+{
+  "entry": {
+    "title": "Importar un plan",
+    "hint": "pégalo o súbelo y revisa antes de crear"
+  },
+  "eyebrow": "metas",
+  "title": "Importar un plan",
+  "textLabel": "tu plan",
+  "placeholder": "Pega aquí tu plan, como lo tengas escrito.",
+  "upload": "Subir un archivo",
+  "uploadHint": "PDF, texto o imagen · hasta 4 MB",
+  "privacy": "Lo que pegues o subas se envía a OpenAI para leerlo. Un plan escrito en la plantilla se lee aquí, sin IA.",
+  "read": "Leer el plan",
+  "size": "{value} MB",
+  "reading": "Leyendo el plan…",
+  "slow": "Puede tardar un minuto.",
+  "retry": "Intentar otra vez",
+  "template": {
+    "show": "ver la plantilla",
+    "label": "la plantilla",
+    "note": "Escrito así, el plan se lee aquí mismo, sin IA y sin tope.",
+    "copy": "copiar la plantilla",
+    "copied": "plantilla copiada",
+    "example": "pulsar · plantilla 1\n\n# IA aplicada\nhorizonte: 2027-10-01\nmedida: horas de estudio · minutos\n\n## Fases\n- 2026-10-01 a 2026-12-31 · Evals y harness\n\n## Meses\n- 2026-10 · 12 h\n- 2026-11 · 20 h\n\n## Compromisos\n- Tema técnico · martes y jueves · 2 h\n- Inglés pasivo · cada día · toque\n\n## Tareas\n- 2026-10 · 4 h · Leer AI Engineering cap. 1–4\n- 2026-10 · Tutor\n  - 1 h · Elegir tutor\n  - 6 h · Sesiones 1–4"
+  },
+  "review": {
+    "eyebrow": "importar · leído por OpenAI",
+    "eyebrowTemplate": "importar · leído con la plantilla, sin IA",
+    "title": "Revisa el plan",
+    "hint": "desmarca lo que no quieras; toca un monto para cambiarlo",
+    "horizon": "horizonte",
+    "horizonUntil": "hasta el {date}",
+    "measure": "medida",
+    "groups": {
+      "phases": "fases",
+      "months": "meses",
+      "commitments": "compromisos",
+      "tasks": "tareas"
+    },
+    "sumOfMarked": "{month} · la suma de lo marcado",
+    "create": "{count, plural, one {Crear # meta} other {Crear # metas}}",
+    "creating": "Creando…",
+    "failed": "No se pudo crear el plan. Inténtalo otra vez.",
+    "amountOf": "Cambiar el monto de {name}, {amount}",
+    "place": "tu texto",
+    "sourceLabel": "tu texto",
+    "sourceFile": "leído de {name}",
+    "sourceFileAnon": "leído de un archivo",
+    "change": "Cambiar el texto",
+    "repeated": "Ya tienes una meta abierta con este nombre. Quedó desmarcada: márcala si quieres otra.",
+    "edit": {
+      "title": "Cambiar el monto"
+    },
+    "blocked": {
+      "title": "No se puede crear",
+      "hint": "se queda fuera; corrígelo en tu texto y vuelve a leerlo",
+      "from": "{goal} · {group}",
+      "timesPerWeek": "una semana tiene 7 días",
+      "monthBeforeStart": "ya pasó: la meta empieza en {first}",
+      "monthAfterEnd": "queda después del final de la meta, el {last}",
+      "amountNoMeasure": "esta meta no mide nada, así que un mes no lleva monto",
+      "quantityNoMeasure": "esta meta no mide nada, así que un compromiso no lleva cantidad"
+    }
+  },
+  "notices": {
+    "estimateDropped": "se crea sin tiempo: esta meta no mide nada"
+  },
+  "errors": {
+    "signedOut": "Tu sesión terminó. Entra otra vez.",
+    "tooBig": "El archivo pesa más de 4 MB. Pega su texto en la caja.",
+    "tooBigNamed": "«{file}» pesa {size} y el tope es 4 MB. Pega su texto en la caja.",
+    "unreadableType": "Ese tipo de archivo no se lee. Pega su texto en la caja.",
+    "templateLine": "Línea {line}: «{text}». Esperaba {expected}.",
+    "noKey": "La lectura con IA no está disponible ahora. Un plan escrito en la plantilla sí se lee.",
+    "cap": "Ya leíste 10 planes con IA hoy. Mañana puedes leer otros 10. Un plan escrito en la plantilla sí se lee hoy.",
+    "empty": "No encontramos metas, meses ni tareas en este texto. Prueba escribirlo en la plantilla.",
+    "modelFailed": "No pudimos leer el plan. Tu texto sigue aquí.",
+    "modelInvalid": "No pudimos leer el plan. Tu texto sigue aquí.",
+    "horizonPast": "El final de la meta ya pasó. Pon una fecha por venir.",
+    "duplicateMonth": "Hay dos montos para un mismo mes.",
+    "parentWithAmount": "Una tarea con sub-tareas no lleva monto propio. Quítalo o quita las sub-tareas.",
+    "tapWithAmount": "Un compromiso de un toque no lleva monto ni unidad. Quítalos.",
+    "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez."
+  }
+}

@@ -34,6 +34,7 @@ type GoalRow = {
   name: string;
   horizon: string;
   created_at: string;
+  archived_at: string | null;
 };
 
 // `source_key` / `source_unit` ride in from the join to `evidence_sources`;
@@ -62,6 +63,7 @@ type FactRow = {
 
 type WeekQueryRow = {
   goals: GoalRow[];
+  first_monday: string | null;
   commitments: CommitmentRow[];
   phases: PhaseRow[];
   facts: FactRow[];
@@ -95,10 +97,13 @@ type EvidenceOutcome = {
  * inside its period, and «al mes» reaches days the week's own `facts` never
  * read. No extra round trip.
  *
- * `goals` excludes an archived one (RP-24) and one that ended before the
- * week began; a goal that ended mid-week stays, it lived through the days
- * before. The same archived filter `lib/queries/
- * day.ts`'s own `queryGoalsRow` carries: `WeekScreen` (module 17) only ever
+ * `goals` are those that governed the week (RP-24, RP-44): written on or
+ * before its Sunday, not ended before it began, and not archived on or before
+ * its Sunday — so an archive since keeps the past week it lived through, and
+ * a goal opened later never enters it. A goal that ended mid-week stays, it
+ * lived through the days before. `first_monday` is the Monday of the oldest
+ * goal's creation, archived included: the bound of the screen's ‹.
+ * `WeekScreen` (module 17) only ever
  * groups a dot under a goal it finds here, and `goals.length === 0` is what
  * decides the week's own empty state (`empty-week.tsx`).
  */
@@ -112,7 +117,11 @@ async function queryGoalsRow(
     select
       (select coalesce(json_agg(to_jsonb(g) order by g.created_at), '[]'::json)
          from "goals"."goals" g
-         where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
+         where (g.created_at at time zone ${TIME_ZONE})::date <= ${weekEnd}::date
+           and g.horizon > ${weekStart}::date
+           and (g.archived_at is null or (g.archived_at at time zone ${TIME_ZONE})::date > ${weekEnd}::date)) as goals,
+      (select date_trunc('week', min(g.created_at at time zone ${TIME_ZONE}))::date::text
+         from "goals"."goals" g) as first_monday,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
                  'source_unit', s.unit
@@ -185,10 +194,18 @@ export type GoalSummary = {
   name: string;
   horizon: string;
   createdAt: string;
+  // Set only on a goal archived after the week read (RP-24).
+  archivedAt: string | null;
 };
 
 function toGoalSummary(row: GoalRow): GoalSummary {
-  return { id: row.id, name: row.name, horizon: row.horizon, createdAt: row.created_at };
+  return {
+    id: row.id,
+    name: row.name,
+    horizon: row.horizon,
+    createdAt: row.created_at,
+    archivedAt: row.archived_at,
+  };
 }
 
 // Which goal a commitment's own dots belong to, and its name for the dot's
@@ -255,6 +272,7 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   view: WeekView;
   evidence: "read" | "unreadable";
   goals: GoalSummary[];
+  firstMonday: string | null;
   commitments: CommitmentGoal[];
   oneOffFacts: OneOffFact[];
 }> {
@@ -291,6 +309,7 @@ export async function loadWeek(anyDayInIt: string): Promise<{
     view,
     evidence: evidenceOutcome.status,
     goals: row.goals.map(toGoalSummary),
+    firstMonday: row.first_monday,
     commitments: row.commitments.map((c) => toCommitmentGoal(c, row.period_facts, week, anyDayInIt.slice(0, 7))),
     // Unfiltered by `commitment_id`, unlike `facts` above: a one-off's fact
     // is exactly the row `facts` throws away (RP-19's own shape — "one

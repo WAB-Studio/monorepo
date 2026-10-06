@@ -52,9 +52,10 @@
  * runs after that is `lib/session.ts` itself, unmodified, importing the real
  * `@/db/client` and calling the real `withSettledTransaction`.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mock } from "node:test";
 
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import { createClient } from "@supabase/supabase-js";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -513,14 +514,33 @@ async function checkStatementAttributionByConnection(): Promise<void> {
   const sqlA = postgres(DATABASE_URL!, { prepare: false, max: 1, debug: (id, query) => wireA.push({ connId: id, sql: query }) });
   const sqlB = postgres(DATABASE_URL!, { prepare: false, max: 1, debug: (id, query) => wireB.push({ connId: id, sql: query }) });
 
+  // Barrier: each transaction holds its connection open until both have read
+  // their pid, so the pooler cannot hand one backend to both. The finally
+  // releases on a throw too, so one side failing never hangs the other.
+  let releaseA!: () => void;
+  let releaseB!: () => void;
+  const readA = new Promise<void>((resolve) => (releaseA = resolve));
+  const readB = new Promise<void>((resolve) => (releaseB = resolve));
   const [[pidA], [pidB]] = await Promise.all([
     sqlA.begin(async (tx) => {
-      await tx`select pg_sleep(0.05)`;
-      return tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      try {
+        const rows = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+        releaseA();
+        await readB;
+        return rows;
+      } finally {
+        releaseA();
+      }
     }),
     sqlB.begin(async (tx) => {
-      await tx`select pg_sleep(0.05)`;
-      return tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+      try {
+        const rows = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`;
+        releaseB();
+        await readA;
+        return rows;
+      } finally {
+        releaseB();
+      }
     }),
   ]);
 
@@ -628,6 +648,24 @@ async function checkRealDoor(): Promise<void> {
   assert("P34", threw, `real withGoalsDb with no session, threw = ${threw}`);
 }
 
+// Read the grant back from the catalogue, never from the migration file:
+// `facts` carried DELETE from 0000 ("undoing a tap is a delete of the whole
+// row"), `one_offs` from module 25 and `month_budgets` from 0007 (a month
+// amount is removed, and moved by delete and insert). `goals`, `phases`,
+// `commitments`, `month_shifts` and `model_calls` carry none. Takes any
+// executor so a mutant run can read it inside its own rollback.
+async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
+  const grants = await q<{ table_name: string }[]>`
+    select table_name from information_schema.role_table_grants
+    where table_schema = 'goals' and grantee = 'authenticated' and privilege_type = 'DELETE'`;
+  const tablesWithDelete = grants.map((row) => row.table_name).sort();
+  assert(
+    "P38",
+    tablesWithDelete.join(",") === "facts,month_budgets,one_offs",
+    `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
+  );
+}
+
 // Module 25's own grant (RP-22): `one_offs_delete_self` (0000) stood inert
 // until this migration's `GRANT DELETE`. Own connection, own transaction,
 // own forced rollback — nothing this seeds survives it, the same shape as
@@ -682,21 +720,7 @@ async function checkOneOffDeleteGrant(): Promise<void> {
       if (error !== forcedRollback) throw error;
     });
 
-  // Read the grant back from the catalogue, never from the migration file:
-  // `facts` already carried DELETE (0000, "undoing a tap is a delete of the
-  // whole row"); this migration adds `one_offs` beside it and nothing else —
-  // `goals`, `phases` and `commitments` still carry none.
-  const grants = await sql<{ table_name: string }[]>`
-    select table_name from information_schema.role_table_grants
-    where table_schema = 'goals' and grantee = 'authenticated' and privilege_type = 'DELETE'`;
-  const tablesWithDelete = grants.map((row) => row.table_name).sort();
-  assert(
-    "P38",
-    tablesWithDelete.length === 2 &&
-      tablesWithDelete[0] === "facts" &&
-      tablesWithDelete[1] === "one_offs",
-    `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
-  );
+  await assertDeleteGrants(sql);
 
   await sql.end();
 }
@@ -1003,16 +1027,18 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
       if (error !== forcedRollback) throw error;
     });
 
-  // Read from the catalogue: `one_offs` gains `day` alone; `goals` gains
-  // `horizon` beside the four it already had.
+  // Read from the catalogue: `one_offs` takes `day` (0005) and
+  // `planned_month` (0007, the shift's one write on this table) and nothing
+  // else.
   const oneOffCols = await sql<{ column_name: string }[]>`
     select column_name from information_schema.column_privileges
     where table_schema = 'goals' and table_name = 'one_offs'
       and grantee = 'authenticated' and privilege_type = 'UPDATE'`;
+  const oneOffUpdatable = oneOffCols.map((r) => r.column_name).sort();
   assert(
     "P58",
-    oneOffCols.length === 1 && oneOffCols[0].column_name === "day",
-    `columns of goals.one_offs updatable by authenticated = ${oneOffCols.map((r) => r.column_name).join(", ") || "none"}`,
+    oneOffUpdatable.join(",") === "day,planned_month",
+    `columns of goals.one_offs updatable by authenticated = ${oneOffUpdatable.join(", ") || "none"}`,
   );
 
   await sql.end();
@@ -1127,7 +1153,785 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
   await sql.end();
 }
 
+// The privileges one role holds on one `goals` table, table-level and
+// column-level apart, as `PRIV` and `PRIV(col, …)`, sorted.
+async function privilegesOf(
+  q: postgres.Sql | postgres.TransactionSql,
+  table: string,
+  grantee: string,
+): Promise<string> {
+  const tableLevel = await q<{ privilege_type: string }[]>`
+    select privilege_type from information_schema.role_table_grants
+    where table_schema = 'goals' and table_name = ${table} and grantee = ${grantee}`;
+  const columnLevel = await q<{ privilege_type: string; column_name: string }[]>`
+    select privilege_type, column_name from information_schema.column_privileges
+    where table_schema = 'goals' and table_name = ${table} and grantee = ${grantee}`;
+  const whole = new Set(tableLevel.map((r) => r.privilege_type));
+  const byColumn = new Map<string, string[]>();
+  for (const { privilege_type, column_name } of columnLevel) {
+    // A table-level grant shows up on every column too; keep the narrow ones.
+    if (whole.has(privilege_type)) continue;
+    byColumn.set(privilege_type, [...(byColumn.get(privilege_type) ?? []), column_name]);
+  }
+  return [
+    ...[...whole],
+    ...[...byColumn].map(([privilege, columns]) => `${privilege}(${columns.sort().join(",")})`),
+  ]
+    .sort()
+    .join(" ");
+}
+
+// Module 124: what 0007 grants on the three plan tables and on `one_offs`,
+// read from the catalogue. Takes any executor so a mutant run can read it
+// inside its own rollback.
+async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
+  const expected: [string, string, string][] = [
+    ["P108", "month_budgets", "DELETE INSERT(amount,goal_id,month,user_id) SELECT UPDATE(amount)"],
+    ["P109", "month_shifts", "INSERT(goal_id,month,user_id) SELECT"],
+    ["P110", "model_calls", "INSERT(model,source,user_id) SELECT UPDATE(input_tokens,outcome,output_tokens)"],
+    // 0008: a phase moves in time with a shift (RP-34) and never changes its aim.
+    ["P113", "phases", "INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT UPDATE(ends_on,starts_on)"],
+  ];
+  for (const [label, table, wanted] of expected) {
+    const authenticated = await privilegesOf(q, table, "authenticated");
+    const anon = await privilegesOf(q, table, "anon");
+    const service = await privilegesOf(q, table, "service_role");
+    assert(
+      label,
+      authenticated === wanted && anon === "" && service === "",
+      `${table}: authenticated = ${authenticated || "none"}; anon = ${anon || "none"}; service_role = ${service || "none"}`,
+    );
+  }
+
+  const oneOffs = await privilegesOf(q, "one_offs", "authenticated");
+  assert(
+    "P111",
+    oneOffs ===
+      "DELETE INSERT(day,estimate,goal_id,id,name,parent_id,planned_month,user_id) SELECT UPDATE(day,planned_month)",
+    `one_offs: authenticated = ${oneOffs || "none"}`,
+  );
+
+  const policies = await q<{ tablename: string; count: number }[]>`
+    select tablename, count(*)::int as count from pg_policies
+    where schemaname = 'goals' and tablename in ('month_budgets', 'month_shifts', 'model_calls', 'one_offs', 'phases')
+    group by tablename order by tablename`;
+  const counts = policies.map((r) => `${r.tablename}=${r.count}`).join(",");
+  assert(
+    "P112",
+    counts === "model_calls=3,month_budgets=4,month_shifts=2,one_offs=4,phases=4",
+    `policies per table = ${counts || "none"}`,
+  );
+}
+
+// Module 124 (RP-28, RP-30, RP-31, RP-34, RNP-13): every rule 0007 writes,
+// driven bare under a settled session, own transaction, forced rollback. The
+// row-to-row rules on `one_offs` and `facts` live in policies alone, so each
+// refusal below isolates one clause: the parent differs from a good one in
+// one column only.
+async function checkPlanByMonth(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const today = todayInZone();
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+
+      await enterUserContext(tx, subject);
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta', '2027-06-30') returning id`;
+      const [otherGoal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'otra meta', '2027-06-30') returning id`;
+
+      // -- month_budgets --
+      const [budget] = await tx<{ id: string }[]>`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${subject}, ${goal.id}, '2026-10-01', 720) returning id`;
+      const ownBudget = await tx<{ id: string }[]>`select id from goals.month_budgets where id = ${budget.id}`;
+      assert("P67", ownBudget.length === 1, `own month amount, rows visible = ${ownBudget.length}`);
+
+      const changesAmount = await attemptRows<{ amount: number }>(
+        tx,
+        (sp) => sp`update goals.month_budgets set amount = 600 where id = ${budget.id} returning amount`,
+      );
+      assert(
+        "P68",
+        changesAmount.code === undefined && changesAmount.rows.length === 1 && changesAmount.rows[0].amount === 600,
+        `own month amount changes, sqlstate = ${changesAmount.code ?? "none"}, rows = ${changesAmount.rows.length}`,
+      );
+
+      const budgetAsOther = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${intruder}, ${goal.id}, '2026-11-01', 60)`,
+      );
+      assert(
+        "P69",
+        budgetAsOther.code === "42501",
+        `insert month amount as another user, sqlstate = ${budgetAsOther.code ?? "none"}`,
+      );
+
+      const movesMonth = await attempt(
+        tx,
+        (sp) => sp`update goals.month_budgets set month = '2026-11-01' where id = ${budget.id}`,
+      );
+      assert("P70", movesMonth.code === "42501", `update month_budgets.month, sqlstate = ${movesMonth.code ?? "none"}`);
+
+      const midMonth = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${subject}, ${goal.id}, '2026-11-15', 60)`,
+      );
+      assert("P71", midMonth.code === "23514", `month amount on the 15th, sqlstate = ${midMonth.code ?? "none"}`);
+
+      const negative = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${subject}, ${goal.id}, '2026-11-01', -1)`,
+      );
+      assert("P72", negative.code === "23514", `month amount of -1, sqlstate = ${negative.code ?? "none"}`);
+
+      const twice = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_budgets (user_id, goal_id, month, amount)
+          values (${subject}, ${goal.id}, '2026-10-01', 60)`,
+      );
+      assert("P73", twice.code === "23505", `second amount for one goal's month, sqlstate = ${twice.code ?? "none"}`);
+
+      await enterUserContext(tx, intruder);
+      const foreignBudget = await tx<{ id: string }[]>`select id from goals.month_budgets where id = ${budget.id}`;
+      assert("P74", foreignBudget.length === 0, `another person's month amount, rows visible = ${foreignBudget.length}`);
+      const foreignAmount = await attemptCount(
+        tx,
+        (sp) => sp`update goals.month_budgets set amount = 1 where id = ${budget.id}`,
+      );
+      assert(
+        "P75",
+        foreignAmount.code === undefined && foreignAmount.count === 0,
+        `another person's month amount changes, sqlstate = ${foreignAmount.code ?? "none"}, rows = ${foreignAmount.count}`,
+      );
+      const foreignDelete = await attemptCount(tx, (sp) => sp`delete from goals.month_budgets where id = ${budget.id}`);
+      assert(
+        "P76",
+        foreignDelete.code === undefined && foreignDelete.count === 0,
+        `another person's month amount deleted, sqlstate = ${foreignDelete.code ?? "none"}, rows = ${foreignDelete.count}`,
+      );
+
+      await enterUserContext(tx, subject);
+      const ownDelete = await attemptCount(tx, (sp) => sp`delete from goals.month_budgets where id = ${budget.id}`);
+      assert(
+        "P77",
+        ownDelete.code === undefined && ownDelete.count === 1,
+        `own month amount deleted, sqlstate = ${ownDelete.code ?? "none"}, rows = ${ownDelete.count}`,
+      );
+
+      // -- one_offs: sub-tasks, one level deep, under a month task only --
+      const monthTask = async (name: string, goalId: string): Promise<string> => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into goals.one_offs (user_id, goal_id, name, planned_month)
+          values (${subject}, ${goalId}, ${name}, '2026-10-01') returning id`;
+        return row.id;
+      };
+      const parent = await monthTask("padre", goal.id);
+      const [datedParent] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month, day)
+        values (${subject}, ${goal.id}, 'padre con dia', '2026-10-01', '2026-10-05') returning id`;
+      const [estimatedParent] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+        values (${subject}, ${goal.id}, 'padre con estimado', '2026-10-01', 60) returning id`;
+      const doneParent = await monthTask("padre hecho", goal.id);
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${doneParent}, ${today})`;
+      const otherGoalParent = await monthTask("padre de otra meta", otherGoal.id);
+
+      const childUnder = (parentId: string, goalId = goal.id) =>
+        attemptRows<{ id: string }>(
+          tx,
+          (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
+            values (${subject}, ${goalId}, 'hija', ${parentId}, 30) returning id`,
+        );
+
+      const child = await childUnder(parent);
+      assert(
+        "P78",
+        child.code === undefined && child.rows.length === 1,
+        `sub-task under a month task, sqlstate = ${child.code ?? "none"}`,
+      );
+      const childId = child.rows[0]?.id ?? randomUUID();
+
+      // One savepoint at a time: never start them together in one transaction.
+      const refusals: [string, string, string][] = [
+        ["P79", "under a sub-task", childId],
+        ["P80", "under a month task with a day", datedParent.id],
+        ["P81", "under a month task with an estimate", estimatedParent.id],
+        ["P82", "under a month task with a fact", doneParent],
+        ["P83", "under a month task of another goal", otherGoalParent],
+      ];
+      for (const [label, what, parentId] of refusals) {
+        const result = await childUnder(parentId);
+        assert(label, result.code === "42501", `sub-task ${what}, sqlstate = ${result.code ?? "none (inserted)"}`);
+      }
+
+      const childWithMonth = await attempt(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id, planned_month)
+          values (${subject}, ${goal.id}, 'hija con mes', ${parent}, '2026-10-01')`,
+      );
+      assert(
+        "P84",
+        childWithMonth.code === "23514",
+        `sub-task with a month of its own, sqlstate = ${childWithMonth.code ?? "none"}`,
+      );
+
+      const parentTakesDay = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set day = '2026-10-20' where id = ${parent} returning id`,
+      );
+      assert(
+        "P85",
+        parentTakesDay.code === "42501",
+        `a parent takes a day, sqlstate = ${parentTakesDay.code ?? "none"}, rows = ${parentTakesDay.rows.length}`,
+      );
+
+      const parentMoves = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set planned_month = '2026-11-01' where id = ${parent} returning id`,
+      );
+      assert(
+        "P86",
+        parentMoves.code === undefined && parentMoves.rows.length === 1,
+        `an undone parent moves a month, sqlstate = ${parentMoves.code ?? "none"}, rows = ${parentMoves.rows.length}`,
+      );
+
+      const doneLeaf = await monthTask("hecha", goal.id);
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${doneLeaf}, ${today})`;
+      const doneMoves = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set planned_month = '2026-11-01' where id = ${doneLeaf} returning id`,
+      );
+      assert(
+        "P87",
+        doneMoves.code === undefined && doneMoves.rows.length === 0,
+        `a done month task moves a month, sqlstate = ${doneMoves.code ?? "none"}, rows = ${doneMoves.rows.length}`,
+      );
+
+      const setsEstimate = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 90 where id = ${childId}`,
+      );
+      assert("P88", setsEstimate.code === "42501", `update one_offs.estimate, sqlstate = ${setsEstimate.code ?? "none"}`);
+      const setsParent = await attempt(
+        tx,
+        (sp) => sp`update goals.one_offs set parent_id = null where id = ${childId}`,
+      );
+      assert("P89", setsParent.code === "42501", `update one_offs.parent_id, sqlstate = ${setsParent.code ?? "none"}`);
+
+      // -- facts: a parent is done by its children alone --
+      const parentFact = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${parent}, ${today})`,
+      );
+      assert("P90", parentFact.code === "42501", `a fact for a parent, sqlstate = ${parentFact.code ?? "none (inserted)"}`);
+      const childFact = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${childId}, ${today})`,
+      );
+      assert("P91", childFact.code === undefined, `a fact for its sub-task, sqlstate = ${childFact.code ?? "none"}`);
+
+      // -- delete: the FK cascade to the children bypasses RLS --
+      const parentGoes = await attemptCount(tx, (sp) => sp`delete from goals.one_offs where id = ${parent}`);
+      assert(
+        "P92",
+        parentGoes.code === undefined && parentGoes.count === 0,
+        `delete a parent whose sub-task has a fact, sqlstate = ${parentGoes.code ?? "none"}, rows = ${parentGoes.count}`,
+      );
+      const childFactLeft = await tx<{ id: string }[]>`select id from goals.facts where one_off_id = ${childId}`;
+      assert("P93", childFactLeft.length === 1, `the sub-task's fact after it, rows visible = ${childFactLeft.length}`);
+
+      const emptyParent = await monthTask("padre sin hechos", goal.id);
+      await childUnder(emptyParent);
+      await childUnder(emptyParent);
+      const emptyGoes = await attemptCount(tx, (sp) => sp`delete from goals.one_offs where id = ${emptyParent}`);
+      const orphans = await tx<{ id: string }[]>`select id from goals.one_offs where parent_id = ${emptyParent}`;
+      assert(
+        "P94",
+        emptyGoes.code === undefined && emptyGoes.count === 1 && orphans.length === 0,
+        `delete a parent with undone sub-tasks, rows = ${emptyGoes.count}, sub-tasks left = ${orphans.length}`,
+      );
+
+      // -- month_shifts: an act, written once --
+      const [shift] = await tx<{ id: string }[]>`
+        insert into goals.month_shifts (user_id, goal_id, month)
+        values (${subject}, ${goal.id}, '2026-09-01') returning id`;
+      const ownShift = await tx<{ id: string }[]>`select id from goals.month_shifts where id = ${shift.id}`;
+      assert("P95", ownShift.length === 1, `own shift, rows visible = ${ownShift.length}`);
+
+      const shiftTwice = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_shifts (user_id, goal_id, month) values (${subject}, ${goal.id}, '2026-09-01')`,
+      );
+      assert("P96", shiftTwice.code === "23505", `second shift for one month, sqlstate = ${shiftTwice.code ?? "none"}`);
+      const shiftMidMonth = await attempt(
+        tx,
+        (sp) => sp`insert into goals.month_shifts (user_id, goal_id, month) values (${subject}, ${goal.id}, '2026-08-15')`,
+      );
+      assert("P97", shiftMidMonth.code === "23514", `shift on the 15th, sqlstate = ${shiftMidMonth.code ?? "none"}`);
+      const shiftUpdate = await attempt(
+        tx,
+        (sp) => sp`update goals.month_shifts set month = '2026-08-01' where id = ${shift.id}`,
+      );
+      assert("P98", shiftUpdate.code === "42501", `update a shift, sqlstate = ${shiftUpdate.code ?? "none"}`);
+      const shiftDelete = await attempt(tx, (sp) => sp`delete from goals.month_shifts where id = ${shift.id}`);
+      assert("P99", shiftDelete.code === "42501", `delete a shift, sqlstate = ${shiftDelete.code ?? "none"}`);
+
+      // -- model_calls: the day is the zone's, and the count never drops --
+      const [call] = await tx<{ id: string; day: string }[]>`
+        insert into goals.model_calls (user_id, model, source)
+        values (${subject}, 'modelo', 'paste') returning id, day::text as day`;
+      assert("P100", call.day === today, `a call's day = ${call.day}, Bogota today = ${today}`);
+
+      const answered = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.model_calls set input_tokens = 900, output_tokens = 300, outcome = 'ok'
+          where id = ${call.id} returning id`,
+      );
+      assert(
+        "P101",
+        answered.code === undefined && answered.rows.length === 1,
+        `own call takes its tokens and outcome, sqlstate = ${answered.code ?? "none"}, rows = ${answered.rows.length}`,
+      );
+
+      const forgedDay = await attempt(
+        tx,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source, day)
+          values (${subject}, 'modelo', 'paste', '2026-01-01')`,
+      );
+      assert("P102", forgedDay.code === "42501", `insert a call naming its day, sqlstate = ${forgedDay.code ?? "none"}`);
+      const callDelete = await attempt(tx, (sp) => sp`delete from goals.model_calls where id = ${call.id}`);
+      assert("P103", callDelete.code === "42501", `delete a call, sqlstate = ${callDelete.code ?? "none"}`);
+      const badSource = await attempt(
+        tx,
+        (sp) => sp`insert into goals.model_calls (user_id, model, source) values (${subject}, 'modelo', 'x')`,
+      );
+      assert("P104", badSource.code === "23514", `a call from source 'x', sqlstate = ${badSource.code ?? "none"}`);
+
+      // -- phases: dates move, nothing else does (0008) --
+      const [shiftable] = await tx<{ id: string }[]>`
+        insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+        values (${subject}, ${goal.id}, 'fase corrible', '2026-12-01', '2026-12-31') returning id`;
+      const phaseMoves = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.phases set starts_on = '2027-01-01', ends_on = '2027-01-31'
+          where id = ${shiftable.id} returning id`,
+      );
+      assert(
+        "P114",
+        phaseMoves.code === undefined && phaseMoves.rows.length === 1,
+        `own phase's dates move, sqlstate = ${phaseMoves.code ?? "none"}, rows = ${phaseMoves.rows.length}`,
+      );
+      const phaseAim = await attempt(tx, (sp) => sp`update goals.phases set aim = 'otra' where id = ${shiftable.id}`);
+      assert("P115", phaseAim.code === "42501", `update phases.aim, sqlstate = ${phaseAim.code ?? "none"}`);
+      const phaseBackwards = await attempt(
+        tx,
+        (sp) => sp`update goals.phases set ends_on = '2026-12-31' where id = ${shiftable.id}`,
+      );
+      assert("P116", phaseBackwards.code === "23514", `a phase ending before it starts, sqlstate = ${phaseBackwards.code ?? "none"}`);
+
+      await enterUserContext(tx, intruder);
+      const foreignPhase = await attemptCount(
+        tx,
+        (sp) => sp`update goals.phases set starts_on = '2027-02-01', ends_on = '2027-02-28' where id = ${shiftable.id}`,
+      );
+      assert(
+        "P117",
+        foreignPhase.code === undefined && foreignPhase.count === 0,
+        `another person's phase dates move, sqlstate = ${foreignPhase.code ?? "none"}, rows = ${foreignPhase.count}`,
+      );
+      const foreignShift = await tx<{ id: string }[]>`select id from goals.month_shifts where id = ${shift.id}`;
+      assert("P105", foreignShift.length === 0, `another person's shift, rows visible = ${foreignShift.length}`);
+      const foreignCall = await tx<{ id: string }[]>`select id from goals.model_calls where id = ${call.id}`;
+      assert("P106", foreignCall.length === 0, `another person's call, rows visible = ${foreignCall.length}`);
+      const foreignAnswer = await attemptCount(
+        tx,
+        (sp) => sp`update goals.model_calls set outcome = 'failed' where id = ${call.id}`,
+      );
+      assert(
+        "P107",
+        foreignAnswer.code === undefined && foreignAnswer.count === 0,
+        `another person's call takes an outcome, sqlstate = ${foreignAnswer.code ?? "none"}, rows = ${foreignAnswer.count}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await assertPlanByMonthCatalogue(sql);
+
+  await sql.end();
+}
+
+// Module 181 (RP-38, RP-41, RNP-14, RNP-15): the key and the connection the
+// AI door opens with — 0009's grants, policies and four functions, driven as
+// the roles that would break them. Own transaction, forced rollback.
+// `AI_DOOR_MUTANT_SQL`, when set, runs inside that same transaction before
+// anything is read, so a mutant of a policy, a grant or a function is proved
+// red without a line of DDL surviving: the rollback takes it back.
+function sha256(): Buffer {
+  return createHash("sha256").update(randomBytes(32)).digest();
+}
+
+async function checkAiDoor(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.AI_DOOR_MUTANT_SQL;
+
+  await sql
+    .begin(async (tx) => {
+      if (mutant) {
+        console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+        await tx.unsafe(mutant);
+      }
+      await tx`insert into auth.users (id, email)
+        values (${subject}, ${`${subject}@example.invalid`}), (${intruder}, ${`${intruder}@example.invalid`})`;
+
+      // -- the catalogue --
+      const door: [string, string, string][] = [
+        [
+          "P118",
+          "access_tokens",
+          "INSERT(hint,name,token_hash,user_id) SELECT(created_at,expires_at,hint,id,kind,last_used_at,name,revoked_at,user_id) UPDATE(revoked_at)",
+        ],
+        ["P119", "oauth_clients", "SELECT(client_name,id,redirect_uris)"],
+        ["P120", "oauth_codes", "INSERT(client_id,code_challenge,code_hash,redirect_uri,resource,user_id)"],
+        ["P121", "oauth_refresh", ""],
+      ];
+      for (const [label, table, wanted] of door) {
+        const authenticated = await privilegesOf(tx, table, "authenticated");
+        const anon = await privilegesOf(tx, table, "anon");
+        const service = await privilegesOf(tx, table, "service_role");
+        assert(
+          label,
+          authenticated === wanted && anon === "" && service === "",
+          `${table}: authenticated = ${authenticated || "none"}; anon = ${anon || "none"}; service_role = ${service || "none"}`,
+        );
+      }
+      const doorPolicies = await tx<{ tablename: string; count: number }[]>`
+        select tablename, count(*)::int as count from pg_policies
+        where schemaname = 'goals' and tablename in ('access_tokens', 'oauth_clients', 'oauth_codes', 'oauth_refresh')
+        group by tablename order by tablename`;
+      const doorCounts = doorPolicies.map((r) => `${r.tablename}=${r.count}`).join(",");
+      assert(
+        "P122",
+        doorCounts === "access_tokens=3,oauth_clients=1,oauth_codes=2",
+        `policies per table = ${doorCounts || "none"}`,
+      );
+      const fns = await tx<{ name: string; secdef: boolean; config: string[] | null; auth: boolean; anon: boolean; svc: boolean }[]>`
+        select p.proname as name, p.prosecdef as secdef, p.proconfig as config,
+          has_function_privilege('authenticated', p.oid, 'execute') as auth,
+          has_function_privilege('anon', p.oid, 'execute') as anon,
+          has_function_privilege('service_role', p.oid, 'execute') as svc
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'goals'
+          and p.proname in ('person_for_token', 'oauth_register_client', 'oauth_exchange_code', 'oauth_refresh_token')
+        order by p.proname`;
+      const fnShape = fns
+        .map((f) => `${f.name}:${f.secdef ? "definer" : "invoker"}:${(f.config ?? []).join("|")}:${f.auth || f.anon || f.svc ? "open" : "closed"}`)
+        .join(" ");
+      assert(
+        "P123",
+        fnShape ===
+          'oauth_exchange_code:definer:search_path="":closed oauth_refresh_token:definer:search_path="":closed oauth_register_client:definer:search_path="":closed person_for_token:definer:search_path="":closed',
+        fnShape || "no functions",
+      );
+
+      // A client nobody owns and a second one a code does not name — made by
+      // the connection's own role, the only one that may call the function.
+      const [{ id: client }] = await tx<{ id: string }[]>`
+        select goals.oauth_register_client('Asistente', array['https://a.example.invalid/cb'], null) as id`;
+      const [{ id: otherClient }] = await tx<{ id: string }[]>`
+        select goals.oauth_register_client('Otro asistente', array['https://b.example.invalid/cb'], null) as id`;
+
+      // -- the subject --
+      await enterUserContext(tx, subject);
+      const keyHash = sha256();
+      const keyHash2 = sha256();
+      const own = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`insert into goals.access_tokens (user_id, name, token_hash, hint)
+          values (${subject}, 'mi llave', ${keyHash}, 'abcd') returning id`,
+      );
+      assert("P124", own.code === undefined && own.rows.length === 1, `insert own key, sqlstate = ${own.code ?? "none"}`);
+      const keyId = own.rows[0]?.id;
+      const [second] = await tx<{ id: string }[]>`
+        insert into goals.access_tokens (user_id, name, token_hash, hint)
+        values (${subject}, 'otra llave', ${keyHash2}, 'wxyz') returning id`;
+
+      const readOwn = await tx<{ name: string; hint: string; kind: string; revoked_at: Date | null }[]>`
+        select id, user_id, kind, name, hint, created_at, last_used_at, expires_at, revoked_at
+        from goals.access_tokens where id = ${keyId}`;
+      assert(
+        "P125",
+        readOwn.length === 1 && readOwn[0].name === "mi llave" && readOwn[0].hint === "abcd" && readOwn[0].kind === "personal",
+        `own key's columns read back, rows = ${readOwn.length}, kind = ${readOwn[0]?.kind}`,
+      );
+      const readHash = await attempt(tx, (sp) => sp`select token_hash from goals.access_tokens where id = ${keyId}`);
+      assert("P126", readHash.code === "42501", `owner selects token_hash, sqlstate = ${readHash.code ?? "none"}`);
+      const readStar = await attempt(tx, (sp) => sp`select * from goals.access_tokens where id = ${keyId}`);
+      assert("P127", readStar.code === "42501", `owner selects *, sqlstate = ${readStar.code ?? "none"}`);
+
+      const forgedOwner = await attempt(
+        tx,
+        (sp) => sp`insert into goals.access_tokens (user_id, name, token_hash, hint)
+          values (${intruder}, 'a nombre de otro', ${sha256()}, 'qqqq')`,
+      );
+      assert("P128", forgedOwner.code === "42501", `insert a key for another person, sqlstate = ${forgedOwner.code ?? "none"}`);
+      const forgedKind = await attempt(
+        tx,
+        (sp) => sp`insert into goals.access_tokens (user_id, kind, name, token_hash)
+          values (${subject}, 'oauth', 'conexion falsa', ${sha256()})`,
+      );
+      assert("P129", forgedKind.code === "42501", `insert a key of kind oauth, sqlstate = ${forgedKind.code ?? "none"}`);
+      const rename = await attempt(tx, (sp) => sp`update goals.access_tokens set name = 'otro' where id = ${keyId}`);
+      assert("P130", rename.code === "42501", `update a key's name, sqlstate = ${rename.code ?? "none"}`);
+      const expiry = await attempt(tx, (sp) => sp`update goals.access_tokens set expires_at = null where id = ${keyId}`);
+      assert("P131", expiry.code === "42501", `update a key's expires_at, sqlstate = ${expiry.code ?? "none"}`);
+
+      const revoke = await attemptCount(
+        tx,
+        (sp) => sp`update goals.access_tokens set revoked_at = now() where id = ${second.id}`,
+      );
+      assert("P132", revoke.code === undefined && revoke.count === 1, `revoke own key, sqlstate = ${revoke.code ?? "none"}, rows = ${revoke.count}`);
+      const unrevoke = await attemptCount(
+        tx,
+        (sp) => sp`update goals.access_tokens set revoked_at = null where id = ${second.id}`,
+      );
+      const restamp = await attemptCount(
+        tx,
+        (sp) => sp`update goals.access_tokens set revoked_at = now() + interval '1 day' where id = ${second.id}`,
+      );
+      const [stillRevoked] = await tx<{ revoked_at: Date | null; later: boolean }[]>`
+        select revoked_at, revoked_at > now() as later from goals.access_tokens where id = ${second.id}`;
+      assert(
+        "P133",
+        unrevoke.count === 0 && restamp.count === 0 && stillRevoked.revoked_at !== null && stillRevoked.later === false,
+        `a revoked key is un-revoked / re-dated: rows = ${unrevoke.count}/${restamp.count}, still revoked = ${stillRevoked.revoked_at !== null}`,
+      );
+
+      for (const [label, table] of [
+        ["P134", "access_tokens"],
+        ["P135", "oauth_clients"],
+        ["P136", "oauth_codes"],
+        ["P137", "oauth_refresh"],
+      ] as const) {
+        const del = await attempt(tx, (sp) => sp`delete from goals.${sp(table)}`);
+        assert(label, del.code === "42501", `delete from ${table}, sqlstate = ${del.code ?? "none"}`);
+      }
+
+      const clientRead = await tx<{ id: string; client_name: string }[]>`
+        select id, client_name, redirect_uris from goals.oauth_clients where id = ${client}`;
+      assert("P138", clientRead.length === 1 && clientRead[0].client_name === "Asistente", `a client's public metadata reads, rows = ${clientRead.length}`);
+      const clientUrl = await attempt(tx, (sp) => sp`select metadata_url from goals.oauth_clients`);
+      assert("P139", clientUrl.code === "42501", `select oauth_clients.metadata_url, sqlstate = ${clientUrl.code ?? "none"}`);
+      const refreshRead = await attempt(tx, (sp) => sp`select 1 from goals.oauth_refresh limit 1`);
+      assert("P140", refreshRead.code === "42501", `select oauth_refresh, sqlstate = ${refreshRead.code ?? "none"}`);
+      const refreshWrite = await attempt(
+        tx,
+        (sp) => sp`insert into goals.oauth_refresh (access_token_id, client_id, refresh_hash)
+          values (${keyId}, ${client}, ${sha256()})`,
+      );
+      assert("P141", refreshWrite.code === "42501", `insert oauth_refresh, sqlstate = ${refreshWrite.code ?? "none"}`);
+      const codeRead = await attempt(tx, (sp) => sp`select 1 from goals.oauth_codes limit 1`);
+      assert("P142", codeRead.code === "42501", `select oauth_codes, sqlstate = ${codeRead.code ?? "none"}`);
+
+      const ownCode = await attempt(
+        tx,
+        (sp) => sp`insert into goals.oauth_codes (user_id, client_id, code_hash, code_challenge, redirect_uri, resource)
+          values (${subject}, ${client}, ${sha256()}, 'c', 'https://a.example.invalid/cb', 'https://r.example.invalid')`,
+      );
+      assert("P143", ownCode.code === undefined, `insert own code, sqlstate = ${ownCode.code ?? "none"}`);
+      const foreignCode = await attempt(
+        tx,
+        (sp) => sp`insert into goals.oauth_codes (user_id, client_id, code_hash, code_challenge, redirect_uri, resource)
+          values (${intruder}, ${client}, ${sha256()}, 'c', 'https://a.example.invalid/cb', 'https://r.example.invalid')`,
+      );
+      assert("P144", foreignCode.code === "42501", `insert a code for another person, sqlstate = ${foreignCode.code ?? "none"}`);
+
+      // The four functions answer to the connection's role and to no app role.
+      const probe: [string, (sp: postgres.TransactionSql) => Promise<unknown>][] = [
+        ["person_for_token", (sp) => sp`select * from goals.person_for_token(${keyHash}::bytea)`],
+        [
+          "oauth_register_client",
+          (sp) => sp`select goals.oauth_register_client('x', array['https://x.example.invalid'], null)`,
+        ],
+        [
+          "oauth_exchange_code",
+          (sp) => sp`select goals.oauth_exchange_code(${sha256()}::bytea, 'c', ${client}::uuid, 'r', ${sha256()}::bytea, ${sha256()}::bytea)`,
+        ],
+        [
+          "oauth_refresh_token",
+          (sp) => sp`select goals.oauth_refresh_token(${sha256()}::bytea, ${client}::uuid, ${sha256()}::bytea, ${sha256()}::bytea)`,
+        ],
+      ];
+      const asAuthenticated: string[] = [];
+      for (const [name, call] of probe) asAuthenticated.push(`${name}=${(await attempt(tx, call)).code ?? "ran"}`);
+      assert(
+        "P145",
+        asAuthenticated.every((r) => r.endsWith("=42501")),
+        `authenticated calls ${asAuthenticated.join(" ")}`,
+      );
+
+      // -- the intruder --
+      await enterUserContext(tx, intruder);
+      const foreignKey = await tx<{ id: string }[]>`select id from goals.access_tokens where id = ${keyId}`;
+      const foreignAll = await tx<{ id: string }[]>`select id from goals.access_tokens where user_id = ${subject}`;
+      assert("P146", foreignKey.length === 0 && foreignAll.length === 0, `another person's keys, rows visible = ${foreignKey.length}/${foreignAll.length}`);
+      const foreignRevoke = await attemptCount(
+        tx,
+        (sp) => sp`update goals.access_tokens set revoked_at = now() where id = ${keyId}`,
+      );
+      assert(
+        "P147",
+        foreignRevoke.code === undefined && foreignRevoke.count === 0,
+        `revoke another person's key, sqlstate = ${foreignRevoke.code ?? "none"}, rows = ${foreignRevoke.count}`,
+      );
+
+      // -- anon --
+      await tx`reset role`;
+      await tx`select set_config('role', 'anon', true)`;
+      const anonRefusals: string[] = [];
+      for (const [name, call] of [
+        ["select", (sp: postgres.TransactionSql) => sp`select 1 from goals.access_tokens limit 1`],
+        ["insert", (sp: postgres.TransactionSql) => sp`insert into goals.access_tokens (user_id, name, token_hash) values (${subject}, 'x', ${sha256()})`],
+        ["update", (sp: postgres.TransactionSql) => sp`update goals.access_tokens set revoked_at = now()`],
+        ["delete", (sp: postgres.TransactionSql) => sp`delete from goals.access_tokens`],
+        ["clients", (sp: postgres.TransactionSql) => sp`select 1 from goals.oauth_clients limit 1`],
+        ["codes", (sp: postgres.TransactionSql) => sp`select 1 from goals.oauth_codes limit 1`],
+        ["refresh", (sp: postgres.TransactionSql) => sp`select 1 from goals.oauth_refresh limit 1`],
+        ...probe,
+      ] as [string, (sp: postgres.TransactionSql) => Promise<unknown>][]) {
+        anonRefusals.push(`${name}=${(await attempt(tx, call)).code ?? "ran"}`);
+      }
+      assert("P148", anonRefusals.every((r) => r.endsWith("=42501")), `anon: ${anonRefusals.join(" ")}`);
+
+      // -- the connection's own role: person_for_token --
+      await tx`reset role`;
+      const person = await tx<{ user_id: string; email: string }[]>`
+        select * from goals.person_for_token(${keyHash}::bytea)`;
+      assert(
+        "P149",
+        person.length === 1 && person[0].user_id === subject && person[0].email === `${subject}@example.invalid`,
+        `a live key's person, rows = ${person.length}`,
+      );
+      const [stamp] = await tx<{ last_used_at: Date | null }[]>`
+        select last_used_at from goals.access_tokens where id = ${keyId}`;
+      assert("P150", stamp.last_used_at !== null, `a resolved key is stamped, last_used_at = ${stamp.last_used_at}`);
+      const revokedKey = await tx<{ user_id: string }[]>`select * from goals.person_for_token(${keyHash2}::bytea)`;
+      const [revokedStamp] = await tx<{ last_used_at: Date | null }[]>`
+        select last_used_at from goals.access_tokens where id = ${second.id}`;
+      assert(
+        "P151",
+        revokedKey.length === 0 && revokedStamp.last_used_at === null,
+        `a revoked key resolves to ${revokedKey.length} people, stamped = ${revokedStamp.last_used_at !== null}`,
+      );
+      const staleHash = sha256();
+      const freshHash = sha256();
+      await tx`insert into goals.access_tokens (user_id, kind, name, token_hash, expires_at)
+        values (${subject}, 'oauth', 'vencida', ${staleHash}, now() - interval '1 minute'),
+               (${subject}, 'oauth', 'vigente', ${freshHash}, now() + interval '1 hour')`;
+      const stale = await tx<{ user_id: string }[]>`select * from goals.person_for_token(${staleHash}::bytea)`;
+      const fresh = await tx<{ user_id: string }[]>`select * from goals.person_for_token(${freshHash}::bytea)`;
+      assert(
+        "P152",
+        stale.length === 0 && fresh.length === 1 && fresh[0].user_id === subject,
+        `an expired connection resolves to ${stale.length}, an unexpired one to ${fresh.length}`,
+      );
+      const unknown = await tx<{ user_id: string }[]>`select * from goals.person_for_token(${sha256()}::bytea)`;
+      assert("P153", unknown.length === 0, `an unknown key resolves to ${unknown.length} people`);
+
+      // -- oauth_exchange_code --
+      const redirect = "https://a.example.invalid/cb";
+      const newCode = async (expired = false): Promise<Buffer> => {
+        const hash = sha256();
+        await tx`insert into goals.oauth_codes (user_id, client_id, code_hash, code_challenge, redirect_uri, resource, expires_at)
+          values (${subject}, ${client}, ${hash}, 'desafio', ${redirect}, 'https://r.example.invalid',
+            ${expired ? tx`now() - interval '1 minute'` : tx`now() + interval '10 minutes'`})`;
+        return hash;
+      };
+      const exchange = async (
+        code: Buffer,
+        o: { challenge?: string; client?: string; redirect?: string; access?: Buffer; refresh?: Buffer } = {},
+      ): Promise<string | null> => {
+        const [row] = await tx<{ person: string | null }[]>`
+          select goals.oauth_exchange_code(${code}::bytea, ${o.challenge ?? "desafio"}, ${(o.client ?? client)}::uuid,
+            ${o.redirect ?? redirect}, ${(o.access ?? sha256())}::bytea, ${(o.refresh ?? sha256())}::bytea) as person`;
+        return row.person;
+      };
+      const resolves = async (hash: Buffer): Promise<boolean> =>
+        (await tx`select * from goals.person_for_token(${hash}::bytea)`).length === 1;
+
+      const code = await newCode();
+      const wrong = [
+        await exchange(code, { challenge: "otro" }),
+        await exchange(code, { client: otherClient }),
+        await exchange(code, { redirect: "https://evil.example.invalid/cb" }),
+      ];
+      assert("P154", wrong.every((r) => r === null), `a code with a wrong challenge, client or redirect yields ${wrong.join(",")}`);
+      const access1 = sha256();
+      const refresh1 = sha256();
+      const once = await exchange(code, { access: access1, refresh: refresh1 });
+      assert("P155", once === subject && (await resolves(access1)), `the matching code yields the person, got ${once}`);
+      const access1b = sha256();
+      const twice = await exchange(code, { access: access1b });
+      assert(
+        "P156",
+        twice === null && !(await resolves(access1)) && !(await resolves(access1b)),
+        `a second redemption yields ${twice}, the connection it produced still resolves = ${await resolves(access1)}`,
+      );
+      const stale2 = await newCode(true);
+      const expiredToken = sha256();
+      const expired = await exchange(stale2, { access: expiredToken });
+      assert("P157", expired === null && !(await resolves(expiredToken)), `an expired code yields ${expired}`);
+
+      // -- oauth_refresh_token --
+      const code2 = await newCode();
+      const access2 = sha256();
+      const refreshA = sha256();
+      await exchange(code2, { access: access2, refresh: refreshA });
+      const rotate = async (old: Buffer, access: Buffer, refresh: Buffer, forClient = client): Promise<string | null> => {
+        const [row] = await tx<{ person: string | null }[]>`
+          select goals.oauth_refresh_token(${old}::bytea, ${forClient}::uuid, ${access}::bytea, ${refresh}::bytea) as person`;
+        return row.person;
+      };
+      const wrongClient = await rotate(refreshA, sha256(), sha256(), otherClient);
+      const access3 = sha256();
+      const refreshB = sha256();
+      const rotated = await rotate(refreshA, access3, refreshB);
+      assert(
+        "P158",
+        wrongClient === null && rotated === subject && (await resolves(access3)) && !(await resolves(access2)),
+        `a refresh rotates once: wrong client ${wrongClient}, rotated ${rotated}, old key still resolves = ${await resolves(access2)}`,
+      );
+      const replay = await rotate(refreshA, sha256(), sha256());
+      assert("P159", replay === null && !(await resolves(access3)), `a reused refresh yields ${replay}, the connection still resolves = ${await resolves(access3)}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
+  assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
     prepare: false,
     max: 1,
@@ -1146,6 +1950,8 @@ async function main(): Promise<void> {
   await checkGoalRenameArchiveGrant();
   await checkOneOffScheduleAndHorizonGrants();
   await checkScheduledOneOffMoveByZone();
+  await checkPlanByMonth();
+  await checkAiDoor();
 
   if (failed) process.exit(1);
 }

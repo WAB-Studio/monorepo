@@ -58,13 +58,13 @@ test("renaming a goal on screen reads everywhere: its own screen, Hoy and Semana
     await sheet.getByRole("button", { name: "Guardarlo" }).click();
     await expect(sheet).toBeHidden();
 
-    await expect(page.getByText(renamed, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(renamed, { exact: true })).toBeVisible();
 
     await page.goto("/");
-    await expect(page.getByText(renamed, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(renamed, { exact: true })).toBeVisible();
 
     await page.goto("/semana");
-    await expect(page.getByText(renamed)).toBeVisible();
+    await expect(page.getByRole("main").getByText(renamed)).toBeVisible();
   } finally {
     // Restored: the marker this spec's own `findOrCreateGoal` looks for on
     // its next run, on this lane or any other.
@@ -162,7 +162,7 @@ test("reopening an archived goal through its own screen brings it back to Hoy (R
   await expect(page.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
 
   await page.goto("/");
-  await expect(page.getByText(marker, { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText(marker, { exact: true })).toBeVisible();
 });
 
 test("an archived goal offers no way to add a phase, direct visit included (RP-24)", async ({

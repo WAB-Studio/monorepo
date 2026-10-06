@@ -47,6 +47,7 @@ import { sql, type SQL } from "drizzle-orm";
 // `DATABASE_URL` role, and loaded here (a plain npm package, static import)
 // before `installStubs` ever runs, so it is never the wrapped, counted
 // `postgres` `installStubs` hands `loadGoal` itself.
+import { assertSuiteDatabase } from "@repo/harness-registry";
 import postgres from "postgres";
 
 function laneNumber(): number {
@@ -1148,8 +1149,8 @@ async function runEndedCheck(): Promise<void> {
       where(split.archived, archivedId) && !where(split.ended, archivedId) && !where(split.open, archivedId),
       `open=${where(split.open, archivedId)} ended=${where(split.ended, archivedId)} archived=${where(split.archived, archivedId)}`,
     );
-    assert("listGoalsForMetas stays one query behind its settle (two application statements)",
-      statements === 2,
+    assert("listGoalsForMetas reads the goals in one statement and the evidence in another, each behind its settle (four application statements)",
+      statements === 4,
       `${statements} application statement(s)`);
 
     const listed = await listGoals();
@@ -1162,6 +1163,167 @@ async function runEndedCheck(): Promise<void> {
     for (const id of seeded) await migrationDb`delete from goals.goals where id = ${id}`;
     await migrationDb.end();
   }
+}
+
+/**
+ * Module 129: `loadGoal` reads the plan by month. A goal opened 2010-09-15
+ * with a horizon of 2011-08-15, budgets for 2010-10 (720) and 2010-11 (0), one
+ * declared fact of 300 in October, a parent with two sub-tasks, and a shifted
+ * month, all seeded through the session pooler (the one door onto the
+ * backdated `created_at` and onto rows the policies would refuse), read with
+ * `today` pinned inside the span.
+ */
+async function runPlanMonthsCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runPlanMonthsCheck: no settled session");
+
+  const goal = await createGoal({ name: "check-goal.ts probe — 129 meses", horizon: "2030-01-01" });
+  if (!goal.ok) throw new Error(`runPlanMonthsCheck: createGoal failed: ${goal.error}`);
+  const goalId = goal.goalId;
+  const commitment = await addCommitment({
+    goalId,
+    name: "check-goal.ts probe — 129 medida",
+    cadenceKind: "daily",
+    satisfaction: "quantity",
+    targetQuantity: 1,
+    unit: "min",
+  });
+  if (!commitment.ok) throw new Error(`runPlanMonthsCheck: addCommitment failed: ${commitment.error}`);
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    await migrationDb`
+      update goals.goals set created_at = ${new Date("2010-09-15T12:00:00-05:00")}, horizon = '2011-08-15'
+      where id = ${goalId}`;
+    await migrationDb`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${goalId}, '2010-10-01', 720), (${person.id}, ${goalId}, '2010-11-01', 0)`;
+    await migrationDb`
+      insert into goals.month_shifts (user_id, goal_id, month) values (${person.id}, ${goalId}, '2010-09-01')`;
+    await migrationDb`
+      insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
+      values (${person.id}, ${commitment.commitmentId}, ${goalId}, '2010-10-05', 300)`;
+    const [parent] = await migrationDb<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${person.id}, ${goalId}, 'check-goal.ts probe — 129 madre', '2010-10-01', 500) returning id`;
+    const [done] = await migrationDb<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
+      values (${person.id}, ${goalId}, 'check-goal.ts probe — 129 hija hecha', ${parent.id}, 60) returning id`;
+    await migrationDb`
+      insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
+      values (${person.id}, ${goalId}, 'check-goal.ts probe — 129 hija abierta', ${parent.id}, 40)`;
+
+    const today = "2010-10-20";
+    const start = wireCalls.length;
+    const before = await loadGoal(goalId, today);
+    const calls = wireCalls.slice(start);
+    reportRun("plan-months", calls, true);
+    await assertBoundsResolveToGoalRow(goalId, calls);
+    if (!before) throw new Error("runPlanMonthsCheck: loadGoal returned null");
+
+    assert(
+      "RP-16: a goal opened 2010-09-15 with a horizon of 2011-08-15 reads twelve month rows",
+      before.months.length === 12 && before.months[0]?.month === "2010-09-01" && before.months[11]?.month === "2011-08-01",
+      `${before.months.length} row(s), ${before.months[0]?.month}..${before.months[11]?.month}`,
+    );
+    const planned = (month: string) => before.months.find((row) => row.month === month)?.planned;
+    assert(
+      "RP-28: October plans 720, November 0, a month with no budget row null",
+      planned("2010-10-01") === 720 && planned("2010-11-01") === 0 && planned("2010-12-01") === null,
+      `oct=${planned("2010-10-01")} nov=${planned("2010-11-01")} dec=${planned("2010-12-01")}`,
+    );
+    assert(
+      "RP-29: on 2010-10-20 with 300 of 720 reached, the month line is under pace",
+      before.month?.month === "2010-10-01" && before.month.planned === 720 && before.month.reached === 300 &&
+        before.month.underPace === true,
+      `month = ${JSON.stringify(before.month)}`,
+    );
+    const early = await loadGoal(goalId, "2010-10-19");
+    assert(
+      "RP-29: the day before the 20th the same month is not under pace",
+      early?.month?.underPace === false,
+      `month = ${JSON.stringify(early?.month)}`,
+    );
+    const zero = await loadGoal(goalId, "2010-11-25");
+    assert(
+      "RP-29: a month planned at 0 is never under pace",
+      zero?.month?.planned === 0 && zero.month.underPace === false,
+      `month = ${JSON.stringify(zero?.month)}`,
+    );
+    assert(
+      "RP-28: loadGoal returns the budgets, and the shifted month in shifts",
+      before.budgets.length === 2 && JSON.stringify(before.shifts) === JSON.stringify(["2010-09-01"]),
+      `budgets = ${JSON.stringify(before.budgets)}, shifts = ${JSON.stringify(before.shifts)}`,
+    );
+    assert(
+      "RP-30: a parent and its two children come back in tasks, none done yet",
+      before.tasks.length === 3 && before.tasks.filter((task) => task.parentId === parent.id).length === 2 &&
+        before.tasks.every((task) => task.doneOn === null),
+      `tasks = ${JSON.stringify(before.tasks.map((task) => [task.name, task.parentId === null, task.doneOn]))}`,
+    );
+
+    // Written at `now()` on the server's clock, the day is the 2010 one: a
+    // read of `done_on` from `written_at` cannot land on it.
+    await migrationDb`
+      insert into goals.facts (user_id, one_off_id, goal_id, day)
+      values (${person.id}, ${done.id}, ${goalId}, '2010-10-10')`;
+    // The parent's own fact must add nothing: its leaves already did.
+    await migrationDb`
+      insert into goals.facts (user_id, one_off_id, goal_id, day)
+      values (${person.id}, ${parent.id}, ${goalId}, '2010-10-12')`;
+    const after = await loadGoal(goalId, today);
+    if (!after) throw new Error("runPlanMonthsCheck: loadGoal returned null after the fact");
+
+    assert(
+      "RP-30: a child's done_on is the day of its own fact",
+      after.tasks.find((task) => task.id === done.id)?.doneOn === "2010-10-10",
+      `doneOn = ${after.tasks.find((task) => task.id === done.id)?.doneOn}`,
+    );
+    assert(
+      "RP-36: a done child's estimate of 60 raises measureTotal by 60, the parent's 500 adds nothing",
+      after.measureTotal - before.measureTotal === 60,
+      `before=${before.measureTotal} after=${after.measureTotal}`,
+    );
+    const weekOf = (view: typeof after) =>
+      view.weeks.find((week) => week.startsOn <= "2010-10-10" && "2010-10-10" <= week.endsOn)?.total ?? NaN;
+    assert(
+      "RP-36: the same 60 lands in its week and in its month",
+      weekOf(after) - weekOf(before) === 60 &&
+        (after.months.find((row) => row.month === "2010-10-01")?.reached ?? 0) -
+          (before.months.find((row) => row.month === "2010-10-01")?.reached ?? 0) === 60,
+      `week ${weekOf(before)} -> ${weekOf(after)}; month ${before.month?.reached} -> ${after.month?.reached}`,
+    );
+  } finally {
+    await migrationDb`delete from goals.goals where id = ${goalId}`;
+    await migrationDb.end();
+  }
+}
+
+/**
+ * `/metas` reads the goals and the evidence on two connections at once, never
+ * one after the other. A warm call (the first pays the dial) must show the
+ * two transactions' wall-clock windows overlapping, the way `check-day.ts`
+ * asserts it for `loadDay`.
+ */
+async function runMetasOverlapCheck(): Promise<void> {
+  const { listGoalsForMetas } = await import("@/lib/queries/goal");
+  await listGoalsForMetas();
+  const start = wireCalls.length;
+  await listGoalsForMetas();
+  const groups = [...groupByConnection(wireCalls.slice(start)).entries()].map(([connection, calls]) =>
+    analyzeGroup(connection, calls),
+  );
+  const [a, b] = groups.map((group) => group.window);
+  const overlaps = a !== undefined && b !== undefined && Math.max(a.start, b.start) < Math.min(a.end, b.end);
+  assert(
+    "listGoalsForMetas' two transactions overlap in wall-clock time (warm)",
+    groups.length === 2 && overlaps,
+    `${groups.length} connection(s), overlap = ${overlaps}`,
+  );
 }
 
 async function runMain(): Promise<void> {
@@ -1249,6 +1411,8 @@ async function runMain(): Promise<void> {
   await runWeeksCheck();
   await runLateNightOpenCheck();
   await runEndedCheck();
+  await runPlanMonthsCheck();
+  await runMetasOverlapCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");
@@ -1257,6 +1421,7 @@ async function runMain(): Promise<void> {
 
 void (async () => {
   try {
+    assertSuiteDatabase();
     const childArg = process.argv.find((arg) => arg.startsWith("--child="));
     const goalArg = process.argv.find((arg) => arg.startsWith("--goal="));
     if (childArg) {

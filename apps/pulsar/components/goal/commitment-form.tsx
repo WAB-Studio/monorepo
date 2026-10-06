@@ -6,7 +6,8 @@ import { useTranslations } from "next-intl";
 
 import { addCommitment } from "@/app/actions/plan";
 import { addCommitmentSchema, type AddCommitmentInput } from "@/lib/validation/plan";
-import { Button, Chip, Field, Flex, Page, SectionLabel, Text } from "@/components/ui";
+import { Button, Chip, Field, Flex, Page, ScreenHeader, SectionLabel, Text } from "@/components/ui";
+import { messageKey, type MessageKey, type SourceKey } from "@/i18n/translator";
 
 export type CommitmentFormProps = {
   goalId: string;
@@ -18,7 +19,7 @@ export type CommitmentFormProps = {
   // The evidence catalogue (RP-07, RNP-10), read off `goals.evidence_sources`
   // by the page: a second source is a seeded row, never a case this form
   // hardcodes.
-  sources: { key: string; labelKey: string; unit: string }[];
+  sources: { key: string; labelKey: SourceKey; unit: string }[];
 };
 
 // RP-12's five cadences (`lib/day/types.ts`'s `Cadence`), in the order of
@@ -42,7 +43,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
   const t = useTranslations();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageKey | null>(null);
 
   const [name, setName] = useState("");
   const [cadenceKind, setCadenceKind] = useState<CadenceKind>("daily");
@@ -83,7 +84,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
 
     const parsed = addCommitmentSchema.safeParse({ goalId, name, ...cadence, ...done });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      setError(messageKey(parsed.error.issues[0].message));
       return null;
     }
     return parsed.data;
@@ -112,12 +113,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, sources }: Commit
 
   return (
     <Page>
-      <Text as="p" variant="meta" tone="muted">
-        {goalName}
-      </Text>
-      <Text as="p" variant="title">
-        {t("plan.commitmentForm.title")}
-      </Text>
+      <ScreenHeader title={t("plan.commitmentForm.title")} back={{ href: `/metas/${goalId}`, place: goalName }} />
 
       <Field
         label={t("plan.commitmentForm.whatLabel")}

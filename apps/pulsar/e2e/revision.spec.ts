@@ -19,8 +19,10 @@ function dayAfter(openedOn: string, days: number): string {
 // (RP-17), whatever weekday the spec runs on, and week 1 is partial. Every
 // week's own start comes from `weekSpan`, never a fixed count of days.
 const OPENED_WEEKDAY_OFFSET = 2;
-const WEEK1_TOTAL = 12;
-const WEEK2_TOTAL = 9;
+// In minutes: 690 and 60 sum to the 750 the goal reads as «12 h 30 min»
+// (RP-35), and each week reads in hours and minutes of its own.
+const WEEK1_TOTAL = 690;
+const WEEK2_TOTAL = 60;
 // Week 3 (today's own) gets no fact at all: the zero `measureByWeek` must
 // still draw, on the same row `current` marks.
 
@@ -48,7 +50,7 @@ async function addQuantityCommitment(
 
   await page.getByLabel("qué es").fill(name);
   await page.getByRole("button", { name: "un número", exact: true }).click();
-  await page.getByLabel("cantidad").fill(String(target));
+  await page.getByLabel("cantidad", { exact: true }).fill(String(target));
   await page.getByLabel("unidad").fill(unit);
   await page.getByRole("button", { name: "Añadirlo" }).click();
   await page.waitForURL(`**/metas/${goalId}`);
@@ -66,7 +68,7 @@ async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): P
   await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
 }
 
-test("a goal opened on a Wednesday two weeks back draws its measure week by week, the current week's zero included (RP-17)", async ({
+test("a goal opened on a Wednesday two weeks back draws its measure week by week in hours and minutes, the current week's zero included (RP-17, RP-35)", async ({
   page,
   db,
   personId,
@@ -109,13 +111,22 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
         (${personId}, ${id}, ${goalId}, ${weekSpan(openedOn, 2, 2).startsOn}, ${WEEK2_TOTAL})
     `;
 
+    // The goal's own figure: 750 minutes in hours and minutes, and no
+    // «minutos» after them; «mide en minutos» above it stays as it was.
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    // The total comes first; the month block under it may repeat it (RP-28).
+    await expect(page.getByText("12 h 30 min", { exact: true }).first()).toBeVisible();
+
     await page.goto(`/metas/${goalId}/revision`);
 
-    // Header: the goal's own name as the kicker, the measure's unit as the
-    // one heading — a `<p>` each, so the wide table's own `<th>` repeating
-    // the same string never collides with this lookup.
-    await expect(page.locator("p", { hasText: goalName })).toHaveCount(1);
-    await expect(page.locator("p", { hasText: unit })).toHaveCount(1);
+    // `RevisionAncha.dc.html`: one `h1` in the header, the way back named for
+    // the goal, the measure's unit on its mono line.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Por semana");
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByLabel(`Volver a ${goalName}`)).toHaveAttribute("href", `/metas/${goalId}`);
+    await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
     await expect(page.getByText("la única cifra que predice el progreso")).toHaveCount(0);
 
     // The phone face, `Revision.dc.html`: three rows, the lead figure and
@@ -124,11 +135,13 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     const items = page.getByRole("listitem");
     await expect(items).toHaveCount(3);
     await expect(items.nth(0)).toContainText("semana 1");
-    await expect(items.nth(0)).toContainText(String(WEEK1_TOTAL));
+    await expect(items.nth(0)).toContainText("11 h 30 min");
     await expect(items.nth(1)).toContainText("semana 2");
-    await expect(items.nth(1)).toContainText(String(WEEK2_TOTAL));
+    await expect(items.nth(1)).toContainText("1 h");
     await expect(items.nth(2)).toContainText("semana 3");
-    await expect(items.nth(2)).toContainText("0");
+    await expect(items.nth(2)).toContainText("0 min");
+    // The unit word no longer follows each figure (`RevisionHoras.dc.html`).
+    await expect(items.filter({ hasText: unit })).toHaveCount(0);
     await expect(items.nth(2)).toContainText("en curso");
     await expect(items.nth(0)).not.toContainText("en curso");
     await expect(items.nth(1)).not.toContainText("en curso");
@@ -141,7 +154,7 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
 
     // `RevisionEscritorio.dc.html`: the same rows, a real `<table>`, widened
     // past the kit's usual 640px cap.
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 1440, height: 900 });
     const table = page.getByRole("table");
     await expect(table).toBeVisible();
     const rows = table.getByRole("row");
@@ -149,17 +162,32 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
 
     const week1Row = rows.nth(1);
     await expect(week1Row.getByRole("cell").nth(0)).toContainText("semana 1");
-    await expect(week1Row.getByRole("cell").nth(1)).toHaveText(String(WEEK1_TOTAL));
+    await expect(week1Row.getByRole("cell").nth(1)).toHaveText("11 h 30 min");
     await expect(week1Row).not.toHaveAttribute("data-current", "");
 
     const week3Row = rows.nth(3);
     await expect(week3Row.getByRole("cell").nth(0)).toContainText("semana 3");
-    await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0");
+    await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0 min");
     await expect(week3Row.getByRole("cell").nth(3)).toHaveText("en curso");
     await expect(week3Row).toHaveAttribute("data-current", "");
 
-    const pageWidth = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
-    expect(pageWidth).toBeGreaterThan(640);
+    // From 1024 the table spans the main column, past the old 1020 cap.
+    const tableWidth = (await table.boundingBox())!.width;
+    expect(tableWidth).toBeGreaterThan(1020);
+    const mainWidth = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
+    expect(tableWidth).toBeGreaterThan(mainWidth! * 0.8);
+
+    // The header's way back is the only one: no link after the table.
+    await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
+    await page.getByLabel(`Volver a ${goalName}`).click();
+    await page.waitForURL(`**/metas/${goalId}`);
+
+    for (const width of [360, 390, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/metas/${goalId}/revision`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
   } finally {
     await deleteGoal(db, personId, goalId);
   }
@@ -183,7 +211,9 @@ test("a goal with no measure yet says so on its review, with no way in and no ta
     await expect(page.getByRole("table")).toHaveCount(0);
     await expect(page.getByRole("listitem")).toHaveCount(0);
 
-    await page.getByRole("link", { name: "Volver a la meta" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
+    await page.getByLabel(`Volver a ${goalName}`).click();
     await page.waitForURL(`**/metas/${goalId}`);
   } finally {
     await deleteGoal(db, personId, goalId);
@@ -199,4 +229,38 @@ test("an id that is no uuid 404s the review on a live database, never the failur
   await page.goto("/metas/not-a-uuid/revision");
   await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "No se pudo abrir" })).toHaveCount(0);
+});
+
+test("a goal measured in «páginas» reads its plain number on the goal and in the review, the unit beside it (RP-35)", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const lane = laneNumber();
+  const goalName = `Meta revisión páginas ${lane} ${Date.now()}`;
+  const measureName = `Medida páginas ${lane} ${Date.now()}`;
+  const unit = "páginas";
+  const goalId = await createGoal(page, goalName);
+
+  try {
+    await addQuantityCommitment(page, goalId, measureName, unit, 5);
+    const id = await commitmentId(db, personId, measureName);
+    await db`
+      insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
+      values (${personId}, ${id}, ${goalId}, ${todayInZone()}, 750)
+    `;
+
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(`750${unit}`, { exact: true })).toBeVisible();
+
+    await page.goto(`/metas/${goalId}/revision`);
+    await expect(page.locator("li[data-current]")).toContainText(`750${unit}`);
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const table = page.getByRole("table");
+    await expect(table.getByRole("columnheader").nth(1)).toHaveText(`total${unit}`);
+    await expect(table.locator("tr[data-current]").getByRole("cell").nth(1)).toHaveText("750");
+  } finally {
+    await deleteGoal(db, personId, goalId);
+  }
 });

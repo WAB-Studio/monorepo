@@ -18,6 +18,15 @@
   }
 }
 
+/* A group heading inside a screen: the sheet title's step, 21px. */
+.heading.heading {
+  font-size: var(--pulsar-text-sheet-title-size);
+  font-weight: var(--pulsar-text-title-weight);
+  letter-spacing: var(--pulsar-text-title-tracking);
+  line-height: 1.2;
+  margin: 0;
+}
+
 /* A commitment name. */
 .name.name {
   font-size: var(--pulsar-text-name-size);
@@ -65,5 +74,18 @@
     font-weight: 400;
     letter-spacing: normal;
     line-height: var(--pulsar-text-line-leading);
+  }
+}
+
+.rule.rule {
+  margin: 0;
+  padding-block-start: 18px;
+  border-block-start: 2px solid var(--pulsar-ink);
+}
+
+@media (min-width: 1024px) {
+  .rule.rule {
+    padding-block-start: 0;
+    border-block-start: 0;
   }
 }

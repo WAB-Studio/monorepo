@@ -792,8 +792,11 @@ Principles, not recipes:
 | Language | **next-intl** | Locale routing, server-side translations, date and number formatting. |
 | Spreadsheets (phase 2) | **ExcelJS** | Reading and writing `.xlsx` with valid options in the template. |
 | Browser verification | **Playwright** | Drives a real browser for the interface facts no server-side check reaches: clicks, dialogs, the mobile sheet, tap-target size and the narrow viewport. |
+| Local database and Auth for the suites | **Supabase CLI `2.119.0`** | The same Postgres image and GoTrue the project runs, on each machine and each CI runner, so no suite shares the remote. |
 
 Playwright is a development dependency: it never reaches the bundle, ships in no deployment and costs nothing to run, so RNF-01 and RNF-02 hold.
+
+The Supabase CLI is invoked as `npx --yes supabase@2.119.0` from `scripts/supabase-local.sh` alone. It is in no `package.json`, never reaches a bundle or a deployment, needs Docker and costs nothing to run, so RNF-01 and RNF-02 hold.
 
 ### Do not install
 

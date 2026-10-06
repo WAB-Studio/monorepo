@@ -7,6 +7,7 @@ import { and, eq, isNull, max, sql } from "drizzle-orm";
 import { commitments, evidenceSources, goals, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
+import { isClosed } from "@/lib/validation/closed";
 import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
 import { todayInZone } from "@/lib/zone";
 import {
@@ -27,28 +28,22 @@ import {
   type ReopenGoalInput,
   type RetireCommitmentInput,
 } from "@/lib/validation/plan";
+import { messageKey, type MessageKey } from "@/i18n/translator";
 
-export type CreateGoalResult = { ok: true; goalId: string } | { ok: false; error: string };
-export type AddPhaseResult = { ok: true; phaseId: string } | { ok: false; error: string };
+export type CreateGoalResult = { ok: true; goalId: string } | { ok: false; error: MessageKey };
+export type AddPhaseResult = { ok: true; phaseId: string } | { ok: false; error: MessageKey };
 export type AddCommitmentResult =
   | { ok: true; commitmentId: string }
-  | { ok: false; error: string };
-export type RetireCommitmentResult = { ok: true } | { ok: false; error: string };
-export type RenameGoalResult = { ok: true } | { ok: false; error: string };
-export type ArchiveGoalResult = { ok: true } | { ok: false; error: string };
-export type ReopenGoalResult = { ok: true } | { ok: false; error: string };
-export type MoveHorizonResult = { ok: true } | { ok: false; error: string };
+  | { ok: false; error: MessageKey };
+export type RetireCommitmentResult = { ok: true } | { ok: false; error: MessageKey };
+export type RenameGoalResult = { ok: true } | { ok: false; error: MessageKey };
+export type ArchiveGoalResult = { ok: true } | { ok: false; error: MessageKey };
+export type ReopenGoalResult = { ok: true } | { ok: false; error: MessageKey };
+export type MoveHorizonResult = { ok: true } | { ok: false; error: MessageKey };
 
 // Carries a message key out of the transaction without collapsing every
 // rejection into the same generic failure.
 class NamedError extends Error {}
-
-// An archived or ended goal takes no new phase or commitment, and is refused
-// as a goal that is not there — what `compromisos/nuevo` and `fases/nueva`
-// answer with a 404. `listGoals` draws the same line.
-function isClosed(goal: { horizon: string; archivedAt: Date | string | null }): boolean {
-  return goal.archivedAt !== null || goal.horizon <= todayInZone();
-}
 
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal
@@ -73,7 +68,7 @@ function weekdaysArraySql(days: number[]) {
  */
 export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResult> {
   const parsed = createGoalSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -114,7 +109,7 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
  */
 export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
   const parsed = addPhaseSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -129,6 +124,7 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
         .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, goalId));
+      // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
       if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       // A goal names one horizon; a phase is a span of it, never past it.
@@ -158,7 +154,7 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
     revalidatePath("/");
     return { ok: true, phaseId };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 }
@@ -177,7 +173,7 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
  */
 export async function addCommitment(input: AddCommitmentInput): Promise<AddCommitmentResult> {
   const parsed = addCommitmentSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -190,6 +186,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
         .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
         .from(goals)
         .where(eq(goals.id, data.goalId));
+      // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
       if (!goal || isClosed(goal)) throw new NamedError("plan.errors.goalNotFound");
 
       let sourceId: string | null = null;
@@ -232,7 +229,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
     revalidatePath("/");
     return { ok: true, commitmentId };
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     // `addCommitmentSchema`'s own `.max()`s refuse an oversized cadenceN,
     // targetQuantity or threshold before the insert runs; this is the second
     // line, the way `declareFact` catches the same code — a number the schema
@@ -258,7 +255,7 @@ export async function retireCommitment(
   input: RetireCommitmentInput,
 ): Promise<RetireCommitmentResult> {
   const parsed = retireCommitmentSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -297,7 +294,7 @@ function revalidateGoalScreens(goalId: string): void {
  */
 export async function renameGoal(input: RenameGoalInput): Promise<RenameGoalResult> {
   const parsed = renameGoalSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -326,7 +323,7 @@ export async function renameGoal(input: RenameGoalInput): Promise<RenameGoalResu
  */
 export async function archiveGoal(input: ArchiveGoalInput): Promise<ArchiveGoalResult> {
   const parsed = archiveGoalSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -353,7 +350,7 @@ export async function archiveGoal(input: ArchiveGoalInput): Promise<ArchiveGoalR
  */
 export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResult> {
   const parsed = reopenGoalSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -380,7 +377,7 @@ export async function reopenGoal(input: ReopenGoalInput): Promise<ReopenGoalResu
  */
 export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonResult> {
   const parsed = moveHorizonSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "plan.errors.signedOut" };
@@ -412,7 +409,7 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
       if (moved.length === 0) throw new NamedError("plan.errors.notFound");
     });
   } catch (error) {
-    if (error instanceof NamedError) return { ok: false, error: error.message };
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
     throw error;
   }
 

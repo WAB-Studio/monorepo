@@ -88,7 +88,7 @@ test("a weekdays commitment with an untyped goal's first quantity lands in goals
     await page.getByRole("button", { name: "J", exact: true }).click();
 
     await page.getByRole("button", { name: "un número", exact: true }).click();
-    await page.getByLabel("cantidad").fill("15");
+    await page.getByLabel("cantidad", { exact: true }).fill("15");
     await page.getByLabel("unidad").fill("minutos");
 
     // The goal has no measure yet: this is the note this screen draws only
@@ -133,7 +133,7 @@ test("a quantity this large is refused on screen, with no navigation and no row 
     // Twelve digits: past `integer`'s own ceiling and past the schema's
     // `.max(1_000_000)` alike — the crash this schema now refuses before the
     // request ever reaches `addCommitment`.
-    await page.getByLabel("cantidad").fill("999999999999");
+    await page.getByLabel("cantidad", { exact: true }).fill("999999999999");
     await page.getByLabel("unidad").fill("unidades");
 
     await page.getByRole("button", { name: "Añadirlo" }).click();

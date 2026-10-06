@@ -61,7 +61,7 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText(goalName, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
     await expect(page.getByText("hechos 0 de 2", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: new RegExp(`^${first}`) }).click();

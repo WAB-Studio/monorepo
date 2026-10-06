@@ -25,9 +25,17 @@
     "endedOn": "terminó el {weekday} {day} de {month}",
     "endHeading": "el final",
     "reopen": "Reabrir",
-    "reviewLink": "Ver por semana"
+    "reviewLink": "Ver por semana",
+    "monthsLink": "Ver por mes",
+    "monthNoPlan": "sin monto planeado",
+    "monthPlanLink": "Planear {month}",
+    "monthProgress": "llevas {percent} % · faltan {days, plural, one {# día} other {# días}}",
+    "monthPace": "día {day} · {percent} %, bajo el {threshold} %",
+    "monthDeclaredOnly": "solo lo que dijiste tú · no pudimos leer el diccionario de lectura"
   },
   "review": {
+    "title": "Por semana",
+    "measure": "mide en {unit}",
     "caption": "por semana",
     "columns": {
       "week": "semana",
@@ -37,8 +45,7 @@
     },
     "weekLabel": "semana {n}",
     "current": "en curso",
-    "noMeasure": "Esta meta todavía no tiene cifra.",
-    "back": "Volver a la meta"
+    "noMeasure": "Esta meta todavía no tiene cifra."
   },
   "commitments": {
     "retired": "retirado",
@@ -85,12 +92,21 @@
     "diecinueve",
     "veinte"
   ],
+  "none": {
+    "eyebrow": "metas",
+    "title": "Todavía no hay metas",
+    "body": "Abre una meta a mano, o trae el plan que ya tienes escrito.",
+    "action": "Abrir una meta"
+  },
   "list": {
-    "title": "tus metas",
     "addAnother": "Abrir otra meta",
     "endedTitle": "terminadas",
     "endedOnShort": "terminó el {date}",
-    "archivedTitle": "Archivadas"
+    "archivedTitle": "Archivadas",
+    "openTitle": "abiertas",
+    "untilShort": "hasta el {date}",
+    "monthTasks": "{month} · {done} de {total} tareas",
+    "archivedOnShort": "archivada el {date}"
   },
   "horizon": {
     "title": "¿Cuántas semanas?",

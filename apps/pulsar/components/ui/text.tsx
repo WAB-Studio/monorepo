@@ -4,7 +4,7 @@ import styles from "./text.module.css";
 
 // The type scale of docs/pulsar/DESIGN.md "Type", one class per role, so no
 // screen names a size. `body` inherits the base step and only takes a tone.
-type Variant = "title" | "name" | "meta" | "body";
+type Variant = "title" | "heading" | "name" | "meta" | "body";
 
 // docs/pulsar/DESIGN.md "Tokens": `quiet` never carries a word a person must
 // read, so a screen reaching for it is asking for decoration, not a sentence.
@@ -18,10 +18,14 @@ type PulsarTextProps = {
   // A `title` that reads as body text from the desktop rail on, where the page
   // already has its headline above the card.
   plainWide?: boolean;
+  // A section's head on the phone: a 2px ink rule above it, 18px of air under
+  // the rule. From 1024 the card is the divider, so the rule goes.
+  rule?: boolean;
 };
 
 const variants: Record<Variant, string | undefined> = {
   title: styles.title,
+  heading: styles.heading,
   name: styles.name,
   meta: styles.meta,
   body: undefined,
@@ -41,8 +45,8 @@ const tones: Record<Tone, string> = {
 // union over the element it renders and a plain `Omit` would collapse it to one.
 type Narrowed<T> = T extends unknown ? Omit<T, "color" | "highContrast" | "size"> : never;
 
-export function Text({ variant = "body", tone, end, plainWide, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
-  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, className]
+export function Text({ variant = "body", tone, end, plainWide, rule, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
+  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, rule ? styles.rule : undefined, className]
     .filter(Boolean)
     .join(" ");
   return <ThemesText {...props} className={merged || undefined} />;

@@ -1,7 +1,6 @@
 {
   "range": "Del {start} al {end}",
   "sectionLabel": "{name} · semana {week} de {total}",
-  "today": "hoy",
   "todayMark": "· hoy",
   "table": {
     "caption": "La semana, un compromiso por fila y un día por columna",
@@ -14,7 +13,9 @@
     "month": "{count} al mes",
     "weekProgress": "{done} de {total} esta semana",
     "monthProgress": "{done} de {total} este mes",
-    "detail": "{cadence} · {progress}"
+    "detail": "{cadence} · {progress}",
+    "weekProgressPast": "{done} de {total} esa semana",
+    "monthProgressPast": "{done} de {total} ese mes"
   },
   "unreadableEvidence": "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.",
   "weekdayShort": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
@@ -31,11 +32,24 @@
     "title": "Todavía no tienes una meta abierta.",
     "action": "Crear una meta"
   },
-  "dot": {
-    "commitment": "{name}: {status}",
-    "evidence": "{name}: {source}",
+  "archivedOn": "{label} · archivada el {date}",
+  "ratioOf": "de {total}",
+  "nav": {
+    "prev": "Semana anterior",
+    "next": "Semana siguiente"
+  },
+  "eyebrow": {
+    "this": "esta semana",
+    "last": "la semana pasada",
+    "first": "{month} · la primera",
+    "ago": "{month} · hace {count} semanas"
+  },
+  "mark": {
+    "label": "{name}, {weekday} {day}: {status}",
     "done": "hecho",
-    "pending": "pendiente",
-    "oneOff": "suelta hecha"
+    "missed": "no hecho",
+    "upcoming": "todavía no",
+    "none": "no pedía",
+    "evidence": "hecho, por evidencia"
   }
 }

@@ -23,8 +23,12 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
   await expect(page.locator("main")).toHaveCount(1);
 
   const rail = await box(page, "nav");
-  expect(rail).toMatchObject({ x: 0, y: 0, width: 232, height: 800 });
-  await expect(page.locator("nav").getByRole("link")).toHaveCount(3);
+  expect(rail).toMatchObject({ x: 0, y: 0, width: 232 });
+  // The rail's ground is the page's whole height, never less than the viewport's.
+  expect(rail.height).toBeGreaterThanOrEqual(800);
+  await expect(
+    page.locator("nav").getByRole("link").filter({ hasText: /^(Hoy|Semana|Mes|Metas)$/ }),
+  ).toHaveCount(4);
 
   const main = await box(page, "main");
   expect(main.x).toBeGreaterThanOrEqual(232);
@@ -43,15 +47,14 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1280);
 });
 
-// Boxes measured on `integracion` before this module, at 740 px tall on the
-// same three-tab nav: the nav 51 px at the foot, three equal links, the page
-// column 640 wide and centred from 700 up.
+// Four tabs fixed at the foot (module 203): the nav 57 px (56 of tab and its
+// rule), four equal links, the page column 640 wide and centred from 700 up.
 for (const [width, pageBox] of [
   [360, { x: 0, width: 360 }],
   [800, { x: 80, width: 640 }],
   [1023, { x: 191.5, width: 640 }],
 ] as const) {
-  test(`at ${width} the nav is still three tabs at the foot and the page column has not moved (RNP-11)`, async ({
+  test(`at ${width} the nav is four tabs at the foot and the page column has not moved (RNP-11)`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 740 });
@@ -60,16 +63,16 @@ for (const [width, pageBox] of [
     await expect(page.locator("main")).toHaveCount(1);
 
     const nav = await box(page, "nav");
-    expect(nav).toMatchObject({ x: 0, width, height: 51 });
+    expect(nav).toMatchObject({ x: 0, width, height: 57 });
     expect(nav.y + nav.height).toBe(740);
 
     const links = page.locator("nav").getByRole("link");
-    await expect(links).toHaveCount(3);
-    for (let index = 0; index < 3; index++) {
+    await expect(links).toHaveCount(4);
+    for (let index = 0; index < 4; index++) {
       const link = await box(page, "nav a", index);
-      expect(link.x).toBeCloseTo((width / 3) * index, 1);
-      expect(link.width).toBeCloseTo(width / 3, 1);
-      expect(link.height).toBe(50);
+      expect(link.x).toBeCloseTo((width / 4) * index, 1);
+      expect(link.width).toBeCloseTo(width / 4, 1);
+      expect(link.height).toBe(56);
     }
     await expect(page.locator("nav").getByRole("button")).toHaveCount(0);
 
@@ -80,7 +83,7 @@ for (const [width, pageBox] of [
   });
 }
 
-test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 800, and the review's header prints the unit (RNP-11)", async ({
+test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 800, and the review's header names the column alone for a time unit (RNP-11, RP-35)", async ({
   page,
   db,
   personId,
@@ -96,7 +99,7 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
     await page.goto(`/metas/${goalId}/compromisos/nuevo`);
     await page.getByLabel("qué es").fill(`Medida kit ${lane} ${Date.now()}`);
     await page.getByRole("button", { name: "un número", exact: true }).click();
-    await page.getByLabel("cantidad").fill("5");
+    await page.getByLabel("cantidad", { exact: true }).fill("5");
     await page.getByLabel("unidad").fill("minutos");
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await page.waitForURL(`**/metas/${goalId}`);
@@ -146,7 +149,8 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}/revision`);
-    await expect(page.getByRole("table").getByRole("columnheader").nth(1)).toContainText("minutos");
+    // Each cell spells out its hours and minutes, so the header carries no unit.
+    await expect(page.getByRole("table").getByRole("columnheader").nth(1)).toHaveText("total");
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

@@ -9,17 +9,31 @@ export function Split({
   main,
   before,
   after,
+  tail,
   aside = 360,
+  twoFifths = false,
+  even = false,
 }: {
   main: ReactNode;
   before?: ReactNode;
   after?: ReactNode;
+  // Sits under `main` in its column, but below `after` on a phone: the one
+  // part whose place differs between the two layouts.
+  tail?: ReactNode;
   // The right column's width: Hoy draws 360, the goal 380.
   aside?: 360 | 380;
+  // Keeps the right column at two parts of five at every width from 1024px,
+  // where `aside` would fix it at a number of pixels from 1280.
+  twoFifths?: boolean;
+  // `main` alone, its children in two equal columns from 1024: the past day
+  // (`DiaPasadoEscritorio.dc.html`), which never narrows as the screen widens.
+  even?: boolean;
 }) {
   const className = [
     styles.split,
     aside === 380 ? styles.asideWide : undefined,
+    twoFifths ? styles.twoFifths : undefined,
+    even ? styles.even : undefined,
     before ? undefined : styles.noBefore,
   ]
     .filter(Boolean)
@@ -28,7 +42,10 @@ export function Split({
   return (
     <div className={className}>
       {before ? <div className={styles.before}>{before}</div> : null}
-      <div className={styles.main}>{main}</div>
+      <div className={styles.main}>
+        {main}
+        {tail ? <div className={styles.tail}>{tail}</div> : null}
+      </div>
       {after ? <div className={styles.after}>{after}</div> : null}
     </div>
   );

@@ -20,7 +20,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import { registerSharedIdentity } from "@repo/harness-registry";
+import { assertSuiteDatabase, registerSharedIdentity } from "@repo/harness-registry";
 import type postgres from "postgres";
 
 import { fixtureSql } from "./fixtures";
@@ -69,7 +69,12 @@ export const HARNESS_MEMBER_EMAIL = `harness-member${HARNESS_LANE_SUFFIX}@exampl
 export function sessionFileName(email: string): string {
   const suffix = email.split("@")[0].replace(/^harness/, "");
 
-  return `private/harness-session${suffix}.json`;
+  // A refresh token is only good against the auth server that minted it, so the
+  // local stack keeps files of its own and the remote's survive a local run.
+  const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname;
+  const local = host === "127.0.0.1" || host === "localhost" ? ".local" : "";
+
+  return `private/harness-session${suffix}${local}.json`;
 }
 
 function sessionFile(email: string): string {
@@ -337,6 +342,7 @@ async function newestTokenHash(userId: string): Promise<string | null> {
  * insert, so no crash between the two can leave one without the other.
  */
 export async function ensureHarnessAuthUser(email: string): Promise<string> {
+  assertSuiteDatabase();
   const [existing] = await fixtureSql<{ id: string }[]>`
     select id from auth.users where email = ${email}`;
   if (existing) {

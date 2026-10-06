@@ -16,6 +16,8 @@ import type {
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
+import { estimateFacts, type Task } from "@/lib/plan/carry";
+import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { phasePositions } from "@/lib/day/row-phrases";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
@@ -28,7 +30,7 @@ import {
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, weekOf } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -82,7 +84,13 @@ type FactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
+  // A one-off's fact only (RP-36): the one-off's own estimate and whether it
+  // holds sub-tasks, from the join inside the facts subquery.
+  one_off_estimate: number | null;
+  one_off_has_children: boolean | null;
 };
+
+type MonthBudgetRow = { goal_id: string; month: string; amount: number };
 
 type OneOffRow = {
   id: string;
@@ -104,6 +112,10 @@ type DoneOneOffRow = {
   written_at: string;
 };
 
+type MonthTaskRow = { goal_id: string; id: string; name: string; estimate: number | null };
+
+export type MonthTask = { id: string; name: string; estimate: number | null };
+
 // Every evidence commitment of a goal, retired ones included: the source keys
 // a goal's measure reads, as `loadGoal` reads them.
 type MeasureSourceRow = {
@@ -118,8 +130,10 @@ type GoalsQueryRow = {
   commitments: CommitmentRow[];
   phases: PhaseRow[];
   facts: FactRow[];
+  month_budgets: MonthBudgetRow[];
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
+  month_tasks: MonthTaskRow[];
   dayless_count: number;
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
@@ -142,7 +156,7 @@ function dayBefore(day: string): string {
   return dateToCivilDate(date);
 }
 
-type EvidenceOutcome = {
+export type EvidenceOutcome = {
   status: "read" | "unreadable";
   bySourceKey: Record<string, EvidenceDay[]>;
 };
@@ -175,6 +189,7 @@ async function queryGoalsRow(
   tx: Transaction,
   day: string,
   weekStart: string,
+  isToday: boolean,
 ): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
     select
@@ -200,11 +215,19 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
          from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', c.unit,
+                 'one_off_estimate', fo.estimate,
+                 'one_off_has_children', case when fo.id is null then null else exists (
+                   select 1 from "goals"."one_offs" k where k.parent_id = fo.id
+                 ) end
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
+         left join "goals"."one_offs" fo on fo.id = f.one_off_id
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
+      (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
+         from "goals"."month_budgets" b
+         where b.month = date_trunc('month', ${day}::date)::date) as month_budgets,
       (select coalesce(json_agg(to_jsonb(o) order by o.created_at), '[]'::json)
          from "goals"."one_offs" o
          where o.day <= ${day}::date
@@ -221,9 +244,33 @@ async function queryGoalsRow(
          from "goals"."one_offs" o
          join "goals"."facts" f on f.one_off_id = o.id
          where f.day = ${day}::date) as done_one_offs,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'goal_id', t.goal_id,
+                 'id', t.id,
+                 'name', t.name,
+                 'estimate', t.estimate
+               )), '[]'::json)
+         from (
+           select distinct on (coalesce(p.goal_id, o.goal_id))
+                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate
+             from "goals"."one_offs" o
+             left join "goals"."one_offs" p on p.id = o.parent_id
+             join "goals"."goals" g on g.id = coalesce(p.goal_id, o.goal_id) and ${openGoal("g", day)}
+            where ${isToday}::boolean
+              and o.day is null
+              and coalesce(p.planned_month, o.planned_month) <= date_trunc('month', ${day}::date)::date
+              and (p.id is null or p.day is null)
+              and not exists (select 1 from "goals"."one_offs" k where k.parent_id = o.id)
+              and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
+            order by coalesce(p.goal_id, o.goal_id),
+                     coalesce(p.planned_month, o.planned_month),
+                     coalesce(p.created_at, o.created_at),
+                     o.created_at
+         ) t) as month_tasks,
       (select count(*)::int
          from "goals"."one_offs" o
          where o.day is null
+           and o.planned_month is null and o.parent_id is null
            and not exists (
              select 1 from "goals"."facts" f where f.one_off_id = o.id
            )
@@ -278,6 +325,20 @@ async function queryEvidenceBySource(
   }
 
   return bySourceKey;
+}
+
+// A source that cannot be read degrades to an empty outcome, never a throw
+// (RNP-04): the caller still draws, minus the evidence. Hoy and `/metas` both
+// read their figures through this.
+export async function readEvidenceOutcome(
+  personId: string,
+  from: string,
+  to: string,
+): Promise<EvidenceOutcome> {
+  return withReadingDb((tx) => queryEvidenceBySource(tx, personId, from, to)).then(
+    (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
+    (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
+  );
 }
 
 function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
@@ -399,6 +460,80 @@ function toFactForCommitment(row: FactRow) {
   };
 }
 
+// RP-36: each done leaf one-off of the goal with an estimate, as the quantity
+// it declared. Feeds the measure only; a slot never reads these.
+function estimateFactsOf(
+  row: GoalsQueryRow,
+  goalId: string,
+  unit: string,
+  from: string,
+): DeclaredFact[] {
+  const tasks: Task[] = row.facts
+    .filter(
+      (fact): fact is FactRow & { one_off_id: string } =>
+        fact.goal_id === goalId &&
+        fact.one_off_id !== null &&
+        fact.one_off_has_children === false &&
+        fact.day >= from,
+    )
+    .map((fact) => ({
+      id: fact.one_off_id,
+      parentId: null,
+      name: "",
+      plannedMonth: null,
+      day: null,
+      estimate: fact.one_off_estimate,
+      doneOn: fact.day,
+    }));
+  return estimateFacts(tasks, unit);
+}
+
+// Every goal with a measure: this month's amount, what was reached in it and
+// whether it runs under pace (RP-28, RP-29), over the month's facts by their
+// own `goal_id` and evidence in the goal's unit.
+function monthLineOf(
+  goals: GoalRow[],
+  row: GoalsQueryRow,
+  evidenceOutcome: EvidenceOutcome,
+  day: string,
+): Record<string, MonthLine> {
+  const month = monthOf(day);
+  const lines: Record<string, MonthLine> = {};
+  for (const goal of goals) {
+    const unit = goal.measure_unit;
+    if (!unit) continue;
+    const facts: DeclaredFact[] = row.facts
+      .filter(
+        (fact): fact is FactRow & { commitment_id: string } =>
+          fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= month,
+      )
+      .map(toDeclaredFact);
+    facts.push(...estimateFactsOf(row, goal.id, unit, month));
+    const evidence = evidenceDaysFor(
+      unit,
+      row.measure_sources.filter((source) => source.goal_id === goal.id),
+      evidenceOutcome.bySourceKey,
+    );
+    const budget = row.month_budgets.find((b) => b.goal_id === goal.id);
+    lines[goal.id] = monthLine({
+      month,
+      today: day,
+      budget: budget ? { month, amount: budget.amount } : null,
+      reached: reachedByMonth({ unit, facts, evidence }).get(month) ?? 0,
+    });
+  }
+  return lines;
+}
+
+function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, MonthTask | null> {
+  const tasks: Record<string, MonthTask | null> = {};
+  for (const goal of goals) {
+    const next = row.month_tasks.find((task) => task.goal_id === goal.id);
+    tasks[goal.id] = next ? { id: next.id, name: next.name, estimate: next.estimate } : null;
+  }
+  return tasks;
+}
+
 // The goal's measure from the Monday of `day` to `day`: the current row of
 // the same `measureByWeek` `loadGoal`'s `weeks` runs, over the week's facts
 // of the goal's own commitments and the evidence in its unit, deduped by
@@ -423,6 +558,7 @@ function weekMeasureOf(
           fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= weekStart,
       )
       .map(toDeclaredFact);
+    facts.push(...estimateFactsOf(row, goal.id, unit, weekStart));
     const evidence = evidenceDaysFor(
       unit,
       row.measure_sources.filter((source) => source.goal_id === goal.id),
@@ -480,6 +616,10 @@ export async function loadDay(day: string): Promise<{
   // `day` itself, most recent first: what Hoy's «terminó ayer» line names.
   endedThisWeek: EndedGoal[];
   weekMeasure: Record<string, number>;
+  monthLine: Record<string, MonthLine>;
+  // Each open goal's next undone leaf of the month, carried first; read on
+  // today alone, `{}` on any other day.
+  monthTask: Record<string, MonthTask | null>;
   commitments: CommitmentInfo[];
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
@@ -493,13 +633,15 @@ export async function loadDay(day: string): Promise<{
   if (!person) throw new Error("loadDay called without a verified session");
 
   const weekStart = weekOf(day)[0];
+  const monthStart = monthOf(day);
+  const isToday = day === todayInZone();
+  // The month's evidence reaches back past the week's Monday when the month
+  // opened earlier; the day's slots still filter their own day below.
+  const evidenceFrom = weekStart < monthStart ? weekStart : monthStart;
 
   const [row, evidenceOutcome] = await Promise.all([
-    withGoalsDb((tx) => queryGoalsRow(tx, day, weekStart)),
-    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, weekStart, day)).then(
-      (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
-      (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
-    ),
+    withGoalsDb((tx) => queryGoalsRow(tx, day, weekStart, isToday)),
+    readEvidenceOutcome(person.id, evidenceFrom, day),
   ]);
 
   const commitments = row.commitments.map(toCommitmentPlan);
@@ -563,6 +705,8 @@ export async function loadDay(day: string): Promise<{
       lastDay: dayBefore(goal.horizon),
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
+    monthLine: monthLineOf(goals, row, evidenceOutcome, day),
+    monthTask: isToday ? monthTaskOf(goals, row) : {},
     commitments: row.commitments.map(toCommitmentInfo),
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),

@@ -75,6 +75,43 @@ function loadCookies(): StoredCookie[] {
   return state.cookies.map(({ name, value }) => ({ name, value }));
 }
 
+// The user id the cookie's access token names, read off the token's own
+// payload: the session file outlives `auth.users` rows a reset or a reap
+// removed, and `loadDay` answers that with a message about a missing session.
+function sessionUserId(cookies: StoredCookie[]): string {
+  const value = [...cookies]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((cookie) => cookie.value)
+    .join("");
+  try {
+    const session = JSON.parse(Buffer.from(value.replace(/^base64-/, ""), "base64url").toString("utf8"));
+    const payload = JSON.parse(
+      Buffer.from(String(session.access_token).split(".")[1], "base64url").toString("utf8"),
+    );
+    if (typeof payload.sub !== "string") throw new Error("no sub");
+    return payload.sub;
+  } catch {
+    throw new Error(
+      `${sessionFile()} carries a cookie that is not a session: re-mint (HARNESS_LANE=${lane} npm run harness:mint-session)`,
+    );
+  }
+}
+
+async function assertSessionUserExists(cookies: StoredCookie[]): Promise<void> {
+  const userId = sessionUserId(cookies);
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const rows = await db`select 1 from auth.users where id = ${userId}`;
+    if (rows.length === 0) {
+      throw new Error(
+        `session user ${userId} does not exist: re-mint (HARNESS_LANE=${lane} npm run harness:mint-session)`,
+      );
+    }
+  } finally {
+    await db.end();
+  }
+}
+
 type DebugCall = { at: number; connection: number; query: string; parameters: unknown[] };
 
 const wireCalls: DebugCall[] = [];
@@ -228,6 +265,10 @@ function analyzeGroup(connection: number, calls: DebugCall[]): GroupAnalysis {
 }
 
 let failed = false;
+
+// Goals the older probes create: `goals` grants the app no DELETE, so
+// `runMain` removes them over the migration connection once every probe ran.
+const probeGoalIds: string[] = [];
 
 function assert(label: string, ok: boolean, detail: string): void {
   console.log(`${ok ? "PASS" : "FAIL"}  ${label} — ${detail}`);
@@ -512,6 +553,7 @@ async function runZoneCheck(): Promise<void> {
 
   const goal = await createGoal({ name: "check-day zone probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runZoneCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const commitment = await addCommitment({
     goalId: goal.goalId,
@@ -585,6 +627,7 @@ async function runCadenceZoneCheck(): Promise<void> {
 
   const goal = await createGoal({ name: "check-day cadence zone probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runCadenceZoneCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const commitment = await addCommitment({
     goalId: goal.goalId,
@@ -652,6 +695,7 @@ async function runWeekCommitmentsZoneCheck(): Promise<void> {
 
   const goal = await createGoal({ name: "check-day week-commitments zone probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runWeekCommitmentsZoneCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const commitment = await addCommitment({
     goalId: goal.goalId,
@@ -757,6 +801,7 @@ async function runPhaseWeekBoundCheck(): Promise<void> {
 
   const goal = await createGoal({ name: "check-day phase week-bound probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runPhaseWeekBoundCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const phase = await addPhase({
     goalId: goal.goalId,
@@ -797,6 +842,7 @@ async function runFactSatisfactionCheck(): Promise<void> {
   const today = todayInZone();
   const goal = await createGoal({ name: "check-day fact-satisfaction probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runFactSatisfactionCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const commitment = await addCommitment({
     goalId: goal.goalId,
@@ -842,6 +888,7 @@ async function runEvidenceRefusalCheck(): Promise<void> {
 
   const goal = await createGoal({ name: "check-day evidence-refusal probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runEvidenceRefusalCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const commitment = await addCommitment({
     goalId: goal.goalId,
@@ -890,6 +937,7 @@ async function runFactUniqueCheck(): Promise<void> {
 
   const goal = await createGoal({ name: "check-day unique-fact probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runFactUniqueCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const commitment = await addCommitment({
     goalId: goal.goalId,
@@ -977,31 +1025,74 @@ async function runReplaceRaceCheck(): Promise<void> {
   const { sql } = await import("drizzle-orm");
 
   const TRIALS = 10;
+  // `tap` trials adopt an identical row instead of deleting it (`declareFact`'s
+  // own "adopts first"), so they cannot show a missing lock alone: the lock's
+  // own work is two "Cambiar" calls with different quantities, where the
+  // second must read the first's row and replace it, never conflict into it.
+  const QUANTITY_TRIALS = 20;
   const today = todayInZone();
 
   const goal = await createGoal({ name: "check-day replace-race probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runReplaceRaceCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
-  const testIds: string[] = [];
-  for (let trial = 0; trial < TRIALS; trial++) {
-    const commitment = await addCommitment({
-      goalId: goal.goalId,
-      name: `check-day replace-race probe ${trial}`,
-      cadenceKind: "daily",
-      satisfaction: "tap",
-    });
+  const made = await Promise.all(
+    Array.from({ length: TRIALS + QUANTITY_TRIALS }, (_, trial) =>
+      addCommitment(
+        trial < TRIALS
+          ? {
+              goalId: goal.goalId,
+              name: `check-day replace-race probe ${trial}`,
+              cadenceKind: "daily",
+              satisfaction: "tap",
+            }
+          : {
+              goalId: goal.goalId,
+              name: `check-day replace-race probe ${trial}`,
+              cadenceKind: "daily",
+              satisfaction: "quantity",
+              targetQuantity: 1,
+              unit: "min",
+            },
+      ),
+    ),
+  );
+  const ids = made.map((commitment) => {
     if (!commitment.ok) {
       throw new Error(`runReplaceRaceCheck: addCommitment failed: ${commitment.error}`);
     }
-    testIds.push(commitment.commitmentId);
-  }
+    return commitment.commitmentId;
+  });
+  const testIds = ids.slice(0, TRIALS);
+  const quantityIds = ids.slice(TRIALS);
 
-  type Call = { testId: string; result: Awaited<ReturnType<typeof declareFact>> };
-  const calls: Promise<Call>[] = testIds.flatMap((testId) => [
-    declareFact({ commitmentId: testId }).then((result) => ({ testId, result })),
-    declareFact({ commitmentId: testId, replace: true }).then((result) => ({ testId, result })),
-  ]);
+  type Call = {
+    testId: string;
+    quantity: number | null;
+    result: Awaited<ReturnType<typeof declareFact>>;
+  };
+  const calls: Promise<Call>[] = [
+    ...testIds.flatMap((testId) => [
+      declareFact({ commitmentId: testId }).then((result) => ({ testId, quantity: null, result })),
+      declareFact({ commitmentId: testId, replace: true }).then((result) => ({
+        testId,
+        quantity: null,
+        result,
+      })),
+    ]),
+    ...quantityIds.flatMap((testId) =>
+      [1, 2].map((quantity) =>
+        declareFact({ commitmentId: testId, quantity, replace: true }).then((result) => ({
+          testId,
+          quantity,
+          result,
+        })),
+      ),
+    ),
+  ];
+  const raceStart = Date.now();
   const settled = await Promise.all(calls);
+  console.log(`replace race — ${calls.length} concurrent call(s) settled in ${Date.now() - raceStart}ms`);
 
   for (const { testId, result } of settled) {
     if (!result.ok) {
@@ -1011,31 +1102,50 @@ async function runReplaceRaceCheck(): Promise<void> {
 
   let multiRowTrials = 0;
   let deadIdTrials = 0;
+  let foreignQuantityTrials = 0;
 
-  for (const testId of testIds) {
+  for (const testId of [...testIds, ...quantityIds]) {
     const rows = await withGoalsDb((tx) =>
-      tx.execute<{ id: string }>(
-        sql`select id from ${facts} where commitment_id = ${testId} and day = ${today}`,
+      tx.execute<{ id: string; quantity: number | null }>(
+        sql`select id, quantity from ${facts} where commitment_id = ${testId} and day = ${today}`,
       ),
     );
     if (rows.length !== 1) multiRowTrials++;
 
     const liveIds = new Set(rows.map((row) => row.id));
-    const returnedIds = settled
-      .filter((call) => call.testId === testId)
-      .map((call) => (call.result as { ok: true; factId: string }).factId);
-    if (returnedIds.some((factId) => !liveIds.has(factId))) deadIdTrials++;
+    const trialCalls = settled.filter((call) => call.testId === testId);
+    const returnedIds = trialCalls.map((call) => (call.result as { ok: true; factId: string }).factId);
+    if (testIds.includes(testId) && returnedIds.some((factId) => !liveIds.has(factId))) {
+      deadIdTrials++;
+    }
+
+    // A "Cambiar" that answers with the row still standing must have written
+    // what it was asked to: answering with the other call's row is the lost
+    // update an unserialised pair produces.
+    if (quantityIds.includes(testId)) {
+      const standing = rows[0];
+      const foreign = trialCalls.some((call) => {
+        const factId = (call.result as { ok: true; factId: string }).factId;
+        return standing !== undefined && factId === standing.id && standing.quantity !== call.quantity;
+      });
+      if (foreign) foreignQuantityTrials++;
+    }
   }
 
   assert(
-    `${TRIALS} replace-vs-plain trials each leave exactly one row for their own commitment and day`,
+    `${TRIALS + QUANTITY_TRIALS} replace-vs-plain trials each leave exactly one row for their own commitment and day`,
     multiRowTrials === 0,
-    `${multiRowTrials} of ${TRIALS} trial(s) left more than one row`,
+    `${multiRowTrials} of ${TRIALS + QUANTITY_TRIALS} trial(s) left more than one row`,
   );
   assert(
     `${TRIALS} replace-vs-plain trials never return a factId that is not the row left standing`,
     deadIdTrials === 0,
     `${deadIdTrials} of ${TRIALS} trial(s) returned a dead factId`,
+  );
+  assert(
+    `${QUANTITY_TRIALS} replace-vs-replace trials never answer with the standing row of a call that wrote another quantity`,
+    foreignQuantityTrials === 0,
+    `${foreignQuantityTrials} of ${QUANTITY_TRIALS} trial(s) answered with a row carrying the other call's quantity`,
   );
 }
 
@@ -1158,6 +1268,7 @@ async function runFactWrittenOnCheck(): Promise<void> {
 
   const goal = await createGoal({ name: "check-day written-on probe", horizon: "2099-12-31" });
   if (!goal.ok) throw new Error(`runFactWrittenOnCheck: createGoal failed: ${goal.error}`);
+  probeGoalIds.push(goal.goalId);
 
   const commitment = await addCommitment({
     goalId: goal.goalId,
@@ -1530,22 +1641,30 @@ async function runEndedGoalScheduledCheck(): Promise<void> {
     horizon: string,
     measure: { name: string; unit: string } | null,
     archived = false,
+    createdAt: string | null = null,
   ): Promise<string> {
     const [row] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at, archived_at)
       values (${userId}, ${name}, ${horizon}::date, ${measure?.name ?? null}, ${measure?.unit ?? null},
-              now() - interval '28 days', ${archived ? new Date().toISOString() : null}::timestamptz)
+              coalesce(${createdAt}::timestamptz, now() - interval '28 days'),
+              ${archived ? new Date().toISOString() : null}::timestamptz)
       returning id
     `;
     goalIds.push(row.id);
     return row.id;
   }
-  async function seedCommitment(goalId: string, name: string, quantity: boolean): Promise<string> {
+  async function seedCommitment(
+    goalId: string,
+    name: string,
+    quantity: boolean,
+    createdAt: string | null = null,
+  ): Promise<string> {
     const [row] = await db<{ id: string }[]>`
       insert into goals.commitments
         (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
       values (${userId}, ${goalId}, ${name}, 'daily', ${quantity ? "quantity" : "tap"},
-              ${quantity ? 10 : null}, ${quantity ? "min" : null}, now() - interval '28 days')
+              ${quantity ? 10 : null}, ${quantity ? "min" : null},
+              coalesce(${createdAt}::timestamptz, now() - interval '28 days'))
       returning id
     `;
     return row.id;
@@ -1575,7 +1694,7 @@ async function runEndedGoalScheduledCheck(): Promise<void> {
 
   try {
     const ended = await seedGoal("check-74 ended", today, null);
-    const endedCommitment = await seedCommitment(ended, "check-74 ended tap", false);
+    await seedCommitment(ended, "check-74 ended tap", false);
     const measured = await seedGoal("check-74 measured", "2099-12-31", { name: "minutos", unit: "min" });
     const measuredCommitment = await seedCommitment(measured, "check-74 minutes", true);
     const plain = await seedGoal("check-74 plain", "2099-12-31", null);
@@ -1583,10 +1702,9 @@ async function runEndedGoalScheduledCheck(): Promise<void> {
     const archivedGoal = await seedGoal("check-74 archived", "2099-12-31", null, true);
     await seedCommitment(archivedGoal, "check-74 archived tap", false);
 
-    // 7 on the Monday, 5 today, 100 the week before: the week's measure is 12
-    // (5 when today is the Monday itself).
-    const expectedMeasure = monday === today ? 5 : 12;
-    if (monday !== today) await seedFact(measured, measuredCommitment, monday, 7);
+    // 5 today, 100 the week before: the week's measure is 5 on any weekday.
+    // The Monday's own share is proved in the fixture week below.
+    const expectedMeasure = 5;
     await seedFact(measured, measuredCommitment, today, 5);
     await seedFact(measured, measuredCommitment, addDays(monday, -7), 100);
 
@@ -1712,55 +1830,76 @@ async function runEndedGoalScheduledCheck(): Promise<void> {
       weekOneOff?.name === "check-74 done today",
       `fact = ${JSON.stringify(weekOneOff)}`,
     );
-    const endedInWeek = week.goals.some((goal) => goal.id === ended);
-    assert(
-      "a goal that ended yesterday is in loadWeek(today).goals when yesterday is in the week, absent when the week starts today",
-      endedInWeek === (monday !== today),
-      `inWeek = ${endedInWeek}, monday ${monday}, today ${today}`,
-    );
     assert(
       "an archived goal is not in loadWeek's goals",
       !week.goals.some((goal) => goal.id === archivedGoal),
       "checked",
     );
 
-    const without = { ...week, goals: week.goals.filter((goal) => goal.id !== ended) };
-    const withEnded = tallyDays(week);
-    const withoutEnded = tallyDays(without);
-    const delta = withEnded.map((tally, i) => tally.total - withoutEnded[i].total);
-    const days = week.view.days.map((day) => day.day);
-    const expectedDelta = days.map((day) =>
-      day < today && week.view.days.find((d) => d.day === day)!.slots.some((slot) => slot.commitmentId === endedCommitment)
-        ? 1
-        : 0,
+    // Every probe that reads the Monday or the week's days runs in a fixed
+    // week (Mon 2012-03-12, probed on the Wednesday), never on today's weekday.
+    const FIX_MONDAY = "2012-03-12";
+    const FIX_DAY = "2012-03-14";
+    const FIX_CREATED = "2012-01-02T12:00:00Z";
+
+    const fxEnded = await seedGoal("check-74 fixture ended", FIX_DAY, null, false, FIX_CREATED);
+    const fxEndedCommitment = await seedCommitment(fxEnded, "check-74 fixture ended tap", false, FIX_CREATED);
+    const fxEndedOnMonday = await seedGoal("check-74 fixture ended on monday", FIX_MONDAY, null, false, FIX_CREATED);
+    await seedCommitment(fxEndedOnMonday, "check-74 fixture ended on monday tap", false, FIX_CREATED);
+    const fxMeasured = await seedGoal("check-74 fixture measured", "2012-12-31", { name: "minutos", unit: "min" }, false, FIX_CREATED);
+    const fxMeasuredCommitment = await seedCommitment(fxMeasured, "check-74 fixture minutes", true, FIX_CREATED);
+    await seedFact(fxMeasured, fxMeasuredCommitment, FIX_MONDAY, 7);
+    await seedFact(fxMeasured, fxMeasuredCommitment, FIX_DAY, 5);
+    await seedFact(fxMeasured, fxMeasuredCommitment, addDays(FIX_MONDAY, -7), 100);
+
+    const fxDay = await loadDay(FIX_DAY);
+    const fxCurrent = (await loadGoal(fxMeasured, FIX_DAY))?.weeks.find((row) => row.current);
+    assert(
+      "weekMeasure holds the goal's measure since the Monday: 7 on it, 5 on the day, none of last week's 100",
+      fxDay.weekMeasure[fxMeasured] === 12,
+      `weekMeasure = ${fxDay.weekMeasure[fxMeasured]}, seeded 12`,
     );
     assert(
-      "the ended goal's commitment counts in tallyDays for the days before today and not from today",
-      JSON.stringify(delta) === JSON.stringify(expectedDelta) &&
-        (monday === today || expectedDelta.some((n) => n === 1)),
-      `delta = ${JSON.stringify(delta)}, expected ${JSON.stringify(expectedDelta)}`,
+      "it equals the current week of loadGoal(id, day).weeks",
+      fxCurrent !== undefined && fxCurrent.total === fxDay.weekMeasure[fxMeasured],
+      `loadGoal ${fxCurrent?.total}, loadDay ${fxDay.weekMeasure[fxMeasured]}`,
     );
 
-    // A commitment retired earlier this week still feeds the goal's week:
-    // `weekMeasure` must equal the goal's own current row. Impossible on a
-    // Monday, when nothing can have been retired earlier in the week.
-    if (monday !== today) {
-      const retiredGoal = await seedGoal("check-74 retired", "2099-12-31", { name: "minutos", unit: "min" });
-      const live = await seedCommitment(retiredGoal, "check-74 retired goal, live", true);
-      const gone = await seedCommitment(retiredGoal, "check-74 retired goal, gone", true);
-      await db`update goals.commitments set retired_at = now() - interval '1 day' where id = ${gone}`;
-      await seedFact(retiredGoal, gone, monday, 4);
-      await seedFact(retiredGoal, live, today, 5);
-      const retiredDay = await loadDay(today);
-      const retiredCurrent = (await loadGoal(retiredGoal))?.weeks.find((week) => week.current);
-      assert(
-        "weekMeasure still counts a commitment retired earlier this week, as loadGoal does",
-        retiredCurrent !== undefined &&
-          retiredCurrent.total === 9 &&
-          retiredDay.weekMeasure[retiredGoal] === retiredCurrent.total,
-        `loadGoal ${retiredCurrent?.total}, loadDay ${retiredDay.weekMeasure[retiredGoal]}, seeded 9`,
-      );
-    }
+    // A commitment retired earlier in the week still feeds the goal's week:
+    // `weekMeasure` must equal the goal's own current row.
+    const retiredGoal = await seedGoal("check-74 fixture retired", "2012-12-31", { name: "minutos", unit: "min" }, false, FIX_CREATED);
+    const live = await seedCommitment(retiredGoal, "check-74 fixture retired goal, live", true, FIX_CREATED);
+    const gone = await seedCommitment(retiredGoal, "check-74 fixture retired goal, gone", true, FIX_CREATED);
+    await db`update goals.commitments set retired_at = '2012-03-13T12:00:00Z'::timestamptz where id = ${gone}`;
+    await seedFact(retiredGoal, gone, FIX_MONDAY, 4);
+    await seedFact(retiredGoal, live, FIX_DAY, 5);
+    const retiredDay = await loadDay(FIX_DAY);
+    const retiredCurrent = (await loadGoal(retiredGoal, FIX_DAY))?.weeks.find((row) => row.current);
+    assert(
+      "weekMeasure still counts a commitment retired earlier this week, as loadGoal does",
+      retiredCurrent !== undefined &&
+        retiredCurrent.total === 9 &&
+        retiredDay.weekMeasure[retiredGoal] === retiredCurrent.total,
+      `loadGoal ${retiredCurrent?.total}, loadDay ${retiredDay.weekMeasure[retiredGoal]}, seeded 9`,
+    );
+
+    const fxWeek = await loadWeek(FIX_DAY);
+    assert(
+      "a goal that ended on the Tuesday is in loadWeek's goals, one that ended on the Monday is not",
+      fxWeek.goals.some((goal) => goal.id === fxEnded) && !fxWeek.goals.some((goal) => goal.id === fxEndedOnMonday),
+      `ids in week: ${JSON.stringify(fxWeek.goals.map((goal) => goal.name))}`,
+    );
+    const without = { ...fxWeek, goals: fxWeek.goals.filter((goal) => goal.id !== fxEnded) };
+    const delta = tallyDays(fxWeek).map((tally, i) => tally.total - tallyDays(without)[i].total);
+    const expectedDelta = fxWeek.view.days.map((day) =>
+      day.day < FIX_DAY && day.slots.some((slot) => slot.commitmentId === fxEndedCommitment) ? 1 : 0,
+    );
+    assert(
+      "the ended goal's commitment counts in tallyDays on the Monday and the Tuesday and from its horizon on not at all",
+      JSON.stringify(delta) === JSON.stringify([1, 1, 0, 0, 0, 0, 0]) &&
+        JSON.stringify(expectedDelta) === JSON.stringify(delta),
+      `delta = ${JSON.stringify(delta)}, expected [1,1,0,0,0,0,0], slots say ${JSON.stringify(expectedDelta)}`,
+    );
   } finally {
     if (oneOffIds.length > 0) {
       await db`delete from goals.one_offs where id in ${db(oneOffIds)} and user_id = ${userId}`;
@@ -2077,7 +2216,9 @@ async function runFlexibleDayFeedCheck(): Promise<void> {
 }
 
 async function runMain(): Promise<void> {
-  installStubs(loadCookies(), false);
+  const cookies = loadCookies();
+  await assertSessionUserExists(cookies);
+  installStubs(cookies, false);
 
   if (process.argv.includes("--module-74")) {
     await runEndedGoalScheduledCheck();
@@ -2085,6 +2226,87 @@ async function runMain(): Promise<void> {
     process.exit(failed ? 1 : 0);
   }
 
+  if (process.argv.includes("--replace-race")) {
+    await runReplaceRaceCheck();
+    console.log(failed ? "REPORT  failed" : "REPORT  passed");
+    process.exit(failed ? 1 : 0);
+  }
+
+  const seed = await seedBaseline();
+  try {
+    await runMainChecks(seed);
+  } finally {
+    await seed.cleanup();
+  }
+
+  console.log("");
+  console.log(failed ? "REPORT  failed" : "REPORT  passed");
+  process.exit(failed ? 1 : 0);
+}
+
+type Baseline = { goalIds: string[]; commitmentIds: string[]; cleanup: () => Promise<void> };
+
+// Three goals and seven commitments of every kind, written through the app's
+// own doors: the cold and warm calls, and the statement counts they assert,
+// run over a day whose size a statement per goal or per commitment would
+// change, never over whatever the identity happened to hold.
+async function seedBaseline(): Promise<Baseline> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  type Input = Parameters<typeof addCommitment>[0];
+
+  const daily = { cadenceKind: "daily" } as const;
+  const groups: ((goalId: string) => Input)[][] = [
+    [
+      (goalId) => ({ goalId, name: "check-day baseline tap a", ...daily, satisfaction: "tap" }),
+      (goalId) => ({ goalId, name: "check-day baseline tap b", ...daily, satisfaction: "tap" }),
+      (goalId) => ({ goalId, name: "check-day baseline quantity a", ...daily, satisfaction: "quantity", targetQuantity: 3, unit: "min" }),
+    ],
+    [
+      (goalId) => ({ goalId, name: "check-day baseline tap c", ...daily, satisfaction: "tap" }),
+      (goalId) => ({ goalId, name: "check-day baseline evidence", ...daily, satisfaction: "evidence", sourceKey: "reading_lookups", threshold: 1 }),
+    ],
+    [
+      (goalId) => ({ goalId, name: "check-day baseline tap d", ...daily, satisfaction: "tap" }),
+      (goalId) => ({ goalId, name: "check-day baseline quantity b", ...daily, satisfaction: "quantity", targetQuantity: 2, unit: "min" }),
+    ],
+  ];
+
+  const goalIds: string[] = [];
+  const commitmentIds: string[] = [];
+  await Promise.all(
+    groups.map(async (group, index) => {
+      const goal = await createGoal({ name: `check-day baseline goal ${index}`, horizon: "2099-12-31" });
+      if (!goal.ok) throw new Error(`seedBaseline: createGoal failed: ${goal.error}`);
+      goalIds.push(goal.goalId);
+      await Promise.all(
+        group.map(async (build) => {
+          const commitment = await addCommitment(build(goal.goalId));
+          if (!commitment.ok) throw new Error(`seedBaseline: addCommitment failed: ${commitment.error}`);
+          commitmentIds.push(commitment.commitmentId);
+        }),
+      );
+    }),
+  );
+
+  const { getPerson } = await import("@/lib/session");
+  const person = await getPerson();
+  if (!person) throw new Error("seedBaseline: no verified session");
+
+  return {
+    goalIds,
+    commitmentIds,
+    cleanup: async () => {
+      const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+      try {
+        await db`delete from goals.goals where id in ${db([...goalIds, ...probeGoalIds])} and user_id = ${person.id}`;
+      } finally {
+        await db.end();
+      }
+    },
+  };
+}
+
+async function runMainChecks(seed: Baseline): Promise<void> {
   const { loadDay } = await import("@/lib/queries/day");
   const { todayInZone } = await import("@/lib/zone");
   const today = todayInZone();
@@ -2117,9 +2339,18 @@ async function runMain(): Promise<void> {
   const coldSlotIds = cold.view.slots.map((slot) => slot.commitmentId).sort();
   const warmSlotIdLists = warmResults.map((result) => result.view.slots.map((slot) => slot.commitmentId).sort());
   const lastWarmSlotIds = warmSlotIdLists[warmSlotIdLists.length - 1] ?? [];
+  // A comparison of two empty sets passes whatever `deriveDay` does, so the
+  // floor is the seed this run wrote itself.
+  const missingSeeded = seed.commitmentIds.filter((id) => !coldSlotIds.includes(id));
+  assert(
+    "the cold run carries a slot for every commitment this run seeded",
+    missingSeeded.length === 0 && coldSlotIds.length >= seed.commitmentIds.length,
+    `${coldSlotIds.length} slot(s), ${missingSeeded.length} of ${seed.commitmentIds.length} seeded missing`,
+  );
   assert(
     "the cold and every warm run declare the same slots",
-    warmSlotIdLists.every((ids) => JSON.stringify(ids) === JSON.stringify(coldSlotIds)),
+    coldSlotIds.length >= 1 &&
+      warmSlotIdLists.every((ids) => ids.length >= 1 && JSON.stringify(ids) === JSON.stringify(coldSlotIds)),
     `cold ${coldSlotIds.length} slot(s); warm ${warmSlotIdLists.map((ids) => ids.length).join(", ")} slot(s)`,
   );
 
@@ -2136,7 +2367,8 @@ async function runMain(): Promise<void> {
   );
   assert(
     "every declared slot is still present when the source cannot be read",
-    JSON.stringify(degraded.slotIds) === JSON.stringify(lastWarmSlotIds),
+    lastWarmSlotIds.length >= seed.commitmentIds.length &&
+      JSON.stringify(degraded.slotIds) === JSON.stringify(lastWarmSlotIds),
     `undegraded ${lastWarmSlotIds.length} slot(s), degraded ${degraded.slotIds.length} slot(s)`,
   );
 
@@ -2160,10 +2392,9 @@ async function runMain(): Promise<void> {
   await runPhasePositionCheck();
   await runFlexibleDayFeedCheck();
   await runSurvivorsOf92To94Check();
-
-  console.log("");
-  console.log(failed ? "REPORT  failed" : "REPORT  passed");
-  process.exit(failed ? 1 : 0);
+  await runMonthLineCheck();
+  await runMonthTaskCheck();
+  await runPastWeekCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -2305,6 +2536,342 @@ async function runSurvivorsOf92To94Check(): Promise<void> {
     );
   } finally {
     if (goalId) await db`delete from goals.goals where id = ${goalId}`;
+    await db.end();
+  }
+}
+
+// Module 128: Hoy's month line (RP-28, RP-29), the month task leaving the
+// dayless list (RP-31) and a done estimate joining the measure (RP-36).
+// Fixed October 2010: Wed 2010-10-20 is the pace day, Tue 10-19 is not.
+async function runMonthLineCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { listDaylessOneOffs } = await import("@/lib/queries/one-offs");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runMonthLineCheck: no verified session");
+  const userId = person.id;
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  const deviceId = "00000000-0000-4000-8000-0000000000e8";
+
+  async function seedGoal(name: string): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${userId}, ${name}, '2099-12-31'::date, 'searches', 'searches',
+              '2010-09-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalIds.push(row.id);
+    return row.id;
+  }
+
+  try {
+    // 720 planned; 400 + 26 declared and 5 searched on 10-02 reach 431.
+    const goal = await seedGoal("month-line probe");
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${userId}, ${goal}, '2010-10-01'::date, 720)
+    `;
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${goal}, 'month-line quantity', 'daily', 'quantity', 10, 'searches',
+              '2010-09-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    for (const [day, quantity] of [["2010-10-05", 400], ["2010-10-06", 26]] as const) {
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${userId}, ${goal}, ${commitment.id}, ${day}::date, ${quantity})
+      `;
+    }
+    const [source] = await db<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (${userId}, ${goal}, 'month-line evidence', 'daily', 'evidence', ${source.id}, 1,
+              '2009-12-01T00:00:00Z'::timestamptz)
+    `;
+    for (let i = 1; i <= 5; i++) {
+      await db`
+        insert into reading.lookups
+          (user_id, device_id, local_id, at, received_at, text, normalised, kind, outcome,
+           dictionary_ready, record_schema)
+        values (${userId}, ${deviceId}::uuid, ${i}, '2010-10-02T17:00:00Z'::timestamptz,
+                '2010-10-02T17:00:00Z'::timestamptz, 'x', 'x', 'word', 'exact', true, 1)
+      `;
+    }
+
+    const pace = await loadDay("2010-10-20");
+    const line = pace.monthLine[goal];
+    assert(
+      "720 planned and 431 reached on the 20th reads under pace, the 10-02 evidence counted in the month",
+      line?.planned === 720 && line.reached === 431 && line.underPace === true,
+      `monthLine = ${JSON.stringify(line)}`,
+    );
+    assert(
+      "the 10-02 evidence counts toward the month and not toward the week",
+      pace.weekMeasure[goal] === 0,
+      `weekMeasure = ${pace.weekMeasure[goal]}`,
+    );
+    const eve = (await loadDay("2010-10-19")).monthLine[goal];
+    assert(
+      "the same 431 of 720 on the 19th does not read under pace",
+      eve?.reached === 431 && eve.underPace === false,
+      `monthLine = ${JSON.stringify(eve)}`,
+    );
+
+    // Estimates: a done leaf adds its 60, its undone sibling nothing.
+    const estimated = await seedGoal("month-line estimate probe");
+    const [slotCommitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${estimated}, 'month-line estimate slot', 'daily', 'quantity', 10, 'searches',
+              '2010-09-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    const slotOf = (day: Awaited<ReturnType<typeof loadDay>>) =>
+      JSON.stringify(day.view.slots.find((slot) => slot.commitmentId === slotCommitment.id));
+    const slotBefore = slotOf(await loadDay("2010-10-20"));
+    const [done] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${userId}, ${estimated}, 'month-line done task', '2010-10-01'::date, 60)
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${userId}, ${estimated}, 'month-line undone sibling', '2010-10-01'::date, 40)
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${userId}, ${estimated}, ${done.id}, '2010-10-20'::date)
+    `;
+    const withEstimate = await loadDay("2010-10-20");
+    assert(
+      "a done task estimated at 60 adds 60 to weekMeasure and to the month's reached, its undone sibling nothing",
+      withEstimate.weekMeasure[estimated] === 60 && withEstimate.monthLine[estimated]?.reached === 60,
+      `weekMeasure = ${withEstimate.weekMeasure[estimated]}, monthLine = ${JSON.stringify(withEstimate.monthLine[estimated])}`,
+    );
+    assert(
+      "a commitment's slot is unchanged by the estimate",
+      slotOf(withEstimate) === slotBefore,
+      `before ${slotBefore}, after ${slotOf(withEstimate)}`,
+    );
+
+    // The month task and its sub-task leave /sueltas; a plain one stays.
+    const [parent] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${userId}, ${estimated}, 'month-line parent', '2010-10-01'::date)
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id)
+      values (${userId}, ${estimated}, 'month-line child', null, ${parent.id})
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, ${estimated}, 'month-line plain dayless')
+    `;
+    const baseline = (await loadDay("2010-10-20")).daylessCount;
+    const listed = (await listDaylessOneOffs()).filter((o) => o.name.startsWith("month-line"));
+    assert(
+      "a month-planned one-off and its sub-task are absent from the dayless list, a plain one is present",
+      listed.length === 1 && listed[0].name === "month-line plain dayless",
+      `listed = ${JSON.stringify(listed.map((o) => o.name))}`,
+    );
+    const [{ n }] = await db<{ n: number }[]>`
+      select count(*)::int as n from goals.one_offs o
+        where o.user_id = ${userId} and o.day is null and o.planned_month is null and o.parent_id is null
+          and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
+          and (o.goal_id is null or exists (
+            select 1 from goals.goals g where g.id = o.goal_id and g.archived_at is null and g.horizon > '2010-10-20'::date))
+    `;
+    assert(
+      "daylessCount excludes the month task and its sub-task and counts the plain one",
+      baseline === n,
+      `daylessCount = ${baseline}, expected ${n}`,
+    );
+
+    // The overlap and the four statements, on the day with a budget.
+    await loadDay("2010-10-20");
+    const start = wireCalls.length;
+    await loadDay("2010-10-20");
+    reportRun("month-line", wireCalls.slice(start), true);
+  } finally {
+    await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
+    await db.end();
+  }
+}
+
+// Module 174: each open goal's next undone leaf of the month, read inside the
+// goals statement (RP-31, RNP-03). Seeded on today's own month, since only
+// today reads it; creation stamps are fixed so only the order decides.
+async function runMonthTaskCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { monthOf, nextMonth } = await import("@/lib/plan/months");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runMonthTaskCheck: no verified session");
+  const userId = person.id;
+  const today = todayInZone();
+  const month = monthOf(today);
+  const previous = monthOf(addDays(month, -1));
+  const following = nextMonth(month);
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  let goalId = "";
+
+  async function seed(
+    name: string,
+    plannedMonth: string | null,
+    parentId: string | null,
+    day: string | null,
+    createdAt: string,
+    estimate: number | null = null,
+  ): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, created_at)
+      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate},
+              ${createdAt}::timestamptz)
+      returning id
+    `;
+    return row.id;
+  }
+  async function finish(oneOffId: string): Promise<void> {
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day) values (${userId}, ${goalId}, ${oneOffId}, ${today}::date)
+    `;
+  }
+
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${userId}, 'month-task probe', '2099-12-31'::date, '2020-01-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+
+    await seed("month-task dated", month, null, today, "2020-01-01T00:00:00Z");
+    await seed("month-task next month", following, null, null, "2020-01-02T00:00:00Z");
+    const own = await seed("month-task own", month, null, null, "2020-01-03T00:00:00Z", 90);
+    const parent = await seed("month-task carried parent", previous, null, null, "2020-01-04T00:00:00Z");
+    const first = await seed("month-task child 1", null, parent, null, "2020-01-05T00:00:00Z", 30);
+    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45);
+    await finish(first);
+
+    const nextOf = async () => (await loadDay(today)).monthTask[goal.id];
+    const carried = await nextOf();
+    assert(
+      "the carried parent's undone child is the goal's next task, before the month's own and any dated one-off",
+      carried?.id === second && carried.name === "month-task child 2" && carried.estimate === 45,
+      `monthTask = ${JSON.stringify(carried)}`,
+    );
+
+    await finish(second);
+    const ownNext = await nextOf();
+    assert(
+      "with the carried child done the month's own task is next, and a task of the month after never is",
+      ownNext?.id === own && ownNext.estimate === 90,
+      `monthTask = ${JSON.stringify(ownNext)}`,
+    );
+
+    await finish(own);
+    const none = await loadDay(today);
+    assert(
+      "with every task of the month done the goal reads null, a dated one-off and a later month never next",
+      goal.id in none.monthTask && none.monthTask[goal.id] === null,
+      `monthTask = ${JSON.stringify(none.monthTask[goal.id])}`,
+    );
+
+    const past = await loadDay(addDays(today, -1));
+    assert("a past day reads an empty monthTask", Object.keys(past.monthTask).length === 0, JSON.stringify(past.monthTask));
+
+    await loadDay(today);
+    const start = wireCalls.length;
+    await loadDay(today);
+    reportRun("month-task", wireCalls.slice(start), true);
+  } finally {
+    if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
+    await db.end();
+  }
+}
+
+// Module 206 (RP-44, RP-24): a past week keeps the goals that governed it, an
+// archive since included, and drops one opened after it; `firstMonday` is the
+// oldest goal's Monday, archived included, read in the same statement. Rows
+// are relative to today and deleted by id.
+async function runPastWeekCheck(): Promise<void> {
+  const { loadWeek } = await import("@/lib/queries/week");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone, weekOf } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runPastWeekCheck: no verified session");
+  const today = todayInZone();
+  const threeBack = addDays(today, -21);
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const ids: string[] = [];
+
+  async function seedGoal(name: string, createdDay: string, archivedDay: string | null): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+      values (${person!.id}, ${name}, '2099-12-31'::date, ${`${createdDay}T17:00:00Z`}::timestamptz,
+              ${archivedDay ? `${archivedDay}T17:00:00Z` : null}::timestamptz)
+      returning id
+    `;
+    ids.push(row.id);
+    return row.id;
+  }
+
+  try {
+    const oldest = await seedGoal("past-week oldest archived", "2001-01-03", "2001-02-03");
+    const governed = await seedGoal("past-week governed", addDays(today, -35), addDays(today, -14));
+    const later = await seedGoal("past-week opened last week", addDays(today, -7), null);
+
+    await loadWeek(threeBack);
+    const start = wireCalls.length;
+    const past = await loadWeek(threeBack);
+    reportRun("past-week", wireCalls.slice(start), true);
+    const current = await loadWeek(today);
+
+    assert(
+      "a goal opened five weeks ago and archived two weeks ago is in the week three back",
+      past.goals.some((goal) => goal.id === governed),
+      `goals = ${JSON.stringify(past.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "it is not in this week",
+      !current.goals.some((goal) => goal.id === governed),
+      `goals = ${JSON.stringify(current.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "a goal opened last week is absent from the week three back",
+      !past.goals.some((goal) => goal.id === later),
+      `goals = ${JSON.stringify(past.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "it is in this week",
+      current.goals.some((goal) => goal.id === later),
+      `goals = ${JSON.stringify(current.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "a goal archived long before the week is not in it",
+      !past.goals.some((goal) => goal.id === oldest),
+      `goals = ${JSON.stringify(past.goals.map((goal) => goal.name))}`,
+    );
+    assert(
+      "firstMonday is the Monday of the oldest goal, archived included",
+      past.firstMonday === weekOf("2001-01-03")[0] && current.firstMonday === past.firstMonday,
+      `past ${past.firstMonday}, this ${current.firstMonday}, expected ${weekOf("2001-01-03")[0]}`,
+    );
+  } finally {
+    if (ids.length > 0) {
+      await db`delete from goals.goals where id in ${db(ids)} and user_id = ${person.id}`;
+    }
     await db.end();
   }
 }

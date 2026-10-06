@@ -98,7 +98,6 @@
 .wide {
   display: none;
   inline-size: 100%;
-  max-inline-size: 1020px;
   border-collapse: collapse;
 }
 
@@ -110,6 +109,15 @@
   .wide {
     display: table;
   }
+}
+
+/* Inside a narrow column the phone's stack stays at every width. */
+.narrow .phone {
+  display: block;
+}
+
+.narrow .wide {
+  display: none;
 }
 
 .hidden {
@@ -204,4 +212,68 @@
 /* A week not yet reached: «—», a stroke rather than a word, so quiet. */
 .pending {
   color: var(--pulsar-quiet);
+}
+
+/* A row that is a link (`MesesFilas.dc.html`): the phone's whole row is the
+   anchor, 56px tall, ink, with its chevron at the end. */
+.stackRow.linked {
+  padding: 0;
+  min-block-size: 56px;
+  align-items: stretch;
+}
+
+.rowLink {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 56px;
+  padding: 8px 4px;
+  text-decoration: none;
+  color: var(--pulsar-ink);
+}
+
+.rowLink:focus-visible,
+.cellLink:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: -2px;
+}
+
+.chevron {
+  flex: none;
+  color: var(--pulsar-quiet);
+}
+
+/* The wide face: the lead cell's anchor stretches over the row, so the row is
+   the target and no other cell becomes a link. */
+.linkedRow {
+  position: relative;
+}
+
+.cellLink {
+  color: var(--pulsar-ink);
+  text-decoration: none;
+}
+
+.cellLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  min-block-size: 48px;
+}
+
+/* The month open beside the list is marked from 1024, where a list sits beside
+   its item. */
+@media (min-width: 1024px) {
+  .stackRow.open {
+    background: var(--pulsar-accent-soft);
+    border-radius: 10px;
+  }
+
+  .stackRow.open .stackLabel {
+    font-weight: 600;
+    color: var(--pulsar-ink);
+  }
 }
