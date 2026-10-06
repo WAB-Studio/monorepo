@@ -65,8 +65,7 @@ test("Hoy's controls row stands on the eyebrow's line, the eyebrow a date", asyn
   expect(toggle.x).toBeGreaterThan(date.x + date.width);
 });
 
-// No screen draws a linked eyebrow or an indented row until the sweeps land,
-// so these two read the rules the primitives ship.
+// No screen draws a linked eyebrow yet, so this reads the rule the primitive ships.
 async function ruleOf(page: Page, fragment: string) {
   return page.evaluate((needle) => {
     for (const sheet of Array.from(document.styleSheets)) {
@@ -74,8 +73,7 @@ async function ruleOf(page: Page, fragment: string) {
         if (rule instanceof CSSStyleRule && rule.selectorText.includes(needle)) {
           return {
             minBlockSize: rule.style.getPropertyValue("min-block-size"),
-            marginInlineStart: rule.style.getPropertyValue("margin-inline-start"),
-            inlineSize: rule.style.getPropertyValue("inline-size"),
+            marginBlock: rule.style.getPropertyValue("margin-block"),
           };
         }
       }
@@ -87,13 +85,8 @@ async function ruleOf(page: Page, fragment: string) {
 test("the header's linked eyebrow is a 44 px target", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("main > header:visible").first()).toBeVisible();
-  expect((await ruleOf(page, "eyebrowLink"))?.minBlockSize).toBe("44px");
-});
-
-test("a child row is set in 30 px and ends where its parent's does", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.locator("main > header:visible").first()).toBeVisible();
-  const rule = await ruleOf(page, "indent");
-  expect(rule?.marginInlineStart).toBe("30px");
-  expect(rule?.inlineSize).toBe("calc(100% - 30px)");
+  const rule = await ruleOf(page, "eyebrowLink");
+  expect(rule?.minBlockSize).toBe("44px");
+  // The negative margin cancels the 44 px box's excess: the link adds no height to the header.
+  expect(rule?.marginBlock).toBe("calc(0.6em - 22px)");
 });

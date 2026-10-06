@@ -155,6 +155,7 @@ test("done from the list it leaves, the status line survives and Hoy holds it in
     await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(0);
     const status = page.getByRole("status");
     await expect(status).toContainText(`«${name}» quedó en «hechas hoy».`);
+    expect(await status.locator("p").evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
     await status.getByRole("link", { name: "ver hoy" }).click();
 
     await expect(page).toHaveURL(/\/$/);

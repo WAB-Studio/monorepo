@@ -139,3 +139,38 @@ test("an ended goal's lines are sentences in Archivo and stand together", async 
     await db`delete from goals.goals where user_id = ${person.id}`;
   }
 });
+
+test("a day's one-off that gained sub-tasks refuses «hecha» in a sentence, in Archivo", async ({ person, browser, baseURL, db }) => {
+  const name = `Suelta con hijas ${Date.now()}`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${person.id}, ${`Meta ${name}`}, ${shift(today, 90)}) returning id
+  `;
+  const [parent] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, day, in_plan)
+    values (${person.id}, ${goal.id}, ${name}, ${today}::date, true) returning id
+  `;
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 360, height: 740 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.getByRole("button", { name, exact: true }).locator("visible=true")).toHaveCount(1);
+    const mark = page.getByRole("button", { name: "Marcar como hecho" }).locator("visible=true");
+    await expect(mark).toHaveCount(1);
+    // Landing after the page drew: the refusal is what the click meets.
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, parent_id, in_plan)
+      values (${person.id}, ${goal.id}, ${`Hija ${name}`}, ${parent.id}, true)
+    `;
+    await mark.click();
+    const refusal = page.getByText("Esta tarea se da por hecha cuando lo están sus sub-tareas.").locator("visible=true");
+    await expect(refusal).toHaveCount(1);
+    expect(await refusal.evaluate((node) => getComputedStyle(node).fontFamily)).not.toMatch(/mono/i);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
+  }
+});

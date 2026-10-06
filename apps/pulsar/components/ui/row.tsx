@@ -57,9 +57,6 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // A control of its own at the row's end, a sibling of the row's button
   // because a button cannot hold one (`TareaNotaGuardada`'s note button).
   end?: ReactNode;
-  // A child row: set in by the board's 30px so its mark stands under its
-  // parent's name.
-  indent?: boolean;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -79,7 +76,6 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     wideTrailing,
     preview,
     end,
-    indent,
     className,
     type = "button",
     disabled,
@@ -91,7 +87,6 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
   const merged = [
     styles.row,
     rule ? undefined : styles.flush,
-    indent ? styles.indent : undefined,
     onLeadingClick || end ? styles.split : undefined,
     className,
   ]
