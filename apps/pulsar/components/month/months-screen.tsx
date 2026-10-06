@@ -178,7 +178,7 @@ export async function MonthsScreen({
       />
       {empty && open && target ? (
         <>
-          <Text as="p" tone="secondary">
+          <Text as="p" variant="sentence">
             {t("month.months.emptyBody", { month: monthLabel(target.month) })}
           </Text>
           <Button asChild>
