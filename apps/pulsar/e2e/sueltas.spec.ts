@@ -215,22 +215,23 @@ for (const [width, gap] of [
       await page.setViewportSize({ width, height: 800 });
       await page.goto("/sueltas");
 
-      const sections = page.locator("main > div > section");
-      await expect(sections).toHaveCount(2);
-      expect(await sections.first().evaluate((el) => getComputedStyle(el.parentElement!).rowGap)).toBe(gap);
-      expect(await sections.first().evaluate((el) => getComputedStyle(el).rowGap)).toBe("12px");
+      const sections = page.locator("main section");
+      await expect.soft(sections).toHaveCount(2);
+      expect.soft(await sections.first().evaluate((el) => getComputedStyle(el.parentElement!).rowGap)).toBe(gap);
+      expect.soft(await sections.first().evaluate((el) => getComputedStyle(el).rowGap)).toBe("12px");
 
       const line = page.getByText(`de ${goalName}`).first();
-      expect(await line.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+      expect.soft(await line.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
       const dayFigure = page.getByRole("button", { name: new RegExp(`^${planned}`) }).locator("span", {
         hasText: /^[a-záéíóú]+ \d+/,
       });
-      expect(await dayFigure.last().evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
+      expect.soft(await dayFigure.last().evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
 
       await page.getByRole("button", { name: `Dar por hecha: ${waiting}` }).click();
       const seeToday = page.getByRole("link", { name: "ver hoy" });
-      await expect(seeToday).toBeVisible();
-      expect(await seeToday.evaluate((el) => getComputedStyle(el).fontWeight)).toBe("500");
+      await expect.soft(seeToday).toBeVisible();
+      expect.soft(await seeToday.evaluate((el) => getComputedStyle(el).fontWeight)).toBe("500");
+      await expect.soft(seeToday.locator("span")).toHaveCount(0);
     } finally {
       await db`delete from goals.one_offs where id in (${waitingId}, ${scheduled.id})`;
       await db`delete from goals.goals where id = ${goal.id} and user_id = ${personId}`;
