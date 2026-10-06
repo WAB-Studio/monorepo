@@ -377,3 +377,11 @@ test("with no rhythm every task fixed to a month reads in the month it had", () 
   assert.equal(partIn(roadmap, OCT, "doneNow").done, true);
   assert.equal(partIn(roadmap, DEC, "future").fixed, true);
 });
+
+test("a task carried from an earlier month lists before the month's own tasks, whatever its position", () => {
+  const roadmap = plan([
+    task("own", { estimate: 2, plannedMonth: OCT }),
+    task("late", { estimate: 5, plannedMonth: SEP, doneOn: "2026-10-05" }),
+  ]);
+  assert.deepEqual(ids(roadmap, OCT), ["late", "own"]);
+});

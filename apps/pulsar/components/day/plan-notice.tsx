@@ -7,10 +7,9 @@ import { dismissPlanNotice } from "@/app/actions/roadmap";
 import { Button, Flex, Panel, Text, TextLink } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import type { MessageKey } from "@/i18n/translator";
+import { movedSpan } from "@/lib/plan/moved-span";
 import type { PlanNotice as Notice } from "@/lib/plan/roadmap-read";
 import { formatQuantity } from "@/lib/units/time";
-
-const DAYS_IN_WEEK = 7;
 
 /**
  * `RoadmapHoyMovido.dc.html`, `RoadmapHoyMovidoDias.dc.html` (RP-52): the card
@@ -42,8 +41,7 @@ export function PlanNotice({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
 
-  const short = notice.movedDays < DAYS_IN_WEEK;
-  const weeks = Math.max(1, Math.round(notice.movedDays / DAYS_IN_WEEK));
+  const { short, weeks } = movedSpan(notice.movedDays);
   const month = closedMonthName.charAt(0).toUpperCase() + closedMonthName.slice(1);
   const values = {
     month,

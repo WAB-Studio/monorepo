@@ -209,3 +209,11 @@ test("openMonthsOf: from this month to the goal's last, nothing once the goal en
   assert.deepEqual(openMonthsOf(input([], { horizon: "2027-01-01" })), ["2026-10", "2026-11", "2026-12"]);
   assert.deepEqual(openMonthsOf(input([], { horizon: "2026-10-02" })), []);
 });
+
+test("openMonthsOf: a goal that opens in a future month starts there", () => {
+  assert.deepEqual(openMonthsOf(input([], { openedOn: "2026-12-10", horizon: "2027-03-01" })), [
+    "2026-12",
+    "2027-01",
+    "2027-02",
+  ]);
+});
