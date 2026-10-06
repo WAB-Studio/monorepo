@@ -25,10 +25,19 @@ export default async function ConnectionsPage() {
   const [tokens, t] = await Promise.all([listAccessTokens(), getTranslations()]);
 
   const today = todayInZone();
-  const used = (instant: string | null) => {
-    if (!instant) return t("connections.row.neverUsed");
-    const when = civilDateInZone(new Date(instant)) === today ? t("connections.row.today") : dayOf(instant);
-    return `${when} ${timeInZone(instant)}`;
+  // «hoy 09:40» for today, «el 5 oct» for any other day.
+  const stamp = (instant: string, prefixed: boolean) =>
+    civilDateInZone(new Date(instant)) === today
+      ? `${t("connections.row.today")} ${timeInZone(instant)}`
+      : prefixed
+        ? t("connections.row.on", { date: dayOf(instant) })
+        : `${dayOf(instant)} ${timeInZone(instant)}`;
+  const live = (token: (typeof tokens)[number]) => {
+    const family = token.kind === "oauth" ? "connections.oauth" : "connections.row";
+    const created = stamp(token.createdAt, true);
+    return token.lastUsedAt
+      ? t(`${family}.metaUsed`, { created, used: stamp(token.lastUsedAt, false) })
+      : t(`${family}.metaUnused`, { created });
   };
 
   const rows: ConnectionRow[] = tokens.map((token) => ({
@@ -38,9 +47,7 @@ export default async function ConnectionsPage() {
     revoked: token.revokedAt !== null,
     meta: token.revokedAt
       ? t("connections.row.revokedMeta", { date: dayOf(token.revokedAt) })
-      : token.kind === "oauth"
-        ? t("connections.oauth.meta", { date: dayOf(token.createdAt), used: used(token.lastUsedAt) })
-        : t("connections.row.meta", { created: dayOf(token.createdAt), used: used(token.lastUsedAt) }),
+      : live(token),
   }));
 
   return <ConnectionsScreen rows={rows} siteUrl={env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")} />;
