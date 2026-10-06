@@ -298,11 +298,6 @@ test("loadReport: a goal's month and to-date figures are what loadGoal reads", a
     assert.ok(entry && loaded);
     assert.equal(entry.name, loaded.name);
     assert.equal(entry.unit, loaded.measureUnit);
-    assert.deepEqual(entry.thisMonth, {
-      planned: loaded.month?.planned ?? null,
-      reached: loaded.month?.reached ?? 0,
-      underPace: loaded.month?.underPace ?? false,
-    });
     assert.deepEqual(entry.toDate, toDate(loaded.months));
     assert.deepEqual(
       entry.months.map((row) => ({ ...row, carried: null })),
@@ -310,16 +305,26 @@ test("loadReport: a goal's month and to-date figures are what loadGoal reads", a
     );
     assert.deepEqual(entry.weeks, loaded.weeks);
   }
-  // The fixtures make those figures nonzero, so equality is not two zeros.
-  const minutes = report.goals.find((goal) => goal.id === minutesGoalId)!;
-  // 55 of 720 is under 60 % whenever the pace rule speaks (from the 20th).
-  assert.deepEqual(minutes.thisMonth, {
-    planned: 720,
-    reached: 55,
-    underPace: Number(today.slice(8, 10)) >= 20,
-  });
-  const searches = report.goals.find((goal) => goal.id === searchesGoalId)!;
-  assert.equal(searches.thisMonth.reached, 10);
+});
+
+// Figures written down from the fixtures, not read back through `loadGoal`:
+// the minutes goal holds a 30-minute tap and a done 25-minute task against a
+// plan of 720; the searches goal holds the stubbed 5 + 3 + 2 lookups and no
+// plan this month. `loadReport` takes the day as an argument, so the pace
+// rule (RP-29, from the 20th) is driven on days the test picks, not the day
+// the suite happens to run.
+test("loadReport: this month's figures, and under 60 % is flagged from the 20th and not before", async () => {
+  evidenceRejects = false;
+  const month = today.slice(0, 7);
+  const onTwentieth = await loadReport(`${month}-20`);
+  const minutes = onTwentieth.goals.find((goal) => goal.id === minutesGoalId)!;
+  assert.deepEqual(minutes.thisMonth, { planned: 720, reached: 55, underPace: true });
+  const searches = onTwentieth.goals.find((goal) => goal.id === searchesGoalId)!;
+  assert.deepEqual(searches.thisMonth, { planned: null, reached: 10, underPace: false });
+
+  const onNineteenth = await loadReport(`${month}-19`);
+  const early = onNineteenth.goals.find((goal) => goal.id === minutesGoalId)!;
+  assert.deepEqual(early.thisMonth, { planned: 720, reached: 55, underPace: false });
 });
 
 test("loadReport: phases and the carried task read as the goal holds them", async () => {

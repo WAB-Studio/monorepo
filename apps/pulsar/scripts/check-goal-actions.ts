@@ -1,21 +1,16 @@
-// Proves `renameGoal`'s (`app/actions/plan.ts`, RP-23) own two guards from
-// outside the browser — the same door `scripts/harness/seed-goal.ts` already
-// opens (verbatim comment there): every action here is `"use server"`, which
-// the Next compiler reads at build time and a plain script never sees, so
-// imported directly these run as the ordinary async functions they are.
-// `server-only`, `next/headers` and `next/cache` are stubbed the same way,
-// before the first `@/`-rooted import, and the real session cookie
-// `harness:mint-session` left standing is what `getPerson()` sees — nothing
-// here fabricates a claim.
+// Proves the guards of the goal actions (`app/actions/plan.ts`, `facts.ts`,
+// `one-offs.ts`) from outside the browser — the same door
+// `scripts/harness/seed-goal.ts` already opens (verbatim comment there): every
+// action here is `"use server"`, which the Next compiler reads at build time
+// and a plain script never sees, so imported directly these run as the
+// ordinary async functions they are. `server-only`, `next/headers` and
+// `next/cache` are stubbed the same way, before the first `@/`-rooted import,
+// and the real session cookie `harness:mint-session` left standing is what
+// `getPerson()` sees — nothing here fabricates a claim.
 //
-// Neither case below writes a row. A goalId that names no goal at all
-// matches nothing in the `UPDATE ... WHERE`, so the guard this proves
-// (`if (renamed.length === 0) return notFound`) is the only thing standing
-// between that call and a false "ok: true" — no goal was ever touched to
-// clean up after. A goalId that fails `z.uuid()` never reaches the database
-// at all: the guard this proves (`if (!parsed.success) return ...`) is what
-// keeps `parsed.data` — absent on a failed `safeParse` — from being read and
-// throwing before any statement is sent.
+// Every refusal is read back as a count or a column that did not move; each
+// fixture is deleted by its exact id. Dates are built from `todayInZone()`,
+// never frozen.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -92,6 +87,9 @@ let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
 let addPhase: typeof import("@/app/actions/plan").addPhase;
 let addCommitment: typeof import("@/app/actions/plan").addCommitment;
 let reopenGoal: typeof import("@/app/actions/plan").reopenGoal;
+let archiveGoal: typeof import("@/app/actions/plan").archiveGoal;
+let retireCommitment: typeof import("@/app/actions/plan").retireCommitment;
+let undoFact: typeof import("@/app/actions/facts").undoFact;
 let declareFact: typeof import("@/app/actions/facts").declareFact;
 let todayInZone: typeof import("@/lib/zone").todayInZone;
 let PAST_DAY_LIMIT: number;
@@ -132,9 +130,9 @@ let fixtureGoalId: string;
 
 before(async () => {
   installStubs(loadCookies());
-  ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal } = await import("@/app/actions/plan"));
+  ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal, archiveGoal, retireCommitment } = await import("@/app/actions/plan"));
   ({ createOneOff, scheduleOneOff } = await import("@/app/actions/one-offs"));
-  ({ declareFact } = await import("@/app/actions/facts"));
+  ({ declareFact, undoFact } = await import("@/app/actions/facts"));
   ({ todayInZone } = await import("@/lib/zone"));
   ({ PAST_DAY_LIMIT } = await import("@/lib/validation/fact"));
 
@@ -192,6 +190,22 @@ test("renameGoal: a goalId that fails z.uuid() is refused gracefully, never thro
   await assert.doesNotReject(() => renameGoal({ goalId: "not-a-uuid", name: "meta ajena" }));
   const result = await renameGoal({ goalId: "not-a-uuid", name: "meta ajena" });
   assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error, "plan.errors.goalInvalid");
+});
+
+test("renameGoal: an own goal takes the new name, and revalidates its screens", async () => {
+  const created = await createGoal({ name: "RP-23 antes", horizon: shiftDay(today, 30) });
+  if (!created.ok) throw new Error(created.error);
+  try {
+    revalidated.length = 0;
+    const result = await renameGoal({ goalId: created.goalId, name: "RP-23 después" });
+    assert.equal(result.ok, true);
+    const [row] = await sql<{ name: string }[]>`select name from goals.goals where id = ${created.goalId}`;
+    assert.equal(row.name, "RP-23 después");
+    assert.ok(revalidated.includes(`/metas/${created.goalId}`), revalidated.join(", "));
+  } finally {
+    await sql`delete from goals.goals where id = ${created.goalId}`;
+  }
 });
 
 // RP-06: `declareFact` writes for a day already past.
@@ -599,5 +613,194 @@ test("addPhase and addCommitment: moving an ended goal's end forward, or reopeni
     assert.deepEqual(await written(archived.id), { phases: 1, commitments: 0 });
   } finally {
     await sql`delete from goals.goals where id in ${sql([ended.id, archived.id])}`;
+  }
+});
+
+// A second person's rows, planted through the pooler: no action writes for them.
+async function memberId(): Promise<string> {
+  const [member] = await sql<{ id: string }[]>`select id from auth.users where email = ${memberEmail}`;
+  if (!member) throw new Error("no member identity — run harness:token for this lane");
+  return member.id;
+}
+
+test("addPhase: a span ending past the goal's horizon, or sharing a day with a phase, is refused and writes nothing", async () => {
+  const created = await createGoal({ name: "RP-15 guardas", horizon: shiftDay(today, 30) });
+  if (!created.ok) throw new Error(created.error);
+  const goalId = created.goalId;
+  const count = async () => {
+    const [row] = await sql<{ n: number }[]>`select count(*)::int as n from goals.phases where goal_id = ${goalId}`;
+    return row.n;
+  };
+  try {
+    const past = await addPhase({ goalId, aim: "RP-15 pasada", startsOn: shiftDay(today, 1), endsOn: shiftDay(today, 31) });
+    assert.equal(past.ok, false);
+    if (!past.ok) assert.equal(past.error, "plan.errors.phasePastHorizon");
+    assert.equal(await count(), 0);
+
+    const atHorizon = await addPhase({ goalId, aim: "RP-15 hasta el horizonte", startsOn: shiftDay(today, 1), endsOn: shiftDay(today, 10) });
+    assert.equal(atHorizon.ok, true);
+    assert.equal(await count(), 1);
+
+    // Sharing only the last day is still an overlap: both ends are inclusive.
+    const overlap = await addPhase({ goalId, aim: "RP-15 solapada", startsOn: shiftDay(today, 10), endsOn: shiftDay(today, 20) });
+    assert.equal(overlap.ok, false);
+    if (!overlap.ok) assert.equal(overlap.error, "plan.errors.phaseOverlap");
+    assert.equal(await count(), 1);
+
+    const adjacent = await addPhase({ goalId, aim: "RP-15 contigua", startsOn: shiftDay(today, 11), endsOn: shiftDay(today, 30) });
+    assert.equal(adjacent.ok, true);
+    assert.equal(await count(), 2);
+  } finally {
+    await sql`delete from goals.goals where id = ${goalId}`;
+  }
+});
+
+test("addPhase and addCommitment: another person's goal answers goalNotFound and writes nothing", async () => {
+  const [foreign] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon)
+    values (${await memberId()}, 'RP-15 ajena', ${shiftDay(today, 60)}) returning id`;
+  try {
+    const phase = await addPhase({ goalId: foreign.id, aim: "RP-15 ajena", startsOn: shiftDay(today, 1), endsOn: shiftDay(today, 8) });
+    assert.equal(phase.ok, false);
+    if (!phase.ok) assert.equal(phase.error, "plan.errors.goalNotFound");
+    const commitment = await addCommitment({ goalId: foreign.id, name: "RP-12 ajeno", cadenceKind: "daily", satisfaction: "tap" });
+    assert.equal(commitment.ok, false);
+    if (!commitment.ok) assert.equal(commitment.error, "plan.errors.goalNotFound");
+    const [{ n }] = await sql<{ n: number }[]>`
+      select (select count(*) from goals.phases where goal_id = ${foreign.id})::int
+           + (select count(*) from goals.commitments where goal_id = ${foreign.id})::int as n`;
+    assert.equal(n, 0);
+  } finally {
+    await sql`delete from goals.goals where id = ${foreign.id}`;
+  }
+});
+
+test("addCommitment: an unknown evidence source is refused sourceNotFound; a target past the schema's ceiling is refused and writes nothing", async () => {
+  const created = await createGoal({ name: "RP-12 guardas", horizon: shiftDay(today, 30) });
+  if (!created.ok) throw new Error(created.error);
+  const goalId = created.goalId;
+  const count = async () => {
+    const [row] = await sql<{ n: number }[]>`select count(*)::int as n from goals.commitments where goal_id = ${goalId}`;
+    return row.n;
+  };
+  try {
+    const source = await addCommitment({
+      goalId,
+      name: "RP-12 fuente",
+      cadenceKind: "daily",
+      satisfaction: "evidence",
+      sourceKey: "no_such_source",
+      threshold: 1,
+    });
+    assert.equal(source.ok, false);
+    if (!source.ok) assert.equal(source.error, "plan.errors.sourceNotFound");
+    assert.equal(await count(), 0);
+
+    // Past `integer`'s ceiling the form's schema answers first with its own key;
+    // `plan.errors.valueOutOfRange` (SQLSTATE 22003) is the second line behind it.
+    const target = await addCommitment({
+      goalId,
+      name: "RP-12 monto",
+      cadenceKind: "daily",
+      satisfaction: "quantity",
+      targetQuantity: 2_147_483_648,
+      unit: "minutos",
+    });
+    assert.equal(target.ok, false);
+    if (!target.ok) assert.equal(target.error, "plan.errors.targetQuantityInvalid");
+    assert.equal(await count(), 0);
+  } finally {
+    await sql`delete from goals.goals where id = ${goalId}`;
+  }
+});
+
+test("retireCommitment: retires an own commitment; another person's is notFound and stays live", async () => {
+  const own = await addCommitment({ goalId: fixtureGoalId, name: "RP-13 propio", cadenceKind: "daily", satisfaction: "tap" });
+  if (!own.ok) throw new Error(own.error);
+  const [foreignGoal] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon)
+    values (${await memberId()}, 'RP-13 ajena', ${shiftDay(today, 60)}) returning id`;
+  const [foreign] = await sql<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+    values (${await memberId()}, ${foreignGoal.id}, 'RP-13 ajeno', 'daily', 'tap') returning id`;
+  const retiredAt = async (id: string) => {
+    const [row] = await sql<{ retired: boolean }[]>`select retired_at is not null as retired from goals.commitments where id = ${id}`;
+    return row.retired;
+  };
+  try {
+    const refused = await retireCommitment({ commitmentId: foreign.id });
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.equal(refused.error, "plan.errors.notFound");
+    assert.equal(await retiredAt(foreign.id), false);
+
+    assert.equal(await retiredAt(own.commitmentId), false);
+    const retired = await retireCommitment({ commitmentId: own.commitmentId });
+    assert.equal(retired.ok, true);
+    assert.equal(await retiredAt(own.commitmentId), true);
+  } finally {
+    await sql`delete from goals.goals where id = ${foreignGoal.id}`;
+    await sql`delete from goals.commitments where id = ${own.commitmentId}`;
+  }
+});
+
+test("undoFact: takes back an own fact; another person's is notFound and the row stays", async () => {
+  const own = await addCommitment({ goalId: fixtureGoalId, name: "RP-05 propio", cadenceKind: "daily", satisfaction: "tap" });
+  if (!own.ok) throw new Error(own.error);
+  const fact = await declareFact({ commitmentId: own.commitmentId, day: today });
+  if (!fact.ok) throw new Error(fact.error);
+  const member = await memberId();
+  const [foreignOneOff] = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, name) values (${member}, 'RP-05 ajena') returning id`;
+  const [foreignFact] = await sql<{ id: string }[]>`
+    insert into goals.facts (user_id, one_off_id, day) values (${member}, ${foreignOneOff.id}, ${today}) returning id`;
+  const exists = async (id: string) => {
+    const [row] = await sql<{ n: number }[]>`select count(*)::int as n from goals.facts where id = ${id}`;
+    return row.n === 1;
+  };
+  try {
+    const refused = await undoFact({ factId: foreignFact.id });
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.equal(refused.error, "day.errors.notFound");
+    assert.equal(await exists(foreignFact.id), true);
+
+    const undone = await undoFact({ factId: fact.factId });
+    assert.equal(undone.ok, true);
+    assert.equal(await exists(fact.factId), false);
+  } finally {
+    await sql`delete from goals.one_offs where id = ${foreignOneOff.id}`;
+    await sql`delete from goals.commitments where id = ${own.commitmentId}`;
+  }
+});
+
+test("archiveGoal and reopenGoal: an own goal archives and reopens; another person's is notFound and unchanged", async () => {
+  const created = await createGoal({ name: "RP-24 propia", horizon: shiftDay(today, 30) });
+  if (!created.ok) throw new Error(created.error);
+  const member = await memberId();
+  const [foreignOpen] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon) values (${member}, 'RP-24 ajena abierta', ${shiftDay(today, 60)}) returning id`;
+  const [foreignArchived] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, archived_at)
+    values (${member}, 'RP-24 ajena archivada', ${shiftDay(today, 60)}, now()) returning id`;
+  const archived = async (id: string) => {
+    const [row] = await sql<{ archived: boolean }[]>`select archived_at is not null as archived from goals.goals where id = ${id}`;
+    return row.archived;
+  };
+  try {
+    const refusedArchive = await archiveGoal({ goalId: foreignOpen.id });
+    assert.equal(refusedArchive.ok, false);
+    if (!refusedArchive.ok) assert.equal(refusedArchive.error, "plan.errors.notFound");
+    assert.equal(await archived(foreignOpen.id), false);
+
+    const refusedReopen = await reopenGoal({ goalId: foreignArchived.id });
+    assert.equal(refusedReopen.ok, false);
+    if (!refusedReopen.ok) assert.equal(refusedReopen.error, "plan.errors.notFound");
+    assert.equal(await archived(foreignArchived.id), true);
+
+    assert.equal((await archiveGoal({ goalId: created.goalId })).ok, true);
+    assert.equal(await archived(created.goalId), true);
+    assert.equal((await reopenGoal({ goalId: created.goalId })).ok, true);
+    assert.equal(await archived(created.goalId), false);
+  } finally {
+    await sql`delete from goals.goals where id in ${sql([created.goalId, foreignOpen.id, foreignArchived.id])}`;
   }
 });
