@@ -19,7 +19,6 @@ import { dayBefore } from "@/lib/day/weeks";
 import { isTimeUnit } from "@/lib/units/time";
 import {
   civilDateInZone,
-  civilDateLabel,
   civilDayMonthShort,
   todayInZone,
   TIME_ZONE,
@@ -35,10 +34,11 @@ import {
   Progress,
   Row,
   ScreenHeader,
+  Section,
   SectionLabel,
-  Separator,
   Split,
   Text,
+  TextLink,
 } from "@/components/ui";
 
 import { CommitmentList, countWord } from "./commitment-list";
@@ -123,14 +123,10 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const phoneActs = ended ? (
     <Face on="phone">
-      <Flex gap="3">
-        <Flex flexGrow="1" flexBasis="0" minWidth="0">
-          {moveAction}
-        </Flex>
-        <Flex flexGrow="1" flexBasis="0" minWidth="0">
-          <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
-        </Flex>
-      </Flex>
+      <Section as="div">
+        {moveAction}
+        <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
+      </Section>
     </Face>
   ) : null;
 
@@ -183,64 +179,55 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     />
   ) : null;
   const monthsLink = (
-    <Button asChild variant="ghost">
-      <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
-    </Button>
+    <TextLink href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</TextLink>
   );
   const bareBlock = bareMonth ? (
-    <section>
-      <Separator />
-      <Flex justify="between" align="center">
-        <SectionLabel>{monthName}</SectionLabel>
-        <Button asChild variant="ghost" tone="accent" tap={44}>
-          <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
-        </Button>
-      </Flex>
-      <Text as="p">
-        {t("month.months.withoutMeasure.goalTasks", {
-          count: own.length,
-          done: own.filter((item) => item.done).length,
-        })}
-      </Text>
-      {shiftOffer}
-    </section>
+    <Panel>
+      <Section label={monthName}>
+        <Text as="p" variant="sentence" tone="secondary">
+          {t("month.months.withoutMeasure.goalTasks", {
+            count: own.length,
+            done: own.filter((item) => item.done).length,
+          })}
+        </Text>
+        {shiftOffer}
+        {monthsLink}
+      </Section>
+    </Panel>
   ) : null;
   // Under 60 % from the 20th the pace line holds reached «de» planned itself.
   const paceLine = planned !== null && planned > 0 && Boolean(month?.underPace) && goal.evidence !== "unreadable";
   const monthBlock =
     goal.measureUnit && month ? (
-      <section>
-        <SectionLabel>{monthName}</SectionLabel>
+      <Section label={monthName}>
         {paceLine ? (
-          <Text as="p" variant="meta">
+          <Text as="p" variant="sentence">
             {t("goal.detail.monthPace", { day: Number(today.slice(8, 10)) })}{" "}
             <Figure value={month.reached} unit={figureUnit} variant="meta" />{" "}
             {t("day.monthLine.of")} <Figure value={planned as number} unit={figureUnit} variant="meta" />
             {t("goal.detail.monthPaceUnder", { threshold: 60 })}
           </Text>
         ) : (
-          <Flex align="baseline" gap="2" wrap="wrap">
-            <Figure value={month.reached} unit={figureUnit} variant="measure" />
+          <Text as="p" variant="sentence" tone="muted">
+            <Figure value={month.reached} unit={figureUnit} variant="measure" />{" "}
             {planned !== null ? (
-              <Text variant="meta" tone="muted">
+              <>
                 {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
-              </Text>
+              </>
             ) : (
-              <Text variant="meta" tone="muted">
-                {t("goal.detail.monthNoPlan")}
-              </Text>
+              t("goal.detail.monthNoPlan")
             )}
-          </Flex>
+          </Text>
         )}
         {planned !== null && planned > 0 ? (
           <>
             <Progress percent={percent} />
             {goal.evidence === "unreadable" ? (
-              <Text as="p" variant="meta" tone="muted">
+              <Text as="p" variant="sentence" tone="muted">
                 {t("goal.detail.monthDeclaredOnly")}
               </Text>
             ) : paceLine ? null : (
-              <Text as="p" variant="meta" tone="muted">
+              <Text as="p" variant="sentence" tone="muted">
                 {t("goal.detail.monthProgress", { percent, days: daysLeft })}
               </Text>
             )}
@@ -254,7 +241,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             </Link>
           </Button>
         ) : null}
-      </section>
+      </Section>
     ) : null;
 
   const before = (
@@ -264,12 +251,12 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
         </Face>
         {ended && goal.endedOn ? (
-          <Text as="p" variant="meta">
+          <Text as="p" variant="sentence">
             {endedOnWords(goal.endedOn, t)}
           </Text>
         ) : (
           <Flex justify="between" align="center">
-            <Text as="p" variant="meta" tone="muted">
+            <Text as="p" variant="sentence" tone="muted">
               {t("goal.detail.horizonUntil", {
                 weeks: totalWeeks,
                 date: endLabel,
@@ -279,7 +266,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Flex>
         )}
         {goal.measureUnit ? null : (
-          <Text as="p" variant="meta" tone="muted">
+          <Text as="p" variant="sentence" tone="muted">
             {t("month.list.noMeasure")}
           </Text>
         )}
@@ -288,7 +275,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
       {goal.measureUnit ? (
         <Panel>
-          <Text as="p" variant="meta" tone="muted">
+          <Text as="p" variant="sentence" tone="muted">
             {t("goal.detail.measures", { unit: goal.measureUnit })}
           </Text>
           {phoneActs}
@@ -303,14 +290,14 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
           {monthBlock}
 
-          <Flex gap="5" wrap="wrap">
-            {month ? monthsLink : null}
-            <Button asChild variant="ghost">
-              <Link href={`/metas/${goal.id}/revision`}>
+          <Section as="div">
+            <Flex wrap="wrap" gap="4">
+              {month ? monthsLink : null}
+              <TextLink href={`/metas/${goal.id}/revision`}>
                 {t("goal.detail.reviewLink")}
-              </Link>
-            </Button>
-          </Flex>
+              </TextLink>
+            </Flex>
+          </Section>
 
           {goal.measureUnit && goal.evidence === "unreadable" ? (
             <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
@@ -337,8 +324,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const after = (
     <Panel>
-      <section>
-        <Flex justify="between" align="center" mb={{ initial: "0", lg: "1" }}>
+      <Section>
+        <Flex justify="between" align="center">
           <SectionLabel>
             {t("goal.detail.phasesCount", {
               word: countWord(goal.phases.length, t, true),
@@ -347,11 +334,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </SectionLabel>
           {archived || ended ? null : (
             <Face on="desktop">
-              <Button asChild variant="ghost" tone="accent" tap={44}>
-                <Link href={`/metas/${goal.id}/fases/nueva`}>
-                  {t("goal.phases.add")}
-                </Link>
-              </Button>
+              <TextLink href={`/metas/${goal.id}/fases/nueva`}>
+                {t("goal.phases.add")}
+              </TextLink>
             </Face>
           )}
         </Flex>
@@ -377,18 +362,14 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         ))}
         {archived || ended ? null : (
           <Face on="phone">
-            <Button
-              asChild
-              variant={goal.phases.length > 0 ? "outline" : "solid"}
-              block
-            >
+            <Button asChild variant="outline" block>
               <Link href={`/metas/${goal.id}/fases/nueva`}>
                 {t("goal.phases.add")}
               </Link>
             </Button>
           </Face>
         )}
-      </section>
+      </Section>
     </Panel>
   );
 
@@ -405,7 +386,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         actions={
           archived ? null : (
             <Face on="desktop">
-              <Flex gap="2">
+              <Flex gap="3">
                 <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
                 <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short />
               </Flex>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { approveAuthorization, denyAuthorization } from "@/app/actions/oauth";
-import { Button, Notice, Page, Text } from "@/components/ui";
+import { Button, Notice, Page, ScreenHeader, Text } from "@/components/ui";
 import type { AuthorizationRequest } from "@/lib/validation/oauth";
 
 import { ConsentList } from "./consent-list";
@@ -42,12 +42,7 @@ export function Consent({
 
   return (
     <Page alone>
-      <Text as="p" variant="meta" tone="muted">
-        {t("eyebrow")}
-      </Text>
-      <Text asChild variant="title">
-        <h1>{t("title", { client })}</h1>
-      </Text>
+      <ScreenHeader title={t("title", { client })} eyebrow={t("eyebrow")} />
       <ConsentList label={t("mayLabel")} items={MAY.map((key) => t(`may.${key}`))} mark="+" />
       <ConsentList label={t("neverLabel")} items={NEVER.map((key) => t(`never.${key}`))} mark="–" tone="muted" />
       {error ? <Notice role="alert">{root(error)}</Notice> : null}
@@ -57,7 +52,7 @@ export function Consent({
       <Button variant="outline" tap={52} block disabled={working} onClick={() => void answer(denyAuthorization)}>
         {t("deny")}
       </Button>
-      <Text as="p" variant="meta" tone="quiet">
+      <Text as="p" variant="sentence" tone="muted">
         {t("footer", { email })}
       </Text>
     </Page>

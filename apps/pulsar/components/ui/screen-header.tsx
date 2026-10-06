@@ -16,6 +16,7 @@ export function ScreenHeader({
   back,
   eyebrow,
   eyebrowHref,
+  controls,
   actions,
   meta,
 }: {
@@ -25,6 +26,8 @@ export function ScreenHeader({
   eyebrow?: ReactNode;
   // Makes a string eyebrow an accent link.
   eyebrowHref?: string;
+  // A row on the eyebrow's line: the steps, the way back, the theme toggle.
+  controls?: ReactNode;
   // Beside the title from 1024, under it below.
   actions?: ReactNode;
   // One mono line under the title.
@@ -54,7 +57,14 @@ export function ScreenHeader({
           <span>{back.place}</span>
         </Link>
       ) : null}
-      {eyebrowNode ? <div className={styles.eyebrow}>{eyebrowNode}</div> : null}
+      {controls ? (
+        <div className={styles.top}>
+          {eyebrowNode ? <div className={styles.eyebrow}>{eyebrowNode}</div> : null}
+          <div className={styles.controls}>{controls}</div>
+        </div>
+      ) : eyebrowNode ? (
+        <div className={styles.eyebrow}>{eyebrowNode}</div>
+      ) : null}
       <div className={styles.line}>
         <Text asChild variant="title">
           <h1 className={styles.title}>{title}</h1>

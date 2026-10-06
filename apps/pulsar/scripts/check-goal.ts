@@ -809,6 +809,49 @@ async function runMeasureRenameCheck(): Promise<void> {
 }
 
 /**
+ * A goal that measures owns its commitments' unit (module 361): a quantity
+ * commitment sent with another unit is stored with the goal's.
+ */
+async function runCommitmentUnitCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { withGoalsDb } = await import("@/lib/session");
+
+  const goal = await createGoal({ name: "check-goal.ts probe — 361 unit", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runCommitmentUnitCheck: createGoal failed: ${goal.error}`);
+
+  const quantity = (name: string, unit: string) =>
+    addCommitment({
+      goalId: goal.goalId,
+      name,
+      cadenceKind: "daily",
+      satisfaction: "quantity",
+      targetQuantity: 3,
+      unit,
+    });
+  const unitOf = async (commitmentId: string) => {
+    const [row] = await withGoalsDb((tx) =>
+      tx.execute<{ unit: string | null }>(sql`select unit from "goals"."commitments" where id = ${commitmentId}`),
+    );
+    return row?.unit;
+  };
+
+  const first = await quantity("check-goal.ts probe — 361 first", "min");
+  const second = await quantity("check-goal.ts probe — 361 second", "cards");
+  if (!first.ok || !second.ok) throw new Error("runCommitmentUnitCheck: addCommitment failed");
+
+  assert(
+    "the first quantity commitment of a goal names its unit",
+    (await unitOf(first.commitmentId)) === "min",
+    "unit=min",
+  );
+  assert(
+    "a quantity commitment sent with another unit on a measured goal stores the goal's unit (361)",
+    (await unitOf(second.commitmentId)) === "min",
+    `unit=${await unitOf(second.commitmentId)}`,
+  );
+}
+
+/**
  * RP-15's own race, driven live 2026-09-27: two tabs submitting overlapping
  * spans (1–4 and 2–5) on the same goal both landed under `READ COMMITTED`,
  * each reading "no overlap yet" before either had committed. `addPhase`'s own
@@ -1585,6 +1628,8 @@ async function runMain(): Promise<void> {
     byKind("quantity").length > 0 && byKind("quantity").every((c) => c.sourceLabelKey === null),
     `quantity: ${JSON.stringify(byKind("quantity").map((c) => c.sourceLabelKey))}`,
   );
+
+  await runCommitmentUnitCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

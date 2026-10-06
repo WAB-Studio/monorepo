@@ -70,13 +70,14 @@ export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow }: On
         leadingLabel={t("day.oneOffs.markLabel")}
         name={name}
         meta={carriedFrom}
+        metaVariant="sentence"
         onLeadingClick={handleComplete}
         onClick={() => setDeleteOpen(true)}
         end={noteButton}
         disabled={pending}
       />
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

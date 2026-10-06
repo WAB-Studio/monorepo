@@ -101,7 +101,7 @@ export function NoteSheet({
           </Flex>
         ) : null}
         {tooLong || failed ? (
-          <Text as="p" variant="meta" tone="muted" role="alert">
+          <Text as="p" variant="sentence" tone="muted" role="alert">
             {tooLong
               ? t("day.errors.oneOffNoteTooLong")
               : t("oneOffs.note.failed")}

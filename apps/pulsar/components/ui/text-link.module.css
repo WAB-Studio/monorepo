@@ -2,6 +2,7 @@
   display: inline-flex;
   align-items: center;
   min-block-size: 48px;
+  min-inline-size: 32px;
   font-size: var(--pulsar-text-line-size);
   font-weight: 500;
   color: var(--pulsar-accent);

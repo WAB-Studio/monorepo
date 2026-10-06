@@ -161,7 +161,7 @@ test.describe("the connections screen (RP-38)", () => {
       expect((await mcp(baseURL!, key)).status()).toBe(200);
       await page.reload();
       await expect(page.getByText(messages.row.neverUsed)).toHaveCount(0);
-      await expect(page.getByText(/usada hoy \d\d:\d\d$/)).toBeVisible();
+      await expect(page.getByText(/usada hoy a las \d\d:\d\d$/)).toBeVisible();
 
       await confirmRevoke(page);
       await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
@@ -308,8 +308,15 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await create(page, NAME);
       await page.getByRole("button", { name: messages.created.done }).click();
-      await expect(page.getByText(/^creada hoy \d\d:\d\d · sin usar$/)).toBeVisible();
+      await expect(page.getByText(/^Creada hoy a las \d\d:\d\d · sin usar$/)).toBeVisible();
       expect(await page.locator("main").innerText()).not.toContain("usada sin usar");
+      // 318: a key's row is a row (56 px, padded), and the header carries no second eyebrow over the title.
+      const row = page.getByText(NAME, { exact: true }).locator("xpath=ancestor::div[2]");
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(56);
+      await expect(page.locator("main > header > div")).toHaveCount(1);
+      await expect(
+        page.getByText("Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.", { exact: true }),
+      ).toBeVisible();
     } finally {
       await context.close();
     }

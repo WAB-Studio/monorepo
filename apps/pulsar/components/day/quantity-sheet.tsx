@@ -212,7 +212,7 @@ export function QuantitySheet({
       />
 
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

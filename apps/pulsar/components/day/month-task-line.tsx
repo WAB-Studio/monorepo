@@ -69,9 +69,9 @@ export function MonthTaskLine({
   return (
     <>
       <Flex align="start" gap="2">
-        <Flex ml="-3" asChild>
+        <Flex ml="-1" asChild>
           <Button
-            tap={44}
+            tap={48}
             variant="ghost"
             onClick={handleComplete}
             disabled={pending}
@@ -82,7 +82,7 @@ export function MonthTaskLine({
         </Flex>
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0" pt="2">
           {parentName ? (
-            <Text variant="meta" tone="muted">
+            <Text variant="sentence">
               {t("day.monthLine.parent", { name: parentName })}
             </Text>
           ) : null}
@@ -98,7 +98,7 @@ export function MonthTaskLine({
         <Flex mr="-3">{noteButton}</Flex>
       </Flex>
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

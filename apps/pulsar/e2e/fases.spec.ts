@@ -41,7 +41,7 @@ async function phaseCount(db: postgres.Sql, goalId: string): Promise<number> {
   return Number(row.count);
 }
 
-test("a fresh goal draws its own way in solid; the first phase added lists as semanas 1–4 and the day names it", async ({
+test("a fresh goal draws its phase way in outlined and its commitment way in solid; the first phase added lists as semanas 1–4 and the day names it", async ({
   person,
   browser,
 }) => {
@@ -55,10 +55,12 @@ test("a fresh goal draws its own way in solid; the first phase added lists as se
     const aim = `Primer objetivo ${Date.now()}`;
     const goalId = await createGoal(page, goalName);
 
-    // No phase yet: the way in is solid, the only thing this screen asks for.
+    // No phase yet: the way in is outlined all the same; on an empty goal the
+    // only solid act is «Añadir un compromiso».
     const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
     await expect(addPhaseLink).toBeVisible();
-    await expect(addPhaseLink).toHaveClass(/\bsolid\b/);
+    await expect(addPhaseLink).toHaveClass(/\boutline\b/);
+    await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveClass(/\bsolid\b/);
     await expect(page.getByText("cero fases")).toBeVisible();
 
     // A goal just opened has nothing before it: the first span defaults to
@@ -83,8 +85,6 @@ test("a fresh goal draws its own way in solid; the first phase added lists as se
     await expect(page.getByText(aim)).toBeVisible();
     await page.setViewportSize(viewport!);
 
-    // With one phase in effect, the way in is no longer the only thing this
-    // screen asks for.
     await page.goto(`/metas/${goalId}`);
     await expect(addPhaseLink).toHaveClass(/\boutline\b/);
   } finally {
@@ -117,11 +117,10 @@ test("a goal that already has a phase prefills the next span right after it, ref
 
   const before = await phaseCount(db, goalId);
 
-  // With one phase in effect, the way in is already outlined; with none
-  // (this lane's very first run of this spec), it is solid.
+  // Outlined with a phase and without one alike.
   await page.goto(`/metas/${goalId}`);
   const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
-  await expect(addPhaseLink).toHaveClass(before === 0 ? /\bsolid\b/ : /\boutline\b/);
+  await expect(addPhaseLink).toHaveClass(/\boutline\b/);
 
   // The prefill, proved against the goal's own last phase rather than a
   // hardcoded number: right after it, four weeks long — 1–4 the first time,

@@ -183,7 +183,12 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
   try {
     const commitmentId = await withGoalsDb(async (tx) => {
       const [goal] = await tx
-        .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
+        .select({
+          id: goals.id,
+          horizon: goals.horizon,
+          archivedAt: goals.archivedAt,
+          measureUnit: goals.measureUnit,
+        })
         .from(goals)
         .where(eq(goals.id, data.goalId));
       // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
@@ -202,7 +207,8 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       const cadenceN = "cadenceN" in data ? data.cadenceN : null;
       const cadenceWeekdays = "cadenceWeekdays" in data ? weekdaysArraySql(data.cadenceWeekdays) : sql`null`;
       const targetQuantity = "targetQuantity" in data ? data.targetQuantity : null;
-      const unit = "unit" in data ? data.unit : null;
+      // A goal that already measures owns the unit: whatever was sent is ignored.
+      const unit = "unit" in data ? (goal.measureUnit ?? data.unit) : null;
       const threshold = "threshold" in data ? data.threshold : null;
 
       const [inserted] = await tx.execute<{ id: string }>(sql`

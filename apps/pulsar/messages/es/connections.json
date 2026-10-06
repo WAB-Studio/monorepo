@@ -3,9 +3,8 @@
     "title": "Conectar una IA",
     "hint": "Claude lee y reorganiza tus metas"
   },
-  "eyebrow": "la ia",
   "title": "Conectar una IA",
-  "intro": "Deja que Claude lea tus metas, anote lo hecho y reorganice tus meses. Nunca borra ni archiva.",
+  "intro": "Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.",
   "sections": {
     "first": "una llave para claude code",
     "keys": "llaves",
@@ -29,7 +28,7 @@
     "metaUsed": "creada {created} · usada {used}",
     "metaUnused": "creada {created} · sin usar",
     "neverUsed": "sin usar",
-    "today": "hoy",
+    "today": "hoy a las",
     "on": "el {date}",
     "revokedMeta": "revocada el {date} · ya no entra",
     "revoke": "Revocar"

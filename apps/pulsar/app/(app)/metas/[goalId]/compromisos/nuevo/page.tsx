@@ -49,6 +49,7 @@ export default async function NewCommitmentPage({
       goalId={goal.id}
       goalName={goal.name}
       hasMeasure={goal.measureUnit !== null}
+      measureUnit={goal.measureUnit}
       sources={sourceChoices}
     />
   );

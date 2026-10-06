@@ -10,6 +10,8 @@ for (const path of ["/dia/zzz", `/metas/${UNKNOWN_GOAL}`, "/metas/xyz", "/nada"]
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
     await expect(page.getByRole("navigation")).toHaveCount(1);
+    // 318: the header's one line is the title; «no está» over it said the same twice.
+    await expect(page.locator("main > header > div")).toHaveCount(1);
     await expect(page.getByText("Si era una meta, puede que esté archivada")).toBeVisible();
     await expect(page.getByRole("link", { name: "Ir a hoy" })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Volver a / })).toHaveCount(0);

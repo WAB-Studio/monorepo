@@ -184,3 +184,57 @@ for (const width of [360, 390, 1280, 1440]) {
     await expect(page).toHaveURL(/\/$/);
   });
 }
+
+// Module 311: the groups are `Section`s spaced by their parent (32, 40 from
+// 1024), a goal's name is a sentence in Archivo while the day beside it stays
+// a figure in mono, and «ver hoy» is the one accent link.
+for (const [width, gap] of [
+  [360, "32px"],
+  [1280, "40px"],
+] as const) {
+  test(`the groups sit ${gap} apart, the goal's line is a sentence, its day a figure, «ver hoy» a link, at ${width} (RP-21, RNP-07)`, async ({
+    page,
+    db,
+    personId,
+  }) => {
+    const stamp = Date.now();
+    const goalName = `Meta de espaciado ${stamp}`;
+    const waiting = `Suelta de espaciado ${stamp}`;
+    const planned = `Programada de espaciado ${stamp}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon)
+      values (${personId}, ${goalName}, ${plusDays(90)}) returning id
+    `;
+    const waitingId = await seedDayless(db, personId, waiting, goal.id);
+    const [scheduled] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, name, day, goal_id)
+      values (${personId}, ${planned}, ${plusDays(2)}, ${goal.id}) returning id
+    `;
+
+    try {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/sueltas");
+
+      const sections = page.locator("main section");
+      await expect.soft(sections).toHaveCount(2);
+      expect.soft(await sections.first().evaluate((el) => getComputedStyle(el.parentElement!).rowGap)).toBe(gap);
+      expect.soft(await sections.first().evaluate((el) => getComputedStyle(el).rowGap)).toBe("12px");
+
+      const line = page.getByText(`de ${goalName}`).first();
+      expect.soft(await line.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+      const dayFigure = page.getByRole("button", { name: new RegExp(`^${planned}`) }).locator("span", {
+        hasText: /^[a-záéíóú]+ \d+/,
+      });
+      expect.soft(await dayFigure.last().evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
+
+      await page.getByRole("button", { name: `Dar por hecha: ${waiting}` }).click();
+      const seeToday = page.getByRole("link", { name: "ver hoy" });
+      await expect.soft(seeToday).toBeVisible();
+      expect.soft(await seeToday.evaluate((el) => getComputedStyle(el).fontWeight)).toBe("500");
+      await expect.soft(seeToday.locator("span")).toHaveCount(0);
+    } finally {
+      await db`delete from goals.one_offs where id in (${waitingId}, ${scheduled.id})`;
+      await db`delete from goals.goals where id = ${goal.id} and user_id = ${personId}`;
+    }
+  });
+}

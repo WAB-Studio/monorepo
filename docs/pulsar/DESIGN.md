@@ -448,10 +448,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   note, when there is one, as a third quiet line (the type role already named `quiet` in the token
   table; no new role). Decided 2026-09-27 by the coordinator, the user having delegated it.
 - **A goal adds a phase from its own screen, the same pattern as a commitment** (RP-15). Under the
-  phase list, a block outlined `Button` «Añadir una fase» → `/metas/[goalId]/fases/nueva`; solid
-  while the goal has no phase yet, outlined once it carries one — `commitment-list.tsx`'s own
-  block-button rule, never a second one invented for a phase. Decided 2026-09-27 by the coordinator,
-  the user having delegated it.
+  phase list, «Añadir una fase» → `/metas/[goalId]/fases/nueva`, always outlined on the phone and a
+  `TextLink` from 1024; on an empty goal «Añadir un compromiso» is the one solid act. Decided by the
+  user 2026-10-06 with the UX review (`ux-2026-10-06-b`: «Añadir una fase» solid on an empty goal),
+  replacing the coordinator's 2026-09-27 rule (solid until the first phase).
 - **`Fase nueva` is a full screen in `CompromisoNuevo.dc.html`'s own shape** (RP-15): overline the
   goal's name, h1 «Fase nueva», a field «qué busca» for the aim, a section «qué semanas» with two
   numeric fields «desde la semana» / «hasta la semana», counted from the goal's own opening week
@@ -911,3 +911,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - One link style: accent, 15 / 500, no underline, underlined on hover and focus; never grey.
   - A selected chip is the accent's soft fill with an accent border; the full accent fill is the act's button alone.
 
+- **Chips and paired fields are spaced by their primitives** (2026-10-06, decided by the orchestrator from the space
+  system's multiples of 4). Chips in a row sit 8 apart and wrap by chip; the seven weekday chips sit 4 apart
+  (`ChipRow`, `tight`). A field pair sits 8 apart, two fields sharing the width, or the first sized by the pair when
+  it is narrow, a quantity beside its unit (`FieldPair`). No screen spaces either with `Flex gap` or `style`.

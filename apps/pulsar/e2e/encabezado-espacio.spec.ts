@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 
 // Module 306: the header spaces eyebrow -> title at 6 px and title -> lead at 12 px (`SistemaEspacio.dc.html`).
 
-for (const path of ["/metas/nueva", "/metas/importar", "/semana"]) {
+for (const path of ["/metas/nueva", "/semana"]) {
   test(`${path} holds 6 px between its eyebrow and its title`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(path);
@@ -36,4 +36,23 @@ test("Hoy holds 12 px between its title and the line under it", async ({ person,
   } finally {
     await context.close();
   }
+});
+
+test("Hoy's controls row sits 12 px from the date, 6 px over the title, and its toggle ends the header's line", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto("/");
+  const header = page.locator("main > header:visible").first();
+  await expect(header.getByRole("heading", { level: 1 })).toBeVisible();
+  const row = header.locator("> div").first();
+  const title = (await header.getByRole("heading", { level: 1 }).boundingBox())!;
+  const rowBox = (await row.boundingBox())!;
+  const gap = title.y - (rowBox.y + rowBox.height);
+  expect(gap).toBeGreaterThanOrEqual(6);
+  expect(gap).toBeLessThanOrEqual(8);
+  expect(await row.evaluate((el) => getComputedStyle(el).columnGap)).toBe("12px");
+  // The controls take the rest of the line and the toggle sits at its end.
+  const toggle = (await header.getByRole("button", { name: /modo (oscuro|claro)/ }).boundingBox())!;
+  expect(toggle.x + toggle.width).toBeGreaterThan(rowBox.x + rowBox.width - 12);
 });

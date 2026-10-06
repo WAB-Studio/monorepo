@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, File, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -22,7 +22,8 @@ export type TaskRowProps = {
   // A parent carries a chevron and no mark: it is done by its children (RP-30).
   parent?: boolean;
   child?: boolean;
-  meta?: string;
+  // A sentence, or a mixed line whose figures are `Figure`s.
+  meta?: ReactNode;
   trailing?: string;
   // Names the open mark; absent, the month page's «Marcar como hecho».
   markLabel?: string;
@@ -100,6 +101,7 @@ export function TaskRow({
           </Text>
         }
         meta={meta}
+        metaVariant="sentence"
         trailing={trail}
         data-done={done}
         onClick={() => setDeleteOpen(true)}
@@ -117,6 +119,7 @@ export function TaskRow({
           </Text>
         }
         meta={meta}
+        metaVariant="sentence"
         trailing={trail}
         {...noteProps}
         onClick={() => factId && run(() => undoFact({ factId }))}
@@ -130,6 +133,7 @@ export function TaskRow({
         leadingLabel={markLabel ?? t("day.oneOffs.markLabel")}
         name={name}
         meta={meta}
+        metaVariant="sentence"
         trailing={trail}
         {...noteProps}
         onLeadingClick={() => run(() => completeOneOff({ oneOffId }))}
@@ -143,7 +147,7 @@ export function TaskRow({
     <Flex direction="column" ml={child ? "30px" : undefined}>
       {row}
       {error ? (
-        <Text as="p" tone="muted" variant="meta" role="alert">
+        <Text as="p" variant="sentence" role="alert">
           {t(error)}
         </Text>
       ) : null}
@@ -203,7 +207,7 @@ export function ShiftProposal({
         <Button variant="ghost" tone="accent" onClick={() => setOpen(true)}>
           {see}
         </Button>
-        <Text as="p" variant="meta" tone="muted">
+        <Text as="p" variant="sentence">
           {until}
         </Text>
       </Flex>

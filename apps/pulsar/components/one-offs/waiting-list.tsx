@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { Button, Flex, SectionLabel, Text } from "@/components/ui";
+import { Button, Flex, Section, Text, TextLink } from "@/components/ui";
 
 import { DaylessRow } from "./dayless-row";
 
@@ -50,45 +50,39 @@ export function WaitingList({ dayless, scheduled }: WaitingListProps) {
   }
 
   return (
-    <>
+    <Flex direction="column" gap={{ initial: "6", md: "7" }}>
       {doneName ? (
         <Flex role="status" align="center" justify="between" gap="2">
-          <Text as="p" variant="name">
+          <Text as="p" variant="sentence">
             {t("oneOffs.done", { name: doneName })}
           </Text>
-          <Button asChild tap={44} variant="ghost">
-            <Link href="/">
-              <Text variant="meta" tone="accent">
-                {t("oneOffs.seeToday")}
-              </Text>
-            </Link>
-          </Button>
+          <TextLink href="/">{t("oneOffs.seeToday")}</TextLink>
         </Flex>
       ) : null}
       {dayless.length === 0 && scheduled.length === 0 ? (
-        <>
-          <Text as="p">{t("oneOffs.empty")}</Text>
+        <Section as="div">
+          <Text as="p" variant="sentence">
+            {t("oneOffs.empty")}
+          </Text>
           <Button asChild block variant="outline">
             <Link href="/">{t("oneOffs.emptyToToday")}</Link>
           </Button>
-        </>
+        </Section>
       ) : null}
       {dayless.length > 0 ? (
-        <section>
-          <SectionLabel>{t("oneOffs.daylessGroup", { count: word(dayless.length) })}</SectionLabel>
+        <Section label={t("oneOffs.daylessGroup", { count: word(dayless.length) })}>
           {group(dayless)}
-        </section>
+        </Section>
       ) : null}
       {scheduled.length > 0 ? (
-        <section>
-          <SectionLabel>
-            {t(scheduled.length === 1 ? "oneOffs.scheduledGroupOne" : "oneOffs.scheduledGroupMany", {
-              count: word(scheduled.length),
-            })}
-          </SectionLabel>
+        <Section
+          label={t(scheduled.length === 1 ? "oneOffs.scheduledGroupOne" : "oneOffs.scheduledGroupMany", {
+            count: word(scheduled.length),
+          })}
+        >
           {group(scheduled)}
-        </section>
+        </Section>
       ) : null}
-    </>
+    </Flex>
   );
 }

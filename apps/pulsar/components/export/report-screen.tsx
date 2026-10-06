@@ -3,7 +3,12 @@ import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
 import { dayBefore } from "@/lib/day/weeks";
-import { civilSpan, goalSections, monthsWithWeeks, type Section } from "@/lib/export/sections";
+import {
+  civilSpan,
+  goalSections,
+  monthsWithWeeks,
+  type Section as GoalSection,
+} from "@/lib/export/sections";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { civilDateToDate } from "@/lib/zone";
 import {
@@ -18,6 +23,7 @@ import {
   PrintOnly,
   PrintPage,
   ScreenHeader,
+  Section,
   SectionLabel,
   Separator,
   Table,
@@ -70,21 +76,18 @@ function MonthFigures({
 }) {
   const unit = goal.unit as string;
   return (
-    <Flex direction="column" gap="1">
-      <SectionLabel>{t("sections.month", { month })}</SectionLabel>
-      <Figure value={goal.thisMonth.reached} unit={unit} />
-      {goal.thisMonth.planned !== null ? (
-        <Text variant="meta" tone="muted">
-          {t("of", { planned: "" })}
-          <Figure variant="meta" value={goal.thisMonth.planned} unit={unit} />
-        </Text>
-      ) : null}
-      {declaredOnly ? (
-        <Text variant="meta" tone="muted">
-          {t("declaredOnly")}
-        </Text>
-      ) : null}
-    </Flex>
+    <Section label={t("sections.month", { month })}>
+      <Flex direction="column" gap="1">
+        <Figure value={goal.thisMonth.reached} unit={unit} />
+        {goal.thisMonth.planned !== null ? (
+          <Text variant="sentence">
+            {t("of", { planned: "" })}
+            <Figure variant="meta" value={goal.thisMonth.planned} unit={unit} />
+          </Text>
+        ) : null}
+        {declaredOnly ? <Text variant="sentence">{t("declaredOnly")}</Text> : null}
+      </Flex>
+    </Section>
   );
 }
 
@@ -108,7 +111,9 @@ function Trailing({
       </>
     );
   }
-  const estimates = task.children.flatMap((child) => (child.estimate === null ? [] : [child.estimate]));
+  const estimates = task.children.flatMap((child) =>
+    child.estimate === null ? [] : [child.estimate],
+  );
   const amount =
     task.children.length === 0
       ? task.estimate
@@ -152,7 +157,7 @@ function TaskLine({
           {name}
         </Text>
         {meta ? (
-          <Text as="p" variant="meta" tone="muted">
+          <Text as="p" variant="sentence">
             {meta}
           </Text>
         ) : null}
@@ -163,9 +168,7 @@ function TaskLine({
         ) : null}
       </Flex>
       <Flex flexShrink="0">
-        <Text variant="meta" tone="muted">
-          {trailing}
-        </Text>
+        <Text variant="sentence">{trailing}</Text>
       </Flex>
     </Flex>
   );
@@ -187,24 +190,29 @@ function GoalPart({
   if (goal.endedOn !== null) {
     return (
       <PrintBlock>
-        <Flex direction="column" gap="3">
-          <Text asChild variant="name" rule>
-            <h2>{goal.name}</h2>
-          </Text>
-          <Text as="p" variant="meta" tone="muted">
-            {t("ended", { date: dateWithYear.format(civilDateToDate(goal.endedOn)) })}
-          </Text>
+        <Flex direction="column" gap="6">
+          <Flex direction="column" gap="3">
+            <Text asChild variant="name" rule>
+              <h2>{goal.name}</h2>
+            </Text>
+            <Text as="p" variant="sentence">
+              {t("ended", {
+                date: dateWithYear.format(civilDateToDate(goal.endedOn)),
+              })}
+            </Text>
+          </Flex>
           {unit !== null ? (
-            <Flex direction="column" gap="1">
-              <SectionLabel>{t("sections.atEnd")}</SectionLabel>
-              <Figure value={goal.toDate.reached} unit={unit} />
-              {goal.toDate.planned > 0 ? (
-                <Text variant="meta" tone="muted">
-                  {t("of", { planned: "" })}
-                  <Figure variant="meta" value={goal.toDate.planned} unit={unit} />
-                </Text>
-              ) : null}
-            </Flex>
+            <Section label={t("sections.atEnd")}>
+              <Flex direction="column" gap="1">
+                <Figure value={goal.toDate.reached} unit={unit} />
+                {goal.toDate.planned > 0 ? (
+                  <Text variant="sentence">
+                    {t("of", { planned: "" })}
+                    <Figure variant="meta" value={goal.toDate.planned} unit={unit} />
+                  </Text>
+                ) : null}
+              </Flex>
+            </Section>
           ) : null}
         </Flex>
       </PrintBlock>
@@ -222,45 +230,42 @@ function GoalPart({
         ? t("measuresFed", { unit })
         : t("measures", { unit, date: until });
 
-  const render = (section: Section) => {
+  const render = (section: GoalSection) => {
     switch (section) {
       case "month":
-        return (
-          <MonthFigures goal={goal} declaredOnly={declaredOnly} month={thisMonth} t={t} />
-        );
+        return <MonthFigures goal={goal} declaredOnly={declaredOnly} month={thisMonth} t={t} />;
       case "toDate":
         return (
-          <Flex direction="column" gap="1">
-            <SectionLabel>{t("sections.toDate")}</SectionLabel>
-            <Figure value={goal.toDate.reached} unit={unit as string} />
-            {goal.toDate.planned > 0 ? (
-              <Text variant="meta" tone="muted">
-                {t("of", { planned: "" })}
-                <Figure variant="meta" value={goal.toDate.planned} unit={unit as string} />
-              </Text>
-            ) : null}
-          </Flex>
+          <Section label={t("sections.toDate")}>
+            <Flex direction="column" gap="1">
+              <Figure value={goal.toDate.reached} unit={unit as string} />
+              {goal.toDate.planned > 0 ? (
+                <Text variant="sentence">
+                  {t("of", { planned: "" })}
+                  <Figure variant="meta" value={goal.toDate.planned} unit={unit as string} />
+                </Text>
+              ) : null}
+            </Flex>
+          </Section>
         );
       case "phases":
         return (
-          <Flex direction="column" gap="1">
-            <SectionLabel>{t("sections.phases")}</SectionLabel>
+          <Section label={t("sections.phases")}>
             {goal.phases.map((phase) => (
               <Text key={phase.startsOn} as="p">
                 <Text>{phase.aim}</Text>
                 <Text variant="meta" tone="muted">
                   {" · "}
                   {civilSpan(phase.startsOn, phase.endsOn)}
-                  {phase.current ? ` · ${t("current")}` : ""}
                 </Text>
+                {phase.current ? <Text variant="sentence">{` · ${t("current")}`}</Text> : null}
               </Text>
             ))}
-          </Flex>
+          </Section>
         );
       case "tasks":
         return (
-          <Flex direction="column">
-            <SectionLabel>{t("sections.tasks", { month: thisMonth })}</SectionLabel>
+          <Section label={t("sections.tasks", { month: thisMonth })}>
             {goal.tasks.map((task, index) => (
               <Flex key={`${task.name}-${task.from ?? ""}-${index}`} direction="column">
                 {index > 0 ? <Separator /> : null}
@@ -269,7 +274,9 @@ function GoalPart({
                   done={task.done}
                   meta={
                     task.from !== null
-                      ? t("fromMonth", { month: monthOnly.format(civilDateToDate(task.from)) })
+                      ? t("fromMonth", {
+                          month: monthOnly.format(civilDateToDate(task.from)),
+                        })
                       : undefined
                   }
                   note={task.note}
@@ -299,7 +306,7 @@ function GoalPart({
                 ))}
               </Flex>
             ))}
-          </Flex>
+          </Section>
         );
       case "months": {
         const groups = monthsWithWeeks(goal);
@@ -308,11 +315,7 @@ function GoalPart({
           const share = month.carried;
           const plannedFigure =
             month.planned === null ? null : (
-              <Figure
-                variant="meta"
-                value={month.planned}
-                unit={unit as string}
-              />
+              <Figure variant="meta" value={month.planned} unit={unit as string} />
             );
           const note = month.current ? (
             <>
@@ -342,12 +345,7 @@ function GoalPart({
                 : "";
           const monthRow: TableRow = {
             key: month.month,
-            cells: [
-              monthLabel(month.month),
-              started ? month.reached : null,
-              plannedFigure,
-              last,
-            ],
+            cells: [monthLabel(month.month), started ? month.reached : null, plannedFigure, last],
             note,
           };
           const weekRows: TableRow[] = weeks.map((week) => ({
@@ -366,17 +364,15 @@ function GoalPart({
           }));
           return [monthRow, ...weekRows];
         });
-        const current = rows.findIndex((row) => row.key === goal.months.find((m) => m.current)?.month);
+        const current = rows.findIndex(
+          (row) => row.key === goal.months.find((m) => m.current)?.month,
+        );
         return (
-          <Flex direction="column" gap="1">
-            <SectionLabel>{t("sections.months")}</SectionLabel>
+          <Section label={t("sections.months")}>
             <Table
-              caption={t(
-                declaredOnly ? "monthsCaptionDeclared" : "monthsCaption",
-                {
-                  count: goal.months.length,
-                },
-              )}
+              caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", {
+                count: goal.months.length,
+              })}
               columns={[
                 t("columns.month"),
                 declaredOnly ? t("declaredShort") : t("columns.reached"),
@@ -390,7 +386,7 @@ function GoalPart({
               stackInCard
               current={current === -1 ? undefined : current}
             />
-          </Flex>
+          </Section>
         );
       }
     }
@@ -398,15 +394,17 @@ function GoalPart({
 
   const [first, ...rest] = sections;
   return (
-    <Flex direction="column" gap="3">
+    <Flex direction="column" gap="6">
       <PrintBlock>
-        <Flex direction="column" gap="3">
-          <Text asChild variant="name" rule>
-            <h2>{goal.name}</h2>
-          </Text>
-          <Text as="p" variant="meta" tone="muted">
-            {measureLine}
-          </Text>
+        <Flex direction="column" gap="6">
+          <Flex direction="column" gap="3">
+            <Text asChild variant="name" rule>
+              <h2>{goal.name}</h2>
+            </Text>
+            <Text as="p" variant="sentence">
+              {measureLine}
+            </Text>
+          </Flex>
           {first ? render(first) : null}
         </Flex>
       </PrintBlock>
@@ -435,17 +433,9 @@ export async function ReportScreen({ report }: { report: Report }) {
     return (
       <Page width="full">
         <PrintPage>
-          <Flex direction="column" gap="3">
-            <ScreenHeader
-              title={t("title")}
-              back={back}
-              eyebrow={
-                <Text as="p" variant="meta" tone="muted">
-                  {t("eyebrowEmpty")}
-                </Text>
-              }
-            />
-            <Text as="p" tone="secondary">
+          <Flex direction="column" gap="6">
+            <ScreenHeader title={t("title")} back={back} eyebrow={t("eyebrowEmpty")} />
+            <Text as="p" variant="sentence" tone="secondary">
               {t("empty")}
             </Text>
           </Flex>
@@ -468,45 +458,49 @@ export async function ReportScreen({ report }: { report: Report }) {
   return (
     <Page width="full">
       <PrintPage>
-        <Flex direction="column" gap="2">
-          <ScreenHeader
-            title={t("title")}
-            back={back}
-            eyebrow={
-              <>
-                <PrintHidden>
-                  <Text as="p" variant="meta" tone="muted">
-                    {t("eyebrow", { date: dateWithWeekday.format(civilDateToDate(report.today)) })}
-                  </Text>
-                </PrintHidden>
-                <PrintOnly>
-                  <Text as="p" variant="meta" tone="muted">
-                    {t("printHead", {
-                      brand: t("printBrand"),
-                      date: dateWithYear.format(civilDateToDate(report.today)),
-                    })}
-                  </Text>
-                </PrintOnly>
-              </>
-            }
-            actions={<PrintButton label={t("download")} />}
-          />
-          <Text as="p" variant="meta" tone="muted">
-            {count}
-          </Text>
-          {declaredOnly ? (
-            <Text as="p" tone="secondary">
-              {t("unreadable")}
+        <Flex direction="column" gap="6">
+          <Flex direction="column" gap="3">
+            <ScreenHeader
+              title={t("title")}
+              back={back}
+              eyebrow={
+                <>
+                  <PrintHidden>
+                    <SectionLabel>
+                      {t("eyebrow", {
+                        date: dateWithWeekday.format(civilDateToDate(report.today)),
+                      })}
+                    </SectionLabel>
+                  </PrintHidden>
+                  <PrintOnly>
+                    <SectionLabel>
+                      {t("printHead", {
+                        brand: t("printBrand"),
+                        date: dateWithYear.format(civilDateToDate(report.today)),
+                      })}
+                    </SectionLabel>
+                  </PrintOnly>
+                </>
+              }
+              actions={<PrintButton label={t("download")} />}
+            />
+            <Text as="p" variant="sentence">
+              {count}
             </Text>
-          ) : null}
+            {declaredOnly ? (
+              <Text as="p" variant="sentence" tone="secondary">
+                {t("unreadable")}
+              </Text>
+            ) : null}
+          </Flex>
+          <PanelGrid>
+            {goals.map((goal) => (
+              <Panel key={goal.id}>
+                <GoalPart goal={goal} declaredOnly={declaredOnly} today={report.today} t={t} />
+              </Panel>
+            ))}
+          </PanelGrid>
         </Flex>
-        <PanelGrid>
-          {goals.map((goal) => (
-            <Panel key={goal.id}>
-              <GoalPart goal={goal} declaredOnly={declaredOnly} today={report.today} t={t} />
-            </Panel>
-          ))}
-        </PanelGrid>
       </PrintPage>
     </Page>
   );
