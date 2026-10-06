@@ -2,15 +2,16 @@ import { Check } from "lucide-react";
 
 import styles from "./mark.module.css";
 
-// docs/pulsar/DESIGN.md "The marks": one shape, three states. `evidence` is a
+// docs/pulsar/DESIGN.md "The marks": one shape, four states. `evidence` is a
 // day another app wrote, and it never reads as one the person declared (RP-09).
-export type MarkState = "declared" | "evidence" | "empty";
+export type MarkState = "declared" | "evidence" | "empty" | "partial";
 
 // `declared` is the only state with no ring: it is the accent filled.
 const states: Record<MarkState, string> = {
   declared: styles.declared,
   evidence: `${styles.evidence} ${styles.ring}`,
   empty: `${styles.empty} ${styles.ring}`,
+  partial: `${styles.partial} ${styles.ring}`,
 };
 
 export function Mark({
@@ -54,7 +55,7 @@ export function Mark({
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      {size === "row" && state !== "empty" ? (
+      {size === "row" && state !== "empty" && state !== "partial" ? (
         <Check className={styles.check} strokeWidth={3} />
       ) : null}
     </span>
