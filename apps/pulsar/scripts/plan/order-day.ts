@@ -112,11 +112,12 @@ async function oneOffAt(row: {
   parentId?: string | null;
   month?: string | null;
   day?: string | null;
+  createdAt?: string;
 }): Promise<void> {
   await sql`
-    insert into goals.one_offs (id, user_id, goal_id, name, day, position, planned_month, parent_id)
+    insert into goals.one_offs (id, user_id, goal_id, name, day, position, planned_month, parent_id, created_at)
     values (${row.id}, ${userId}, ${row.goalId ?? null}, ${row.name}, ${row.day ?? null}, ${row.position},
-            ${row.month ?? null}, ${row.parentId ?? null})`;
+            ${row.month ?? null}, ${row.parentId ?? null}, ${row.createdAt ?? new Date().toISOString()})`;
   oneOffIds.push(row.id);
 }
 
@@ -182,4 +183,37 @@ test("listDaylessOneOffs and listScheduledOneOffs order by position before creat
   assert.deepEqual(dayless.map((o) => o.name), ["RP-47 suelta a", "RP-47 suelta b"]);
   const scheduled = (await listScheduledOneOffs(today)).filter((o) => o.name.startsWith("RP-47 agendada"));
   assert.deepEqual(scheduled.map((o) => o.name), ["RP-47 agendada a", "RP-47 agendada b"]);
+});
+
+test("loadDay: today's one-offs and a goal's commitments read in plan order, ties by creation time", async () => {
+  const goalId = await goalAt("RP-47 orden", base + 40, id(5004));
+  // Inserted against position and against id; the last two share a position, so only created_at orders them.
+  const rows = [
+    { id: id(7004), name: "RP-47 hoy y", position: base + 51, createdAt: "2026-01-01T00:00:00Z" },
+    { id: id(7003), name: "RP-47 hoy x", position: base + 50, createdAt: "2026-01-02T00:00:00Z" },
+    { id: id(7002), name: "RP-47 hoy empate 1", position: base + 52, createdAt: "2026-01-03T00:00:00Z" },
+    { id: id(7001), name: "RP-47 hoy empate 2", position: base + 52, createdAt: "2026-01-04T00:00:00Z" },
+  ];
+  for (const row of rows) await oneOffAt({ ...row, day: today });
+  const commitmentRows = [
+    { id: id(8003), name: "RP-47 hábito b", position: base + 61, createdAt: "2026-01-01T00:00:00Z" },
+    { id: id(8002), name: "RP-47 hábito a", position: base + 60, createdAt: "2026-01-02T00:00:00Z" },
+    { id: id(8001), name: "RP-47 hábito empate", position: base + 62, createdAt: "2026-01-03T00:00:00Z" },
+    { id: id(8000), name: "RP-47 hábito empate 2", position: base + 62, createdAt: "2026-01-04T00:00:00Z" },
+  ];
+  for (const c of commitmentRows) {
+    await sql`
+      insert into goals.commitments (id, user_id, goal_id, name, cadence_kind, satisfaction, position, created_at)
+      values (${c.id}, ${userId}, ${goalId}, ${c.name}, 'daily', 'tap', ${c.position}, ${c.createdAt})`;
+  }
+  const { loadDay } = await import("@/lib/queries/day");
+  const loaded = await loadDay(today);
+  assert.deepEqual(
+    loaded.oneOffs.filter((o) => o.name.startsWith("RP-47 hoy")).map((o) => o.name),
+    ["RP-47 hoy x", "RP-47 hoy y", "RP-47 hoy empate 1", "RP-47 hoy empate 2"],
+  );
+  assert.deepEqual(
+    loaded.commitments.filter((c) => c.goalId === goalId).map((c) => c.name),
+    ["RP-47 hábito a", "RP-47 hábito b", "RP-47 hábito empate", "RP-47 hábito empate 2"],
+  );
 });
