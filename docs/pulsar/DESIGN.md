@@ -911,3 +911,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - One link style: accent, 15 / 500, no underline, underlined on hover and focus; never grey.
   - A selected chip is the accent's soft fill with an accent border; the full accent fill is the act's button alone.
 
+- **Chips and paired fields are spaced by their primitives** (2026-10-06, decided by the orchestrator from the space
+  system's multiples of 4). Chips in a row sit 8 apart and wrap by chip; the seven weekday chips sit 4 apart
+  (`ChipRow`, `tight`). A field pair sits 8 apart, two fields sharing the width, or the first sized by the pair when
+  it is narrow, a quantity beside its unit (`FieldPair`). No screen spaces either with `Flex gap` or `style`.

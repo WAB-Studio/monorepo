@@ -22,6 +22,9 @@ const DEFAULT_WEEKS = "12";
 // typed — so it is bounded here alone, before that conversion runs.
 const weeksSchema = z.coerce.number().int().positive().max(520);
 
+const NAME_ERRORS: MessageKey[] = ["plan.errors.nameEmpty", "plan.errors.nameTooLong"];
+const HORIZON_ERRORS: MessageKey[] = ["goal.errors.horizonWeeksInvalid", "plan.errors.horizonInvalid"];
+
 /**
  * `/metas/nueva` (RP-11, §0.3 3): a name and a horizon, nothing else. The
  * horizon is typed in weeks and turned into the civil date the shared schema
@@ -38,6 +41,11 @@ export function NewGoalForm() {
   const [name, setName] = useState("");
   const [weeks, setWeeks] = useState(DEFAULT_WEEKS);
   const [error, setError] = useState<MessageKey | null>(null);
+
+  // The refusal reads under the field it is about, with its ring; only an
+  // error no field owns (the server's) reads above the button.
+  const nameRefusal = error && NAME_ERRORS.includes(error) ? t(error) : undefined;
+  const horizonRefusal = error && HORIZON_ERRORS.includes(error) ? t(error) : undefined;
 
   function handleSubmit() {
     if (pending) return;
@@ -69,17 +77,15 @@ export function NewGoalForm() {
       <ScreenHeader
         title={t("goal.new.title")}
         back={{ href: "/metas", place: t("common.nav.goals") }}
-        eyebrow={
-          <Text as="p" variant="meta" tone="muted">
-            {t("goal.new.overline")}
-          </Text>
-        }
+        eyebrow={t("goal.new.overline")}
       />
 
       <Field
         label={t("goal.new.nameLabel")}
         value={name}
         onChange={(event) => setName(event.target.value)}
+        invalid={nameRefusal !== undefined}
+        hint={nameRefusal}
       />
 
       <Field
@@ -90,11 +96,12 @@ export function NewGoalForm() {
         step={1}
         value={weeks}
         onChange={(event) => setWeeks(event.target.value)}
-        hint={t("goal.new.horizonHint")}
+        invalid={horizonRefusal !== undefined}
+        hint={horizonRefusal ?? t("goal.new.horizonHint")}
       />
 
-      {error ? (
-        <Text as="p" tone="muted" variant="meta">
+      {error && !nameRefusal && !horizonRefusal ? (
+        <Text as="p" tone="ink" variant="sentence">
           {t(error)}
         </Text>
       ) : null}
@@ -103,7 +110,7 @@ export function NewGoalForm() {
         {t("goal.new.submit")}
       </Button>
 
-      <Text as="p" tone="muted" variant="meta">
+      <Text as="p" tone="muted" variant="sentence">
         {t("goal.new.explain")}
       </Text>
     </Page>
