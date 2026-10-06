@@ -131,6 +131,16 @@
   display: none;
 }
 
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .stackInCard .phone {
+    display: block;
+  }
+
+  .stackInCard .wide {
+    display: none;
+  }
+}
+
 .hidden {
   position: absolute;
   inline-size: 1px;

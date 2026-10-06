@@ -198,10 +198,12 @@ function GoalPart({
             <Flex direction="column" gap="1">
               <SectionLabel>{t("sections.atEnd")}</SectionLabel>
               <Figure value={goal.toDate.reached} unit={unit} />
-              <Text variant="meta" tone="muted">
-                {t("of", { planned: "" })}
-                <Figure variant="meta" value={goal.toDate.planned} unit={unit} />
-              </Text>
+              {goal.toDate.planned > 0 ? (
+                <Text variant="meta" tone="muted">
+                  {t("of", { planned: "" })}
+                  <Figure variant="meta" value={goal.toDate.planned} unit={unit} />
+                </Text>
+              ) : null}
             </Flex>
           ) : null}
         </Flex>
@@ -231,14 +233,12 @@ function GoalPart({
           <Flex direction="column" gap="1">
             <SectionLabel>{t("sections.toDate")}</SectionLabel>
             <Figure value={goal.toDate.reached} unit={unit as string} />
-            <Text variant="meta" tone="muted">
-              {t("of", { planned: "" })}
-              <Figure
-                variant="meta"
-                value={goal.toDate.planned}
-                unit={unit as string}
-              />
-            </Text>
+            {goal.toDate.planned > 0 ? (
+              <Text variant="meta" tone="muted">
+                {t("of", { planned: "" })}
+                <Figure variant="meta" value={goal.toDate.planned} unit={unit as string} />
+              </Text>
+            ) : null}
           </Flex>
         );
       case "phases":
@@ -387,6 +387,7 @@ function GoalPart({
               figures={[1]}
               unit={unit as string}
               nowrapLabel
+              stackInCard
               current={current === -1 ? undefined : current}
             />
           </Flex>
@@ -499,7 +500,7 @@ export async function ReportScreen({ report }: { report: Report }) {
             </Text>
           ) : null}
         </Flex>
-        <PanelGrid columns={3}>
+        <PanelGrid>
           {goals.map((goal) => (
             <Panel key={goal.id}>
               <GoalPart goal={goal} declaredOnly={declaredOnly} today={report.today} t={t} />

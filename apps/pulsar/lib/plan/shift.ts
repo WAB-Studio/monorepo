@@ -2,7 +2,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { phaseWithinHorizon } from "@/lib/validation/plan";
 import { dateToCivilDate } from "@/lib/zone";
 import type { Task } from "./carry";
-import { monthOf, nextMonth, type MonthBudget } from "./months";
+import { monthOf, nextMonth, underSixty, type MonthBudget } from "./months";
 
 export type ShiftPhase = { id: string; aim: string; startsOn: string; endsOn: string };
 
@@ -25,23 +25,42 @@ export function addMonths(day: string, n: number): string {
   return dateToCivilDate(new Date(Date.UTC(year, month, target, 12)));
 }
 
-// RP-34: only through the month after the closed one, once, and only when
-// strictly more than half of what it planned was left undone.
+// What a closed month planned and reached (RP-28), the figures RP-48 reads.
+export function monthAmount(
+  month: string,
+  budgets: MonthBudget[],
+  reached: { month: string; reached: number }[],
+): { planned: number | null; reached: number } {
+  return {
+    planned: budgets.find((budget) => budget.month === month)?.amount ?? null,
+    reached: reached.find((row) => row.month === month)?.reached ?? 0,
+  };
+}
+
+// RP-48: only through the month after the closed one, once, when strictly
+// more than half of what it planned was left undone and, where the month had
+// an amount, it reached under 60 % of it. No amount (null or zero) leaves the
+// list rule alone.
 export function shiftOffered({
   month,
   today,
   share,
+  amount,
   shifted,
 }: {
   month: string;
   today: string;
   share: { carried: number; planned: number } | null;
+  amount: { planned: number | null; reached: number };
   shifted: string[];
 }): boolean {
+  const fellShort =
+    amount.planned === null || amount.planned <= 0 || underSixty(amount.reached, amount.planned);
   return (
     monthOf(today) === addMonths(month, 1) &&
     share !== null &&
     share.carried * 2 > share.planned &&
+    fellShort &&
     !shifted.includes(month)
   );
 }

@@ -170,3 +170,46 @@ test("a week before the first lands on the first week; a person with no goal rea
     await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${shift(thisMonday, -21)}$`));
   });
 });
+
+// A times-a-week commitment logged under its target on a day draws the half dot
+// there; the days with nothing logged keep «no pedía».
+for (const width of [390, 1280]) {
+  test(`at ${width}, a times-a-week row logged 3 of 5 draws «en parte» that day and nothing on the rest`, async ({
+    browser,
+    baseURL,
+    db,
+    person,
+  }) => {
+    const created = new Date(`${shift(today, -40)}T17:00:00Z`);
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${GOAL}, ${shift(today, 60)}, ${created}) returning id
+    `;
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${goal.id}, ${ROW}, 'times_per_week', 3, 'quantity', 5, 'km', ${created}) returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${person.id}, ${goal.id}, ${commitment.id}, ${shift(lastMonday, 2)}::date, 3)
+    `;
+    try {
+      await withPage(browser, baseURL, person, width, async (page) => {
+        await page.goto(`/semana?semana=${lastMonday}`);
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(lastMonday));
+        const partial = markOf(page, shift(lastMonday, 2));
+        await expect(partial).toHaveAttribute("data-state", "partial");
+        await expect(partial).toHaveAccessibleName(/: en parte$/);
+        await expect(markOf(page, lastMonday)).toHaveAttribute("data-state", "none");
+        await expect(markOf(page, shift(lastMonday, 3))).toHaveAttribute("data-state", "none");
+        // The key of the half dot shows on the phone even with no daily partial.
+        if (width === 390) {
+          await expect(page.getByTestId("week-legend").getByText("en parte", { exact: true })).toBeVisible();
+          await expect(page.getByText("en parte", { exact: false }).filter({ hasText: /de \d+ · / })).toHaveCount(0);
+        }
+      });
+    } finally {
+      await db`delete from goals.goals where id = ${goal.id}`;
+    }
+  });
+}

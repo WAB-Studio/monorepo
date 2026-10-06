@@ -11,6 +11,8 @@ export type TimeWords = {
   h: (h: string) => string;
   min: (min: string) => string;
   join: (h: string, min: string) => string;
+  // A unit word agreeing with the number; absent where a caller prints raw.
+  unit?: (unit: string, n: number) => string;
 };
 
 export function isTimeUnit(unit: string | null): boolean {
@@ -29,7 +31,7 @@ export function formatTime(n: number, words: TimeWords): string {
 }
 
 export function formatQuantity(n: number, unit: string, words: TimeWords): string {
-  return isTimeUnit(unit) ? formatTime(n, words) : `${grouped.format(n)} ${unit}`;
+  return isTimeUnit(unit) ? formatTime(n, words) : `${grouped.format(n)} ${words.unit?.(unit, n) ?? unit}`;
 }
 
 const NUMBER = String.raw`(\d+(?:[.,]\d+)?)`;

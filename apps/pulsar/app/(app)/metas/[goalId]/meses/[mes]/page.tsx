@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (RP-30, RP-31,
-// RP-32, RP-34): the auth gate and the segment's shape; `MonthScreen` owns the
+// RP-32, RP-48): the auth gate and the segment's shape; `MonthScreen` owns the
 // fetch and the span check. The pattern is the same one the amount sheet and
 // the actions speak (`lib/validation/budget.ts`).
 export default async function MonthPage({

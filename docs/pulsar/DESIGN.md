@@ -201,7 +201,7 @@ Drawn 2026-09-30, approved by the user the same day: «Apruebo los 5».
 | `ReporteImpreso.dc.html` | the same page printed on A4: no nav, no button, black on white, «pulsar» and the date in the head |
 | `ReporteSinEvidencia.dc.html` | the source unreadable: one line at the top, each figure from it says «solo lo que dijiste tú» |
 | `ReporteVacio.dc.html` | no goal open: one line and the way back |
-| `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html` | `/exportar` inside the shell, built 2026-10-05 (module 217): the header with «Metas» as its way back, tabs and rail around it with Metas current; each goal's name an `h2`, with a 2px ink rule over it on the phone; from 1024 the goals are cards in three columns and «Descargar PDF» sits beside the title. The printed page is unchanged: no nav, no back |
+| `ReporteMarco.dc.html`, `ReporteMarcoEscritorio.dc.html` | `/exportar` inside the shell, built 2026-10-05 (module 217): the header with «Metas» as its way back, tabs and rail around it with Metas current; each goal's name an `h2`, with a 2px ink rule over it on the phone; from 1024 the goals are cards in two columns (three were dropped 2026-10-06, see «Decisions of 2026-10-06») and «Descargar PDF» sits beside the title. The printed page is unchanged: no nav, no back |
 
 ### Page «Importar»
 
@@ -804,3 +804,23 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   diseños, me da igual». What the coordinator chose while drawing stands: the partial never adds to «hechos» and is
   named apart («· 1 en parte»); a past day steps both ways and keeps «volver a hoy»; a week sits under the month of its
   Monday; the report is three columns at 1440 and two at 1024; the revoke sheet's words as drawn.
+
+## Decisions of 2026-10-06, after the critic of train 13
+
+- **The report has two columns from 1024, never three.** At 1440 three columns gave 299 px cards and the months table
+  (334 px) ran out of them. `ReporteMarcoEscritorio.dc.html` (three columns) is superseded on this point; the 1024 board's
+  two columns hold at every desktop width. From 1024 to 1279 the months table inside its card takes the phone's stacked face (label over
+  figures); the wide table returns at 1280, where it fits. Decided by the orchestrator 2026-10-06 (module 281): two columns
+  at 1024 leave 280 px of card and the wide table needs 382.
+- **A week that crosses two months is split in the report's months table.** Each month holds the days of that week that
+  fall in it, so the weeks under a month add up to the month. The split week shows under both months with its own span
+  («sem 5 · 28–30 sep 2026», «sem 5 · 1–4 oct 2026»).
+- **Every goal with tasks this month has its «este mes» line on Hoy, measured or not**, as `HoyTelefonoSinPedido.dc.html`
+  already draws «Mudanza · 1 de 3 tareas». A goal with no measure reads its tasks done of total; its next task follows as
+  `HoyTareaMesSubtarea.dc.html` draws it.
+  - On the phone the goal's name sits over its figures, not beside them as the board's one row does: a long name and
+    «1 de 3 tareas» do not share 328 px. Decided by the orchestrator 2026-10-06 (module 283).
+  - From 1024 a goal with no week card gets a side card of its own: its name, «Este mes», then the same lines. No
+    board draws it; it repeats the measured card's order minus the week figure. Decided by the orchestrator 2026-10-06
+    (module 283).
+- **«Correr un mes» is offered only when the month also fell short of its amount** (RP-48, succeeding RP-34).

@@ -222,6 +222,20 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         };
       }),
       weeks: figures.weeks,
+      weekSplits: figures.weeks
+        .filter((week) => monthOf(week.startsOn) !== monthOf(week.endsOn))
+        .flatMap((week) => {
+          const secondMonth = monthOf(week.endsOn);
+          const parts = [
+            { month: monthOf(week.startsOn), startsOn: week.startsOn, endsOn: dayBefore(secondMonth) },
+            { month: secondMonth, startsOn: secondMonth, endsOn: week.endsOn },
+          ];
+          return parts.map((part) => ({
+            index: week.index,
+            ...part,
+            total: figures.totalInSpan(part.startsOn, part.endsOn),
+          }));
+        }),
     };
   });
 

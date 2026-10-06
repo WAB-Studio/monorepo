@@ -73,7 +73,7 @@ const KM = "kilómetros";
 const FIRST = 6;
 const SECOND = 14;
 
-test("the week's figure is named by its unit on Hoy, the goal and the review, and is the sum of both commitments (RP-14)", async ({
+test("the week's figure carries its unit on Hoy, the goal and the review, and is the sum of both commitments (RP-14)", async ({
   browser,
   baseURL,
   db,
@@ -110,12 +110,15 @@ test("the week's figure is named by its unit on Hoy, the goal and the review, an
 
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    // Hoy: the card's label is the unit, its figure the sum, its caption the week.
+    // Hoy: the card's label is the goal, its figure the sum in its unit, its caption the week.
     await page.goto("/");
-    const label = page.getByText(KM, { exact: true });
-    await expect(label).toHaveCount(1);
-    const card = page.locator("section, div").filter({ has: label }).last();
-    await expect(card).toContainText(total);
+    const card = page
+      .getByText("esta semana", { exact: true })
+      .locator("xpath=ancestor::div[.//a][1]")
+      .filter({ hasText: goalName });
+    await expect(card).toHaveCount(1);
+    await expect(card.locator("[class*='section-label']").first()).toHaveText(goalName);
+    await expect(card).toContainText(new RegExp(`${total}\\s*${KM}`));
     await expect(card).toContainText("esta semana");
     await expect(card).not.toContainText(first);
     await expect(card).not.toContainText(second);

@@ -1,11 +1,12 @@
 import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
+import { cache } from "react";
 import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
-import { measureByWeek } from "@/lib/day/review";
+import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
@@ -165,7 +166,7 @@ export type GoalView = {
   months: MonthRow[];
   budgets: MonthBudget[];
   tasks: Task[];
-  // The months of this goal already shifted (RP-34).
+  // The months of this goal already shifted (RP-48).
   shifts: string[];
 };
 
@@ -376,6 +377,8 @@ export function goalFigures(input: {
   months: MonthRow[];
   month: GoalView["month"];
   weeks: ReviewWeek[];
+  // The week rule over any span, for a caller that splits a week.
+  totalInSpan: (startsOn: string, endsOn: string) => number;
 } {
   const { goal, phases, commitments, budgets, evidence, today } = input;
   // A one-off's fact carries no `commitment_id`, and no unit to feed the
@@ -442,7 +445,15 @@ export function goalFigures(input: {
     phases,
   });
 
-  return { tasks, measureTotal: declaredTotal + evidenceTotal, months, month, weeks };
+  return {
+    tasks,
+    measureTotal: declaredTotal + evidenceTotal,
+    months,
+    month,
+    weeks,
+    totalInSpan: (startsOn, endsOn) =>
+      totalInSpan(goal.measure_unit, measureFacts, evidenceDays, startsOn, endsOn),
+  };
 }
 
 /**
@@ -537,8 +548,12 @@ function toGoalSummary(row: GoalRow): GoalSummary {
  * 404 for one, the same way "no add-commitment button" reads on its own
  * screen. `listGoalsForMetas` below is `/metas`'s own query: it needs the
  * archived half too, to list under "Archivadas".
+ *
+ * `cache()`-wrapped: the layout's rail and the screen's `otherGoals` read it in
+ * one render, so a page pays this statement once (RNP-18). It takes no
+ * argument, so the one entry is the whole request's.
  */
-export async function listGoals(): Promise<GoalSummary[]> {
+export const listGoals = cache(async function listGoals(): Promise<GoalSummary[]> {
   const rows = await withGoalsDb((tx) =>
     tx.execute<GoalRow>(sql`
       select id, name, horizon, measure_name, measure_unit, archived_at
@@ -552,7 +567,7 @@ export async function listGoals(): Promise<GoalSummary[]> {
   // never `current_date`: an ended goal is refused like an archived one.
   const today = todayInZone();
   return rows.filter((row) => row.horizon > today).map(toGoalSummary);
-}
+});
 
 // An open goal's current month, as `/metas` draws it beside the goal: the
 // amount in its unit, or the tasks when it measures nothing. The amount folds

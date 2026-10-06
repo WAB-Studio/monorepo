@@ -332,7 +332,7 @@ test("a closed month's amount is text and ?planear= on it mounts no sheet; this 
   }
 });
 
-test("the closed month's row offers «correr el plan un mes» only over half carried; its sheet lists the moves; accepting moves next month's amount and the line is gone on reload (RP-34)", async ({
+test("the closed month's row offers «correr el plan un mes» only over half carried; its sheet lists the moves; accepting moves next month's amount and the line is gone on reload (RP-48)", async ({
   person,
   browser,
   baseURL,

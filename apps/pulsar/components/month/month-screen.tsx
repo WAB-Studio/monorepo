@@ -7,7 +7,7 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, SectionLabel, Separator, Text } from "@/components/ui";
 import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
 import { nextMonth } from "@/lib/plan/months";
-import { shiftOffered, shiftPlan } from "@/lib/plan/shift";
+import { monthAmount, shiftOffered, shiftPlan } from "@/lib/plan/shift";
 import { listGoals, loadGoal, type GoalSummary, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 import { todayInZone } from "@/lib/zone";
@@ -43,7 +43,7 @@ function AddRow({ href, label, child }: { href: string; label: string; child?: b
 
 /**
  * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (RP-30, RP-31,
- * RP-32, RP-34): the month's own content, as `loadGoal`'s `months` and 126's
+ * RP-32, RP-48): the month's own content, as `loadGoal`'s `months` and 126's
  * `monthList` read it (carried ones first), the closed month's share from
  * `carryShare`, and the proposal from 142's `shiftOffered` and `shiftPlan`.
  * `heading` draws the month's name as an `h2`, for the screen whose `h1` is
@@ -186,7 +186,13 @@ export async function MonthDetail({
   const offered =
     open &&
     closed &&
-    shiftOffered({ month: mes, today, share, shifted: goal.shifts });
+    shiftOffered({
+      month: mes,
+      today,
+      share,
+      amount: monthAmount(mes, goal.budgets, goal.months),
+      shifted: goal.shifts,
+    });
   const plan = offered
     ? shiftPlan({
         closedMonth: mes,

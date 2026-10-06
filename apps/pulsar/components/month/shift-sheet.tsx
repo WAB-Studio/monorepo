@@ -34,7 +34,7 @@ function Line({ name, detail }: { name: string; detail: string }) {
 }
 
 /**
- * `MesCorrerHoja.dc.html` (RP-34): what accepting the shift moves and what it
+ * `MesCorrerHoja.dc.html` (RP-48): what accepting the shift moves and what it
  * leaves, from 142's plan, accepted in one confirm through 143.
  */
 export function ShiftSheet({
