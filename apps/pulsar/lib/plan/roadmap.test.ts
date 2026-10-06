@@ -332,3 +332,28 @@ test("a task fixed to a month is present whenever it was created; an unfixed one
   assert.deepEqual(parts(roadmap, "child-parent"), [[NOV, 2]]);
   assert.deepEqual(parts(roadmap, "loose"), []);
 });
+
+test("a task fixed to September and done in October lists in October, done, carried from September, and takes its room", () => {
+  const roadmap = plan([
+    task("late", { estimate: 5, plannedMonth: SEP, doneOn: "2026-10-05" }),
+    task("a", { estimate: 10 }),
+  ]);
+  const late = partIn(roadmap, OCT, "late");
+  assert.equal(late.done, true);
+  assert.equal(late.carriedFrom, SEP);
+  assert.equal(late.fixed, true);
+  assert.deepEqual(parts(roadmap, "a"), [
+    [OCT, 7],
+    [NOV, 3],
+  ]);
+});
+
+test("a task done in its own fixed month, or before it, stays in that month, carried from none", () => {
+  const roadmap = plan([
+    task("own", { estimate: 3, plannedMonth: OCT, doneOn: "2026-10-05" }),
+    task("early", { estimate: 2, plannedMonth: NOV, doneOn: "2026-10-06" }),
+  ]);
+  assert.equal(partIn(roadmap, OCT, "own").carriedFrom, null);
+  assert.equal(partIn(roadmap, NOV, "early").carriedFrom, null);
+  assert.equal(roadmap.months.find((m) => m.month === OCT)?.items.some((i) => i.task.id === "early"), false);
+});
