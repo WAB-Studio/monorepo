@@ -126,6 +126,8 @@ async function counted<T>(run: () => Promise<T>): Promise<{ result: T; statement
 
 const seeded: string[] = [];
 let seedMax: number;
+let seedCommitmentMax: number;
+let seedTaskMax: number;
 let imported: { ids: string[]; statements: number };
 
 before(async () => {
@@ -144,6 +146,15 @@ before(async () => {
     seeded.push(row.id);
     seedMax = row.position;
   }
+  // One commitment and one task the person already has, on the first seeded goal.
+  [{ position: seedCommitmentMax }] = await sql<{ position: number }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+    values (${personId}, ${seeded[0]}, 'RP-47 fixture: compromiso previo', 'daily', 'tap')
+    returning position`;
+  [{ position: seedTaskMax }] = await sql<{ position: number }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month)
+    values (${personId}, ${seeded[0]}, 'RP-47 fixture: tarea previa', '2099-06-01')
+    returning position`;
   const draft = draftOf(planText("RP-47 fixture:"));
   const { result, statements } = await counted(() => confirmImport(draft));
   if (!result.ok) throw new Error(`confirmImport: ${result.error} at ${result.at}`);
@@ -170,6 +181,7 @@ test("import order: commitments keep the template's order across the draft, not 
     select name, position from goals.commitments where goal_id in ${sql(imported.ids)} order by position`;
   const expected = ["Zeta", "Alfa"].flatMap((g) => NAMES.map((n) => `${n} ${g}`));
   assert.deepEqual(rows.map((r) => r.name), expected);
+  assert.ok(rows[0].position > seedCommitmentMax, `${rows[0].position} must come after the person's own ${seedCommitmentMax}`);
   for (let i = 1; i < rows.length; i++) assert.equal(rows[i].position - rows[i - 1].position, 1);
 });
 
@@ -180,6 +192,7 @@ test("import order: tasks number across the draft and each child sits right afte
     NAMES.flatMap((n, i) => [`${n} ${g}`, ...(i % 2 === 0 ? [`Hijo b ${n}`, `Hijo a ${n}`] : [])]),
   );
   assert.deepEqual(rows.map((r) => r.name), expected);
+  assert.ok(rows[0].position > seedTaskMax, `${rows[0].position} must come after the person's own ${seedTaskMax}`);
   for (let i = 1; i < rows.length; i++) assert.equal(rows[i].position - rows[i - 1].position, 1);
 });
 
