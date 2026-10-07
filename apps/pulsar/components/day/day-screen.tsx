@@ -21,7 +21,7 @@ import { EvidenceNote } from "./evidence-note";
 import { NewOneOff } from "./new-one-off";
 import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
-import { PlanNotice } from "./plan-notice";
+import { PlanNotices, type PlanNoticeItem } from "./plan-notice";
 
 
 // Goes through `Date` and back rather than subtracting on the string: a
@@ -517,26 +517,25 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   );
 
   const monthNames = t.raw("day.monthLong") as string[];
-  const notices = past
-    ? null
-    : goals.map((goal) => {
-        const notice = loaded.planNotice[goal.id];
-        if (!notice) return null;
-        const end = civilDateToDate(notice.end);
-        return (
-          <PlanNotice
-            key={goal.id}
-            goalId={goal.id}
-            goalName={goal.name}
-            unit={goal.measureUnit ?? ""}
-            notice={notice}
-            closedMonthName={monthNames[Number(notice.closedMonth.slice(5, 7)) - 1]}
-            nextMonthName={monthNames[Number(notice.closedMonth.slice(5, 7)) % 12]}
-            endDay={end.getUTCDate()}
-            endMonthName={monthNames[end.getUTCMonth()]}
-          />
-        );
+  const noticeItems: PlanNoticeItem[] = [];
+  if (!past) {
+    for (const goal of goals) {
+      const notice = loaded.planNotice[goal.id];
+      if (!notice) continue;
+      const end = civilDateToDate(notice.end);
+      noticeItems.push({
+        goalId: goal.id,
+        goalName: goal.name,
+        unit: goal.measureUnit ?? "",
+        notice,
+        closedMonthName: monthNames[Number(notice.closedMonth.slice(5, 7)) - 1],
+        nextMonthName: monthNames[Number(notice.closedMonth.slice(5, 7)) % 12],
+        endDay: end.getUTCDate(),
+        endMonthName: monthNames[end.getUTCMonth()],
       });
+    }
+  }
+  const notices = past ? null : <PlanNotices notices={noticeItems} />;
 
   return (
     <Page width="full">
