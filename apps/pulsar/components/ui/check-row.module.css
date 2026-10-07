@@ -109,7 +109,10 @@
 @media (min-width: 1024px) {
   .bar {
     inset-block-end: 0;
-    /* One card's width: the review's cards are two columns with a 24px gap. */
+  }
+
+  /* One card's width: the review's cards are two columns with a 24px gap. */
+  .barColumn {
     max-inline-size: calc((100% - 24px) / 2);
   }
 }

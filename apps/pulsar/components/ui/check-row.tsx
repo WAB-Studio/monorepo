@@ -86,6 +86,17 @@ export function CheckRow({
 }
 
 // The review's confirm, held at the foot above the nav.
-export function ActionBar({ children }: { children?: ReactNode }) {
-  return <div className={styles.bar}>{children}</div>;
+// `column` stands one card wide from 1024px, for a review of one goal.
+export function ActionBar({
+  children,
+  span = "full",
+}: {
+  children?: ReactNode;
+  span?: "full" | "column";
+}) {
+  return (
+    <div className={span === "column" ? `${styles.bar} ${styles.barColumn}` : styles.bar}>
+      {children}
+    </div>
+  );
 }
