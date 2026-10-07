@@ -28,21 +28,19 @@ export type ConnectionRow = {
   kind: "personal" | "oauth";
   name: string;
   revoked: boolean;
-  meta: string;
+  revokedAt: ConnectionStamp | null;
+  created: ConnectionStamp;
+  used: ConnectionStamp | null;
 };
+
+// An instant as the page reads it in the person's zone.
+export type ConnectionStamp = { today: boolean; date: string; time: string };
 
 type Created = { name: string; key: string };
 
 type CopyState = "idle" | "copied" | "failed";
 
 const COPIED_MS = 2000;
-
-// The page marks each figure and date of a line with `<fig>`; they print in mono, the rest in Archivo.
-function figures(line: string): ReactNode[] {
-  return line
-    .split(/<fig>(.*?)<\/fig>/)
-    .map((part, index) => (index % 2 === 1 ? <Figure key={index} variant="meta" value={part} /> : part));
-}
 
 function Copyable({ text, label }: { text: string; label: string }) {
   const t = useTranslations("connections");
@@ -94,6 +92,25 @@ function Keys({ rows, section, onAsk, busy }: {
   busy: boolean;
 }) {
   const t = useTranslations("connections");
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
+  const stamp = (when: ConnectionStamp, clock: boolean) =>
+    when.today
+      ? t.rich("row.stampToday", { time: when.time, ...fig })
+      : t.rich(clock ? "row.stampOnClock" : "row.stampOn", { date: when.date, time: when.time, ...fig });
+  // `<created>` and `<used>` in a message stand for the stamps, which are nodes, not text.
+  const at = (created: ReactNode, used?: ReactNode) => ({ created: () => created, used: () => used, ...fig });
+  const line = (row: ConnectionRow) => {
+    if (row.revokedAt) return t.rich("row.revokedMeta", { date: row.revokedAt.date, ...fig });
+    const created = stamp(row.created, false);
+    const used = row.used ? stamp(row.used, true) : null;
+    if (row.kind === "oauth") {
+      return used ? t.rich("oauth.metaUsed", { ...at(created, used) }) : t.rich("oauth.metaUnused", { ...at(created) });
+    }
+    // A key made today opens its line with a capital (`ConexionesTelefono`); an older one stays lower-case.
+    const first = row.created.today;
+    if (used) return t.rich(first ? "row.metaUsedFirst" : "row.metaUsed", { ...at(created, used) });
+    return t.rich(first ? "row.metaUnusedFirst" : "row.metaUnused", { ...at(created) });
+  };
 
   return (
     <Section label={section}>
@@ -105,7 +122,7 @@ function Keys({ rows, section, onAsk, busy }: {
               <Text variant="name" tone={row.revoked ? "muted" : undefined}>
                 {row.name}
               </Text>
-              <Text variant="sentence">{figures(row.meta)}</Text>
+              <Text variant="sentence">{line(row)}</Text>
             </Flex>
             {row.revoked ? null : (
               <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>

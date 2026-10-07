@@ -121,4 +121,27 @@ test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53
       await db`delete from goals.access_tokens where user_id = ${person.id} and name <> 'mi pc'`;
     }
   });
+
+  test("a revoked key's and a claude.ai connection's lines", async ({ person, browser, baseURL, db }) => {
+    const seed = (kind: string, name: string, created: string, used: string | null, revoked: string | null) => db`
+      insert into goals.access_tokens (user_id, kind, name, token_hash, hint, created_at, last_used_at, revoked_at)
+      values (${person.id}, ${kind}, ${name}, ${Buffer.from(`${name}-${Math.random()}`)}, ${kind === "personal" ? "abcd" : null}, ${created}, ${used}, ${revoked})`;
+    await seed("personal", "Vieja", "2026-01-01T10:00:00Z", null, "2026-02-03T10:00:00Z");
+    await seed("oauth", "Claude", "2026-03-01T10:00:00Z", "2026-03-02T10:00:00Z", null);
+    for (const [width, height] of WIDTHS) {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/conexiones");
+        const revoked = page.getByText(/^revocada el .* · ya no entra$/);
+        await expect(revoked).toBeVisible();
+        await expectMixed(revoked, ["3 feb 2026"]);
+        const oauth = page.getByText(/^conectada el .* · usada el .*$/);
+        await expect(oauth).toBeVisible();
+        await expectMixed(oauth, ["1 mar 2026", "2 mar 2026", expect.stringMatching(/^\d\d:\d\d$/) as unknown as string]);
+      } finally {
+        await context.close();
+      }
+    }
+  });
 });
