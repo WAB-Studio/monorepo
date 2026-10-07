@@ -11,9 +11,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The figure's word unit is spaced by a no-break space in the text itself. */
+/* A word unit sits 4px from its figure through the spacer, not the flex gap. */
 .worded {
   gap: 0;
+}
+
+.space {
+  font-size: 0;
+  line-height: 0;
+  padding-inline-start: 4px;
 }
 
 .measure {

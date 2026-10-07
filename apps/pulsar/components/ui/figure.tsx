@@ -58,8 +58,8 @@ export function Figure({
   return (
     <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""}`}>
       {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
-      {/* A no-break space, so copy and a screen reader hear «20 páginas» and the line never splits them. */}
-      {wordUnit ? "\u00a0" : null}
+      {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
+      {wordUnit ? <span className={styles.space}>{"\u00a0"}</span> : null}
       {wordUnit ? (
         <span className={styles.unit}>{typeof value === "number" ? (words.unit?.(wordUnit, value) ?? wordUnit) : wordUnit}</span>
       ) : null}
