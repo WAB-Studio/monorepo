@@ -11,6 +11,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The figure's word unit is spaced by a no-break space in the text itself. */
+.worded {
+  gap: 0;
+}
+
 .measure {
   font-size: var(--pulsar-text-measure-size);
   font-weight: var(--pulsar-text-measure-weight);

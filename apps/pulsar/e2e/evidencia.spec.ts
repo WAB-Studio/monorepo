@@ -144,10 +144,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     // The goal screen's own words for it (`commitment-list.tsx`'s
     // `satisfactionWords`): the threshold just typed, plural, over the
     // source's own name.
-    // The figure is mono and its unit a quiet span of its own (369).
-    const unitWord = page.getByText("búsquedas", { exact: true });
-    await expect(unitWord).toBeVisible();
-    await expect(unitWord.locator("xpath=../..")).toHaveText(`${threshold}búsquedas · ${sources.readingLookups}`);
+    await expect(page.getByText(`${threshold} búsquedas · ${sources.readingLookups}`)).toBeVisible();
 
     const commitment = await commitmentByName(db, personId, commitmentName);
     expect(commitment).not.toBeNull();

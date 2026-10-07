@@ -73,9 +73,9 @@ test("on Meta at 360 a commitment's «conversaciones» sits whole on one line an
         },
         { name: name.source, trailing: trailing.source },
       );
-    const dropped = await place(/^Autoconversacionesdiarias/, /^4microconversacionesdiarias$/);
+    const dropped = await place(/^Autoconversacionesdiarias/, /^4\smicroconversacionesdiarias$/);
     expect([dropped.below, dropped.oneLine]).toEqual([true, true]);
-    const stays = await place(/^Conversaciones de práctica/, /^15conversaciones$/);
+    const stays = await place(/^Conversaciones de práctica/, /^15\sconversaciones$/);
     expect([stays.beside, stays.oneLine]).toEqual([true, true]);
 
     const overflowing = await page.evaluate(() =>

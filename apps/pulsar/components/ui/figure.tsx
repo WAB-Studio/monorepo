@@ -54,11 +54,14 @@ export function Figure({
   const words = useTimeWords();
   const size = variant === "meta" ? styles.meta : styles.measure;
   const formatted = formatFigureValue(value, unit, words);
+  const wordUnit = unit && !isTimeFigure(formatted) ? unit : null;
   return (
-    <span className={`${styles.figure} ${size}`}>
+    <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""}`}>
       {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
-      {unit && !isTimeFigure(formatted) ? (
-        <span className={styles.unit}>{typeof value === "number" ? (words.unit?.(unit, value) ?? unit) : unit}</span>
+      {/* A no-break space, so copy and a screen reader hear «20 páginas» and the line never splits them. */}
+      {wordUnit ? "\u00a0" : null}
+      {wordUnit ? (
+        <span className={styles.unit}>{typeof value === "number" ? (words.unit?.(wordUnit, value) ?? wordUnit) : wordUnit}</span>
       ) : null}
     </span>
   );
