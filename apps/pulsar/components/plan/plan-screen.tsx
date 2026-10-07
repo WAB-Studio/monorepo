@@ -62,6 +62,7 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
   const unit = goal.measureUnit;
   const open = goal.archivedAt === null && goal.endedOn === null;
   const { roadmap, plan } = goal;
+  const rhythmFormDrawn = open && roadmap.state === "noRhythm";
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
 
   let lead: string | null = null;
@@ -97,7 +98,7 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
           {lead}
         </Text>
       ) : null}
-      {unit && open && roadmap.state === "noRhythm" ? (
+      {unit && rhythmFormDrawn ? (
         <>
           <Section>
             <RhythmForm goalId={goal.id} unit={unit} plan={plan} initial={null} releases={releases} />
@@ -171,7 +172,13 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
       ) : null}
       {!unit || roadmap.state === "planned" ? <PlanMonths goal={goal} all={all} /> : null}
       {open ? (
-        <AddTask goalId={goal.id} goalName={goal.name} unit={unit} months={openMonthsOf(plan)} />
+        <AddTask
+          goalId={goal.id}
+          goalName={goal.name}
+          unit={unit}
+          months={openMonthsOf(plan)}
+          variant={unit && rhythmFormDrawn ? "outline" : "solid"}
+        />
       ) : null}
       <Section as="div">
         <Separator />

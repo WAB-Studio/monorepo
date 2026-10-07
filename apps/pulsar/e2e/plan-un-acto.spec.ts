@@ -52,7 +52,9 @@ async function accentFill(page: Page): Promise<string> {
 async function paint(page: Page, name: string) {
   return page.getByRole("button", { name, exact: true }).evaluate((el) => {
     const style = getComputedStyle(el);
-    return { fill: style.backgroundColor, border: style.borderTopWidth };
+    // The outline draws its ring as an inset shadow, never a border.
+    const ring = style.boxShadow.match(/0px 0px 0px ([\d.]+)px/);
+    return { fill: style.backgroundColor, border: ring ? `${ring[1]}px` : "0px" };
   });
 }
 
