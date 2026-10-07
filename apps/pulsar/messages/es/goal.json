@@ -13,6 +13,7 @@
     "archivedOverline": "meta · archivada el <fig>{date}</fig>",
     "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
     "measures": "mide en {unit}",
+    "measureSince": "en total, desde el <fig>{date}</fig>",
     "moveHorizon": "mover el final",
     "moveHorizonEnded": "Mover el final",
     "commitmentsCount": "{count, plural, =0 {} one {{word} compromiso} other {{word} compromisos}}",

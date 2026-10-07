@@ -6,8 +6,8 @@ import { dateToCivilDate, todayInZone } from "@/lib/zone";
 import { test, expect, type Person } from "./fixtures";
 
 // RP-14, RP-28: the figure beside «mide en minutos» is the goal's total since
-// it opened, and a quiet line under it says so: «en total, desde el 24 de
-// agosto» (`MetaTotal`, board words of wave 4). The date is DM Mono inside an
+// it opened, and a quiet line under it says so: «en total, desde el 1 de
+// enero» (`MetaTotal`, board words of wave 4). The date is DM Mono inside an
 // Archivo sentence; the year shows only when it is not the current one. «0 min»
 // stays at zero, and a goal with no measure draws neither figure nor line.
 
@@ -20,7 +20,7 @@ const LINE = /^en total, desde el /;
 
 // Noon in Bogotá, so the opening day is the same civil day in the zone.
 function openedAt(year: number): Date {
-  return new Date(`${year}-08-24T17:00:00Z`);
+  return new Date(`${year}-01-01T17:00:00Z`);
 }
 
 async function seedGoal(
@@ -90,7 +90,7 @@ for (const [width, height] of WIDTHS) {
       // Names the total, with the board's words.
       const line = totalLine(page);
       await expect(line).toHaveCount(1);
-      await expect(line).toHaveText("en total, desde el 24 de agosto");
+      await expect(line).toHaveText("en total, desde el 1 de enero");
 
       // Sits under the figure, not above it or beside the sentence.
       const figure = page.getByText(/^14 h 50 min$/).locator("visible=true").first();
@@ -103,7 +103,7 @@ for (const [width, height] of WIDTHS) {
       const parts = await lineParts(line);
       expect(parts.family).not.toMatch(/mono/i);
       expect(parts.spans.length).toBeGreaterThan(0);
-      expect(parts.spans.map((s) => s.text).join(" ")).toContain("24");
+      expect(parts.spans.map((s) => s.text).join(" ")).toContain("1");
       for (const span of parts.spans) expect(span.family).toMatch(/mono/i);
       // Only the date is mono: the words «en total, desde el» stay outside every span.
       expect(parts.spans.map((s) => s.text).join("")).not.toMatch(/en total|desde/);
@@ -126,7 +126,7 @@ test("a goal opened in another year carries that year in its mono date", async (
     await page.goto(`/metas/${goalId}`);
     const line = totalLine(page);
     await expect(line).toHaveCount(1);
-    await expect(line).toContainText(`24 de agosto`);
+    await expect(line).toContainText(`1 de enero`);
     const parts = await lineParts(line);
     expect(parts.text).toContain(String(lastYear));
     // The year belongs to the date: it sits inside the mono span.
@@ -148,7 +148,7 @@ test("a measured goal with nothing done keeps «0 min» and its line", async ({ 
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText("mide en minutos", { exact: true })).toBeVisible();
     await expect(page.getByText(/^0 min$/).locator("visible=true").first()).toBeVisible();
-    await expect(totalLine(page)).toHaveText("en total, desde el 24 de agosto");
+    await expect(totalLine(page)).toHaveText("en total, desde el 1 de enero");
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
