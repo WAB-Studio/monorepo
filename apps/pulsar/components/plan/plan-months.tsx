@@ -6,7 +6,7 @@ import { Flex, Progress, Row, Section } from "@/components/ui";
 import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
-import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
+import { doneIn, openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import type { GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 
@@ -113,19 +113,18 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
     );
   }
 
-  function figureOf(month: PlanMonth): string | null {
+  // The current month counts what is done in it; a later one what the plan fills.
+  function figureOf(month: PlanMonth, current: boolean): string | null {
     if (!unit || month.amount === null) return null;
-    const current = goal.month?.month === month.month ? goal.month : null;
-    return t("roadmap.plan.reached", {
-      done: say(current ? current.reached : month.filled),
-      amount: say(current?.planned ?? month.amount),
-    });
+    return current
+      ? t("roadmap.plan.monthDone", { done: say(doneIn(goal.plan, month.month)), amount: say(month.amount) })
+      : t("roadmap.plan.monthPlanned", { filled: say(month.filled), amount: say(month.amount) });
   }
 
-  function percentOf(month: PlanMonth): number | null {
+  function percentOf(month: PlanMonth, current: boolean): number | null {
     if (!unit || month.amount === null || month.amount <= 0) return null;
-    const current = goal.month?.month === month.month ? goal.month : null;
-    return Math.floor(((current ? current.reached : month.filled) * 100) / (current?.planned ?? month.amount));
+    const count = current ? doneIn(goal.plan, month.month) : month.filled;
+    return Math.floor((count * 100) / month.amount);
   }
 
   const whole = all ? months : months.slice(0, WHOLE);
@@ -140,8 +139,8 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
     <>
       {whole.map((month) => {
         const current = monthOf(goal.plan.today) === month.month;
-        const figure = figureOf(month);
-        const percent = percentOf(month);
+        const figure = figureOf(month, current);
+        const percent = percentOf(month, current);
         const label = current
           ? t("roadmap.plan.currentMonth", { month: monthName(month.month, thisYear) })
           : monthName(month.month, thisYear);
