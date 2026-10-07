@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { commitments, facts, oneOffs } from "@/db/schema";
+import { commitments, facts, goals, oneOffs } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
@@ -73,10 +73,12 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           .select({
             satisfaction: commitments.satisfaction,
             goalId: commitments.goalId,
+            openedAt: goals.createdAt,
             createdAt: commitments.createdAt,
             retiredAt: commitments.retiredAt,
           })
           .from(commitments)
+          .innerJoin(goals, eq(goals.id, commitments.goalId))
           .where(eq(commitments.id, commitmentId));
 
         if (!commitment) throw new NamedError("day.errors.notFound");
@@ -96,6 +98,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           .superRefine(
             requireDayForSubject({
               kind: "commitment",
+              openedDay: civilDateInZone(commitment.openedAt),
               createdDay: civilDateInZone(commitment.createdAt),
               retiredDay: commitment.retiredAt ? civilDateInZone(commitment.retiredAt) : null,
             }),
