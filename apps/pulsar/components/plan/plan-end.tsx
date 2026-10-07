@@ -1,16 +1,15 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { moveHorizon } from "@/app/actions/plan";
+import { MoveEndSheet } from "@/components/plan/move-end-sheet";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { TaskSheet } from "@/components/plan/task-sheet";
 import { Button, Flex, Row, Text } from "@/components/ui";
 import { Figure, useTimeWords } from "@/components/ui/figure";
-import { type MessageKey } from "@/i18n/translator";
+import { dayBefore } from "@/lib/day/weeks";
 import type { PlanInput } from "@/lib/plan/roadmap";
 import { formatQuantity } from "@/lib/units/time";
 import { civilDateLabel } from "@/lib/zone";
@@ -39,21 +38,8 @@ export function PlanEnd({
   moveTo: string;
 }) {
   const t = useTranslations();
-  const router = useRouter();
   const words = useTimeWords();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<MessageKey | null>(null);
-
-  function move() {
-    if (pending) return;
-    setError(null);
-    startTransition(() => {
-      void moveHorizon({ goalId, horizon: moveTo }).then((result) => {
-        if (result.ok) router.refresh();
-        else setError(result.error ?? "plan.errors.notFound");
-      });
-    });
-  }
+  const [open, setOpen] = useState(false);
 
   return (
     <Flex direction="column" gap="3">
@@ -78,14 +64,9 @@ export function PlanEnd({
         meta={t("roadmap.pasaElFinal.moveEndHint", { date: civilDateLabel(planEnd) })}
         metaVariant="sentence"
         trailing={<ChevronRight size={20} aria-hidden />}
-        onClick={move}
-        disabled={pending}
+        onClick={() => setOpen(true)}
       />
-      {error ? (
-        <Text as="p" variant="sentence" role="alert">
-          {t(error)}
-        </Text>
-      ) : null}
+      <MoveEndSheet goalId={goalId} from={dayBefore(plan.horizon)} to={planEnd} moveTo={moveTo} open={open} onOpenChange={setOpen} />
       <Text as="p" variant="sentence">
         {t("roadmap.pasaElFinal.removeTasks")}
       </Text>

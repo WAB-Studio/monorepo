@@ -4,6 +4,8 @@ import type postgres from "postgres";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
+import roadmap from "../messages/es/roadmap.json";
+
 import { test, expect } from "./fixtures";
 
 // RP-50, RP-53, RP-54: the plan's month sections, its tramo medio, the end
@@ -22,6 +24,10 @@ const m4 = nextMonth(m3);
 // The plan's own wording: the year shows only off this year.
 const name = (month: string) =>
   month.slice(0, 4) === thisYear ? NAMES[Number(month.slice(5, 7)) - 1] : `${NAMES[Number(month.slice(5, 7)) - 1]} de ${month.slice(0, 4)}`;
+
+// The catalogue's sentence with its `{name}` slots filled.
+const say = (template: string, values: Record<string, string>) =>
+  Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), template);
 
 // A white bordered card: 1px line, radius 10 (`Row card`), never `Panel bordered`.
 async function expectCard(row: Locator) {
@@ -92,11 +98,11 @@ for (const width of [390, 1440]) {
         const first = section(page, `${name(m0)} · en curso`);
         await expect.soft(first.getByText(`Empieza aquí con 7 h y sigue en ${name(m1)}.`)).toBeVisible();
         await expect.soft(first.getByText("7 de 30 h", { exact: true })).toBeVisible();
-        await expect.soft(first.getByText("0 min de 12 h", { exact: true })).toBeVisible();
+        await expect.soft(first.getByText(say(roadmap.plan.monthDone, { done: "0 min", amount: "12 h" }), { exact: true })).toBeVisible();
         const middle = section(page, name(m1));
         await expect.soft(middle.getByText(`Viene de ${name(m0)} y sigue en ${name(m2)}.`)).toBeVisible();
         await expect.soft(middle.getByText("12 de 30 h", { exact: true })).toBeVisible();
-        await expect.soft(middle.getByText("12 h de 12 h", { exact: true })).toBeVisible();
+        await expect.soft(middle.getByText(say(roadmap.plan.monthPlanned, { filled: "12 h", amount: "12 h" }), { exact: true })).toBeVisible();
         const last = section(page, name(m2));
         await expect.soft(last.getByText(`Viene de ${name(m1)}.`, { exact: true })).toBeVisible();
         await expect.soft(last.getByText("11 de 30 h", { exact: true })).toBeVisible();
@@ -270,21 +276,53 @@ for (const width of [390, 1440]) {
       }
     });
 
-    test("«Mover el final» moves the horizon to the day after the plan's end and the offers go", async ({ page, db, personId }) => {
+    test("«Mover el final» asks first: the sheet names both ends, «Cancelar» writes nothing, «Moverlo» moves the horizon and the offers go", async ({ page, db, personId }) => {
       const late = await seedLate();
       const goalId = await seedGoal(db, personId, 480, late.horizon);
       await seedTasks(db, personId, goalId, late.tasks);
+      const horizonOf = async () =>
+        (await db<{ horizon: string }[]>`select to_char(horizon, 'YYYY-MM-DD') as horizon from goals.goals where id = ${goalId}`)[0].horizon;
       try {
         await page.goto(`/metas/${goalId}/plan`);
-        await page.getByRole("button", { name: "Mover el final" }).click();
-        await expect(page.getByRole("button", { name: "Mover el final" })).toHaveCount(0);
+        await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
+        const sheet = page.getByRole("dialog");
+        await expect(sheet.getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
+        await expect(sheet).toContainText(/^Mover el finalDel \d{1,2} de \p{L}+( de \d{4})? al \d{1,2} de \p{L}+( de \d{4})?, donde termina el plan\./u);
+        await expect(sheet.getByRole("button", { name: roadmap.moverFinal.move })).toBeEnabled();
+        expect(await horizonOf()).toBe(late.horizon);
+        await sheet.getByRole("button", { name: roadmap.moverFinal.cancel }).click();
+        await expect(sheet).toBeHidden();
+        expect(await horizonOf()).toBe(late.horizon);
+
+        await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
+        await page.getByRole("dialog").getByRole("button", { name: roadmap.moverFinal.move }).click();
+        await expect(page.getByRole("dialog")).toBeHidden();
+        await expect(page.getByRole("button", { name: roadmap.moverFinal.title })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toHaveCount(0);
         await expect(page.getByText("después de tu final", { exact: true })).toHaveCount(0);
         // The end falls on the new last day: no day of slack, none late.
         await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, el día de tu final\.$/u)).toBeVisible();
         await expect(page.getByText(/0 días/)).toHaveCount(0);
-        const [moved] = await db<{ horizon: string }[]>`select to_char(horizon, 'YYYY-MM-DD') as horizon from goals.goals where id = ${goalId}`;
-        expect(moved.horizon > late.horizon).toBe(true);
+        expect((await horizonOf()) > late.horizon).toBe(true);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
+    test("«Mover el final» on a goal deleted under the open sheet keeps the sheet and says it failed", async ({ page, db, personId }) => {
+      const late = await seedLate();
+      const goalId = await seedGoal(db, personId, 480, late.horizon);
+      await seedTasks(db, personId, goalId, late.tasks);
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
+        const sheet = page.getByRole("dialog");
+        await expect(sheet).toBeVisible();
+        await drop(db, personId, goalId);
+        await sheet.getByRole("button", { name: roadmap.moverFinal.move }).click();
+        await expect(sheet.getByRole("alert")).toHaveText(roadmap.moverFinal.failed);
+        await expect(sheet.getByRole("button", { name: roadmap.moverFinal.move })).toBeEnabled();
+        await expect(sheet.getByRole("button", { name: roadmap.moverFinal.cancel })).toBeEnabled();
       } finally {
         await drop(db, personId, goalId);
       }
