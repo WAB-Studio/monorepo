@@ -14,7 +14,7 @@ import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { amountOf } from "@/lib/plan/roadmap";
-import { planMonthList } from "@/lib/plan/roadmap-read";
+import { doneIn, planMonthList } from "@/lib/plan/roadmap-read";
 import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
@@ -163,9 +163,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const monthNames = t.raw("day.monthLong") as string[];
   const planEnd = goal.roadmap.end;
   const planAmount = amountOf(monthKey, goal.plan);
-  const planReached = planMonthList(goal.plan, monthKey)
-    .filter((item) => item.done)
-    .reduce((sum, item) => sum + item.part, 0);
+  const planDone = doneIn(goal.plan, monthKey);
   // The end carries its year only when it is not this one, as `endLabel` does.
   const planEndLabel = planEnd
     ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]}${
@@ -187,9 +185,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           }
           meta={
             goal.roadmap.state === "planned" && planAmount !== null
-              ? t.rich("roadmap.meta.rhythmLine", {
+              ? t.rich("roadmap.meta.rhythmLineDone", {
                   amount: formatQuantity(planAmount, goal.measureUnit ?? "", words),
-                  reached: formatQuantity(planReached, goal.measureUnit ?? "", words),
+                  done: formatQuantity(planDone, goal.measureUnit ?? "", words),
                   planned: formatQuantity(planAmount, goal.measureUnit ?? "", words),
                   month: monthName,
                   ...fig,
