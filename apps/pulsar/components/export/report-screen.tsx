@@ -320,14 +320,13 @@ function GoalPart({
             month.planned === null ? null : (
               <Figure variant="meta" value={month.planned} unit={unit as string} />
             );
-          // The lead cell sets both figures in the table's lead size, the word between them in the body's.
           const done = started ? (
             <>
-              <Figure value={month.reached} unit={unit as string} />
+              <Figure variant="meta" value={month.reached} unit={unit as string} />
               {month.planned !== null ? (
                 <>
-                  <Text variant="line">{` ${t("of", { planned: "" })}`}</Text>
-                  <Figure value={month.planned} unit={unit as string} />
+                  <Text variant="sentence">{` ${t("of", { planned: "" })}`}</Text>
+                  <Figure variant="meta" value={month.planned} unit={unit as string} />
                 </>
               ) : null}
             </>
@@ -352,7 +351,7 @@ function GoalPart({
             <>
               {started && plannedFigure ? (
                 <>
-                  {t("of", { planned: "" })}
+                  <Text variant="sentence">{t("of", { planned: "" })}</Text>
                   {plannedFigure}
                   {" · "}
                 </>

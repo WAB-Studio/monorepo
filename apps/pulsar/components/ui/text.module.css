@@ -54,16 +54,6 @@
   color: var(--pulsar-muted);
 }
 
-/* A word among figures in a cell the table sizes for them: the body line, 15px sans. */
-.line.line {
-  font-family: var(--font-sans);
-  font-size: var(--pulsar-text-line-size);
-  font-weight: 400;
-  letter-spacing: normal;
-  line-height: 1.5;
-  color: var(--pulsar-ink-secondary);
-}
-
 .ink.ink {
   color: var(--pulsar-ink);
 }

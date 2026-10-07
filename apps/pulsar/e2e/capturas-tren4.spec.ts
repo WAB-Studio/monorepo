@@ -209,7 +209,7 @@ test("D. Hoy at 390 with three moved plans: «Ver el plan» is one line (Roadmap
   }
 });
 
-test("E. the report's months table in print: «de» keeps the cell's body size and both figures one size", async ({ browser, baseURL, db, person }) => {
+test("E. the report's months table in print: «de» is Archivo a step beside two equal mono figures", async ({ browser, baseURL, db, person }) => {
   const goalId = await seedPlan(db, person.id);
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 794, height: 1123 } });
   try {
@@ -232,21 +232,26 @@ test("E. the report's months table in print: «de» keeps the cell's body size a
       const row = [...table.querySelectorAll("tbody tr")].find((tr) => ofNode(tr.children[col]) !== null);
       const td = row?.children[col] as HTMLElement | undefined;
       if (!td) return null;
-      const size = parseFloat(getComputedStyle(ofNode(td)!.parentElement!).fontSize);
+      const deStyle = getComputedStyle(ofNode(td)!.parentElement!);
+      const size = parseFloat(deStyle.fontSize);
       const figures = [...td.querySelectorAll<HTMLElement>("[class*='figure-module'][class*='__figure']")].map((f) => ({
         size: parseFloat(getComputedStyle(f).fontSize),
         family: getComputedStyle(f.firstElementChild ?? f).fontFamily,
         own: getComputedStyle(f).fontFamily,
       }));
       const status = row!.children[row!.children.length - 1] as HTMLElement;
-      return { de: size, figures, body: parseFloat(getComputedStyle(status).fontSize), tdSize: parseFloat(getComputedStyle(td).fontSize) };
+      return { de: size, deFamily: deStyle.fontFamily, figures, body: parseFloat(getComputedStyle(status).fontSize), tdSize: parseFloat(getComputedStyle(td).fontSize) };
     }, exportMessages.columns.done);
     expect(cell).not.toBeNull();
     expect(cell!.figures).toHaveLength(2);
     expect(cell!.figures[0].size).toBe(cell!.figures[1].size);
     for (const figure of cell!.figures) expect(figure.own).toMatch(/mono/i);
-    expect(cell!.de).toBe(cell!.body);
-    expect(cell!.de).toBeLessThanOrEqual(Math.max(...cell!.figures.map((f) => f.size)) + 2);
+    expect(cell!.deFamily).not.toMatch(/mono/i);
+    expect(cell!.de).toBeLessThanOrEqual(cell!.body);
+    // The board draws «de» a step beside its figures, never 26px against 12.
+    const figureSize = cell!.figures[0].size;
+    expect(cell!.de).toBeGreaterThanOrEqual(figureSize + 1);
+    expect(cell!.de).toBeLessThanOrEqual(figureSize + 3);
   } finally {
     await context.close();
     await dropGoals(db, person.id, [goalId]);
