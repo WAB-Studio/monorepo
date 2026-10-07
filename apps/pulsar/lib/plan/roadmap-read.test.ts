@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { carryShare } from "./carry";
 import type { PlanInput, PlanTask } from "./roadmap";
-import { openMonthsOf, planMonthList, planMonthOf, planMoved, planShare, rhythmToMeet } from "./roadmap-read";
+import { doneIn, openMonthsOf, planMonthList, planMonthOf, planMoved, planShare, rhythmToMeet } from "./roadmap-read";
 
 const SEP = "2026-09-01";
 const OCT = "2026-10-01";
@@ -216,4 +216,46 @@ test("openMonthsOf: a goal that opens in a future month starts there", () => {
     "2027-01",
     "2027-02",
   ]);
+});
+
+function doneMix(): PlanTask[] {
+  return [
+    task("leaf-oct", { estimate: 300, doneOn: "2026-10-03" }),
+    task("parent"),
+    task("sub-done", { parentId: "parent", estimate: 120, doneOn: "2026-10-10" }),
+    task("sub-open", { parentId: "parent", estimate: 60 }),
+    task("leaf-sep", { estimate: 90, doneOn: "2026-09-30" }),
+    task("leaf-none", { doneOn: "2026-10-04" }),
+  ];
+}
+
+test("doneIn: leaves and done sub-tasks of an undone parent count in their month only", () => {
+  assert.equal(doneIn(input(doneMix()), OCT), 420);
+  assert.equal(doneIn(input(doneMix()), SEP), 90);
+});
+
+test("doneIn: a parent adds nothing of its own beside its sub-tasks", () => {
+  const tasks = [
+    task("p", { estimate: 500, doneOn: "2026-10-05" }),
+    task("s1", { parentId: "p", estimate: 30, doneOn: "2026-10-06" }),
+    task("s2", { parentId: "p", estimate: 40, doneOn: "2026-10-07" }),
+  ];
+  assert.equal(doneIn(input(tasks), OCT), 70);
+});
+
+test("planMoved: closedDone is doneIn of the closed month", () => {
+  const x = input(septemberHalf());
+  const notice = planMoved({ ...x, seen: null });
+  assert.notEqual(notice, null);
+  assert.equal(notice?.closedDone, doneIn(x, notice?.closedMonth ?? ""));
+});
+
+test("planMoved: closedDone counts a done sub-task under an undone parent", () => {
+  const tasks = [
+    task("p"),
+    task("s", { parentId: "p", estimate: 6, doneOn: "2026-09-10" }),
+    task("t", { parentId: "p", estimate: 6 }),
+    task("c", { estimate: 12 }),
+  ];
+  assert.equal(planMoved({ ...input(tasks), seen: null })?.closedDone, 6);
 });
