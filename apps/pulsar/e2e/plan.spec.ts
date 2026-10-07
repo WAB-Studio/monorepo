@@ -27,7 +27,7 @@ const name = (month: string) =>
 
 // The catalogue's sentence with its `{name}` slots filled.
 const say = (template: string, values: Record<string, string>) =>
-  Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), template);
+  Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), template.replace(/<\/?fig>/g, ""));
 
 // A white bordered card: 1px line, radius 10 (`Row card`), never `Panel bordered`.
 async function expectCard(row: Locator) {
@@ -197,6 +197,7 @@ for (const width of [390, 1440]) {
         await expect(page.getByRole("button", { name: "Mover el final" })).toBeVisible();
         for (const row of ["Subir el ritmo", "Mover el final"]) await expectCard(page.getByRole("button", { name: row }));
         await expect(page.getByText(/^Al \d{1,2} de \p{L}+, donde termina el plan\.$/u)).toBeVisible();
+        expect(await page.getByText(/^Al \d{1,2} de \p{L}+, donde termina el plan\./u).locator("> span").evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
         await expect(page.getByText("O quita tareas del plan: cada una que sale adelanta el final.")).toBeVisible();
         const past = section(page, "después de tu final");
         await expect(past.getByText("2 tareas · 9 h", { exact: true })).toBeVisible();
@@ -289,6 +290,12 @@ for (const width of [390, 1440]) {
         await expect(sheet.getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
         await expect(sheet).toContainText(/^Mover el finalDel \d{1,2} de \p{L}+( de \d{4})? al \d{1,2} de \p{L}+( de \d{4})?, donde termina el plan\./u);
         await expect(sheet.getByRole("button", { name: roadmap.moverFinal.move })).toBeEnabled();
+        // The two dates are DM Mono; the words around them are not.
+        const body = sheet.locator("p").first();
+        expect(await body.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+        const dates = body.locator("> span");
+        await expect(dates).toHaveCount(2);
+        for (let i = 0; i < 2; i++) expect(await dates.nth(i).evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
         expect(await horizonOf()).toBe(late.horizon);
         await sheet.getByRole("button", { name: roadmap.moverFinal.cancel }).click();
         await expect(sheet).toBeHidden();

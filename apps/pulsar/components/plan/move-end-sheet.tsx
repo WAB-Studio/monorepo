@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { moveHorizon } from "@/app/actions/plan";
 import { Button, Sheet, SheetActions, Text } from "@/components/ui";
+import { Figure } from "@/components/ui/figure";
 import { civilDateLabel, todayInZone } from "@/lib/zone";
 
 // The year shows only when it is not the current one.
@@ -40,8 +41,8 @@ export function MoveEndSheet({
   const [pending, startTransition] = useTransition();
   const [failed, setFailed] = useState(false);
 
+  // Open while pending too: the write may still land, and the page refreshes when it does.
   function close(next: boolean) {
-    if (pending) return;
     setFailed(false);
     onOpenChange(next);
   }
@@ -67,7 +68,11 @@ export function MoveEndSheet({
       open={open}
       onOpenChange={close}
       title={t("roadmap.moverFinal.title")}
-      description={t("roadmap.moverFinal.body", { from: dateOf(from), to: dateOf(to) })}
+      description={t.rich("roadmap.moverFinal.body", {
+        from: dateOf(from),
+        to: dateOf(to),
+        fig: (chunks) => <Figure variant="meta" value={chunks} />,
+      })}
     >
       {failed ? (
         <Text as="p" variant="sentence" role="alert">
@@ -78,7 +83,7 @@ export function MoveEndSheet({
         <Button block onClick={move} disabled={pending}>
           {pending ? t("roadmap.moverFinal.pending") : t("roadmap.moverFinal.move")}
         </Button>
-        <Button block variant="outline" onClick={() => close(false)} disabled={pending}>
+        <Button block variant="outline" onClick={() => close(false)}>
           {t("roadmap.moverFinal.cancel")}
         </Button>
       </SheetActions>

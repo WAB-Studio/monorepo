@@ -1,8 +1,10 @@
 import { ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { TaskRow, type TaskRowProps } from "@/components/month/task-row";
-import { Flex, Progress, Row, Section } from "@/components/ui";
+import { Flex, Progress, Row, Section, Text } from "@/components/ui";
+import { Figure } from "@/components/ui/figure";
 import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
@@ -113,12 +115,13 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
     );
   }
 
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   // The current month counts what is done in it; a later one what the plan fills.
-  function figureOf(month: PlanMonth, current: boolean): string | null {
+  function figureOf(month: PlanMonth, current: boolean) {
     if (!unit || month.amount === null) return null;
     return current
-      ? t("roadmap.plan.monthDone", { done: say(doneIn(goal.plan, month.month)), amount: say(month.amount) })
-      : t("roadmap.plan.monthPlanned", { filled: say(month.filled), amount: say(month.amount) });
+      ? t.rich("roadmap.plan.monthDone", { done: say(doneIn(goal.plan, month.month)), amount: say(month.amount), ...fig })
+      : t.rich("roadmap.plan.monthPlanned", { filled: say(month.filled), amount: say(month.amount), ...fig });
   }
 
   function percentOf(month: PlanMonth, current: boolean): number | null {
@@ -150,7 +153,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
             label={
               <Flex justify="between" gap="3">
                 <span>{label}</span>
-                {figure ? <span>{figure}</span> : null}
+                {figure ? <Text variant="sentence">{figure}</Text> : null}
               </Flex>
             }
           >

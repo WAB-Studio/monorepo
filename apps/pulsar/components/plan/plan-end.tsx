@@ -61,7 +61,10 @@ export function PlanEnd({
         card
         rule={false}
         name={t("roadmap.pasaElFinal.moveEnd")}
-        meta={t("roadmap.pasaElFinal.moveEndHint", { date: civilDateLabel(planEnd) })}
+        meta={t.rich("roadmap.pasaElFinal.moveEndHint", {
+          date: civilDateLabel(planEnd),
+          fig: (chunks) => <Figure variant="meta" value={chunks} />,
+        })}
         metaVariant="sentence"
         trailing={<ChevronRight size={20} aria-hidden />}
         onClick={() => setOpen(true)}

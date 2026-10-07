@@ -17,7 +17,7 @@ const name = (month: string) =>
   month.slice(0, 4) === thisYear ? NAMES[Number(month.slice(5, 7)) - 1] : `${NAMES[Number(month.slice(5, 7)) - 1]} de ${month.slice(0, 4)}`;
 
 const say = (template: string, values: Record<string, string>) =>
-  Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), template);
+  Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, value), template.replace(/<\/?fig>/g, ""));
 
 const section = (page: import("@playwright/test").Page, label: string) =>
   page.locator("section").filter({ has: page.getByText(label, { exact: true }) });
@@ -58,10 +58,19 @@ for (const width of [390, 1440]) {
         const current = section(page, say(roadmap.plan.currentMonth, { month: name(m0) }));
         await expect(current.getByText(say(roadmap.plan.monthDone, { done: "5 h", amount: "12 h" }), { exact: true })).toBeVisible();
         await expect(current.getByText(/12 h hechas/)).toHaveCount(0);
+        // Figures in DM Mono, the words between them in Archivo.
+        const line = current.getByText(say(roadmap.plan.monthDone, { done: "5 h", amount: "12 h" }), { exact: true });
+        const family = (locator: import("@playwright/test").Locator) => locator.evaluate((el) => getComputedStyle(el).fontFamily);
+        expect(await family(line)).not.toMatch(/mono/i);
+        const figures = line.locator("> span");
+        await expect(figures).toHaveCount(2);
+        for (let i = 0; i < 2; i++) expect(await family(figures.nth(i))).toMatch(/mono/i);
         const width = await current.locator("span[aria-hidden] > span").first().evaluate((el) => (el as HTMLElement).style.inlineSize);
         expect(width).toBe("41%");
         const next = section(page, name(m1));
-        await expect(next.getByText(say(roadmap.plan.monthPlanned, { filled: "12 h", amount: "12 h" }), { exact: true })).toBeVisible();
+        const planned = next.getByText(say(roadmap.plan.monthPlanned, { filled: "12 h", amount: "12 h" }), { exact: true });
+        await expect(planned).toBeVisible();
+        await expect(planned.locator("> span")).toHaveCount(2);
       } finally {
         await db`delete from goals.facts where goal_id = ${goalId} and user_id = ${personId}`;
         await db`delete from goals.commitments where goal_id = ${goalId} and user_id = ${personId}`;
