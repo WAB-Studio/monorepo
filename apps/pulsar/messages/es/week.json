@@ -1,5 +1,6 @@
 {
   "range": "Del {start} al {end}",
+  "rangeWithMonth": "Del {start} al {end} de {month}",
   "sectionLabel": "{name} · semana {week} de {total}",
   "todayMark": "· hoy",
   "table": {

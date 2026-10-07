@@ -81,6 +81,7 @@
     "placeholder": "Escribe algo suelto...",
     "labelForGoal": "Algo suelto de {goal}",
     "placeholderForGoal": "Escribe algo suelto de {goal}...",
+    "placeholderForGoalShort": "Algo suelto de {goal}…",
     "submit": "Anotar",
     "savedNone": "Anotada sin día: espera en «{count} sin día».",
     "savedTomorrow": "Anotada para mañana, {weekday} {day}.",

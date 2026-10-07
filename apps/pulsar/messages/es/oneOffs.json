@@ -1,8 +1,8 @@
 {
   "title": "Lo que espera",
-  "daylessGroup": "{count} sin día",
-  "scheduledGroupOne": "{count} programada",
-  "scheduledGroupMany": "{count} programadas",
+  "daylessGroup": "sin día",
+  "scheduledGroupOne": "con día",
+  "scheduledGroupMany": "con día",
   "fromGoal": "de {goal}",
   "whenWithGoal": "<fig>{when}</fig> · de {goal}",
   "when": "{weekday} {day}",
@@ -12,6 +12,12 @@
   "emptyToToday": "Volver a hoy",
   "done": "«{name}» quedó en «hechas hoy».",
   "seeToday": "ver hoy",
+  "sheet": {
+    "eyebrow": "suelta",
+    "eyebrowDone": "suelta · hecha",
+    "doneHint": "Hecha hoy. Para deshacerla toca su marca.",
+    "giveDay": "Darle un día"
+  },
   "schedule": {
     "title": "¿Para cuándo?",
     "now": "ahora: {when}",

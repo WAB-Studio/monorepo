@@ -4,6 +4,7 @@ import postgres from "postgres";
 
 import { test, expect, mintDisposablePerson } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import plan from "../messages/es/plan.json";
 
 // RNP-17 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
 // `RevisionEscritorio`, `HojaEscritorio`): at 1280 × 800 every route is the
@@ -210,7 +211,7 @@ const ROUTES: Route[] = [
   {
     name: "/metas/<id>/fases/nueva",
     path: (world) => `/metas/${world.goalId}/fases/nueva`,
-    ready: (p) => expect(p.getByText("Fase nueva")).toBeVisible(),
+    ready: (p) => expect(p.getByText(plan.phaseForm.title)).toBeVisible(),
     min: 5,
   },
   {

@@ -4,6 +4,7 @@ import { horizonForWeeks } from "@/lib/day/weeks";
 import { civilDateInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
+import goalMessages from "../messages/es/goal.json";
 
 // Module 369: from 1024 the goal's phases stand under the two columns at the
 // content's full width; a phase stored before its goal opened reads from week
@@ -101,7 +102,7 @@ test("the line under the title is Archivo with its date in mono, and a commitmen
     await expect(line).toBeVisible();
     expect(await line.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
     expect(await line.locator("span").first().evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/mono/i);
-    const tap = page.getByText("toque", { exact: true });
+    const tap = page.getByText(goalMessages.satisfaction.tap, { exact: true });
     expect(await tap.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
