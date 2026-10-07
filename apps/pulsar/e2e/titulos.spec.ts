@@ -1,10 +1,13 @@
 import { civilDateShort, todayInZone } from "@/lib/zone";
 import { monthOf } from "@/lib/plan/months";
+import common from "../messages/es/common.json";
 import { test, expect } from "./fixtures";
 
-// RNP-01: every page names its place, «{place} · pulsar», and the goal's own
+const brand = common.brand;
+
+// RNP-01: every page names its place, «{place} · {brand}», and the goal's own
 // name never enters a title (it would cost a statement).
-test("every page reads «{place} · pulsar», /exportar keeps its dated title", async ({ browser, baseURL, person, db }) => {
+test("every page reads «{place} · {brand}», /exportar keeps its dated title", async ({ browser, baseURL, person, db }) => {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
     values (${person.id}, ${`Meta de títulos ${Date.now()}`}, (${todayInZone()}::date + 90), 'minutos', 'minutos')
@@ -37,7 +40,9 @@ test("every page reads «{place} · pulsar», /exportar keeps its dated title", 
   const page = await context.newPage();
   for (const [path, place] of routes) {
     await page.goto(path);
-    expect(await page.title(), path).toBe(`${place} · pulsar`);
+    const title = await page.title();
+    expect(title, path).toBe(`${place} · ${brand}`);
+    expect(title, path).not.toMatch(/pulsar/i);
   }
 
   await page.goto("/exportar");
@@ -47,6 +52,8 @@ test("every page reads «{place} · pulsar», /exportar keeps its dated title", 
   const out = await browser.newContext({ baseURL: baseURL! });
   const entrar = await out.newPage();
   await entrar.goto("/entrar");
-  expect(await entrar.title()).toBe("Entrar · pulsar");
+  const entrarTitle = await entrar.title();
+  expect(entrarTitle).toBe(`Entrar · ${brand}`);
+  expect(entrarTitle).not.toMatch(/pulsar/i);
   await out.close();
 });
