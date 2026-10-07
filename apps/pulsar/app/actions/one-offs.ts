@@ -348,7 +348,7 @@ const REFUSALS: Record<string, MessageKey> = {
  * no rollback. A task is done when it, or a child, has a fact. A fact or a
  * child landing in between makes `one_offs_guard_day` return 0 rows for an
  * estimate or a month, reported as `doneTask`. A one-off of no goal (RP-57)
- * takes its name alone.
+ * takes its name alone, and so does a goal's one-off outside the plan.
  */
 async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
   const person = await getPerson();
@@ -380,7 +380,7 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
             when goal_id is null then
               case when ${estimate ?? null}::int is not null then 'noMeasure'
                    when ${touchesMonth}::boolean then 'invalid' end
-            when not in_plan then 'invalid'
+            when not in_plan and ${touchesEstimate || touchesMonth}::boolean then 'invalid'
             when ${touchesEstimate || touchesMonth}::boolean then
               case
                 when has_fact then 'doneTask'
