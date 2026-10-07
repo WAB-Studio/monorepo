@@ -74,3 +74,16 @@ test("weekSpan: with a horizon the last week ends on the goal's last day, not it
   // A week past the goal keeps its Sunday, so it stays past the horizon.
   assert.equal(weekSpan(openedOn, 37, 37, horizon).endsOn, "2027-06-20");
 });
+
+// The horizon is the first day after the goal; a week opening on it holds no
+// day of the goal and keeps its own Sunday.
+test("weekSpan: a horizon falling on a Monday closes the week before it on its Sunday, and a week opening on it keeps its Sunday", () => {
+  const openedOn = "2026-09-28"; // a Monday
+  const horizon = "2026-10-12"; // the Monday two weeks on
+  assert.deepEqual(weekSpan(openedOn, 2, 2, horizon), { startsOn: "2026-10-05", endsOn: "2026-10-11" });
+  assert.deepEqual(weekSpan(openedOn, 3, 3, horizon), { startsOn: "2026-10-12", endsOn: "2026-10-18" });
+});
+
+test("weekSpan: a horizon falling mid-week closes that week on the goal's last day", () => {
+  assert.deepEqual(weekSpan("2026-09-28", 2, 2, "2026-10-08"), { startsOn: "2026-10-05", endsOn: "2026-10-07" });
+});
