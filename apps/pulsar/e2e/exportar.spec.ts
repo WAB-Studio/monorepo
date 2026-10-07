@@ -775,6 +775,65 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
     }
   });
+
+  test("RP-46 on paper loses nothing: every goal and every month row the screen shows is in the PDF, in its goal", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const first = await seed(db, person);
+    await seedExtras(db, person, first);
+    const second = await seed(db, person);
+    await seedExtras(db, person, second);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      const main = page.getByRole("main");
+      const names = [first.name, second.name];
+      for (const name of names) {
+        await expect(main.getByRole("heading", { name, exact: true })).toHaveCount(1);
+      }
+      // On screen: per goal, the first column of its «mes» table.
+      const onScreen: string[][] = [];
+      for (const name of names) {
+        const table = main
+          .locator("section", { has: page.getByText(`${name} · por mes`, { exact: true }) })
+          .locator("table", { has: page.locator("thead th", { hasText: /^mes$/ }) })
+          .first();
+        const labels = (await table.locator("tbody tr td:first-child").allTextContents()).map((label) => label.trim());
+        expect(labels.length, `${name}: months on screen`).toBeGreaterThanOrEqual(4);
+        onScreen.push(labels);
+      }
+
+      await page.emulateMedia({ media: "print" });
+      const dir = resolve(process.cwd(), "private/export-pdf");
+      mkdirSync(dir, { recursive: true });
+      const file = resolve(dir, `379-completo-${first.goalId}.pdf`);
+      writeFileSync(file, await page.pdf({ format: "A4" }));
+      const lines = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" })
+        .split("\n")
+        .map((line) => line.trim());
+
+      // Each goal's heading is one line of its own; its months are the label lines up to the next goal.
+      const at = names.map((name) => lines.indexOf(name));
+      for (const [index, found] of at.entries()) expect(found, `${names[index]} heading in the PDF`).toBeGreaterThanOrEqual(0);
+      expect(lines.filter((line) => names.includes(line))).toHaveLength(names.length);
+      const label = /^[a-zñ]+ \d{4}$/;
+      const printed = at.map((from, index) =>
+        lines.slice(from, at[index + 1] ?? lines.length).filter((line) => label.test(line)),
+      );
+      expect(printed).toEqual(onScreen);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
+    }
+  });
 });
 
 // Module 265 (RP-46): the head counts the goals that ended, an ended goal is
