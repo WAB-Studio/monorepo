@@ -291,6 +291,19 @@
   color: var(--pulsar-ink);
 }
 
+.sentence {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--pulsar-muted);
+}
+
+.foldSentence {
+  margin: 3px 0 0;
+  padding-inline: 4px;
+  font-size: 12px;
+  color: var(--pulsar-muted);
+}
+
 .foldDetail {
   margin: 3px 0 0;
   padding-inline: 4px;

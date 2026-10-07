@@ -30,7 +30,14 @@ type WeekTableGroup = {
   label: string;
   // A line under the label, for what the group itself says.
   note?: ReactNode;
-  rows: readonly { key: string; name: string; detail?: string; cells: readonly (WeekTableCell | null)[] }[];
+  rows: readonly {
+    key: string;
+    name: string;
+    detail?: string;
+    // Draws the detail as a sentence (Archivo, muted) instead of a mono figure.
+    sentence?: boolean;
+    cells: readonly (WeekTableCell | null)[];
+  }[];
 };
 
 function join(...names: (string | undefined)[]): string {
@@ -102,7 +109,7 @@ export function WeekTable({
                   {row.detail ? (
                     <span className={styles.nameStack}>
                       <span>{row.name}</span>
-                      <span className={styles.detail}>{row.detail}</span>
+                      <span className={row.sentence ? styles.sentence : styles.detail}>{row.detail}</span>
                     </span>
                   ) : (
                     row.name
@@ -189,7 +196,7 @@ export function WeekFold({
           {group.rows.map((row) => (
             <div key={row.key} className={styles.foldRow}>
               <p className={styles.foldName}>{row.name}</p>
-              {row.detail ? <p className={styles.foldDetail}>{row.detail}</p> : null}
+              {row.detail ? <p className={row.sentence ? styles.foldSentence : styles.foldDetail}>{row.detail}</p> : null}
               <div className={styles.foldMarks}>
                 {columns.map((column, index) => {
                   const cell = row.cells[index] ?? null;

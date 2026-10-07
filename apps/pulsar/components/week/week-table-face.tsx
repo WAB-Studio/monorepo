@@ -109,6 +109,8 @@ export function WeekTableFace({
       .map((fact) => ({
         key: fact.oneOffId,
         name: fact.name,
+        detail: fact.parentName ? t("day.monthLine.parent", { name: fact.parentName }) : undefined,
+        sentence: true,
         cells: view.days.map((dayView) =>
           mark(fact.name, dayView.day, dayView.day === fact.day && live(goalId, dayView.day) ? "done" : "none"),
         ),
