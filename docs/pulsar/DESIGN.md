@@ -1029,7 +1029,9 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - `MetaTotal` (399): under the measure figure, a quiet line «en total, desde el 24 de agosto» (date mono, year only
     when not the current one). «0 min» stays.
   - `ImportarFuera` (401): above «Crear 1 meta», one quiet line: «Sin «Elegir método» y su sub-tarea: no se puede
-    crear.» for one item, «Sin 3 cosas que no se pueden crear.» for more, the count linking up to «No se puede crear».
+    crear.» for one item, «Sin 3 cosas que no se pueden crear.» for more, the count linking up to «No se puede crear». Decided by the orchestrator 2026-10-06 (module 401): a goal refused whole reads «Sin «<goal>»: no se puede
+    crear.»; a task with several sub-tasks «Sin «<name>» y sus <n> sub-tareas: no se puede crear.»; a task with none
+    «Sin «<name>»: no se puede crear.»
   - `MetaPlanHechas` and `RoadmapMesCifras` (405): «Ritmo 12 h al mes · en octubre, 5 h de 12 h en tareas hechas»;
     the current month «5 h de 12 h en tareas hechas»; a later month keeps «12 h planeadas de 12 h».
   - `HoyTareaDeMeta` (408): the field at a goal's foot is labelled «Una tarea de {goal}»; on «sin día» it answers

@@ -53,6 +53,10 @@
     "edit": {
       "title": "Cambiar el monto"
     },
+    "out": {
+      "one": "Sin «{name}»{subTasks, plural, =0 {} one { y su sub-tarea} other { y sus # sub-tareas}}: no se puede crear.",
+      "many": "Sin <link>{count} cosas</link> que no se pueden crear."
+    },
     "blocked": {
       "title": "No se puede crear",
       "hint": "se queda fuera; corrígelo en tu texto y vuelve a leerlo",
