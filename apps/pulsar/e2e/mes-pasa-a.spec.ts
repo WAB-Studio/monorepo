@@ -69,3 +69,50 @@ test("a closed month reads «66 % pasó a <next month>» in the list and on its 
     await db`delete from goals.goals where id = ${goal.id}`;
   }
 });
+
+test("a closed month that carried nothing says no «pasó a» — in the report, the month's page and the list (RP-32)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${`Meta sin pase ${Date.now()}`}, ${nextMonth(thisMonth)}::date, 'minutos', 'minutos', (${lastMonth}::date + 14) + time '12:00' at time zone 'UTC')
+    returning id
+  `;
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${goal.id}, ${lastMonth}::date, 600)
+  `;
+  const [done] = await db<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${person.id}, ${goal.id}, 'Hecha', ${lastMonth}::date, 100) returning id
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, one_off_id, day)
+    values (${person.id}, ${goal.id}, ${done.id}, ${lastMonth}::date + 14)
+  `;
+
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 1280, height: 900 } });
+  try {
+    const page = await context.newPage();
+
+    await page.goto(`/metas/${goal.id}/meses`);
+    await expect(page.getByRole("listitem").first()).toContainText(label(lastMonth));
+    await expect(page.getByText(/pasó a/)).toHaveCount(0);
+
+    await page.goto(`/metas/${goal.id}/meses/${lastMonth.slice(0, 7)}`);
+    await expect(page.getByText(month.list.closed, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/pasó a/)).toHaveCount(0);
+
+    await page.goto("/exportar");
+    const main = page.getByRole("main");
+    await expect(main.getByText(/Meta sin pase/).first()).toBeVisible();
+    await expect(main.getByRole("cell", { name: "cerrado", exact: true })).toBeVisible();
+    await expect(main.getByText(/pasó a/)).toHaveCount(0);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id}`;
+  }
+});

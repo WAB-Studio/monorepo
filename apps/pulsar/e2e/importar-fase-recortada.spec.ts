@@ -50,6 +50,7 @@ async function review(
   run: (page: Page) => Promise<void>,
   width = 1280,
   titles?: string[],
+  source?: string,
 ) {
   const context = await browser.newContext({
     storageState: person.sessionFile,
@@ -59,7 +60,7 @@ async function review(
   try {
     const page = await context.newPage();
     await page.goto("/metas/importar");
-    await page.getByLabel(messages.textLabel).fill(plan(titles));
+    await page.getByLabel(messages.textLabel).fill(source ?? plan(titles));
     await page.getByRole("button", { name: "Leer el plan" }).click();
     await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
     await expect(
@@ -156,6 +157,40 @@ test.describe("the review says the cut (RP-37)", () => {
       },
       1440,
       ["Fases recortadas", "Segunda meta"],
+    );
+  });
+
+  test("with two goals each card names its own cut and drop notes, never the other goal's", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    const calm = [
+      "# Segunda meta",
+      `horizonte: ${plus(200)}`,
+      "medida: horas de estudio · minutos",
+      "",
+      "## Fases",
+      `- ${plus(5)} a ${plus(40)} · Fase tranquila`,
+      "",
+      "## Meses",
+      `- ${todayInZone().slice(0, 7)} · 12 h`,
+    ].join("\n");
+    const source = ["pulsar · plantilla 1", "", goalBlock("Fases recortadas"), "", calm].join("\n");
+    await review(
+      { person, browser, baseURL },
+      async (page) => {
+        const first = page.getByRole("region", { name: "Fases recortadas" });
+        const second = page.getByRole("region", { name: "Segunda meta" });
+        await expect(first).toContainText(`La fase «${CUT}» empieza en la semana 1`);
+        await expect(first).toContainText(`La fase «${DROPPED}» termina antes de abrirla`);
+        await expect(second).toContainText("Fase tranquila");
+        await expect(second).not.toContainText("La fase «");
+        await expect(page.locator("p").filter({ hasText: "La fase «" })).toHaveCount(1);
+      },
+      1280,
+      undefined,
+      source,
     );
   });
 });
