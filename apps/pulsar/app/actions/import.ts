@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { sql, type SQL } from "drizzle-orm";
 
 import { commitments, goals, monthBudgets, oneOffs, phases } from "@/db/schema";
-import { draftRefusals, importDraftSchema } from "@/lib/import/draft";
+import { draftRefusals, importDraftSchema, withCutPhases } from "@/lib/import/draft";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthStart } from "@/lib/validation/budget";
 import { todayInZone } from "@/lib/zone";
@@ -54,9 +54,12 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     const error = issue.message.includes(".errors.") ? messageKey(issue.message) : "import.errors.draftInvalid";
     return { ok: false, error, at: issue.path.join(".") };
   }
-  const draft = parsed.data;
+  // RP-37: a phase that starts before the goal opens begins today, one wholly
+  // before it is dropped, so the refusals and the rows see the cut draft.
+  const today = todayInZone();
+  const draft = withCutPhases(parsed.data, today);
 
-  const [refusal] = draftRefusals(draft, todayInZone());
+  const [refusal] = draftRefusals(draft, today);
   if (refusal) return { ok: false, error: messageKey(refusal.key), at: refusal.path };
 
   const person = await getPerson();
