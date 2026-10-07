@@ -103,6 +103,17 @@ export function planShare(input: PlanInput, month: string): { carried: number; p
   return planned === 0 ? null : { carried, planned };
 }
 
+// Leaves only: a parent's hours are its children's, so a done sub-task counts under an undone parent.
+export function doneIn(input: PlanInput, month: string): number {
+  const parents = new Set(input.tasks.map((task) => task.parentId));
+  let total = 0;
+  for (const task of input.tasks) {
+    if (parents.has(task.id) || task.doneOn === null || monthOf(task.doneOn) !== month) continue;
+    total += task.estimate ?? 0;
+  }
+  return total;
+}
+
 export function planMoved(input: PlanInput & { seen: string | null }): PlanNotice | null {
   if (input.rhythm === null) return null;
   const current = monthOf(input.today);
@@ -115,17 +126,10 @@ export function planMoved(input: PlanInput & { seen: string | null }): PlanNotic
   const after = fillPlan({ ...input, today: current, doneBy: last }).end;
   if (before === null || after === null || after <= before) return null;
 
-  // Leaves only: a parent's hours are its children's.
-  const parents = new Set(input.tasks.map((task) => task.parentId));
-  let closedDone = 0;
-  for (const task of input.tasks) {
-    if (parents.has(task.id) || task.doneOn === null || monthOf(task.doneOn) !== closed) continue;
-    closedDone += task.estimate ?? 0;
-  }
   return {
     closedMonth: closed,
     movedDays: daysBetween(before, after),
-    closedDone,
+    closedDone: doneIn(input, closed),
     closedAmount: amountOf(closed, input) ?? 0,
     end: after,
   };
