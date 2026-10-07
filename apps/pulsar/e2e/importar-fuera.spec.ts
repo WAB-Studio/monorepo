@@ -127,7 +127,7 @@ test.describe("the create bar says what stays out (RP-37)", () => {
   });
 
   test("«Crear 1 meta» still creates the goal without the refused task", async ({ person, browser, baseURL, db }) => {
-    await review({ person, browser, baseURL }, plan(goal("Se crea sin ella", { tasks: [parentWithAmount(OUT)] })), async (page, bar) => {
+    await review({ person, browser, baseURL }, plan(goal("Se crea sin ella", { tasks: [parentWithAmount(OUT)] })), async (page) => {
       await page.getByRole("button", { name: "Crear 1 meta" }).click();
       await expect(page).toHaveURL(/\/metas$/);
       const goals = await db`select id from goals.goals where user_id = ${person.id} and name = 'Se crea sin ella'`;
