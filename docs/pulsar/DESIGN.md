@@ -939,7 +939,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - A task past the goal's end that starts inside it reads its part in its month («Empieza aquí con 10 h y sigue en
     diciembre.»); only what falls after the end is listed under «después de tu final» (RP-54).
   - A row under «después de tu final» opens the task's sheet, as every task row does.
-  - A month's header says which figure it is: the current month «5 h hechas de 12 h», a later one «12 h planeadas de
+  - A month's header says which figure it is: the current month «5 h de 12 h en tareas hechas», a later one «12 h planeadas de
     12 h». Boards `RoadmapMesCifras`, `MetaPlanHechas`, approved by the user 2026-10-06.
   - Setting a goal's first rhythm raises no «se movió» notice: the plan starts there.
   - A task with no estimate reads «sin estimar» as its trailing, muted, in every list of the plan.
@@ -992,7 +992,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
 - **The report's split week is one row** (2026-10-06, orchestrator, module 379): a week across two months reads its
   whole total once under the fold, no longer two halves.
 - **`MetaPlanHechas` settles where «hechas» reaches** (2026-10-06, read by the orchestrator from the approved board):
-  the goal's plan row reads «5 h hechas de 12 h en octubre»; the block «lo medido» keeps the measure («6 h 40 min de
+  the goal's plan row reads «Ritmo 12 h al mes · en octubre, 5 h de 12 h en tareas hechas» (amended 2026-10-06, A3); the block «lo medido» keeps the measure («6 h 40 min de
   estudio en octubre», RP-28). Hoy's month line and «Mes» (RP-43) keep the measure this round. No code retired.
 - **A fact before its goal opened is refused with «Ese día es anterior a cuando abriste esta meta.»** (2026-10-06,
   decided by the orchestrator; no board draws it).
@@ -1021,3 +1021,19 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - C. «Armar el plan» keeps every month that already has an amount and spreads only the rest.
   - D. A closed month that did more than planned stays as it is; nothing is split into the next month.
   - W4-Q2. An imported task with sub-tasks and its own amount is left out, and the create bar says what stays out (RP-37).
+- **Words of the boards of wave 4, approved by the user 2026-10-06 on the words, before the boards were drawn**
+  («apruebo los tableros»). Drawn after, from these lines; where a drawing and these lines disagree, these lines win.
+  - `HoySiguienteCifra` (394): one hour figure per row, never a 0. A whole task trails its estimate and reads «Siguiente
+    del plan» with no figure; a task with no estimate trails «sin estimar», muted; a sub-task reads «de <parent>» above
+    and trails its own estimate; a split task trails its estimate and reads «Siguiente del plan · 10 h este mes».
+  - `MetaTotal` (399): under the measure figure, a quiet line «en total, desde el 24 de agosto» (date mono, year only
+    when not the current one). «0 min» stays.
+  - `ImportarFuera` (401): above «Crear 1 meta», one quiet line: «Sin «Elegir método» y su sub-tarea: no se puede
+    crear.» for one item, «Sin 3 cosas que no se pueden crear.» for more, the count linking up to «No se puede crear».
+  - `MetaPlanHechas` and `RoadmapMesCifras` (405): «Ritmo 12 h al mes · en octubre, 5 h de 12 h en tareas hechas»;
+    the current month «5 h de 12 h en tareas hechas»; a later month keeps «12 h planeadas de 12 h».
+  - `HoyTareaDeMeta` (408): the field at a goal's foot is labelled «Una tarea de {goal}»; on «sin día» it answers
+    «Anotada en el plan de {goal}.» with «ver el plan»; an empty name answers «Escribe qué hay que hacer.». The goalless
+    field keeps «Algo suelto».
+  - A goal's task with no day is a task of the goal's plan: it never shows on `/sueltas`, never counts in «N sin día»,
+    and Hoy never calls it suelto (RP-59).
