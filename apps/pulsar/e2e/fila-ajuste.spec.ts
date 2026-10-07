@@ -43,7 +43,8 @@ test("on Meta at 360 a commitment's «conversaciones» sits whole on one line an
     const page = await context.newPage();
     await page.goto(`/metas/${goal.id}`);
     for (const unit of ["conversaciones", "microconversacionesdiarias"]) {
-      const phrase = page.getByText(new RegExp(`^\\d+ ${unit}$`)).first();
+      // The unit is its own quiet span inside the mono figure (369).
+      const phrase = page.getByText(unit, { exact: true }).first();
       await expect(phrase).toBeVisible();
       const word = await phrase.evaluate((el, unit) => {
         const node = el.firstChild as Text;
@@ -51,7 +52,7 @@ test("on Meta at 360 a commitment's «conversaciones» sits whole on one line an
         const range = document.createRange();
         range.setStart(node, start);
         range.setEnd(node, start + unit.length);
-        const box = el.parentElement!.parentElement!.getBoundingClientRect();
+        const box = el.parentElement!.parentElement!.parentElement!.parentElement!.getBoundingClientRect();
         const rect = range.getBoundingClientRect();
         console.log(JSON.stringify({ l: rect.left, r: rect.right, bl: box.left, br: box.right, w: window.innerWidth }));
         return { lines: range.getClientRects().length, inside: rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5 };
@@ -64,7 +65,7 @@ test("on Meta at 360 a commitment's «conversaciones» sits whole on one line an
         ({ name, trailing }) => {
           const find = (source: string) =>
             Array.from(document.querySelectorAll("span")).find(
-              (el) => el.children.length === 0 && new RegExp(source).test(el.textContent ?? ""),
+              (el) => el.children.length <= 1 && new RegExp(source).test(el.textContent ?? ""),
             )!;
           const n = find(name).getBoundingClientRect();
           const t = find(trailing).getBoundingClientRect();
@@ -72,9 +73,9 @@ test("on Meta at 360 a commitment's «conversaciones» sits whole on one line an
         },
         { name: name.source, trailing: trailing.source },
       );
-    const dropped = await place(/^Autoconversacionesdiarias/, /^4 microconversacionesdiarias$/);
+    const dropped = await place(/^Autoconversacionesdiarias/, /^4microconversacionesdiarias$/);
     expect([dropped.below, dropped.oneLine]).toEqual([true, true]);
-    const stays = await place(/^Conversaciones de práctica/, /^15 conversaciones$/);
+    const stays = await place(/^Conversaciones de práctica/, /^15conversaciones$/);
     expect([stays.beside, stays.oneLine]).toEqual([true, true]);
 
     const overflowing = await page.evaluate(() =>

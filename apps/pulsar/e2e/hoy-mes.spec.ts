@@ -108,7 +108,12 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     // 90 this week, or the whole 405 in the first days of a month.
     const inWeek = weekOf(today).includes(monthStart);
     await lines(inWeek ? 1 : 0);
-    if (!inWeek) await expect(seen("1 h 30 min")).toHaveCount(1);
+    if (!inWeek) {
+      // Two honest places: the card's week figure and the done row's own line
+      // «1 h 30 min · 19:52 · lo dijiste tú», a mono figure since 367.
+      await expect(seen("1 h 30 min")).toHaveCount(2);
+      await expect(seen("esta semana").locator("xpath=preceding-sibling::*[1]").filter({ hasText: /^1 h 30 min$/ })).toHaveCount(1);
+    }
 
     // Never on a past day (the ended line's own guard).
     await page.goto(`/dia/${plusDays(-1)}`);

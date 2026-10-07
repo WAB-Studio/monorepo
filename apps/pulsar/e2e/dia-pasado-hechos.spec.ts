@@ -98,7 +98,7 @@ test("a past day with five daily rows (three done), a weekly row done and one pa
     expect(fonts.figures).toHaveLength(3);
     for (const family of fonts.figures) expect(family).toMatch(/mono/i);
   } finally {
-    await db`delete from goals.goals where user_id = ${personId}`;
+    await db`delete from goals.goals where id = any(${[main, other]}) and user_id = ${personId}`;
   }
 });
 
@@ -112,7 +112,7 @@ test("a goal whose rows that day are all weekly reads its name alone (RP-44)", a
     await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByText(/ese día pedía/)).toHaveCount(0);
   } finally {
-    await db`delete from goals.goals where user_id = ${personId}`;
+    await db`delete from goals.goals where id = ${goal} and user_id = ${personId}`;
   }
 });
 
@@ -156,6 +156,6 @@ test("at 390 the «este mes» groups on Hoy stand one gap apart (RP-28)", async 
     expect(Math.abs(gaps[0] - gaps[1])).toBeLessThanOrEqual(1);
     expect(gaps[0]).toBeGreaterThanOrEqual(24);
   } finally {
-    await db`delete from goals.goals where user_id = ${personId}`;
+    await db`delete from goals.goals where id = any(${ids}) and user_id = ${personId}`;
   }
 });
