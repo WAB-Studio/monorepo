@@ -335,3 +335,150 @@ test.describe("the report folds its weeks (RP-49)", () => {
     });
   });
 });
+
+// RP-58, module 392: «Esta semana: <hecho> de <planeado>.» — the month's amount
+// spread over the month's days, summed over the week's days inside the goal.
+
+function firstOfMonth(day: string, offset: number): string {
+  const date = civilDateToDate(`${day.slice(0, 7)}-01`);
+  date.setUTCMonth(date.getUTCMonth() + offset);
+  return dateToCivilDate(date);
+}
+
+function daysInMonthOf(day: string): number {
+  return new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).getUTCDate();
+}
+
+// The rule written out for the seeded week, over exact integers: every month has
+// 28 to 31 days, so scaling by their product keeps each day's share whole.
+function plannedByRule(monthAmounts: Record<string, number>, openedOn: string, horizon: string): number {
+  const scale = 28 * 29 * 30 * 31;
+  const monday = civilDateToDate(todayInZone());
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  let scaled = 0;
+  for (let i = 0; i < 7; i++) {
+    const day = dateToCivilDate(monday);
+    monday.setUTCDate(monday.getUTCDate() + 1);
+    if (day < openedOn || day >= horizon) continue;
+    const amount = monthAmounts[`${day.slice(0, 7)}-01`] ?? 0;
+    scaled += amount * (scale / daysInMonthOf(day));
+  }
+  return Math.floor(scaled / scale);
+}
+
+function minutesText(total: number): string {
+  const h = Math.floor(total / 60);
+  const min = total % 60;
+  if (h === 0) return `${min} min`;
+  if (min === 0) return `${h} h`;
+  return `${h} h ${String(min).padStart(2, "0")} min`;
+}
+
+async function seedWeek(db: postgres.Sql, person: Person, amount: number | null) {
+  const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const today = todayInZone();
+  const name = `Meta semana ${stamp}`;
+  const horizon = plusDays(90);
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${name}, ${horizon}, 'minutos', 'minutos', now() - interval '70 days')
+    returning id
+  `;
+  const months = [-1, 0, 1].map((offset) => firstOfMonth(today, offset));
+  if (amount !== null) {
+    for (const month of months) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${month}::date, ${amount})
+      `;
+    }
+  }
+  const [commitment] = await db<{ id: string }[]>`
+    insert into goals.commitments
+      (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${person.id}, ${goal.id}, ${`Sesión ${stamp}`}, 'daily', 'quantity', 30, 'minutos', now() - interval '70 days')
+    returning id
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${person.id}, ${goal.id}, ${commitment.id}, ${today}::date, 90)
+  `;
+  const openedOn = plusDays(-70);
+  return { goalId: goal.id, name, months, openedOn, horizon };
+}
+
+test.describe("the report's week says what was planned for it (RP-58)", () => {
+  for (const width of [390, 1440] as const) {
+    test(`at ${width} a goal at 12 h a month reads «Esta semana: <hecho> de <planeado>.» with both figures mono`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const seeded = await seedWeek(db, person, 720);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 900 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        const main = page.getByRole("main");
+        await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+
+        const planned = plannedByRule(
+          Object.fromEntries(seeded.months.map((month) => [month, 720])),
+          seeded.openedOn,
+          seeded.horizon,
+        );
+        expect(planned).toBeGreaterThan(0);
+        const line = main.getByText(/^Esta semana: /).locator("visible=true");
+        await expect(line).toHaveCount(1);
+        const text = ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
+        expect(text).toBe(`Esta semana: 1 h 30 min de ${minutesText(planned)}.`);
+
+        const fonts = await line.evaluate((node) => {
+          const digits = [...node.querySelectorAll("span")].filter(
+            (span) => span.children.length === 0 && /^\d+$/.test((span.textContent ?? "").trim()),
+          );
+          return {
+            line: getComputedStyle(node).fontFamily,
+            digits: digits.map((span) => getComputedStyle(span).fontFamily),
+          };
+        });
+        expect(fonts.line).not.toMatch(/mono/i);
+        // 90 min is «1 h 30 min»: two figures, and the planned one adds its own.
+        expect(fonts.digits.length).toBeGreaterThanOrEqual(3);
+        for (const family of fonts.digits) expect(family).toMatch(/mono/i);
+        await expect(main.getByText(/de 0 min/)).toHaveCount(0);
+      } finally {
+        await context.close();
+        await remove(db, person, [seeded.goalId]);
+      }
+    });
+  }
+
+  test("a goal with no amount reads the done figure alone", async ({ person, browser, baseURL, db }) => {
+    const seeded = await seedWeek(db, person, null);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 390, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      const main = page.getByRole("main");
+      await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+      const line = main.getByText(/^Esta semana: /).locator("visible=true");
+      await expect(line).toHaveCount(1);
+      const text = ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
+      expect(text).toBe("Esta semana: 1 h 30 min.");
+      await expect(main.getByText(/ de 0 min/)).toHaveCount(0);
+    } finally {
+      await context.close();
+      await remove(db, person, [seeded.goalId]);
+    }
+  });
+});
