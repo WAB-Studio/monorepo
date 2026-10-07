@@ -1,14 +1,13 @@
 {
   "plan": {
     "title": "El plan",
-    "monthDone": "{done} hechas de {amount}",
-    "monthPlanned": "{filled} planeadas de {amount}",
+    "monthDone": "<fig>{done}</fig> hechas de <fig>{amount}</fig>",
+    "monthPlanned": "<fig>{filled}</fig> planeadas de <fig>{amount}</fig>",
     "finish": "A este ritmo terminas el {date}, {days, plural, one {# día} other {# días}} antes de tu final.",
     "finishOnEnd": "A este ritmo terminas el {date}, el día de tu final.",
     "rhythm": "Ritmo {hours} al mes",
     "change": "Cambiar",
     "currentMonth": "{month} · en curso",
-    "reached": "{done} de {amount}",
     "startsHere": "Empieza aquí con {hours} y sigue en {month}.",
     "comesFrom": "Viene de {month}.",
     "part": "{part} de {total}",
@@ -46,7 +45,7 @@
     "raise": "Subir el ritmo",
     "raiseHint": "Con <fig>{hours}</fig> al mes llegas a tiempo.",
     "moveEnd": "Mover el final",
-    "moveEndHint": "Al {date}, donde termina el plan.",
+    "moveEndHint": "Al <fig>{date}</fig>, donde termina el plan.",
     "removeTasks": "O quita tareas del plan: cada una que sale adelanta el final.",
     "afterEnd": "después de tu final",
     "summary": "{count, plural, one {# tarea} other {# tareas}} · {hours}"
@@ -101,7 +100,7 @@
   },
   "moverFinal": {
     "title": "Mover el final",
-    "body": "Del {from} al {to}, donde termina el plan. Las tareas que pasaban de tu final vuelven a caber.",
+    "body": "Del <fig>{from}</fig> al <fig>{to}</fig>, donde termina el plan. Las tareas que pasaban de tu final vuelven a caber.",
     "move": "Moverlo",
     "cancel": "Cancelar",
     "pending": "Moviendo…",

@@ -25,7 +25,7 @@ export function Sheet({
   // accessible name: `title` still owns that, as the one real `<h2>`.
   label?: string;
   title: string;
-  description?: string;
+  description?: ReactNode;
   children?: ReactNode;
 }) {
   // Radix points every dialog at a description; with none rendered the
