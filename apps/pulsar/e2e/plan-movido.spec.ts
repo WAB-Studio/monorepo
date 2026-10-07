@@ -165,7 +165,7 @@ for (const [width, kind] of [[390, "days"], [390, "weeks"], [1440, "days"], [144
     else expect(moved!.movedDays, "the long seed moves a week or more").toBeGreaterThanOrEqual(7);
     expect(still, "the met seed does not move").toBeNull();
 
-    const body = (notice: NonNullable<typeof days>, done: number, tail: string) => {
+    const body = (notice: NonNullable<typeof moved>, done: number, tail: string) => {
       const closedName = MONTHS[Number(notice.closedMonth.slice(5, 7)) - 1];
       const nextName = MONTHS[Number(notice.closedMonth.slice(5, 7)) % 12];
       const end = civilDateToDate(notice.end);
