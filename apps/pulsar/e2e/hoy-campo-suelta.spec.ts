@@ -22,9 +22,17 @@ test("at 390 the suelta field of a long goal shows its whole placeholder (RP-19)
     const page = await context.newPage();
     await page.goto("/");
     const field = page.getByLabel(day.newOneOff.labelForGoal.replace("{goal}", NAME));
-    const fits = await field.evaluate((input) => input.scrollWidth <= input.clientWidth);
-    expect(fits).toBe(true);
-    await expect(field).toHaveAttribute("placeholder", day.newOneOff.placeholderForGoalShort.replace("{goal}", NAME));
+    const placeholder = day.newOneOff.placeholderForGoalShort.replace("{goal}", NAME);
+    await expect(field).toHaveAttribute("placeholder", placeholder);
+    // Chrome never overflows a placeholder, so measure its text in the input's own font.
+    const { text, room } = await field.evaluate((input: HTMLInputElement, shown) => {
+      const style = getComputedStyle(input);
+      const context = document.createElement("canvas").getContext("2d")!;
+      context.font = style.font;
+      const inner = input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      return { text: context.measureText(shown).width, room: inner };
+    }, placeholder);
+    expect(text).toBeLessThanOrEqual(room);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${row.id}`;
