@@ -29,19 +29,11 @@ export function useTimeWords(): TimeWords {
 // Each figure in mono, each word after it in the caller's quiet class. The
 // spaces are flex-collapsed where the parent is a flex box and keep the
 // text reading «12 h 30 min» wherever it is copied or read aloud.
-export function TimeParts({
-  time,
-  unitClass,
-  segmented = false,
-}: {
-  time: TimeFigure;
-  unitClass: string;
-  segmented?: boolean;
-}) {
+export function TimeParts({ time, unitClass }: { time: TimeFigure; unitClass: string }) {
   return time.tokens.map((token, index) => (
     <Fragment key={index}>
       {index > 0 ? " " : null}
-      {token.figure ? (segmented ? <span>{token.text}</span> : token.text) : <span className={unitClass}>{token.text}</span>}
+      {token.figure ? token.text : <span className={unitClass}>{token.text}</span>}
     </Fragment>
   ));
 }
@@ -50,18 +42,14 @@ export function TimeParts({
 // log's substance, so they are set in mono and their unit sits beside them in
 // quiet. `measure` is the 26px figure; `meta` the 12px one inside a row. A
 // time (RP-35) carries its own «h» and «min», so its unit word is not drawn.
-// `segmented` wraps each number of a time in its own span, so a line of prose
-// holding two figures keeps each digit run addressable.
 export function Figure({
   value,
   unit,
   variant = "measure",
-  segmented = false,
 }: {
   value: ReactNode;
   unit?: string;
   variant?: "measure" | "meta";
-  segmented?: boolean;
 }) {
   const words = useTimeWords();
   const size = variant === "meta" ? styles.meta : styles.measure;
@@ -69,7 +57,7 @@ export function Figure({
   const wordUnit = unit && !isTimeFigure(formatted) ? unit : null;
   return (
     <span className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""}`}>
-      {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} segmented={segmented} /> : formatted}
+      {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted}
       {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
       {wordUnit ? <span className={styles.space}>{"\u00a0"}</span> : null}
       {wordUnit ? (

@@ -439,17 +439,15 @@ test.describe("the report's week says what was planned for it (RP-58)", () => {
         expect(text).toBe(`Esta semana: 1 h 30 min de ${minutesText(planned)}.`);
 
         const fonts = await line.evaluate((node) => {
-          const digits = [...node.querySelectorAll("span")].filter(
-            (span) => span.children.length === 0 && /^\d+$/.test((span.textContent ?? "").trim()),
-          );
+          const digits = [...node.querySelectorAll("span")].filter((span) => /\d/.test(span.textContent ?? ""));
           return {
             line: getComputedStyle(node).fontFamily,
             digits: digits.map((span) => getComputedStyle(span).fontFamily),
           };
         });
         expect(fonts.line).not.toMatch(/mono/i);
-        // 90 min is «1 h 30 min»: two figures, and the planned one adds its own.
-        expect(fonts.digits.length).toBeGreaterThanOrEqual(3);
+        // The done figure and the planned one, each a span of its own.
+        expect(fonts.digits.length).toBeGreaterThanOrEqual(2);
         for (const family of fonts.digits) expect(family).toMatch(/mono/i);
         await expect(main.getByText(/de 0 min/)).toHaveCount(0);
       } finally {

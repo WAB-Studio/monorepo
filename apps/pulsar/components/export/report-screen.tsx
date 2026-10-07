@@ -407,8 +407,8 @@ function GoalPart({
                         : t.rich("thisWeek", {
                             done: week.total,
                             planned: weekPlanned,
-                            fig: () => <Figure variant="meta" segmented value={week.total} unit={unit as string} />,
-                            plan: () => <Figure variant="meta" segmented value={weekPlanned} unit={unit as string} />,
+                            fig: () => <Figure variant="meta" value={week.total} unit={unit as string} />,
+                            plan: () => <Figure variant="meta" value={weekPlanned} unit={unit as string} />,
                           })}
                     </Text>
                   ) : null}
