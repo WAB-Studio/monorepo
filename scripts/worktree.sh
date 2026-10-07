@@ -79,6 +79,8 @@ git worktree add -b "$BRANCH" "$DIR" "$BASE"
 cp -al node_modules "$DIR/node_modules"
 if [[ $COPIES_ENV == yes ]]; then
   cp "apps/$APP_NAME/.env.local" "$APP/.env.local"
+  # The app reads one origin for its screen, MCP metadata, issuer and sign-in link.
+  "$DIR/scripts/lane-env.sh" "$APP/.env.local" "$PORT"
 fi
 # Gitignored and per checkout: the CLI's `status` fails without it, and the stack
 # in Docker was started with this file's keys.
