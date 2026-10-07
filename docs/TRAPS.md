@@ -2613,6 +2613,9 @@ A fresh identity was not the cause.
   build, which has no badge, so it stayed green.
 - **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/pulsar/next.config.ts`. Never set
   `devIndicators: false`: errors would stay, but the badge is how a dev sees a real issue count.
+- **Also on the phone.** Bottom-right is the Metas tab's corner at 360: a spec that taps it (`varias-metas.spec.ts:16`)
+  reads «`<nextjs-portal>` subtree intercepts pointer events» under `next dev`, with no error behind the badge.
+  Measured 2026-10-06. Run the e2e against `npm run build` + `next start`, as `playwright.config.ts` says; never click `force`.
 
 ## The `pulsar-e2e` queue holds one waiting run, and a newer one cancels it
 

@@ -328,3 +328,23 @@ test("phaseCuts: a phase starting on the day or later is untouched, and so is th
   assert.deepEqual(phaseDrops(raw, OPENS), []);
   assert.deepEqual(withCutPhases(raw, OPENS), raw);
 });
+
+test("phaseDrops: a phase ending on the day the goal opens is kept, one ending the day before is dropped, and drops are exactly the phases withCutPhases removes", () => {
+  const raw = draft(
+    goal({
+      phases: [
+        phaseOf("Ayer", "2026-09-01", "2026-10-05"),
+        phaseOf("Hoy", "2026-09-20", OPENS),
+        phaseOf("Luego", "2026-10-07", "2026-12-31"),
+      ],
+    }),
+  );
+  assert.deepEqual(phaseDrops(raw, OPENS), [{ path: "goals.0.phases.0", aim: "Ayer" }]);
+  const kept = withCutPhases(raw, OPENS).goals[0].phases.map((p) => p.aim);
+  assert.deepEqual(kept, ["Hoy", "Luego"]);
+  const dropped = new Set(phaseDrops(raw, OPENS).map((d) => d.aim));
+  assert.deepEqual(
+    raw.goals[0].phases.map((p) => p.aim).filter((aim) => !kept.includes(aim)),
+    [...dropped],
+  );
+});

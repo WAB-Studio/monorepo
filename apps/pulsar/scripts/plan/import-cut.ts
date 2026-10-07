@@ -187,3 +187,16 @@ test("confirmImport: a draft with no early phase stores as written and the cut a
   const cut = await confirmed(draftOf(goalText("RP-37 cut: mismo conteo", [`- ${shiftDay(TODAY, -5)} a ${end} · Viva`])));
   assert.equal(cut.statements, plain.statements);
 });
+
+test("confirmImport: phases wholly before the goal opens that overlap each other are cut away before the overlap is judged", async () => {
+  const end = shiftDay(TODAY, 60);
+  const draft = draftOf(goalText("RP-37 cut: pasadas que se cruzan", [`- ${shiftDay(TODAY, 1)} a ${end} · Viva`]));
+  const [live] = draft.goals[0].phases;
+  draft.goals[0].phases = [
+    { aim: "Pasada A", startsOn: shiftDay(TODAY, -40), endsOn: shiftDay(TODAY, -10) },
+    { aim: "Pasada B", startsOn: shiftDay(TODAY, -30), endsOn: shiftDay(TODAY, -5) },
+    live,
+  ];
+  const { goalId } = await confirmed(draft);
+  assert.deepEqual((await phasesOf(goalId)).map((p) => ({ ...p })), [{ aim: "Viva", starts_on: shiftDay(TODAY, 1), ends_on: end }]);
+});
