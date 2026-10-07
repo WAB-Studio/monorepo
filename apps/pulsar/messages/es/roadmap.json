@@ -101,7 +101,8 @@
     "build": "Armar el plan"
   },
   "moverFinal": {
-    "title": "Mover el final del {from} al {to}",
+    "title": "Mover el final",
+    "body": "Del {from} al {to}, donde termina el plan. Las tareas que pasaban de tu final vuelven a caber.",
     "move": "Moverlo",
     "cancel": "Cancelar",
     "pending": "Moviendo…",
