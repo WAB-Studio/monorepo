@@ -243,16 +243,18 @@ test("doneIn: a parent adds nothing of its own beside its sub-tasks", () => {
   assert.equal(doneIn(input(tasks), OCT), 70);
 });
 
-test("planMoved: closedDone is doneIn of the closed month", () => {
-  const x = input(septemberHalf());
-  const notice = planMoved({ ...x, seen: null });
-  assert.notEqual(notice, null);
-  assert.equal(notice?.closedDone, doneIn(x, notice?.closedMonth ?? ""));
+test("doneIn: the last day of the month counts, the first of the next does not", () => {
+  const tasks = [
+    task("last", { estimate: 10, doneOn: "2026-10-31" }),
+    task("next", { estimate: 7, doneOn: "2026-11-01" }),
+  ];
+  assert.equal(doneIn(input(tasks), OCT), 10);
+  assert.equal(doneIn(input(tasks), NOV), 7);
 });
 
-test("planMoved: closedDone counts a done sub-task under an undone parent", () => {
+test("planMoved: closedDone counts a done sub-task under an undone parent, never the parent", () => {
   const tasks = [
-    task("p"),
+    task("p", { estimate: 50, doneOn: "2026-09-12" }),
     task("s", { parentId: "p", estimate: 6, doneOn: "2026-09-10" }),
     task("t", { parentId: "p", estimate: 6 }),
     task("c", { estimate: 12 }),
