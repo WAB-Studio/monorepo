@@ -986,6 +986,11 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   `FaseFechas`, `FaseFechasFuera`, `FaseFechasSolapa`, `ImportarFaseRecortada`, `EntrarFormulario`, `EntrarEnviado`,
   `PermisoSinSesion`, `PermisoConSesion`, `SueltaHoja`, `SueltaHojaHecha`, `ReportePlegado`, `ReporteImpresoMeses`,
   `PalabrasDelPlan`. Canvas version 69. Where a board and the lines above disagree, the lines above win.
+- **`ReportePlegado`'s «Esta semana: [3 h] de [3 h].» keeps its second figure** (decided by the user 2026-10-06): it is
+  the month's planned amount prorated by day over the week (RP-58, module 392). Until 392 lands the line reads the done
+  figure alone. Options refused: owed over the remaining weeks (moves daily), dated tasks' estimates (empty for most goals).
+- **The report's split week is one row** (2026-10-06, orchestrator, module 379): a week across two months reads its
+  whole total once under the fold, no longer two halves.
 - **`MetaPlanHechas` settles where «hechas» reaches** (2026-10-06, read by the orchestrator from the approved board):
   the goal's plan row reads «5 h hechas de 12 h en octubre»; the block «lo medido» keeps the measure («6 h 40 min de
   estudio en octubre», RP-28). Hoy's month line and «Mes» (RP-43) keep the measure this round. No code retired.
