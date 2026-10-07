@@ -258,6 +258,9 @@ for (const width of [390, 1440]) {
       try {
         await nameButton(page, name).click();
         const sheet = page.getByRole("dialog");
+        await expect(sheet).toBeVisible();
+        // The sheet slides in; a box read mid-slide differs by the frame's travel.
+        await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)));
         const hours = await sheet.getByLabel("Cuánto le calculas").boundingBox();
         const minutes = await sheet.getByRole("spinbutton", { name: "min" }).boundingBox();
         expect(Math.abs(hours!.y - minutes!.y)).toBeLessThanOrEqual(1);
