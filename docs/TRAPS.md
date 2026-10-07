@@ -2866,3 +2866,11 @@ respondió 404 en `/metas/<id>/fases/nueva` y `/metas/<id>/compromisos/nuevo` pa
 
 - Al cambiar la rama de un carril: `fuser -k <puerto>/tcp`, `rm -rf apps/<app>/.next`, y arrancar el servidor de nuevo.
 - Un 404 en una ruta que la rama sí tiene es primero esto, no un defecto.
+
+## Una mutación verde bajo `next dev` puede ser una mutación que el servidor nunca leyó
+
+`next dev` no recargó el archivo mutado en dos carriles el 2026-10-07 (399 en `goal-screen.tsx`, 407 en
+`lib/queries/one-offs.ts`): la primera ronda de mutaciones salió toda verde, por la razón equivocada.
+
+- Reinicia el servidor tras aplicar cada mutación: `fuser -k <puerto>/tcp` y arrancarlo de nuevo.
+- Un mutante que sobrevive bajo `next dev` no cuenta hasta que sobrevive con el servidor recién arrancado.
