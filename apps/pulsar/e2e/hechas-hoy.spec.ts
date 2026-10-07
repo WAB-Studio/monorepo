@@ -31,14 +31,17 @@ async function factCount(db: postgres.Sql, oneOffId: string): Promise<number> {
 }
 
 test("a completed one-off moves to «hechas hoy» with a filled mark, survives a reload, and a second tap puts it back and deletes its fact (RP-19, RP-05)", async ({
-  page,
+  browser,
   db,
-  personId,
+  person,
 }) => {
   const name = `Suelta hecha ${Date.now()}`;
-  const oneOffId = await seedOneOff(db, personId, name);
+  const oneOffId = await seedOneOff(db, person.id, name);
+  // «Hechas hoy» absent is asserted over the whole page, so the person is the worker's own.
+  const context = await browser.newContext({ storageState: person.sessionFile });
 
   try {
+    const page = await context.newPage();
     await page.goto("/");
     await expect(page.getByText("Hechas hoy")).toHaveCount(0);
     await markOf(page, name).click();
@@ -58,6 +61,7 @@ test("a completed one-off moves to «hechas hoy» with a filled mark, survives a
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
     await expect.poll(() => factCount(db, oneOffId)).toBe(0);
   } finally {
+    await context.close();
     await db`delete from goals.one_offs where id = ${oneOffId}`;
   }
 });
