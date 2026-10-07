@@ -255,7 +255,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         const share = row.past ? planShare(planInput, row.month) : null;
         return {
           ...row,
-          carried: share ? Math.floor((share.carried * 100) / share.planned) : null,
+          carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
         };
       }),
       weeks: figures.weeks,

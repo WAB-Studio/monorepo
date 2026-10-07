@@ -156,7 +156,7 @@ export function PlanNotices({ notices }: { notices: PlanNoticeItem[] }) {
                       : t.rich("roadmap.hoyMovido.severalWeeks", { weeks, date, ...fig })}
                   </Text>
                 </Flex>
-                <TextLink href={`/metas/${item.goalId}/plan`}>{t("roadmap.hoyMovido.seePlan")}</TextLink>
+                <TextLink nowrap href={`/metas/${item.goalId}/plan`}>{t("roadmap.hoyMovido.seePlan")}</TextLink>
               </Flex>
             </Flex>
           );

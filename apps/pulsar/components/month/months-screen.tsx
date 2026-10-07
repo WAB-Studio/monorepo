@@ -85,7 +85,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
     );
     const state = row.current
       ? t("month.months.current")
-      : share
+      : share && share.carried > 0
         ? t("month.months.carriedTo", {
             percent: Math.floor((share.carried * 100) / share.planned),
             month: monthLabel(nextMonth(row.month)),

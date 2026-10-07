@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { moveHorizon } from "@/app/actions/plan";
-import { Button, Sheet, SheetActions, Text } from "@/components/ui";
+import { Button, Notice, Sheet, SheetActions } from "@/components/ui";
 import { Figure } from "@/components/ui/figure";
 import { civilDateLabel, todayInZone } from "@/lib/zone";
 
@@ -75,9 +75,7 @@ export function MoveEndSheet({
       })}
     >
       {failed ? (
-        <Text as="p" variant="sentence" role="alert">
-          {t("roadmap.moverFinal.failed")}
-        </Text>
+        <Notice>{t("roadmap.moverFinal.failed")}</Notice>
       ) : null}
       <SheetActions>
         <Button block onClick={move} disabled={pending}>

@@ -30,6 +30,8 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
   };
   const unit = goal.measureUnit;
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
+  // A section header's figure stays with its unit: a non-breaking space in plain text.
+  const glue = (text: string) => text.replace(/ /g, "\u00a0");
   const thisYear = String(new Date().getFullYear());
   const { roadmap } = goal;
   const lastMonth = monthOf(roadmap.lastDay);
@@ -174,7 +176,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
                     })
                   : monthName(rest[0].month, thisYear)}
               </span>
-              <span>{t("roadmap.plan.summary", { count: restItems.size, hours: say(restHours) })}</span>
+              <span>{t("roadmap.plan.summary", { count: restItems.size, hours: glue(say(restHours)) })}</span>
             </Flex>
           }
         >
@@ -192,7 +194,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
           label={
             <Flex justify="between" gap="3">
               <span>{t("roadmap.pasaElFinal.afterEnd")}</span>
-              <span>{t("roadmap.pasaElFinal.summary", { count: pastItems.length, hours: say(pastHours) })}</span>
+              <span>{t("roadmap.pasaElFinal.summary", { count: pastItems.length, hours: glue(say(pastHours)) })}</span>
             </Flex>
           }
         >
