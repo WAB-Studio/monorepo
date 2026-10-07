@@ -24,8 +24,7 @@
     "confirm": "Ponerle ese día",
     "keep": "Dejarla sin día",
     "move": "Moverla",
-    "stay": "Dejarla como está",
-    "delete": "Borrarla"
+    "stay": "Dejarla como está"
   },
   "note": {
     "open": "Escribir una nota en «{name}»",

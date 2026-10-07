@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
+import { TaskSheet } from "@/components/plan/task-sheet";
 import { IconButton, Mark, Row, Text } from "@/components/ui";
 
-import { OneOffDeleteSheet } from "./one-off-delete-sheet";
 import { type MessageKey } from "@/i18n/translator";
 
 export type OneOffRowProps = {
@@ -20,6 +20,8 @@ export type OneOffRowProps = {
   // The note it holds, never drawn here: only its button is (`HoyNota`).
   note: string | null;
   noteEyebrow: string;
+  // Set for a goal's own dated one-off: its sheet then names the goal.
+  goalName?: string;
 };
 
 /**
@@ -28,15 +30,15 @@ export type OneOffRowProps = {
  * distinguish once it is on the list, since `completeOneOff` is what takes
  * it off (`app/actions/one-offs.ts`), never a second state drawn here.
  *
- * Two tap targets, two acts (RP-22): the mark still finishes it
- * (`onLeadingClick`), the name opens the sheet that deletes it (`onClick`) —
+ * Two tap targets, two acts (RP-57): the mark still finishes it
+ * (`onLeadingClick`), the name opens its sheet (`onClick`) —
  * `Row`'s own split, so neither tap reaches the other's act by mistake.
  */
-export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow }: OneOffRowProps) {
+export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow, goalName }: OneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
 
   function handleComplete() {
@@ -72,7 +74,7 @@ export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow }: On
         meta={carriedFrom}
         metaVariant="sentence"
         onLeadingClick={handleComplete}
-        onClick={() => setDeleteOpen(true)}
+        onClick={() => setSheetOpen(true)}
         end={noteButton}
         disabled={pending}
       />
@@ -89,11 +91,20 @@ export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow }: On
         note={note}
         eyebrow={noteEyebrow}
       />
-      <OneOffDeleteSheet
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+      <TaskSheet
+        mode="edit"
+        goalName={goalName}
         oneOffId={oneOffId}
         name={name}
+        unit={null}
+        fixedMonth={null}
+        planMonth={null}
+        months={[]}
+        done={false}
+        kind="loose"
+        canDelete
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
       />
     </>
   );

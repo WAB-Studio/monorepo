@@ -20,15 +20,14 @@ export type ScheduleSheetProps = {
   onOpenChange: (open: boolean) => void;
   oneOffId: string;
   name: string;
-  onDelete: () => void;
   // Set for a one-off that already has a day: the sheet moves it instead of
   // giving it one (`SueltaMover.dc.html`).
   current?: { day: string; label: string };
 };
 
 /**
- * `SueltaDarDia.dc.html` (RP-21): «para cuándo» without «sin día», the way
- * to give the one-off that day, and the way to the delete sheet. With
+ * `SueltaDarDia.dc.html` (RP-21): «para cuándo» without «sin día» and the way
+ * to give the one-off that day; deleting lives in its own sheet. With
  * `current` it is `SueltaMover.dc.html`: the day it has now, «Moverla».
  */
 export function ScheduleSheet({
@@ -36,7 +35,6 @@ export function ScheduleSheet({
   onOpenChange,
   oneOffId,
   name,
-  onDelete,
   current,
 }: ScheduleSheetProps) {
   const t = useTranslations();
@@ -103,11 +101,6 @@ export function ScheduleSheet({
           {t(current ? "oneOffs.schedule.stay" : "oneOffs.schedule.keep")}
         </Button>
       </SheetActions>
-      <Button tap={44} variant="ghost" onClick={onDelete} disabled={pending}>
-        <Text variant="sentence" tone="muted">
-          {t("oneOffs.schedule.delete")}
-        </Text>
-      </Button>
     </Sheet>
   );
 }

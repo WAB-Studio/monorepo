@@ -80,6 +80,7 @@ test("given «hoy» it leaves the list and draws on Hoy (RP-21)", async ({ page,
   try {
     await page.goto("/sueltas");
     await page.getByRole("button", { name, exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     await page.getByRole("radio", { name: "hoy" }).click();
     await page.getByRole("button", { name: "Ponerle ese día" }).click();
 
@@ -105,6 +106,7 @@ test("given «mañana» it leaves the list and does not draw on Hoy (RP-21)", as
   try {
     await page.goto("/sueltas");
     await page.getByRole("button", { name, exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     await page.getByRole("radio", { name: "mañana" }).click();
     await page.getByRole("button", { name: "Ponerle ese día" }).click();
 
@@ -149,7 +151,7 @@ test("deleted from the sheet its row is gone from the database, and the last one
     const page = await context.newPage();
     await page.goto("/sueltas");
     await page.getByRole("button", { name, exact: true }).click();
-    await page.getByRole("button", { name: "Borrarla" }).click();
+    await page.getByRole("button", { name: "Borrar la tarea" }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toContainText("¿Borrarla?");
     await sheet.getByRole("button", { name: "Borrarla" }).click();
