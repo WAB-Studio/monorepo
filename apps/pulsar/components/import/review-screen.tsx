@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
-import { draftRefusals, strayEstimates, withoutStrayEstimates, type ImportDraft } from "@/lib/import/draft";
+import { draftRefusals, phaseCuts, phaseDrops, strayEstimates, withoutStrayEstimates, type ImportDraft } from "@/lib/import/draft";
 import { clearDraft, readDraft, saveReview } from "@/lib/import/draft-store";
 import { repeatedGoals } from "@/lib/import/repeated";
 import { dayBefore } from "@/lib/day/weeks";
@@ -172,6 +172,9 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     const year = (date: string) => (crossesYear ? ` ${date.slice(0, 4)}` : "");
     return `${shortMonth(startsOn)}${year(startsOn)}–${shortMonth(endsOn)}${year(endsOn)}`;
   };
+  // The board's form for a day inside the year: no year.
+  const dayAndMonth = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", timeZone: "UTC" });
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const figure = (value: number | null, unit: string | null): ReactNode =>
     unit === null || value === null ? null : <Figure value={value} unit={unit} variant="meta" />;
 
@@ -203,6 +206,9 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   }
 
   const goalsKept = sent.goals.length;
+  const cuts = phaseCuts(work, today);
+  const drops = new Set(phaseDrops(work, today).map((drop) => drop.path));
+  const droppedAims = phaseDrops(work, today);
 
   async function confirm() {
     if (pending || goalsKept === 0) return;
@@ -349,7 +355,17 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         const ok = (path: string) => !refused.has(path);
         const on = (path: string) => !unmarked.has(path);
         const goalOn = on(at);
-        const phases = goal.phases.map((phase, p) => ({ phase, path: `${at}.phases.${p}` })).filter((entry) => ok(entry.path));
+        const phases = goal.phases
+          .map((phase, p) => ({ phase, path: `${at}.phases.${p}` }))
+          .filter((entry) => ok(entry.path) && !drops.has(entry.path));
+        const lastDay = dayBefore(goal.horizon);
+        const cutNotes = cuts
+          .filter((cut) => cut.path.startsWith(`${at}.phases.`) && ok(cut.path))
+          .map((cut) => t.rich("import.review.cutPhase", { aim: cut.aim, date: dayAndMonth(cut.from), ...fig }));
+        const dropNotes = droppedAims
+          .filter((drop) => drop.path.startsWith(`${at}.phases.`) && ok(drop.path))
+          .map((drop) => t("import.review.droppedPhase", { aim: drop.aim }));
+        const notes = [...cutNotes, ...dropNotes];
         const months = goal.months.map((entry, m) => ({ entry, path: `${at}.months.${m}` })).filter((item) => ok(item.path));
         const commitments = goal.commitments.map((commitment, c) => ({ commitment, path: `${at}.commitments.${c}` })).filter((item) => ok(item.path));
         const tasks = goal.tasks.map((task, i) => ({ task, path: `${at}.tasks.${i}` })).filter((item) => ok(item.path));
@@ -369,6 +385,13 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     </Panel>
                   </div>
                 ) : null}
+                <Text as="p" variant="sentence" tone="muted">
+                  {t.rich("import.review.goalSpan", {
+                    from: dayAndMonth(today),
+                    to: dayLabel(lastDay),
+                    ...fig,
+                  })}
+                </Text>
                 <CheckRow
                   checked={goalOn}
                   onCheckedChange={(value) => toggle(at, value)}
@@ -400,6 +423,19 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     ))}
                   </div>
                 </Section>
+              ) : null}
+
+              {notes.length > 0 ? (
+                <Panel as="div" bordered>
+                  <Text as="p" variant="body">
+                    {notes.map((note, n) => (
+                      <Fragment key={n}>
+                        {n > 0 ? " " : null}
+                        {note}
+                      </Fragment>
+                    ))}
+                  </Text>
+                </Panel>
               ) : null}
 
               {months.length > 0 ? (

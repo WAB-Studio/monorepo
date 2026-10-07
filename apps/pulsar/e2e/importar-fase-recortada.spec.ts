@@ -1,0 +1,129 @@
+import type { Browser, Page } from "@playwright/test";
+
+import messages from "../messages/es/import.json";
+import { test, expect } from "./fixtures";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+
+// The review says what the import does to a phase that starts before the goal
+// opens (cut to today) or ends before it (not created), and its confirm bar
+// stands one card wide at 1440 (RP-37). The board is `ImportarFaseRecortada`.
+
+const plus = (days: number) => {
+  const date = civilDateToDate(todayInZone());
+  date.setUTCDate(date.getUTCDate() + days);
+  return dateToCivilDate(date);
+};
+const dayAndMonth = (date: string) =>
+  new Intl.DateTimeFormat("es", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(civilDateToDate(date));
+
+const CUT = "Diagnóstico";
+const DROPPED = "Repaso de verano";
+
+const plan = () =>
+  [
+    "pulsar · plantilla 1",
+    "",
+    "# Fases recortadas",
+    `horizonte: ${plus(200)}`,
+    "medida: horas de estudio · minutos",
+    "",
+    "## Fases",
+    `- ${plus(-90)} a ${plus(-60)} · ${DROPPED}`,
+    `- ${plus(-10)} a ${plus(20)} · ${CUT}`,
+    "",
+    "## Meses",
+    `- ${todayInZone().slice(0, 7)} · 12 h`,
+  ].join("\n");
+
+type Fixtures = {
+  person: { id: string; sessionFile: string };
+  browser: Browser;
+  baseURL: string | undefined;
+};
+async function review(
+  { person, browser, baseURL }: Fixtures,
+  run: (page: Page) => Promise<void>,
+  width = 1280,
+) {
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/metas/importar");
+    await page.getByLabel(messages.textLabel).fill(plan());
+    await page.getByRole("button", { name: "Leer el plan" }).click();
+    await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+    await expect(
+      page.getByRole("heading", { name: messages.review.title }),
+    ).toBeVisible();
+    await run(page);
+  } finally {
+    await context.close();
+  }
+}
+
+test.describe("the review says the cut (RP-37)", () => {
+  test("a phase starting before today is named with week 1 and today; one ending before it is not created", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    await review({ person, browser, baseURL }, async (page) => {
+      const note = page.locator("p").filter({ hasText: "La fase «" });
+      await expect(note).toHaveCount(1);
+      const today = dayAndMonth(todayInZone());
+      await expect(note).toContainText(
+        `La fase «${CUT}» empieza en la semana 1, el ${today}`,
+      );
+      await expect(note).toContainText(
+        `La fase «${DROPPED}» termina antes de abrirla y no se crea.`,
+      );
+      // The dropped phase is no row; the cut one is.
+      await expect(
+        page.getByRole("checkbox", { name: new RegExp(DROPPED) }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("checkbox", { name: new RegExp(CUT) }),
+      ).toBeVisible();
+      // The line comes before the confirm.
+      const noteBox = (await note.boundingBox())!;
+      const confirm = (await page
+        .getByRole("button", { name: "Crear 1 meta" })
+        .boundingBox())!;
+      expect(noteBox.y).toBeLessThan(confirm.y);
+      // The span line opens on today.
+      await expect(
+        page.locator("p").filter({ hasText: `Desde el ${today} hasta el` }),
+      ).toBeVisible();
+    });
+  });
+
+  test("at 1440 with one goal the card and the confirm bar stand one width", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    await review(
+      { person, browser, baseURL },
+      async (page) => {
+        const card = (await page
+          .getByRole("region", { name: "Fases recortadas" })
+          .boundingBox())!;
+        const bar = await page
+          .getByRole("button", { name: "Crear 1 meta" })
+          .evaluate(
+            (button) => button.parentElement!.getBoundingClientRect().width,
+          );
+        expect(Math.abs(card.width - bar)).toBeLessThanOrEqual(1);
+      },
+      1440,
+    );
+  });
+});
