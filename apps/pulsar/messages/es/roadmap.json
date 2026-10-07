@@ -1,7 +1,7 @@
 {
   "plan": {
     "title": "El plan",
-    "monthDone": "<fig>{done}</fig> hechas de <fig>{amount}</fig>",
+    "monthDone": "<fig>{done}</fig> de <fig>{amount}</fig> en tareas hechas",
     "monthPlanned": "<fig>{filled}</fig> planeadas de <fig>{amount}</fig>",
     "finish": "A este ritmo terminas el {date}, {days, plural, one {# día} other {# días}} antes de tu final.",
     "finishOnEnd": "A este ritmo terminas el {date}, el día de tu final.",
@@ -94,7 +94,7 @@
   },
   "meta": {
     "planLabel": "el plan",
-    "rhythmLineDone": "Ritmo <fig>{amount}</fig> al mes · <fig>{done}</fig> hechas de <fig>{planned}</fig> en {month}",
+    "rhythmLineDone": "Ritmo <fig>{amount}</fig> al mes · en {month}, <fig>{done}</fig> de <fig>{planned}</fig> en tareas hechas",
     "finish": "A este ritmo terminas el {date}",
     "build": "Armar el plan"
   },

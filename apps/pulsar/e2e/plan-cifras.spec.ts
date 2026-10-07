@@ -57,7 +57,9 @@ for (const width of [390, 1440]) {
         await page.goto(`/metas/${goalId}/plan`);
         const current = section(page, say(roadmap.plan.currentMonth, { month: name(m0) }));
         await expect(current.getByText(say(roadmap.plan.monthDone, { done: "5 h", amount: "12 h" }), { exact: true })).toBeVisible();
-        await expect(current.getByText(/12 h hechas/)).toHaveCount(0);
+        // The reached total (12 h) is never the done figure, in the new words or the old.
+        await expect(page.getByText(say(roadmap.plan.monthDone, { done: "12 h", amount: "12 h" }), { exact: true })).toHaveCount(0);
+        await expect(page.getByText(/12 h hechas/)).toHaveCount(0);
         // Figures in DM Mono, the words between them in Archivo.
         const line = current.getByText(say(roadmap.plan.monthDone, { done: "5 h", amount: "12 h" }), { exact: true });
         const family = (locator: import("@playwright/test").Locator) => locator.evaluate((el) => getComputedStyle(el).fontFamily);
