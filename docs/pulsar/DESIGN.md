@@ -1014,3 +1014,10 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   «N semanas · hasta el …». An archived goal whose end is still ahead keeps its weeks line.
 - **What is in the import box when the screen answers is what is read.** Text typed before the page settles is kept;
   the stored draft fills the box only when it is empty. The box never changes under the person's hands.
+- **Decided by the user 2026-10-06, after the product critic of train 4** (questions A–D and W4-Q2):
+  - A. «hechas» on the plan is labelled as the done tasks it counts; Hoy, Semana and the goal's measure keep their own
+    figures. The plan's figure never adds commitments' facts.
+  - B. A suelta is a task with no goal. A goal's task with no day stays in its goal's plan, never on `/sueltas`.
+  - C. «Armar el plan» keeps every month that already has an amount and spreads only the rest.
+  - D. A closed month that did more than planned stays as it is; nothing is split into the next month.
+  - W4-Q2. An imported task with sub-tasks and its own amount is left out, and the create bar says what stays out (RP-37).
