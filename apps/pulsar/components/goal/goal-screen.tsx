@@ -309,14 +309,15 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               variant="measure"
             />
           ) : null}
-          {goal.measureUnit ? (
-            <Text as="p" variant="sentence" tone="muted">
-              {t.rich("goal.detail.measureSince", {
-                date: openedOn.slice(0, 4) === today.slice(0, 4) ? civilDateLabel(openedOn) : `${civilDateLabel(openedOn)} ${openedOn.slice(0, 4)}`,
-                fig: (chunks) => <Figure variant="meta" value={chunks} />,
-              })}
-            </Text>
-          ) : null}
+          <Text as="p" variant="sentence" tone="muted">
+            {t.rich("goal.detail.measureSince", {
+              date:
+                openedOn.slice(0, 4) === today.slice(0, 4)
+                  ? civilDateLabel(openedOn)
+                  : t("goal.detail.measureSinceYear", { date: civilDateLabel(openedOn), year: openedOn.slice(0, 4) }),
+              fig: (chunks) => <Figure variant="meta" value={chunks} />,
+            })}
+          </Text>
 
           {monthBlock}
 

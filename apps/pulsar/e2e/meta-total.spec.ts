@@ -102,11 +102,9 @@ for (const [width, height] of WIDTHS) {
       // The date is mono, the rest of the sentence is not.
       const parts = await lineParts(line);
       expect(parts.family).not.toMatch(/mono/i);
-      expect(parts.spans.length).toBeGreaterThan(0);
-      expect(parts.spans.map((s) => s.text).join(" ")).toContain("1");
-      for (const span of parts.spans) expect(span.family).toMatch(/mono/i);
-      // Only the date is mono: the words «en total, desde el» stay outside every span.
-      expect(parts.spans.map((s) => s.text).join("")).not.toMatch(/en total|desde/);
+      // One span, the whole date: the words «en total, desde el» stay outside it.
+      expect(parts.spans.map((s) => s.text)).toEqual(["1 de enero"]);
+      expect(parts.spans[0].family).toMatch(/mono/i);
 
       // The current year is never printed.
       expect(parts.text).not.toMatch(/\d{4}/);
@@ -130,8 +128,8 @@ test("a goal opened in another year carries that year in its mono date", async (
     const parts = await lineParts(line);
     expect(parts.text).toContain(String(lastYear));
     // The year belongs to the date: it sits inside the mono span.
-    const mono = parts.spans.filter((s) => /mono/i.test(s.family)).map((s) => s.text).join(" ");
-    expect(mono).toContain(String(lastYear));
+    expect(parts.spans.map((s) => s.text)).toEqual([`1 de enero de ${lastYear}`]);
+    expect(parts.spans[0].family).toMatch(/mono/i);
     expect(parts.family).not.toMatch(/mono/i);
   } finally {
     await context.close();

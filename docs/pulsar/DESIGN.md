@@ -1027,7 +1027,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
     del plan» with no figure; a task with no estimate trails «sin estimar», muted; a sub-task reads «de <parent>» above
     and trails its own estimate; a split task trails its estimate and reads «Siguiente del plan · 10 h este mes».
   - `MetaTotal` (399): under the measure figure, a quiet line «en total, desde el 24 de agosto» (date mono, year only
-    when not the current one). «0 min» stays.
+    when not the current one, as «de <year>»). «0 min» stays.
   - `ImportarFuera` (401): above «Crear 1 meta», one quiet line: «Sin «Elegir método» y su sub-tarea: no se puede
     crear.» for one item, «Sin 3 cosas que no se pueden crear.» for more, the count linking up to «No se puede crear».
   - `MetaPlanHechas` and `RoadmapMesCifras` (405): «Ritmo 12 h al mes · en octubre, 5 h de 12 h en tareas hechas»;
