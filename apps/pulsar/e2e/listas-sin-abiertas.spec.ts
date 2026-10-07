@@ -47,14 +47,17 @@ test("/metas with only ended and archived goals draws no «abiertas» label and 
   db,
 }) => {
   const context = await browser.newContext({ storageState: person.sessionFile });
+  const goalIds: string[] = [];
   try {
     const page = await context.newPage();
     await page.setViewportSize({ width: 390, height: 800 });
     const old = new Date(Date.now() - 20 * 86_400_000);
-    await db`insert into goals.goals (user_id, name, horizon, created_at)
-             values (${person.id}, ${`Fin ${Date.now() % 100000}`}, '2026-09-14', ${old})`;
-    await db`insert into goals.goals (user_id, name, horizon, archived_at, created_at)
-             values (${person.id}, ${`Arch ${Date.now()}`}, ${plusDays(60)}, ${new Date()}, ${old})`;
+    const [ended] = await db<{ id: string }[]>`insert into goals.goals (user_id, name, horizon, created_at)
+             values (${person.id}, ${`Fin ${Date.now() % 100000}`}, '2026-09-14', ${old}) returning id`;
+    goalIds.push(ended.id);
+    const [archived] = await db<{ id: string }[]>`insert into goals.goals (user_id, name, horizon, archived_at, created_at)
+             values (${person.id}, ${`Arch ${Date.now()}`}, ${plusDays(60)}, ${new Date()}, ${old}) returning id`;
+    goalIds.push(archived.id);
 
     await page.goto("/metas");
     await expect(page.getByText(goal.list.endedTitle, { exact: true })).toBeVisible();
@@ -63,5 +66,6 @@ test("/metas with only ended and archived goals draws no «abiertas» label and 
     await expect(page.getByRole("link", { name: goal.list.addAnother })).toHaveCount(0);
   } finally {
     await context.close();
+    if (goalIds.length) await db`delete from goals.goals where id = any(${goalIds}) and user_id = ${person.id}`;
   }
 });
