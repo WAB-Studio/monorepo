@@ -66,7 +66,7 @@ test("/entrar's button is its text wide at 1440", async ({ browser, baseURL }) =
   try {
     const page = await context.newPage();
     await page.goto("/entrar");
-    const button = page.locator("main > button, main > a").first();
+    const button = page.getByRole("button", { name: "Enviar enlace" });
     await expect(button).toBeVisible();
     const box = (await button.boundingBox())!;
     expect(box.width).toBeGreaterThanOrEqual(160);

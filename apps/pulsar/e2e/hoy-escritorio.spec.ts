@@ -227,7 +227,9 @@ test("a one-off done at a known instant reads its HH:mm in «hechas hoy» (RP-19
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const row = page.getByRole("button", { name: `Deshacer: ${name}` });
+    // The mark undoes; the name button beside it carries the name and its hour.
+    await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
+    const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row).toBeVisible();
     await expect(row).toContainText("19:40");
   } finally {

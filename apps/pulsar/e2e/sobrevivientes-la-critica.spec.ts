@@ -255,6 +255,7 @@ test("dating a dayless one-off offers no «sin día» and no date before today (
   try {
     await page.goto("/sueltas");
     await page.getByRole("button", { name, exact: true }).click();
+    await page.getByRole("button", { name: "Darle un día" }).click();
     await expect(page.getByRole("radio", { name: "hoy" })).toBeVisible();
     await expect(page.getByRole("radio", { name: "sin día" })).toHaveCount(0);
 
