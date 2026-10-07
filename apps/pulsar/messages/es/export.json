@@ -21,14 +21,14 @@
     "toDate": "hasta hoy",
     "atEnd": "al terminar",
     "phases": "fases",
-    "tasks": "tareas de {month}",
-    "months": "por mes"
+    "tasks": "tareas de {month}"
   },
   "ended": "terminada el {date}",
   "monthsCaption": "{count, plural, one {# mes} other {# meses}}",
   "monthsCaptionDeclared": "{count, plural, one {# mes} other {# meses}} · solo lo dicho",
   "columns": {
     "month": "mes",
+    "week": "semana",
     "reached": "alcanzado",
     "done": "hecho",
     "status": "estado"
@@ -36,7 +36,6 @@
   "of": "de {planned}",
   "fromMonth": "de {month}",
   "owes": "falta {owes}",
-  "carried": "se arrastró {share} %",
   "carriedTo": "{percent} % pasó a {month}",
   "planned": "planeado",
   "current": "en curso",
@@ -44,6 +43,8 @@
   "byMonth": "{goal} · por mes",
   "byWeek": "por semana",
   "closed": "cerrado",
+  "thisWeekDone": "Esta semana: <fig>{done}</fig>.",
+  "weeksCaption": "{count, plural, one {# semana} other {# semanas}}",
   "thisWeek": "Esta semana: <fig>{done}</fig> de <fig>{planned}</fig>.",
   "showWeeks": "{count, plural, one {Ver la semana} other {Ver las # semanas}}",
   "taskDone": "hecha",

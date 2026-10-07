@@ -6,7 +6,6 @@ import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
   goalSections,
-  monthsWithWeeks,
   type Section as GoalSection,
 } from "@/lib/export/sections";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
@@ -309,84 +308,116 @@ function GoalPart({
           </Section>
         );
       case "months": {
-        const groups = monthsWithWeeks(goal);
-        const rows: TableRow[] = groups.flatMap(({ month, weeks }) => {
+        const nextMonth = (month: string) => {
+          const day = civilDateToDate(month);
+          day.setUTCMonth(day.getUTCMonth() + 1);
+          return monthOnly.format(day);
+        };
+        const rows: TableRow[] = goal.months.map((month) => {
           const started = month.current || month.past;
           const share = month.carried;
           const plannedFigure =
             month.planned === null ? null : (
               <Figure variant="meta" value={month.planned} unit={unit as string} />
             );
-          const note = month.current ? (
+          const done = started ? (
             <>
+              <Figure variant="meta" value={month.reached} unit={unit as string} />
               {plannedFigure ? t("of", { planned: "" }) : null}
               {plannedFigure}
-              {plannedFigure ? " · " : null}
-              {t("current")}
             </>
+          ) : null;
+          const status = month.current ? (
+            <Text wrap="nowrap">{t("current")}</Text>
           ) : started ? (
             <>
-              {plannedFigure ? t("of", { planned: "" }) : null}
-              {plannedFigure}
-              {plannedFigure && share !== null ? " · " : null}
-              {share !== null ? t("carried", { share }) : null}
+              <Text wrap="nowrap">{t("closed")}</Text>
+              {share !== null
+                ? ` · ${t("carriedTo", { percent: share, month: nextMonth(month.month) })}`
+                : null}
             </>
           ) : plannedFigure ? (
             <>
-              {plannedFigure} {t("planned")}
+              {plannedFigure} <Text wrap="nowrap">{t("planned")}</Text>
             </>
-          ) : undefined;
-          const last = month.current
-            ? t("current")
-            : share !== null
-              ? t("carried", { share })
-              : !started && month.planned !== null
-                ? t("planned")
-                : "";
-          const monthRow: TableRow = {
+          ) : (
+            ""
+          );
+          const phoneNote = (
+            <>
+              {started && plannedFigure ? (
+                <>
+                  {t("of", { planned: "" })}
+                  {plannedFigure}
+                  {" · "}
+                </>
+              ) : null}
+              {status}
+            </>
+          );
+          return {
             key: month.month,
-            cells: [monthLabel(month.month), started ? month.reached : null, plannedFigure, last],
-            note,
+            cells: [monthLabel(month.month), done, status],
+            phoneFigure: started ? month.reached : null,
+            note: phoneNote,
           };
-          const weekRows: TableRow[] = weeks.map((week) => ({
-            key: `${month.month}-${week.index}`,
-            cells: [
-              <Flex key="label" as="span" pl="4">
-                <Text tone="muted">
-                  {`${t("weekLabel", { n: week.index })} · ${civilSpan(week.startsOn, week.endsOn)}`}
-                </Text>
-              </Flex>,
-              week.total,
-              null,
-              week.current ? t("current") : "",
-            ],
-            note: week.current ? t("current") : undefined,
-          }));
-          return [monthRow, ...weekRows];
         });
-        const current = rows.findIndex(
-          (row) => row.key === goal.months.find((m) => m.current)?.month,
-        );
+        const current = goal.months.findIndex((m) => m.current);
+        const week = goal.weeks.find((w) => w.current);
+        const weekRows: TableRow[] = goal.weeks.map((w) => ({
+          key: `week-${w.index}`,
+          cells: [
+            `${t("weekLabel", { n: w.index })} · ${civilSpan(w.startsOn, w.endsOn)}`,
+            <Figure key="total" variant="meta" value={w.total} unit={unit as string} />,
+            w.current ? <Text wrap="nowrap">{t("current")}</Text> : "",
+          ],
+          note: w.current ? t("current") : undefined,
+        }));
         return (
-          <Section label={t("sections.months")}>
-            <Table
-              caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", {
-                count: goal.months.length,
-              })}
-              columns={[
-                t("columns.month"),
-                declaredOnly ? t("declaredShort") : t("columns.reached"),
-                t("planned"),
-                "",
-              ]}
-              rows={rows}
-              figures={[1]}
-              unit={unit as string}
-              nowrapLabel
-              stackInCard
-              current={current === -1 ? undefined : current}
-            />
-          </Section>
+          <Flex direction="column" gap="6">
+            <Section label={t("byMonth", { goal: goal.name })}>
+              <Table
+                caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", {
+                  count: goal.months.length,
+                })}
+                columns={[
+                  t("columns.month"),
+                  t("columns.done"),
+                  t("columns.status"),
+                ]}
+                rows={rows}
+                figures={[1]}
+                unit={unit as string}
+                nowrapLabel
+                stackInCard
+                current={current === -1 ? undefined : current}
+              />
+            </Section>
+            {goal.weeks.length > 0 ? (
+              <PrintHidden>
+                <Section label={t("byWeek")}>
+                  {week ? (
+                    <Text as="p" variant="sentence">
+                      {t.rich("thisWeekDone", {
+                        done: week.total,
+                        fig: () => <Figure variant="meta" value={week.total} unit={unit as string} />,
+                      })}
+                    </Text>
+                  ) : null}
+                  <Table
+                    caption={t("weeksCaption", { count: goal.weeks.length })}
+                    columns={[t("columns.week"), t("columns.done"), t("columns.status")]}
+                    rows={weekRows}
+                    figures={[1]}
+                    unit={unit as string}
+                    nowrapLabel
+                    stackInCard
+                    fold={t("showWeeks", { count: goal.weeks.length })}
+                  />
+                </Section>
+              </PrintHidden>
+            ) : null}
+          </Flex>
         );
       }
     }
