@@ -983,3 +983,8 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   `FaseFechas`, `FaseFechasFuera`, `FaseFechasSolapa`, `ImportarFaseRecortada`, `EntrarFormulario`, `EntrarEnviado`,
   `PermisoSinSesion`, `PermisoConSesion`, `SueltaHoja`, `SueltaHojaHecha`, `ReportePlegado`, `ReporteImpresoMeses`,
   `PalabrasDelPlan`. Canvas version 69. Where a board and the lines above disagree, the lines above win.
+- **`MetaPlanHechas` settles where «hechas» reaches** (2026-10-06, read by the orchestrator from the approved board):
+  the goal's plan row reads «5 h hechas de 12 h en octubre»; the block «lo medido» keeps the measure («6 h 40 min de
+  estudio en octubre», RP-28). Hoy's month line and «Mes» (RP-43) keep the measure this round. No code retired.
+- **A fact before its goal opened is refused with «Ese día es anterior a cuando abriste esta meta.»** (2026-10-06,
+  decided by the orchestrator; no board draws it).
