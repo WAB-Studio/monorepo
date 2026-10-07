@@ -361,6 +361,17 @@
     break-after: avoid;
   }
 
+  /* The header and the first row stay together, so the label above them
+     follows its first row onto the next page. */
+  .wide thead,
+  .wide thead tr {
+    break-after: avoid;
+  }
+
+  .wide tbody tr:first-child {
+    break-before: avoid;
+  }
+
   .fold {
     display: none;
   }
