@@ -24,6 +24,11 @@ cp "$TMP/host" "$TMP/host.want"
 "$SUT" "$TMP/host" 3202
 cmp -s "$TMP/host" "$TMP/host.want" || fail "real host untouched"
 
+printf 'NEXT_PUBLIC_SITE_URL=http://example.com\n' >"$TMP/plainhost"
+cp "$TMP/plainhost" "$TMP/plainhost.want"
+"$SUT" "$TMP/plainhost" 3202
+cmp -s "$TMP/plainhost" "$TMP/plainhost.want" || fail "real http host untouched"
+
 printf 'A=1\nB=2\n' >"$TMP/none"
 cp "$TMP/none" "$TMP/none.want"
 "$SUT" "$TMP/none" 3202
