@@ -1,11 +1,12 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { Button, Face, Figure, Flex, Page, Panel, Section, SectionLabel, Split, Text, TextLink } from "@/components/ui";
 import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
-import { tallyDay } from "@/lib/day/tally";
+import { isFlexible, tallyDay } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -146,12 +147,14 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   // The same count the Semana's cell for this day makes; nothing to say when
   // it counts nothing or when the all-ended card stands in for the goals.
   const counted = tallyDay({ view, goals: openGoals, commitments });
+  // The tally's figures in mono, each word between them in the line's own Archivo.
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const tally =
     goals.length === 0 || lastEnded || counted.total === 0
       ? undefined
       : counted.partial > 0
-        ? t("day.tallyPartial", { done: counted.done, total: counted.total, partial: counted.partial })
-        : t("day.tally", { done: counted.done, total: counted.total });
+        ? t.rich("day.tallyPartial", { done: counted.done, total: counted.total, partial: counted.partial, ...fig })
+        : t.rich("day.tally", { done: counted.done, total: counted.total, ...fig });
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
   // Stable: within each kind, `loadDay`'s own creation order stands.
@@ -211,8 +214,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     .filter(({ rows, met }) => !past || rows.length > 0 || met.length > 0)
     .sort((a, b) => Number(!a.asks) - Number(!b.asks));
 
+  // One block, so the past day's two columns never split the title from its line.
   const goalsMain = past && sections.length === 0 ? (
-    <>
+    <Flex direction="column" gap="2">
       <Text as="p" variant="title">
         {t("day.past.nothingTitle")}
       </Text>
@@ -221,7 +225,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           {dayPhrase("day.past.startedOn", laterGoal.openedOn, t, { goal: laterGoal.name })}
         </Text>
       ) : null}
-    </>
+    </Flex>
   ) : lastEnded ? (
     <Panel as="div">
       {oneOffs.length === 0 ? (
@@ -250,14 +254,17 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
         const goalPhase = phaseOn(goalPhases, day);
 
+        // What «hechos» counts: a weekly or monthly row is not asked of that day.
+        const asked = rows.filter(({ commitment }) => !(commitment.cadence && isFlexible(commitment.cadence))).length;
+
         const section = (
           <Panel as="div" key={goal.id}>
             <Section
               label={
-                past && rows.length > 0
+                past && asked > 0
                   ? t("day.past.asked", {
                       goal: goal.name,
-                      count: (t.raw("day.past.askedWords") as string[])[rows.length] ?? rows.length,
+                      count: (t.raw("day.past.askedWords") as string[])[asked] ?? asked,
                     })
                   : goal.name
               }

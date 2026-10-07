@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Face, Flex, IconButton, ScreenHeader, Text, TextLink, ThemeToggle } from "@/components/ui";
@@ -33,9 +34,9 @@ export function DayHeader({
   limitNote?: string;
   toToday?: HeaderLink;
   theme?: { toLightLabel: string; toDarkLabel: string };
-  // «hechos 3 de 5»: mono, under the title (a past day's, under its date),
-  // absent when the day counts nothing.
-  tally?: string;
+  // «hechos 3 de 5»: a sentence with its figures in mono, under the title (a
+  // past day's, under its date), absent when the day counts nothing.
+  tally?: ReactNode;
   // One quiet line per goal that ended this week, under the title.
   ended?: { id: string; text: string; href: string; see: string; seeLabel: string }[];
 }) {
@@ -94,6 +95,7 @@ export function DayHeader({
         eyebrow={title ? date : undefined}
         controls={controls}
         meta={tally}
+        metaVariant="sentence"
       />
       {limitNote ? (
         <Text as="p" variant="sentence">
