@@ -97,7 +97,6 @@
     "planLabel": "el plan",
     "rhythmLineDone": "Ritmo <fig>{amount}</fig> al mes · <fig>{done}</fig> hechas de <fig>{planned}</fig> en {month}",
     "finish": "A este ritmo terminas el {date}",
-    "rhythmLine": "Ritmo <fig>{amount}</fig> al mes · <fig>{reached}</fig> de <fig>{planned}</fig> en {month}",
     "build": "Armar el plan"
   },
   "moverFinal": {
