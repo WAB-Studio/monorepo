@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
-import { Button, Flex, IconButton, Mark, Text } from "@/components/ui";
+import { Button, Figure, Flex, IconButton, Mark, Text } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import type { MessageKey } from "@/i18n/translator";
 import { formatQuantity } from "@/lib/units/time";
@@ -32,7 +32,7 @@ export function MonthTaskLine({
   // The task is a sub-task: its parent's name rides above its own
   // (`HoyTareaMesSubtarea.dc.html`).
   parentName: string | null;
-  // The hours the plan puts in this month for the task (`roadmap.hoyMovido.next`).
+  // The hours the plan puts in this month for the task; drawn only when the task is split across months.
   part: number | null;
   unit: string;
   // Its button is drawn, never its text (`HoyNota`).
@@ -44,6 +44,10 @@ export function MonthTaskLine({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
+
+  // A sub-task never shows its parent's share (`item.part` is the parent's).
+  const splitPart =
+    parentName === null && estimate !== null && part !== null && part > 0 && part < estimate ? part : null;
 
   function handleComplete() {
     if (pending) return;
@@ -90,16 +94,19 @@ export function MonthTaskLine({
             </Text>
           ) : null}
           <Text variant="name">{name}</Text>
-          {part !== null ? (
-            <Text variant="sentence">
-              {t("roadmap.hoyMovido.next", { hours: formatQuantity(part, unit, words) })}
-            </Text>
-          ) : null}
+          <Text variant="sentence">
+            {splitPart !== null
+              ? t.rich("day.monthLine.nextPart", {
+                  hours: splitPart,
+                  fig: () => <Figure variant="meta" value={Number(splitPart)} unit={unit || undefined} />,
+                })
+              : t("day.monthLine.next")}
+          </Text>
         </Flex>
-        {estimate !== null ? (
+        {estimate !== null || unit !== "" ? (
           <Flex flexShrink="0" pt="2">
             <Text variant="meta" tone="muted" wrap="nowrap">
-              {formatQuantity(estimate, unit, words)}
+              {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
             </Text>
           </Flex>
         ) : null}

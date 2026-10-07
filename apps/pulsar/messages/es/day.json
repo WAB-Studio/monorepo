@@ -125,6 +125,8 @@
     "tasksOf": "{total, plural, one {de # tarea} other {de # tareas}}",
     "tasksAfterFigure": "· {done} de {total, plural, one {# tarea} other {# tareas}}",
     "parent": "de {name}",
+    "next": "Siguiente del plan",
+    "nextPart": "Siguiente del plan · <fig>{hours}</fig> este mes",
     "pace": "día {day} ·",
     "paceUnder": ", bajo el {threshold} %"
   },

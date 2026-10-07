@@ -49,7 +49,6 @@ for (const width of WIDTHS) {
     baseURL,
     db,
   }) => {
-    test.setTimeout(60_000);
     const stamp = Date.now();
     const minutesName = `Sin cifra minutos ${stamp}`;
     const kmName = `Sin cifra km ${stamp}`;
