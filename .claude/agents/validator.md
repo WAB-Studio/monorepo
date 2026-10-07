@@ -30,6 +30,8 @@ Read the diff the worker landed: `git show --stat` on each commit of
 that moved after the fork reads as the branch deleting what the base added.
 
 Against the contract:
+- Walk the Done table row by row: the assertion exists, and its mutation reddens it. A clause of the
+  contract with no row is a FAIL of the plan; say so under `Deferred` and name the missing row.
 - Every file the contract names is touched; no file outside it is.
 - Inputs, outputs and types match the contract to the letter.
 - The done criterion is actually met by the code, not only by a passing command.

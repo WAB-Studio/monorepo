@@ -29,6 +29,12 @@ A slice: a set of RF codes from `docs/SPEC.md`, and the path to write the plan t
 - Contract: inputs, outputs, types.
 - RF codes covered.
 - Done criterion, written as a fact to prove. Never as a command to run.
+- **Done table**: one row per contract clause → the assertion that proves it → the mutation that breaks it.
+  Give a screen a row for each of its states: pending, refused, cancelled, empty, done. A clause with no row
+  is a clause nobody tests. Measured 2026-10-06: four modules came back from the validator for clauses
+  the Done never named (a silent submit, «Cancelar» while pending, a done row's rename, a lost `next`).
+- For a screen: the query that feeds every figure on its board, by file and line. A figure with no
+  query is a question for the user before the board is approved, never a gap the worker finds.
 - Dependencies: numbers of prior modules.
 - Track, and the docs to read cited by heading and line range, never a whole file.
 
@@ -47,6 +53,10 @@ would have broken a performance guard written in the file it named.
 # Cut so tracks never collide
 
 - Give every file exactly one owner. A path in two modules is a cut you have not finished.
+- Grep before you assign. A module that changes words owns every spec and probe quoting them by literal;
+  a module that changes a shared primitive (`components/ui`) owns every caller's spec. Write the grep
+  and its count in the module. Measured 2026-10-06: one module left six specs red that its file list
+  never named, and two modules owned the same screen.
 - Group modules into tracks that share no file and no dependency. Name the tracks.
 - State each module's track. Say which tracks run at once and which wait on which.
 - Prefer four disjoint tracks over eight that interleave.
