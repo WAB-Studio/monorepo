@@ -20,13 +20,8 @@
   "working": "Un momento…",
   "footer": "entraste como {email} · lo revocas cuando quieras en Metas › Conectar una IA",
   "signedOut": {
-    "title": "Entra para continuar",
-    "body": "{client} pidió entrar a tu Bitácora de metas. Entra con tu correo y vuelves aquí para decir que sí o que no.",
-    "emailLabel": "Correo electrónico",
-    "emailPlaceholder": "nombre@correo.com",
     "send": "Enviar enlace",
-    "lead": "Entra primero. Te mandamos un enlace a tu correo y vuelves aquí para decidir.",
-    "promise": "El enlace te trae de vuelta a este permiso."
+    "lead": "Entra primero. Te mandamos un enlace a tu correo y vuelves aquí para decidir."
   },
   "invalid": {
     "title": "Este pedido no es válido",

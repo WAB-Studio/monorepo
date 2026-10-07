@@ -8,7 +8,6 @@
   "sentTitle": "Revisa tu correo",
   "sentBody": "Te mandamos el enlace a <fig>{email}</fig>. Vence en una hora.",
   "sentOther": "Usar otro correo",
-  "sent": "Revisa tu correo y abre el enlace que te mandamos.",
   "errors": {
     "emailInvalid": "Escribe un correo válido.",
     "domainUndeliverable": "Ese dominio no recibe correo.",

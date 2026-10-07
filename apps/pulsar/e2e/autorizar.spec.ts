@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 
+import account from "../messages/es/account.json";
 import connections from "../messages/es/connections.json";
 import oauth from "../messages/es/oauth.json";
 import { test, expect, type Person } from "./fixtures";
@@ -98,6 +99,7 @@ test.describe("the consent screen (RP-41)", () => {
         await expect(page.getByText(text, { exact: true })).toBeVisible();
       }
       await expect(page.getByRole("button", { name: oauth.allow, exact: true })).toBeVisible();
+      await expect(page.getByText(oauth.consentLead, { exact: true })).toBeVisible();
       // 318: the app has one name wherever a person reads it.
       await expect(page.getByText(oauth.eyebrow, { exact: true })).toBeVisible();
       expect(await page.locator("main").innerText()).not.toMatch(/pulsar ·/i);
@@ -183,7 +185,7 @@ test.describe("the consent screen (RP-41)", () => {
       await page.goto(consentPath(clientId, challengeOf(verifier()), "http://localhost:6274/otra"));
       await expect(page.getByRole("heading", { level: 1, name: oauth.invalid.title })).toBeVisible();
       await expect(page.getByText(oauth.invalid.body, { exact: true })).toBeVisible();
-      await expect(page.getByRole("button")).toHaveCount(0);
+      await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
       await expect(page.getByRole("link", { name: oauth.invalid.home })).toHaveAttribute("href", "/");
       await expectNoOverflow(page);
     } finally {
@@ -198,29 +200,27 @@ test.describe("the consent screen (RP-41)", () => {
       const path = consentPath(clientId, challengeOf(verifier())).replace(/&code_challenge=[^&]*/, "");
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1, name: oauth.invalid.title })).toBeVisible();
-      await expect(page.getByRole("button")).toHaveCount(0);
+      await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
     } finally {
       await context.close();
     }
   });
 
-  test("signed out it asks for the address and the form carries this screen's own path as next", async ({
+  test("signed out it asks for the address in the shared form under the client's title", async ({
     browser,
     baseURL,
   }) => {
-    const clientId = client.id;
+    const { id: clientId } = client;
     const path = consentPath(clientId, challengeOf(verifier()));
     const { context, page } = await open(browser, baseURL!, signedOut);
     try {
       await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1, name: oauth.signedOut.title })).toBeVisible();
-      await expect(page.getByLabel(oauth.signedOut.emailLabel)).toHaveAttribute(
-        "placeholder",
-        oauth.signedOut.emailPlaceholder,
-      );
+      await expect(
+        page.getByRole("heading", { level: 1, name: oauth.title.replace("{client}", oauth.anonymousClient) }),
+      ).toBeVisible();
+      await expect(page.getByLabel(account.emailLabel)).not.toHaveAttribute("placeholder", /.+/);
       await expect(page.getByRole("button", { name: oauth.signedOut.send })).toBeVisible();
-      await expect(page.getByText(oauth.signedOut.promise, { exact: true })).toBeVisible();
-      await expect(page.locator('input[name="next"]')).toHaveValue(path);
+      await expect(page.getByText(oauth.signedOut.lead, { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: oauth.allow, exact: true })).toHaveCount(0);
       await expectNoOverflow(page);
     } finally {
