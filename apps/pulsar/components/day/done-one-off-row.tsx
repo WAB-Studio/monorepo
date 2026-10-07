@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { undoFact } from "@/app/actions/facts";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
+import { TaskSheet } from "@/components/plan/task-sheet";
 import { IconButton, Mark, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 
@@ -19,18 +20,20 @@ export type DoneOneOffRowProps = {
   // The id of the one-off the fact belongs to, which the note is written on.
   oneOffId: string;
   noteEyebrow: string;
+  goalName?: string;
 };
 
 /**
- * A one-off done today (RP-19): the whole row is the one control and takes
- * the fact back, so the one-off returns among the undone (RP-05). It opens
- * nothing — a done one-off is not deleted (RP-22).
+ * A one-off done today (RP-19): the mark takes the fact back, so the one-off
+ * returns among the undone (RP-05); the name opens its sheet, which renames
+ * it and never deletes it (RP-22, RP-57).
  */
-export function DoneOneOffRow({ factId, name, time, note, oneOffId, noteEyebrow }: DoneOneOffRowProps) {
+export function DoneOneOffRow({ factId, name, time, note, oneOffId, noteEyebrow, goalName }: DoneOneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   function handleUndo() {
     if (pending) return;
@@ -60,14 +63,15 @@ export function DoneOneOffRow({ factId, name, time, note, oneOffId, noteEyebrow 
     <>
       <Row
         leading={<Mark state="declared" />}
-        aria-label={t("day.doneOneOffs.undoLabel", { name })}
+        leadingLabel={t("day.doneOneOffs.undoLabel", { name })}
         name={
           <Text as="span" tone="muted">
             {name}
           </Text>
         }
         meta={time}
-        onClick={handleUndo}
+        onLeadingClick={handleUndo}
+        onClick={() => setSheetOpen(true)}
         end={noteButton}
         disabled={pending}
       />
@@ -76,6 +80,21 @@ export function DoneOneOffRow({ factId, name, time, note, oneOffId, noteEyebrow 
           {t(error)}
         </Text>
       ) : null}
+      <TaskSheet
+        mode="edit"
+        goalName={goalName}
+        oneOffId={oneOffId}
+        name={name}
+        unit={null}
+        fixedMonth={null}
+        planMonth={null}
+        months={[]}
+        done
+        kind="loose"
+        canDelete={false}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
       <NoteSheet
         open={noteOpen}
         onOpenChange={setNoteOpen}

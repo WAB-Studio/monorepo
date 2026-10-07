@@ -5,7 +5,7 @@ import { File, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
-import { OneOffDeleteSheet } from "@/components/day/one-off-delete-sheet";
+import { TaskSheet } from "@/components/plan/task-sheet";
 import { Figure, IconButton, Mark, Row, Text } from "@/components/ui";
 
 import { NoteSheet } from "./note-sheet";
@@ -26,14 +26,14 @@ export type DaylessRowProps = {
 
 /**
  * A row of `/sueltas`: the mark finishes it today (`completeOneOff`), the
- * name opens the sheet that gives it a day, or moves it when it has one.
+ * name opens its sheet (RP-57), where its day is given, or moved when it has one.
  */
 export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }: DaylessRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
 
   function handleComplete() {
@@ -84,7 +84,7 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }
         onLeadingClick={handleComplete}
         preview={note}
         end={noteButton}
-        onClick={() => setScheduleOpen(true)}
+        onClick={() => setSheetOpen(true)}
         disabled={pending}
       />
       {error ? (
@@ -99,10 +99,22 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }
         oneOffId={oneOffId}
         name={name}
         current={scheduled}
-        onDelete={() => {
-          setScheduleOpen(false);
-          setDeleteOpen(true);
-        }}
+      />
+      <TaskSheet
+        mode="edit"
+        goalName={goalName}
+        oneOffId={oneOffId}
+        name={name}
+        unit={null}
+        fixedMonth={null}
+        planMonth={null}
+        months={[]}
+        done={false}
+        kind="loose"
+        canDelete
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        onGiveDay={() => setScheduleOpen(true)}
       />
       <NoteSheet
         open={noteOpen}
@@ -111,12 +123,6 @@ export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }
         name={name}
         note={note}
         eyebrow={goalName ? t("oneOffs.note.eyebrowGoal", { goal: goalName }) : t("oneOffs.note.eyebrowLoose")}
-      />
-      <OneOffDeleteSheet
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        oneOffId={oneOffId}
-        name={name}
       />
     </>
   );

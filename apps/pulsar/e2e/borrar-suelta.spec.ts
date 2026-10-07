@@ -56,8 +56,10 @@ test("deleting an undone one-off through the sheet leaves no row in one_offs or 
     await page.getByRole("button", { name, exact: true }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
-    await expect(sheet).toContainText("¿Borrarla?");
+    await expect(sheet).not.toContainText("¿Borrarla?");
 
+    await sheet.getByRole("button", { name: "Borrar la tarea" }).click();
+    await expect(sheet).toContainText("¿Borrarla?");
     await sheet.getByRole("button", { name: "Borrarla" }).click();
     await expect(sheet).toBeHidden();
     await expect(page.getByRole("button", { name, exact: true })).toBeHidden();
@@ -100,6 +102,7 @@ test("a one-off that already carries a fact is refused on screen, and nothing is
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
 
+    await sheet.getByRole("button", { name: "Borrar la tarea" }).click();
     await sheet.getByRole("button", { name: "Borrarla" }).click();
     await expect(sheet).toContainText("Eso ya se hizo, y lo hecho no se borra.");
     await expect(sheet).toBeVisible();
@@ -129,6 +132,7 @@ test("\"Dejarla\" closes the sheet and leaves the one-off exactly as it was (RP-
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
 
+    await sheet.getByRole("button", { name: "Borrar la tarea" }).click();
     await sheet.getByRole("button", { name: "Dejarla" }).click();
     await expect(sheet).toBeHidden();
 

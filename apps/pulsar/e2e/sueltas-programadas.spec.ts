@@ -91,6 +91,7 @@ test("moved to today it leaves the list and draws on Hoy; moved to another day i
   try {
     await page.goto("/sueltas");
     await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toContainText(`ahora: ${words(plusDays(3))}`);
     await expect(sheet.getByRole("radio", { name: "sin día" })).toHaveCount(0);
@@ -104,6 +105,7 @@ test("moved to today it leaves the list and draws on Hoy; moved to another day i
     );
 
     await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     await page.getByRole("dialog").getByRole("radio", { name: "hoy" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Moverla" }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -127,6 +129,7 @@ test("a past day is refused in the move sheet and the one-off stays where it was
   try {
     await page.goto("/sueltas");
     await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByLabel("qué día").fill(plusDays(-1));
     await sheet.getByRole("button", { name: "Moverla" }).click();
@@ -180,7 +183,7 @@ test("a dayless one done from the list shows the same line (RP-21)", async ({ pa
   }
 });
 
-test("deleted from the move sheet its row is gone from the database (RP-22)", async ({
+test("deleted from the suelta's sheet its row is gone from the database (RP-22)", async ({
   page,
   db,
   personId,
@@ -191,7 +194,7 @@ test("deleted from the move sheet its row is gone from the database (RP-22)", as
   try {
     await page.goto("/sueltas");
     await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Borrarla" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Borrar la tarea" }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toContainText("¿Borrarla?");
     await sheet.getByRole("button", { name: "Borrarla" }).click();

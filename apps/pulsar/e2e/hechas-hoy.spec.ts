@@ -5,7 +5,7 @@ import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
 // «Hechas hoy» (`HoyHechas.dc.html`): a one-off done today stays on Hoy with a
-// filled mark, and the whole row takes the fact back (RP-19, RP-05).
+// filled mark, and the mark takes the fact back (RP-19, RP-05).
 
 async function seedOneOff(db: postgres.Sql, personId: string, name: string): Promise<string> {
   const [row] = await db<{ id: string }[]>`
@@ -62,7 +62,7 @@ test("a completed one-off moves to «hechas hoy» with a filled mark, survives a
   }
 });
 
-test("the name of a done one-off opens no sheet and undoes it, and the screen holds at 360px (RP-19, RP-22, RNP-07)", async ({
+test("the mark of a done one-off undoes it and its name opens a sheet with no «Borrar», and the screen holds at 360px (RP-19, RP-22, RNP-07)", async ({
   page,
   db,
   personId,
@@ -77,7 +77,7 @@ test("the name of a done one-off opens no sheet and undoes it, and the screen ho
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
-    await page.getByText(name, { exact: true }).click();
+    await page.getByRole("button", { name: `Deshacer: ${name}` }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toHaveCount(0);
     await expect.poll(() => factCount(db, oneOffId)).toBe(0);

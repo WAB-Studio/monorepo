@@ -167,6 +167,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     return goal ? t("oneOffs.note.eyebrowGoal", { goal: goal.name }) : t("oneOffs.note.eyebrowLoose");
   }
 
+  function goalNameOf(goalId: string | null) {
+    return goals.find((candidate) => candidate.id === goalId)?.name;
+  }
+
   function oneOffRow(oneOff: OneOffSummary) {
     return (
       <OneOffRow
@@ -175,6 +179,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         name={oneOff.name}
         note={oneOff.note}
         noteEyebrow={noteEyebrow(oneOff.goalId)}
+        goalName={goalNameOf(oneOff.goalId)}
         carriedFrom={
           isCarried(oneOff, day)
             ? dayPhrase("day.oneOffs.carriedFrom", oneOff.day, t)
@@ -506,6 +511,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                   oneOffId={done.id}
                   note={done.note}
                   noteEyebrow={noteEyebrow(done.goalId)}
+                  goalName={goalNameOf(done.goalId)}
                   time={timeInZone(done.writtenAt)}
                 />
               ))}
