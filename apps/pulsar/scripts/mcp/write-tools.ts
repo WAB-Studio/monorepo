@@ -49,6 +49,7 @@ let subject: Person;
 let intruder: Person;
 let goal: string;
 let quantityCommitment: string;
+let quantityGoal: string;
 let intruderGoal: string;
 let intruderCommitment: string;
 let intruderTask: string;
@@ -208,8 +209,12 @@ before(async () => {
     const made = await acts.plan.createGoal({ name: "escribir tools", horizon: dayFrom(120) });
     if (!made.ok) throw new Error(`createGoal: ${made.error}`);
     goal = made.goalId;
+    // Its own goal: opening it 20 days back must not move `goal`'s span.
+    const old = await acts.plan.createGoal({ name: "estudiar de antes", horizon: dayFrom(120) });
+    if (!old.ok) throw new Error(`createGoal old: ${old.error}`);
+    quantityGoal = old.goalId;
     const commitment = await acts.plan.addCommitment({
-      goalId: goal,
+      goalId: quantityGoal,
       name: "estudiar",
       cadenceKind: "daily",
       satisfaction: "quantity",
@@ -221,6 +226,7 @@ before(async () => {
   });
   // A past day is only open to a commitment that already existed that day.
   await admin`update goals.commitments set created_at = now() - interval '20 days' where id = ${quantityCommitment}`;
+  await admin`update goals.goals set created_at = now() - interval '20 days' where id = ${quantityGoal}`;
 
   await as(intruder, async () => {
     const made = await acts.plan.createGoal({ name: "ajena", horizon: dayFrom(120) });
@@ -581,4 +587,15 @@ test("each tool issues exactly the statements its act issues called directly", a
     assert.ok(actual > 0, `${tool} measured nothing`);
   }
   console.log(`wire (act, tool): ${JSON.stringify(counts)}`);
+});
+
+test("declare_fact refuses a day before the goal opened with the goal's own sentence, and writes nothing", async () => {
+  const opened = await freshGoal();
+  const made = await as(subject, () =>
+    acts.plan.addCommitment({ goalId: opened, name: "hoy", cadenceKind: "daily", satisfaction: "tap" } as never),
+  );
+  if (!made.ok) throw new Error(`addCommitment: ${made.error}`);
+  await refused("declare_fact", { commitment_id: made.commitmentId, day: dayFrom(-1) }, "day.errors.dayBeforeGoal", day.errors.dayBeforeGoal);
+  const rows = await door`select 1 from goals.facts where commitment_id = ${made.commitmentId}`;
+  assert.equal(rows.length, 0);
 });

@@ -158,6 +158,8 @@ before(async () => {
     values (${personId}, ${goal.goalId}, 'RP-06 fixture: hace 10 días', 'daily', 'tap', now() - interval '10 days')
     returning id`;
   oldCommitmentId = old.id;
+  // The goal opened with its oldest commitment, as the app can reach.
+  await sql`update goals.goals set created_at = now() - interval '10 days' where id = ${goal.goalId}`;
 
   const [young] = await sql<{ id: string }[]>`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
