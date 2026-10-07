@@ -104,7 +104,7 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
           hideLabel
           placeholder={
             goalName
-              ? t("day.newOneOff.placeholderForGoal", { goal: goalName })
+              ? t("day.newOneOff.placeholderForGoalShort", { goal: goalName })
               : t("day.newOneOff.placeholder")
           }
           value={name}
