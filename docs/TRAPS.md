@@ -2857,3 +2857,8 @@ branch could pass until it was restored.
   «nothing else is here» on it fails whenever another spec seeds for it at the same moment.
 - Assert an absence or an exact count only on the disposable `person`. Measured 2026-10-06: `dia-pasado.spec.ts:314`
   and `dia-pasado-hechos.spec.ts:105` passed one CI run and failed the next on the same tree.
+- Match a date's words with `\p{L}` and the `u` flag, never `\w`: `\w` is ASCII and skips «miércoles» and «sábado»,
+  so on those days a header spec measured the «hechos 0 de 6» tally instead (75 px off, 2026-10-07). Drive the longest
+  date by rewriting the eyebrow's text, so the check never waits for a Wednesday.
+- Order a list a spec reads «most recent first» by the date in the query. `ended_this_week` ordered by `position`
+  and passed only while creation order happened to agree with end order (2026-10-07).
