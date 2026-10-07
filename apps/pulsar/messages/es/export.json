@@ -45,7 +45,7 @@
   "closed": "cerrado",
   "thisWeekDone": "Esta semana: <fig>{done}</fig>.",
   "weeksCaption": "{count, plural, one {# semana} other {# semanas}}",
-  "thisWeek": "Esta semana: <fig>{done}</fig> de <fig>{planned}</fig>.",
+  "thisWeek": "Esta semana: <fig>{done}</fig> de <plan>{planned}</plan>.",
   "showWeeks": "{count, plural, one {Ver la semana} other {Ver las # semanas}}",
   "taskDone": "hecha",
   "taskPending": "pendiente",
