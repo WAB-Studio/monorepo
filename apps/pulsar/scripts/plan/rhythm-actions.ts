@@ -274,6 +274,66 @@ test("dismissPlanNotice: another person's goal and a month not over are refused"
   assert.equal(row.seen, null);
 });
 
+const seenOf = async (id: string) =>
+  (await admin<{ seen: string | null }[]>`select plan_seen::text as seen from goals.goals where id = ${id}`)[0].seen;
+
+test("dismissPlanNotices: several goals read back as given, an older month never lowers one, one statement", async () => {
+  const ids = [await goal(owner, "a1", true), await goal(owner, "a2", true), await goal(owner, "a3", true)];
+  goalIds.push(...ids);
+  const [september, august] = [monthFrom(today, -1), monthFrom(today, -2)];
+  const months = [september, august, september];
+  revalidated.length = 0;
+  const notices = ids.map((goalId, i) => ({ goalId, month: months[i] }));
+  assert.equal(await statementsOf(() => as(owner, () => roadmap.dismissPlanNotices({ notices }))), 2);
+  assert.deepEqual(revalidated, [{ path: "/", type: undefined }]);
+  assert.deepEqual(await Promise.all(ids.map(seenOf)), months.map((m) => `${m}-01`));
+  const older = ids.map((goalId) => ({ goalId, month: monthFrom(today, -4) }));
+  assert.deepEqual(await as(owner, () => roadmap.dismissPlanNotices({ notices: older })), { ok: true });
+  assert.deepEqual(await Promise.all(ids.map(seenOf)), months.map((m) => `${m}-01`));
+});
+
+test("dismissPlanNotices: one goal sent twice keeps its latest month", async () => {
+  const goalId = await goal(owner, "doble", true);
+  goalIds.push(goalId);
+  const [september, august] = [monthFrom(today, -1), monthFrom(today, -2)];
+  const notices = [
+    { goalId, month: september },
+    { goalId, month: august },
+  ];
+  assert.deepEqual(await as(owner, () => roadmap.dismissPlanNotices({ notices })), { ok: true });
+  assert.equal(await seenOf(goalId), `${september}-01`);
+});
+
+test("dismissPlanNotices: a stranger's goal among the owner's refuses all and writes nothing", async () => {
+  const mine = [await goal(owner, "m1", true), await goal(owner, "m2", true)];
+  const theirs = await goal(stranger, "ajena", true);
+  goalIds.push(...mine, theirs);
+  const month = monthFrom(today, -1);
+  const notices = [mine[0], theirs, mine[1]].map((goalId) => ({ goalId, month }));
+  revalidated.length = 0;
+  assert.deepEqual(await as(owner, () => roadmap.dismissPlanNotices({ notices })), {
+    ok: false,
+    error: "month.errors.notFound",
+  });
+  assert.deepEqual(await Promise.all([...mine, theirs].map(seenOf)), [null, null, null]);
+  assert.deepEqual(revalidated, []);
+});
+
+test("dismissPlanNotices: the current month, or an empty list, refuses before any write", async () => {
+  const goalId = await goal(owner, "mes", true);
+  goalIds.push(goalId);
+  const notices = [
+    { goalId, month: monthFrom(today, -1) },
+    { goalId, month: thisMonth },
+  ];
+  assert.deepEqual(await as(owner, () => roadmap.dismissPlanNotices({ notices })), {
+    ok: false,
+    error: "month.errors.monthInvalid",
+  });
+  assert.equal(await seenOf(goalId), null);
+  assert.equal((await as(owner, () => roadmap.dismissPlanNotices({ notices: [] }))).ok, false);
+});
+
 test("each act is one statement beside its settle", async () => {
   const goalId = await goal(owner, "viajes", true);
   goalIds.push(goalId);

@@ -9,7 +9,7 @@ import { moveHorizon } from "@/app/actions/plan";
 import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { TaskSheet } from "@/components/plan/task-sheet";
 import { Button, Flex, Row, Text } from "@/components/ui";
-import { useTimeWords } from "@/components/ui/figure";
+import { Figure, useTimeWords } from "@/components/ui/figure";
 import { type MessageKey } from "@/i18n/translator";
 import type { PlanInput } from "@/lib/plan/roadmap";
 import { formatQuantity } from "@/lib/units/time";
@@ -65,7 +65,10 @@ export function PlanEnd({
           plan={plan}
           initial={meets}
           name={t("roadmap.pasaElFinal.raise")}
-          meta={t("roadmap.pasaElFinal.raiseHint", { hours: formatQuantity(meets, unit, words) })}
+          meta={t.rich("roadmap.pasaElFinal.raiseHint", {
+            hours: formatQuantity(meets, unit, words),
+            fig: (chunks) => <Figure variant="meta" value={chunks} />,
+          })}
         />
       ) : null}
       <Row
