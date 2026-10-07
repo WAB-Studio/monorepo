@@ -2,6 +2,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import day from "../messages/es/day.json";
 
 // Hoy's order and its phone face (`HoyTelefonoSinPedido.dc.html`,
 // `HoyTareaMesSubtarea.dc.html`, RP-47, RP-01): goals that ask today come
@@ -48,7 +49,7 @@ test("a goal that asks nothing is below the one that asks at 1280 and has no sec
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
     const page = await context.newPage();
-    const field = (goal: string) => page.getByPlaceholder(`Escribe algo suelto de ${goal}...`);
+    const field = (goal: string) => page.getByPlaceholder(day.newOneOff.placeholderForGoalShort.replace("{goal}", goal));
     const seen = (text: string) => page.getByText(text, { exact: true }).locator("visible=true");
 
     await page.setViewportSize({ width: 1280, height: 800 });

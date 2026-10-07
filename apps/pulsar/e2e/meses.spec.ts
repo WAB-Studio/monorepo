@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures";
+import month from "../messages/es/month.json";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
@@ -28,6 +29,9 @@ function label(month: string): string {
 
 const thisMonth = monthOf(todayInZone());
 const lastMonth = monthOf(dayBefore(thisMonth));
+// A closed month says where its share went: the month after it.
+const carried = (percent: number) =>
+  month.months.carriedTo.replace("{percent}", String(percent)).replace("{month}", label(thisMonth));
 const followingMonth = nextMonth(thisMonth);
 const horizon = nextMonth(followingMonth);
 const seg = (month: string) => month.slice(0, 7);
@@ -90,11 +94,11 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(last).toContainText(label(lastMonth));
     await expect(last).toContainText("1 h 40 min");
     await expect(last).toContainText("de 10 h");
-    await expect(last).toContainText("se arrastró 66 %");
+    await expect(last).toContainText(carried(66));
     // The whole row is the one link; no year, and the state sits under the name, never in the note.
     await expect(last.getByRole("link")).toHaveCount(1);
     await expect(last).not.toContainText(lastMonth.slice(0, 4));
-    await expect(last.locator("span").filter({ hasText: /^se arrastró 66 %$/ })).toHaveCount(1);
+    await expect(last.locator("span").filter({ hasText: new RegExp(`^${carried(66)}$`) })).toHaveCount(1);
     // A closed month's amount is text, never a door to the sheet.
     await expect(last.getByText("de 10 h", { exact: true })).toBeVisible();
     await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
@@ -106,7 +110,7 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(current).toContainText(label(thisMonth));
     await expect(current).toContainText("en curso");
     await expect(current).toContainText("sin monto");
-    await expect(current).not.toContainText("se arrastró");
+    await expect(current).not.toContainText(carried(66).replace("66 %", "").replace(label(thisMonth), "").trim());
     // A month with nothing is still a row, and says so, and carries no share.
     await expect(items.nth(2)).toContainText(label(followingMonth));
     await expect(items.nth(2)).toContainText("sin monto");
@@ -383,7 +387,7 @@ test("a closed month over half carried offers no shift line, in the list or anyw
     const page = await context.newPage();
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(`/metas/${goalId}/meses`);
-    await expect(page.getByRole("listitem").first()).toContainText("se arrastró 100 %");
+    await expect(page.getByRole("listitem").first()).toContainText(carried(100));
     await expect(page.getByRole("button", { name: "correr el plan un mes" })).toHaveCount(0);
     await expect(page.getByText(/correr/i)).toHaveCount(0);
   } finally {

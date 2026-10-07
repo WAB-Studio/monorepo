@@ -1,6 +1,7 @@
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import day from "../messages/es/day.json";
 
 // The words Hoy says at every width: a goal's name as written, a far date with
 // its month, a goal that ended off the screen, and the day that has no goal
@@ -49,7 +50,7 @@ test("a goal named «Inglés Crítico» keeps its capitals on its field, and on 
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.getByLabel("Algo suelto de Inglés Crítico")).toBeVisible();
-    await expect(page.getByPlaceholder("Escribe algo suelto de Inglés Crítico...")).toBeVisible();
+    await expect(page.getByPlaceholder(day.newOneOff.placeholderForGoalShort.replace("{goal}", "Inglés Crítico"))).toBeVisible();
 
     await page.goto(`/dia/${plusDays(-1)}`);
     await expect(page.getByText("Ese día no pedía nada")).toBeVisible();

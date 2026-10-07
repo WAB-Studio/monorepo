@@ -162,8 +162,14 @@ test("this month lists the carried parent first, then its own task; marking the 
     // Last month: closed, its share, nothing to add.
     await page.goto(`/metas/${goalId}/meses/${seg(lastMonth)}`);
     await expect(page.getByText("cerrado", { exact: true })).toBeVisible();
-    await expect(page.getByText("cerrado · se arrastró 75 % · 3 h de 4 h")).toBeVisible();
-    await expectFigures(page.getByText("cerrado · se arrastró 75 % · 3 h de 4 h"), ["75 %", "3 h", "4 h"]);
+    const closedLine = monthMessages.list.closedLineTo
+      .replace(/<\/?fig>/g, "")
+      .replace("{share}", "75")
+      .replace("{next}", label(thisMonth))
+      .replace("{owed}", "3 h")
+      .replace("{planned}", "4 h");
+    await expect(page.getByText(closedLine)).toBeVisible();
+    await expectFigures(page.getByText(closedLine), ["75 %", "3 h", "4 h"]);
     await expect(page.getByText("Un mes cerrado no toma tareas nuevas.")).toBeVisible();
     await expect(page.getByRole("link", { name: /Otra tarea|Escribir una tarea/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Escribir una tarea/ })).toHaveCount(0);
