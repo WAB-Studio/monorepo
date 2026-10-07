@@ -102,17 +102,21 @@ test("a past day with five daily rows (three done), a weekly row done and one pa
   }
 });
 
-test("a goal whose rows that day are all weekly reads its name alone (RP-44)", async ({ page, db, personId }) => {
+test("a goal whose rows that day are all weekly reads its name alone (RP-44)", async ({ person, browser, db }) => {
   const stamp = Date.now();
   const name = `Solo semanal ${stamp}`;
-  const goal = await seedGoal(db, personId, name);
+  const goal = await seedGoal(db, person.id, name);
+  // The absence is asserted over the whole page, so the person is the worker's own.
+  const context = await browser.newContext({ storageState: person.sessionFile });
   try {
-    await seedRow(db, personId, goal, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [] });
+    await seedRow(db, person.id, goal, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [] });
+    const page = await context.newPage();
     await page.goto(`/dia/${plusDays(-1)}`);
     await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByText(/ese día pedía/)).toHaveCount(0);
   } finally {
-    await db`delete from goals.goals where id = ${goal} and user_id = ${personId}`;
+    await context.close();
+    await db`delete from goals.goals where id = ${goal} and user_id = ${person.id}`;
   }
 });
 
