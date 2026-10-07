@@ -121,10 +121,13 @@ test("the parent costs no statement: a week with parents pays what an empty one 
   const count = async (person: Person) => {
     wire.length = 0;
     await as(person, () => queries.loadWeek(today));
+    assert.equal(wire.filter((query) => /^\s*begin\s*$/i.test(query)).length, 2);
     return wire.filter((query) => !/^\s*(begin|commit)\s*$/i.test(query));
   };
+  // Measured before 395: two transactions, three statements between them.
   const full = await count(owner);
   const empty = await count(other);
-  assert.equal(full.length, empty.length);
+  assert.equal(full.length, 3);
+  assert.equal(empty.length, 3);
   assert.equal(full.filter((query) => query.includes("one_off_parent_name")).length, 1);
 });
