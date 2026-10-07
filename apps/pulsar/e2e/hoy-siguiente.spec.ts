@@ -103,6 +103,16 @@ for (const width of WIDTHS) {
       values (${person.id}, ${goal}, ${parentId}, ${`Cap. 1 ${stamp}`}, 60, 1),
              (${person.id}, ${goal}, ${parentId}, ${`Cap. 2 ${stamp}`}, 120, 2)
     `;
+    // A parent split across months: this month holds 10 h of its 30 h, and the
+    // next chapter is 20 h. The 10 h is the parent's share, never the chapter's.
+    const wide = `Tomo ${letters(stamp)}`;
+    const wideGoal = await seedGoal(db, person.id, `Meta tomo ${stamp}`, { unit: "minutos", rhythm: 600 });
+    const wideId = await planTask(db, person.id, wideGoal, wide, null);
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate, position)
+      values (${person.id}, ${wideGoal}, ${wideId}, ${`Parte 1 ${stamp}`}, 1200, 1),
+             (${person.id}, ${wideGoal}, ${wideId}, ${`Parte 2 ${stamp}`}, 600, 2)
+    `;
 
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
     try {
@@ -117,6 +127,14 @@ for (const width of WIDTHS) {
       expect.soft(text.match(/\b1 h\b/g)?.length ?? 0, "its own hour, once").toBe(1);
       expect.soft(text, "never the parent's share").not.toMatch(/\b3 h\b/);
       expect.soft(text, "the line carries no figure").not.toContain("·");
+
+      const wideRow = rowOf(page, `Parte 1 ${stamp}`);
+      await expect(wideRow).toBeVisible();
+      await expect.soft(wideRow.getByText(`de ${wide}`, { exact: true })).toHaveCount(1);
+      const wideText = await wideRow.innerText();
+      expect.soft(wideText.match(/\b20 h\b/g)?.length ?? 0, "the chapter's own 20 h, once").toBe(1);
+      expect.soft(wideText, "the parent's 10 h this month never shows on the chapter").not.toMatch(/\b10 h\b/);
+      expect.soft(wideText, "no share line on a sub-task").not.toContain("este mes");
     } finally {
       await context.close();
       await db`delete from goals.goals where user_id = ${person.id}`;
