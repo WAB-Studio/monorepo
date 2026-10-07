@@ -2,6 +2,10 @@ import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import monthMessages from "../messages/es/month.json";
+
+const owesLine = (month: string, owes: string) =>
+  monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
 
 // Module 314 (`SistemaEspacio.dc.html`, `SistemaTipo.dc.html`): «Mes» and the
 // month's forms on the space and type system. The goals of «Mes» stand on one
@@ -41,7 +45,7 @@ test("«Mes» sets a mixed line's sentence in Archivo and its figure in mono; it
     const page = await context.newPage();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/mes");
-    const line = page.getByText(/^de .* · debe 3 h$/);
+    const line = page.getByText(new RegExp(`^${owesLine(".*", "3 h")}$`));
     await expect(line).toBeVisible();
     const fonts = await line.evaluate((el) => ({
       line: getComputedStyle(el).fontFamily,

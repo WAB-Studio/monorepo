@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect } from "./fixtures";
+import plan from "../messages/es/plan.json";
 
 // UX 362: chips and paired fields are spaced by `ChipRow` and `FieldPair`,
 // never by `Flex gap` or an inline `style`.
@@ -42,7 +43,7 @@ for (const viewport of [
 
       await page.getByRole("button", { name: "un número", exact: true }).click();
       const done = await Promise.all([
-        page.getByRole("button", { name: "un toque", exact: true }).boundingBox(),
+        page.getByRole("button", { name: plan.commitmentForm.satisfaction.tap, exact: true }).boundingBox(),
         page.getByRole("button", { name: "un número", exact: true }).boundingBox(),
       ]);
       expect(Math.round(done[1]!.x - (done[0]!.x + done[0]!.width))).toBe(8);
@@ -78,7 +79,7 @@ for (const viewport of [
       const goalId = await createGoal(page, `Meta chips ${Date.now()}`);
       await page.goto(`/metas/${goalId}/compromisos/nuevo`);
       const first = (await page.getByRole("button", { name: "todos los días", exact: true }).boundingBox())!;
-      const last = (await page.getByRole("button", { name: "N al mes", exact: true }).boundingBox())!;
+      const last = (await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true }).boundingBox())!;
       const view = page.viewportSize()!.width;
       expect(last.x + last.width).toBeLessThanOrEqual(view);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(view);
@@ -89,7 +90,7 @@ for (const viewport of [
     test("the phase weeks share the width evenly, 8 apart", async ({ page }) => {
       const goalId = await createGoal(page, `Meta fases ${Date.now()}`);
       await page.goto(`/metas/${goalId}/fases/nueva`);
-      await expect(page.getByLabel("desde la semana")).toBeVisible();
+      await expect(page.getByLabel(plan.phaseForm.fromLabel)).toBeVisible();
       const from = await root(page, "desde la semana").boundingBox();
       const to = await root(page, "hasta la semana").boundingBox();
       expect(Math.abs(from!.width - to!.width)).toBeLessThanOrEqual(1);

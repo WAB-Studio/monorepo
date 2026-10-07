@@ -4,6 +4,10 @@ import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import monthMessages from "../messages/es/month.json";
+
+const owesLine = (month: string, owes: string) =>
+  monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
 
 // `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado` (module 139, RP-30,
 // RP-31, RP-32): one month of a goal, its carried tasks first. Calendar-bound
@@ -132,7 +136,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     const parentRow = page.locator("[data-done]");
     await expect(parentRow).toHaveCount(1);
     await expect(parentRow).toContainText(`Padre ${stamp}`);
-    await expect(parentRow).toContainText(`de ${label(lastMonth)} · debe 3 h`);
+    await expect(parentRow).toContainText(owesLine(label(lastMonth), "3 h"));
     await expect(parentRow).toHaveAttribute("data-done", "false");
     // The parent has no mark of its own: only the leaves do.
     await expect(parentRow.locator("[data-state]")).toHaveCount(0);
@@ -223,7 +227,7 @@ test("a carried task with no estimate reads «de <mes>» alone and one with time
     await expect(bare).toContainText(`de ${label(lastMonth)}`);
     await expect(bare).not.toContainText("debe");
     await expect(bare).not.toContainText("0 min");
-    await expect(owed).toContainText(`de ${label(lastMonth)} · debe 5 h 15 min`);
+    await expect(owed).toContainText(owesLine(label(lastMonth), "5 h 15 min"));
 
     if (following.slice(0, 7) <= horizon.slice(0, 7)) {
       await page.goto(`/metas/${goalId}/meses/${seg(following)}`);
