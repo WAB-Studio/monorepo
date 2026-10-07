@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -10,6 +10,7 @@ import {
   Button,
   CodeBlock,
   Field,
+  Figure,
   Flex,
   Notice,
   Page,
@@ -35,6 +36,13 @@ type Created = { name: string; key: string };
 type CopyState = "idle" | "copied" | "failed";
 
 const COPIED_MS = 2000;
+
+// The page marks each figure and date of a line with `<fig>`; they print in mono, the rest in Archivo.
+function figures(line: string): ReactNode[] {
+  return line
+    .split(/<fig>(.*?)<\/fig>/)
+    .map((part, index) => (index % 2 === 1 ? <Figure key={index} variant="meta" value={part} /> : part));
+}
 
 function Copyable({ text, label }: { text: string; label: string }) {
   const t = useTranslations("connections");
@@ -97,9 +105,7 @@ function Keys({ rows, section, onAsk, busy }: {
               <Text variant="name" tone={row.revoked ? "muted" : undefined}>
                 {row.name}
               </Text>
-              <Text variant="meta" tone="muted">
-                {row.meta}
-              </Text>
+              <Text variant="sentence">{figures(row.meta)}</Text>
             </Flex>
             {row.revoked ? null : (
               <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>
@@ -160,7 +166,8 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
       <Page>
         <ScreenHeader title={t("created.title")} back={place} />
         <Notice role="note">{t("created.once")}</Notice>
-        <Section label={created.name}>
+        <Section label={t("sections.keys")}>
+          <Text variant="name">{created.name}</Text>
           <Copyable text={created.key} label={t("created.copyName")} />
         </Section>
         <Section label={t("created.terminal")}>

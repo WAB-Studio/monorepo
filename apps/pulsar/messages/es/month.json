@@ -26,6 +26,7 @@
     "planned": "planeado",
     "noAmount": "sin monto",
     "of": "de {planned}",
+    "ofFigure": "de <fig>{planned}</fig>",
     "current": "en curso",
     "carried": "se arrastró {share} %",
     "notReached": "—",

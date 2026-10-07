@@ -1,0 +1,124 @@
+import type { Locator } from "@playwright/test";
+
+import { monthOf, nextMonth } from "@/lib/plan/months";
+import { todayInZone } from "@/lib/zone";
+
+import connections from "../messages/es/connections.json";
+import { test, expect } from "./fixtures";
+
+// RP-38, RP-43, RP-53: a line that mixes words and figures is Archivo, and only
+// its figures and dates are DM Mono (`SistemaPiezas`). The new key's name is a
+// name, never a mono-caps label (`ConexionesCreada`).
+
+async function expectMixed(line: Locator, figures: string[]) {
+  const set = await line.evaluate((el) => ({
+    family: getComputedStyle(el).fontFamily,
+    spans: Array.from(el.querySelectorAll("span")).map((span) => ({
+      text: span.textContent,
+      family: getComputedStyle(span).fontFamily,
+    })),
+  }));
+  expect(set.family).not.toMatch(/mono/i);
+  expect(set.spans.map((span) => span.text)).toEqual(figures);
+  for (const span of set.spans) expect(span.family).toMatch(/mono/i);
+}
+
+const today = todayInZone();
+const thisMonth = monthOf(today);
+const WIDTHS: [number, number][] = [
+  [390, 844],
+  [1440, 900],
+];
+
+test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53)", () => {
+  test("«Mes»: «de 10 h» beside the goal's figure", async ({ person, browser, baseURL, db }) => {
+    const stamp = Date.now();
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${`Inglés ${stamp}`}, ${`${Number(today.slice(0, 4)) + 1}-${today.slice(5, 7)}-01`}::date, 'minutos', 'minutos', now() - interval '40 days')
+      returning id`;
+    await db`insert into goals.month_budgets (user_id, goal_id, month, amount) values (${person.id}, ${goal.id}, ${thisMonth}::date, 600)`;
+    for (const [width, height] of WIDTHS) {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/mes");
+        const line = page.locator("main span").filter({ hasText: /^de 10 h$/ }).first();
+        await expect(line).toBeVisible();
+        await expectMixed(line, ["10 h"]);
+      } finally {
+        await context.close();
+      }
+    }
+  });
+
+  test("the plan's end: «Con 11 h al mes llegas a tiempo.»", async ({ person, browser, baseURL, db }) => {
+    const year = Number(today.slice(0, 4));
+    const horizon = nextMonth(nextMonth(nextMonth(thisMonth)));
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
+      values (${person.id}, ${`Meta fin ${year}-${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', 480)
+      returning id`;
+    let position = 0;
+    for (const [name, estimate] of [["A", 480], ["B", 480], ["C", 480], ["D", 240], ["E", 300]] as [string, number][]) {
+      position += 1;
+      await db`
+        insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan)
+        values (${person.id}, ${goal.id}, ${name}, ${estimate}, ${position}, true)`;
+    }
+    for (const [width, height] of WIDTHS) {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height } });
+      try {
+        const page = await context.newPage();
+        await page.goto(`/metas/${goal.id}/plan`);
+        const line = page.getByText(/^Con .* al mes llegas a tiempo\.$/);
+        await expect(line).toBeVisible();
+        await expectMixed(line, [(await line.textContent())!.match(/Con (.*) al mes/)![1]]);
+      } finally {
+        await context.close();
+      }
+    }
+  });
+
+  test("a key's line: «Creada hoy a las 12:18 · sin usar», and the new key's name is a name", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    await db`
+      insert into goals.access_tokens (user_id, kind, name, token_hash, hint)
+      values (${person.id}, 'personal', 'mi pc', ${Buffer.from(`mi-pc-${Math.random()}`)}, 'abcd')`;
+    for (const [width, height] of WIDTHS) {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/conexiones");
+        const line = page.getByText(/^Creada hoy a las \d\d:\d\d · sin usar$/);
+        await expect(line).toBeVisible();
+        const time = (await line.textContent())!.match(/(\d\d:\d\d)/)![1];
+        await expectMixed(line, [time]);
+
+        await page.getByLabel(connections.nameLabel).fill("portátil del trabajo");
+        await page.getByRole("button", { name: connections.create }).click();
+        await expect(page.getByRole("heading", { level: 1, name: connections.created.title })).toBeVisible();
+        const group = page.getByText(connections.sections.keys, { exact: true });
+        await expect(group).toBeVisible();
+        const name = page.getByText("portátil del trabajo", { exact: true });
+        const set = await name.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { family: style.fontFamily, transform: style.textTransform, weight: style.fontWeight, size: style.fontSize };
+        });
+        expect(set.family).not.toMatch(/mono/i);
+        expect(set.transform).not.toBe("uppercase");
+        expect(set.weight).toBe("500");
+        expect(set.size).toBe("16px");
+        const sentence = page.getByText(connections.created.connected, { exact: true });
+        expect(await sentence.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+      } finally {
+        await context.close();
+      }
+      await db`delete from goals.access_tokens where user_id = ${person.id} and name <> 'mi pc'`;
+    }
+  });
+});

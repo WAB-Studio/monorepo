@@ -31,8 +31,8 @@ export default async function ConnectionsPage() {
   // «hoy 09:40» for today, «el 5 oct 2026» (plus the time when `clock`) for any other day.
   const stamp = (instant: string, clock: boolean) =>
     civilDateInZone(new Date(instant)) === today
-      ? `${t("connections.row.today")} ${timeInZone(instant)}`
-      : `${t("connections.row.on", { date: dayOf(instant) })}${clock ? ` ${timeInZone(instant)}` : ""}`;
+      ? `${t("connections.row.today")} <fig>${timeInZone(instant)}</fig>`
+      : `${t("connections.row.on", { date: `<fig>${dayOf(instant)}</fig>` })}${clock ? ` <fig>${timeInZone(instant)}</fig>` : ""}`;
   const live = (token: (typeof tokens)[number]) => {
     const family = token.kind === "oauth" ? "connections.oauth" : "connections.row";
     const created = stamp(token.createdAt, false);
@@ -51,7 +51,7 @@ export default async function ConnectionsPage() {
     name: token.name,
     revoked: token.revokedAt !== null,
     meta: token.revokedAt
-      ? t("connections.row.revokedMeta", { date: dayOf(token.revokedAt) })
+      ? t("connections.row.revokedMeta", { date: `<fig>${dayOf(token.revokedAt)}</fig>` })
       : live(token),
   }));
 
