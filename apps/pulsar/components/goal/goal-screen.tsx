@@ -76,10 +76,15 @@ function phaseSpanLabel(
   startsOn: string,
   endsOn: string | null,
   t: Translator,
-) {
+): ReactNode {
   const start = weekIndex(openedOn, startsOn);
   const end = endsOn ? weekIndex(openedOn, endsOn) : start;
-  return t("goal.detail.phaseSpan", { start, end });
+  // A phase stored before its goal opened reads from week 1, never week 0.
+  return t.rich("goal.detail.phaseSpan", {
+    start: Math.max(1, start),
+    end: Math.max(1, end),
+    fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} />,
+  });
 }
 
 /**
@@ -145,6 +150,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const bareMonth = !goal.measureUnit && goal.months.some((row) => row.current);
   const monthKey = `${today.slice(0, 7)}-01`;
   const own = planMonthList(goal.plan, monthKey).filter((item) => item.carriedFrom === null);
+  // An archived goal that holds no task this month has nothing to say of it;
+  // «Ver por mes» is still the way to the months that do.
+  const noMonthBlock = archived && bareMonth && own.length === 0;
   const units = await getTranslations("units");
   const words: TimeWords = {
     h: (h) => units("h", { h }),
@@ -196,7 +204,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const monthsLink = (
     <TextLink href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</TextLink>
   );
-  const bareBlock = bareMonth ? (
+  const bareBlock = bareMonth && !noMonthBlock ? (
     <Panel>
       <Section label={monthName}>
         <Text as="p" variant="sentence" tone="secondary">
@@ -306,7 +314,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
           <Section as="div">
             <Flex wrap="wrap" gap="4">
-              {month ? monthsLink : null}
+              {month || noMonthBlock ? monthsLink : null}
               <TextLink href={`/metas/${goal.id}/revision`}>
                 {t("goal.detail.reviewLink")}
               </TextLink>
@@ -321,6 +329,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <>
           {phoneActs}
           {bareBlock}
+          {noMonthBlock ? (
+            <Section as="div">{monthsLink}</Section>
+          ) : null}
         </>
       )}
     </>
@@ -366,7 +377,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             name={phase.name}
             trailing={
               <Flex direction="column" align="end">
-                <Text as="span" variant="meta" tone="muted">
+                <Text as="span" variant="sentence" tone="muted">
                   {phaseSpanLabel(openedOn, phase.startsOn, phase.endsOn, t)}
                 </Text>
               </Flex>
@@ -392,16 +403,16 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <ScreenHeader
         title={goal.name}
         back={{ href: "/metas", place: t("common.nav.goals") }}
-        meta={
-          goal.archivedAt
-            ? t("goal.detail.archivedOverline", { date: longDateLabel(goal.archivedAt) })
-            : t("goal.detail.overline", { date: longDateLabel(goal.createdAt) })
-        }
+        metaVariant="sentence"
+        meta={t.rich(archived ? "goal.detail.archivedOverline" : "goal.detail.overline", {
+          date: longDateLabel(goal.archivedAt ?? goal.createdAt),
+          ...fig,
+        })}
         actions={
           archived ? null : (
             <Face on="desktop">
               <Flex gap="3">
-                <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
+                <RenameGoalAction goalId={goal.id} name={goal.name} />
                 <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short />
               </Flex>
             </Face>
@@ -410,11 +421,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       />
       {archived ? null : (
         <Face on="phone">
-          <RenameGoalAction goalId={goal.id} name={goal.name} />
+          <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
         </Face>
       )}
 
-      <Split before={before} main={main} after={after} aside={380} />
+      <Split before={before} main={main} after={after} aside={380} afterBelow />
 
       {archived ? (
         <ReopenGoalButton goalId={goal.id} />

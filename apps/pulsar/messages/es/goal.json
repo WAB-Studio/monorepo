@@ -9,15 +9,15 @@
     "explain": "Los compromisos se añaden después, uno a uno, y el primero que mida algo —minutos, páginas— le pone la cifra a la meta. Ninguno es obligatorio para abrirla."
   },
   "detail": {
-    "overline": "meta · abierta el {date}",
-    "archivedOverline": "meta · archivada el {date}",
+    "overline": "meta · abierta el <fig>{date}</fig>",
+    "archivedOverline": "meta · archivada el <fig>{date}</fig>",
     "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
     "measures": "mide en {unit}",
     "moveHorizon": "mover el final",
     "moveHorizonEnded": "Mover el final",
     "commitmentsCount": "{word} {count, plural, one {compromiso} other {compromisos}}",
     "phasesCount": "{word} {count, plural, one {fase} other {fases}}",
-    "phaseSpan": "semanas {start}–{end}",
+    "phaseSpan": "semanas <fig>{start}–{end}</fig>",
     "unreadableEvidence": "No pudimos leer una fuente. Lo declarado sigue aquí.",
     "rename": "Renombrar",
     "archive": "Archivar esta meta",

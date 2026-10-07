@@ -99,3 +99,18 @@
     margin-block-start: 0;
   }
 }
+
+@media (min-width: 1024px) {
+  .split.afterBelow {
+    grid-template-rows: auto auto;
+  }
+
+  .afterBelow .main {
+    grid-row: 1;
+  }
+
+  .afterBelow .after {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
