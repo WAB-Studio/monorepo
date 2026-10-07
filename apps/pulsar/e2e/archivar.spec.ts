@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { todayInZone } from "../lib/zone";
 import { test, expect, laneNumber } from "./fixtures";
+import plan from "../messages/es/plan.json";
 
 // Reused per lane, never one per run (RP-23, RP-24): `goals.goals` grants no
 // DELETE (`scripts/check-policies.ts`'s own P37), so a fresh goal every run
@@ -209,7 +210,7 @@ test("an archived goal offers no way to add a phase, direct visit included (RP-2
     // nowhere in it.
     await page.goto(`/metas/${goalId}/fases/nueva`);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
-    await expect(page.getByText("Fase nueva")).toHaveCount(0);
+    await expect(page.getByText(plan.phaseForm.title)).toHaveCount(0);
   } finally {
     await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
   }

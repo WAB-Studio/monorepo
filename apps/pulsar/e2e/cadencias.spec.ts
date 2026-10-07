@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
+import plan from "../messages/es/plan.json";
 
 // `compromiso.spec.ts` already drives "daily" (the form's own default) and
 // "weekdays" through the screen; this file drives the two RP-12 gave the
@@ -65,7 +66,7 @@ test("a «N veces a la semana» commitment created through CompromisoNuevo lands
   try {
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
-    await page.getByRole("button", { name: "N por semana", exact: true }).click();
+    await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_week, exact: true }).click();
     await page.getByLabel("veces por semana").fill("3");
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await page.waitForURL(`**/metas/${goalId}`);
@@ -101,7 +102,7 @@ test("a «cada N días» commitment created through CompromisoNuevo lands in goa
   try {
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
-    await page.getByRole("button", { name: "cada N días", exact: true }).click();
+    await page.getByRole("button", { name: plan.commitmentForm.cadence.every_n_days, exact: true }).click();
     await page.getByLabel("cada cuántos días").fill("4");
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await page.waitForURL(`**/metas/${goalId}`);
@@ -139,7 +140,7 @@ test("«N al mes» is the fifth chip on CompromisoNuevo, and a commitment stored
     // is never counted by accident.
     const cadenceSection = page.locator("section", { hasText: "cada cuándo" });
     await expect(cadenceSection.getByRole("button")).toHaveCount(5);
-    await expect(cadenceSection.getByRole("button", { name: "N al mes", exact: true })).toHaveCount(1);
+    await expect(cadenceSection.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true })).toHaveCount(1);
 
     // Seeded directly: the read-back is this test's subject, not the form.
     await db`
@@ -169,7 +170,7 @@ test("«8» veces por semana is refused with the message naming 7 and writes no 
   try {
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
-    await page.getByRole("button", { name: "N por semana", exact: true }).click();
+    await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_week, exact: true }).click();
     await page.getByLabel("veces por semana").fill("8");
     await page.getByRole("button", { name: "Añadirlo" }).click();
 

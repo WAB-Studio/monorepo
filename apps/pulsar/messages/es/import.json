@@ -25,8 +25,11 @@
   "review": {
     "eyebrow": "importar · leído por OpenAI",
     "eyebrowTemplate": "importar · leído con la plantilla, sin IA",
-    "title": "Revisa el plan",
+    "title": "Revisa antes de crear",
     "hint": "desmarca lo que no quieras; toca un monto para cambiarlo",
+    "goalSpan": "Desde el <fig>{from}</fig> hasta el <fig>{to}</fig>",
+    "cutPhase": "La fase «{aim}» empieza en la semana 1, el <fig>{date}</fig>: tu plan la ponía antes de abrir la meta.",
+    "droppedPhase": "La fase «{aim}» termina antes de abrirla y no se crea.",
     "horizon": "horizonte",
     "horizonUntil": "hasta el {date}",
     "measure": "medida",
@@ -45,7 +48,7 @@
     "sourceLabel": "tu texto",
     "sourceFile": "leído de {name}",
     "sourceFileAnon": "leído de un archivo",
-    "change": "Cambiar el texto",
+    "change": "Volver al texto",
     "repeated": "Ya tienes una meta abierta con este nombre. Quedó desmarcada: márcala si quieres otra.",
     "edit": {
       "title": "Cambiar el monto"
@@ -79,7 +82,7 @@
     "horizonPast": "El final de la meta ya pasó. Pon una fecha por venir.",
     "duplicateMonth": "Hay dos montos para un mismo mes.",
     "parentWithAmount": "Una tarea con sub-tareas no lleva monto propio. Quítalo o quita las sub-tareas.",
-    "tapWithAmount": "Un compromiso de un toque no lleva monto ni unidad. Quítalos.",
+    "tapWithAmount": "Un compromiso de una vez no lleva monto ni unidad. Quítalos.",
     "draftInvalid": "Este plan ya no se puede crear. Léelo otra vez."
   }
 }

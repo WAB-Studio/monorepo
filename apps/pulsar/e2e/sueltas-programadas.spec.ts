@@ -2,6 +2,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import oneOffs from "../messages/es/oneOffs.json";
 
 // `/sueltas` holds the one-offs dated after today under «programadas»: each
 // is moved, done or deleted from there, and a done one says where it went
@@ -62,7 +63,7 @@ test("a one-off for tomorrow is listed under «programadas» with tomorrow's wor
     await page.goto("/sueltas");
 
     await expect(page.getByText("Lo que espera", { exact: true })).toBeVisible();
-    await expect(page.getByText("una programada", { exact: true })).toBeVisible();
+    await expect(page.getByText(oneOffs.scheduledGroupOne, { exact: true })).toBeVisible();
     await expect(page.getByText(/sin día$/)).toHaveCount(0);
     const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row).toContainText(`${words(plusDays(1))}`);

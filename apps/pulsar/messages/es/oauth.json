@@ -1,6 +1,6 @@
 {
-  "eyebrow": "Bitácora de metas · permiso",
-  "title": "{client} quiere entrar a tu Bitácora de metas",
+  "eyebrow": "bitácora de metas",
+  "title": "{client} quiere ver tu bitácora",
   "mayLabel": "podrá",
   "may": {
     "read": "leer tus metas, meses, tareas e informe",
@@ -13,6 +13,7 @@
     "delete": "borrar ni archivar nada",
     "undo": "desmarcar lo que ya hiciste"
   },
+  "consentLead": "Podrá leer tus metas y anotar lo que hagas. Puedes revocarlo en Conexiones.",
   "allow": "Permitir",
   "deny": "No permitir",
   "anonymousClient": "Una aplicación",
@@ -21,9 +22,10 @@
   "signedOut": {
     "title": "Entra para continuar",
     "body": "{client} pidió entrar a tu Bitácora de metas. Entra con tu correo y vuelves aquí para decir que sí o que no.",
-    "emailLabel": "tu correo",
+    "emailLabel": "Correo electrónico",
     "emailPlaceholder": "nombre@correo.com",
-    "send": "Enviarme el enlace",
+    "send": "Enviar enlace",
+    "lead": "Entra primero. Te mandamos un enlace a tu correo y vuelves aquí para decidir.",
     "promise": "El enlace te trae de vuelta a este permiso."
   },
   "invalid": {

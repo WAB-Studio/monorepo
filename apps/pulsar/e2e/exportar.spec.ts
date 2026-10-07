@@ -11,6 +11,7 @@ import {
   todayInZone,
 } from "@/lib/zone";
 import type postgres from "postgres";
+import exportMessages from "../messages/es/export.json";
 
 // `Reporte.dc.html`, `ReporteImpreso.dc.html`, `ReporteSinEvidencia.dc.html`,
 // `ReporteVacio.dc.html`, `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
@@ -189,7 +190,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
         ).toHaveText(note);
       }
       await expect(page.getByText(/^exportar · .* de \d{4}$/)).toBeVisible();
-      await expect(page).toHaveTitle(/^pulsar · /);
+      await expect(page).toHaveTitle(new RegExp(`^${exportMessages.printBrand} · `));
       // The evidence read, so no notice.
       await expect(
         page.getByText(/No pudimos leer el diccionario/),
@@ -400,7 +401,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
         await expect(back).toBeHidden();
         await expect(nav).toBeHidden();
         await expect(page).toHaveTitle(
-          `pulsar · ${civilDateShort(todayInZone())}`,
+          `${exportMessages.printBrand} · ${civilDateShort(todayInZone())}`,
         );
         await page.emulateMedia({ media: "screen" });
 
@@ -617,8 +618,8 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
         page.getByText(extras.doneChild, { exact: true }),
       ).toBeVisible();
       // The carried task with an amount says what it owes, at the row's end.
-      await expect(page.getByText(/^debe 45 min$/)).toHaveCount(1);
-      await expect(page.getByText(/debe 0/)).toHaveCount(0);
+      await expect(page.getByText(`${exportMessages.owes.replace("{owes}", "45 min")}`, { exact: true })).toHaveCount(1);
+      await expect(page.getByText(exportMessages.owes.replace("{owes}", "0"))).toHaveCount(0);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -738,7 +739,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       await page.emulateMedia({ media: "print" });
       const year = todayInZone().slice(0, 4);
       await expect(
-        page.getByText(new RegExp(`^pulsar · .*${year}$`)),
+        page.getByText(new RegExp(`^${exportMessages.printBrand} · .*${year}$`)),
       ).toBeVisible();
       await expect(
         page.getByText(/^exportar · /).locator("visible=true"),

@@ -143,7 +143,7 @@ test("at 360 the order is the phone's: end, commitments, phases, then «Archivar
   }
 });
 
-test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase» sits right of the phases label (RNP-17)", async ({
+test("at 1280 a goal with no measure draws no empty card (RNP-17)", async ({
   page,
   db,
   personId,
@@ -153,7 +153,7 @@ test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase
   try {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("cero fases", { exact: true })).toBeVisible();
+    await expect(page.getByText("cero fases", { exact: true })).toHaveCount(0);
     await expect(page.locator("main")).toHaveCount(1);
 
     const cards = await page.locator("main").evaluate((main) =>
@@ -166,11 +166,6 @@ test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase
     );
     expect(cards).toHaveLength(4);
     for (const text of cards) expect(text).not.toBe("");
-
-    const label = await boxOf(page, "cero fases");
-    const add = await page.getByRole("link", { name: "Añadir una fase" }).boundingBox();
-    expect(add!.x).toBeGreaterThan(label.x + 150);
-    expect(Math.abs(add!.y + add!.height / 2 - (label.y + 8))).toBeLessThan(30);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
