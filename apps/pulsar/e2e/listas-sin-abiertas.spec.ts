@@ -1,5 +1,7 @@
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
+import goal from "../messages/es/goal.json";
+
 import { test, expect } from "./fixtures";
 
 // `/sueltas` is a 640px column and `/metas` names no empty group (RP-21,
@@ -55,10 +57,10 @@ test("/metas with only ended and archived goals draws no «abiertas» label and 
              values (${person.id}, ${`Arch ${Date.now()}`}, ${plusDays(60)}, ${new Date()}, ${old})`;
 
     await page.goto("/metas");
-    await expect(page.getByText("terminadas", { exact: true })).toBeVisible();
-    await expect(page.getByText("abiertas", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Abrir una meta" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Abrir otra meta" })).toHaveCount(0);
+    await expect(page.getByText(goal.list.endedTitle, { exact: true })).toBeVisible();
+    await expect(page.getByText(goal.list.openTitle, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: goal.none.action })).toBeVisible();
+    await expect(page.getByRole("link", { name: goal.list.addAnother })).toHaveCount(0);
   } finally {
     await context.close();
   }
