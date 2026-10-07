@@ -2843,3 +2843,17 @@ branch could pass until it was restored.
   session on the local stack, so `/auth/confirm` refuses it and every spec reads `linkInvalid`.
 - Start a lane's server inside `scripts/supabase-local.sh exec`. Measured 2026-10-06: four agents on four lanes hit it
   the same evening before each found it alone.
+
+## A machine crash leaves empty git objects
+
+- A WSL reset on 2026-10-06 left nine zero-byte files under `.git/objects`; a lane's `HEAD` then read `bad object`.
+- Find them with `find .git/objects -type f -empty`, move them out of `.git` (never delete), and `git fetch origin`:
+  every one of them was a pushed object and came back whole. An unpushed commit would not.
+- Restore every lane's tree after the crash too: a mutator's live mutant survives it uncommitted.
+
+## A whole-page absence on the shared person is a race
+
+- `personId` (`e2e/fixtures.ts`) is one person per lane, shared by both workers and every spec. A test that asserts
+  «nothing else is here» on it fails whenever another spec seeds for it at the same moment.
+- Assert an absence or an exact count only on the disposable `person`. Measured 2026-10-06: `dia-pasado.spec.ts:314`
+  and `dia-pasado-hechos.spec.ts:105` passed one CI run and failed the next on the same tree.
