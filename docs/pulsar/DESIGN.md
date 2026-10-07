@@ -914,9 +914,11 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   Hoy, above the goal sections, each naming its goal. A move of 0 days draws none.
 - **A phase is written in weeks and reads its dates**, decided by the user 2026-10-06 after the wave-2 review. The
   phase form shows live, under the weeks, the days they cover («del lunes 5 de octubre al domingo 8 de noviembre») and
-  the last week the goal allows, as «Mover el final» does. No schema change. Board still to draw.
+  the last week the goal allows, as «Mover el final» does. No schema change. Boards `FaseFechas`, `FaseFechasFuera`,
+  `FaseFechasSolapa`, approved by the user 2026-10-06.
 - **An imported phase that starts before its goal is cut to week 1**, decided by the user 2026-10-06. The import's
-  review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board still to draw.
+  review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board `ImportarFaseRecortada`,
+  approved by the user 2026-10-06.
 - **The goal at 1024 draws its phases on a full-width row under the two columns** (2026-10-06, decided by the
   orchestrator): a 260 px phases column broke an aim into one word per line.
 - **Decided by the user 2026-10-06, after the roadmap and wave-2 critics:**
@@ -925,16 +927,17 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - A month's figure on the goal and the plan is the hours of the tasks done that month against its room, as Hoy's
     notice counts («septiembre cerró con 6 h de 12 h»). The measure's total stays on its own line.
   - «Mover el final» asks first: a sheet names the old and the new end («Mover el final del 29 de noviembre al 20 de
-    febrero»), «Moverlo» and «Cancelar». Supersedes the one tap of `RoadmapPasaElFinal`. Board still to draw.
+    febrero»), «Moverlo» and «Cancelar». Supersedes the one tap of `RoadmapPasaElFinal`. Boards `RoadmapMoverFinalHoja`,
+    `RoadmapMoverFinalFallo`, approved by the user 2026-10-06.
   - When several plans moved, Hoy draws one card: «N planes se movieron», a line per goal (how far, «Ver el plan»), one
-    «Entendido». Supersedes one card per goal (`RoadmapHoyMovido`) and the stacking decided earlier today. Board still
-    to draw.
+    «Entendido». Supersedes one card per goal (`RoadmapHoyMovido`) and the stacking decided earlier today. Board
+    `RoadmapHoyMovidoVarios`, approved by the user 2026-10-06.
 - **Decided by the orchestrator 2026-10-06, same reviews:**
   - A task past the goal's end that starts inside it reads its part in its month («Empieza aquí con 10 h y sigue en
     diciembre.»); only what falls after the end is listed under «después de tu final» (RP-54).
   - A row under «después de tu final» opens the task's sheet, as every task row does.
   - A month's header says which figure it is: the current month «5 h hechas de 12 h», a later one «12 h planeadas de
-    12 h». Board still to draw.
+    12 h». Boards `RoadmapMesCifras`, `MetaPlanHechas`, approved by the user 2026-10-06.
   - Setting a goal's first rhythm raises no «se movió» notice: the plan starts there.
   - A task with no estimate reads «sin estimar» as its trailing, muted, in every list of the plan.
   - A parent's sheet says under «Nombre» why it has no estimate: «Suma lo de sus sub-tareas.»
@@ -974,3 +977,9 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - A goal with no measure draws no figure and no bar on the plan's months.
   - «Añadir una tarea» opens the sheet with no «va a» hint.
   - A plan that ends on the goal's last day reads «A este ritmo terminas el {date}, el día de tu final.», never «0 días antes».
+
+- **Eighteen boards of wave 3 and the roadmap's second round, approved by the user 2026-10-06: «si a todo».**
+  `RoadmapMoverFinalHoja`, `RoadmapMoverFinalFallo`, `RoadmapHoyMovidoVarios`, `RoadmapMesCifras`, `MetaPlanHechas`,
+  `FaseFechas`, `FaseFechasFuera`, `FaseFechasSolapa`, `ImportarFaseRecortada`, `EntrarFormulario`, `EntrarEnviado`,
+  `PermisoSinSesion`, `PermisoConSesion`, `SueltaHoja`, `SueltaHojaHecha`, `ReportePlegado`, `ReporteImpresoMeses`,
+  `PalabrasDelPlan`. Canvas version 69. Where a board and the lines above disagree, the lines above win.
