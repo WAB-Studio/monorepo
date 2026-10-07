@@ -91,6 +91,64 @@ for (const width of WIDTHS) {
     }
   });
 
+  test(`Hoy at ${width}: a done suelta is renamed from its sheet and stays done (RP-57)`, async ({
+    page,
+    db,
+    personId,
+  }) => {
+    await page.setViewportSize({ width, height: width < 1024 ? 800 : 900 });
+    const name = `Suelta hecha renombrar ${width} ${Date.now()}`;
+    const renamed = `${name} nueva`;
+    const id = await seed(db, personId, name, todayInZone());
+    try {
+      await page.goto("/");
+      await page
+        .locator("div")
+        .filter({ has: page.getByRole("button", { name, exact: true }) })
+        .last()
+        .getByRole("button", { name: "Marcar como hecho" })
+        .click();
+      await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
+
+      await page.getByText(name, { exact: true }).click();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet).toContainText(oneOffs.sheet.eyebrowDone);
+      await sheet.getByLabel(roadmap.fijar.name).fill(renamed);
+      await sheet.getByRole("button", { name: roadmap.fijar.save }).click();
+      await expect(sheet).toBeHidden();
+
+      expect(await nameOf(db, id)).toBe(renamed);
+      expect((await db`select id from goals.facts where one_off_id = ${id}`).length).toBe(1);
+      await expect(page.getByRole("button", { name: `Deshacer: ${renamed}` })).toBeVisible();
+    } finally {
+      await db`delete from goals.facts where one_off_id = ${id}`;
+      await db`delete from goals.one_offs where id = ${id}`;
+    }
+  });
+
+  test(`Hoy at ${width}: «${roadmap.fijar.cancel}» closes the sheet and writes nothing (RP-57)`, async ({
+    page,
+    db,
+    personId,
+  }) => {
+    await page.setViewportSize({ width, height: width < 1024 ? 800 : 900 });
+    const name = `Suelta cancelar ${width} ${Date.now()}`;
+    const id = await seed(db, personId, name, todayInZone());
+    try {
+      await page.goto("/");
+      await page.getByRole("button", { name, exact: true }).click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByLabel(roadmap.fijar.name).fill(`${name} nueva`);
+      await sheet.getByRole("button", { name: roadmap.fijar.cancel }).click();
+      await expect(sheet).toBeHidden();
+
+      expect(await nameOf(db, id)).toBe(name);
+      await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+    } finally {
+      await db`delete from goals.one_offs where id = ${id}`;
+    }
+  });
+
   test(`/sueltas at ${width}: the name opens the sheet and «${oneOffs.sheet.giveDay}» reaches its day (RP-57, W3-Q1)`, async ({
     page,
     db,
