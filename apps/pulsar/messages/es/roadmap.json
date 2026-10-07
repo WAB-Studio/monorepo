@@ -38,7 +38,7 @@
   "pasaElFinal": {
     "finish": "A este ritmo terminas el {date}, {weeks, plural, one {# semana} other {# semanas}} después de tu final, el {end}.",
     "raise": "Subir el ritmo",
-    "raiseHint": "Con {hours} al mes llegas a tiempo.",
+    "raiseHint": "Con <fig>{hours}</fig> al mes llegas a tiempo.",
     "moveEnd": "Mover el final",
     "moveEndHint": "Al {date}, donde termina el plan.",
     "removeTasks": "O quita tareas del plan: cada una que sale adelanta el final.",

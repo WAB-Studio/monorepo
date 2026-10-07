@@ -188,8 +188,8 @@ export async function MonthAcrossScreen() {
             <Flex align="baseline" gap="2">
               <Figure value={goal.line.reached} unit={unit ?? undefined} />
               {goal.line.planned !== null ? (
-                <Text variant="meta" tone="muted">
-                  {t("month.months.of", { planned: say(goal.line.planned) })}
+                <Text variant="sentence">
+                  {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}
                 </Text>
               ) : null}
             </Flex>
