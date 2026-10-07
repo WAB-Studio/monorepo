@@ -991,3 +991,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   estudio en octubre», RP-28). Hoy's month line and «Mes» (RP-43) keep the measure this round. No code retired.
 - **A fact before its goal opened is refused with «Ese día es anterior a cuando abriste esta meta.»** (2026-10-06,
   decided by the orchestrator; no board draws it).
+- **The consent screen keeps its «may / never» lists under `PermisoConSesion`'s lead** (2026-10-06, decided by the
+  orchestrator, module 381). The board draws the layout — centred, h1, «Podrá leer tus metas y anotar lo que hagas. Puedes
+  revocarlo en Conexiones.», «Permitir» over «No permitir» — and not the removal of what a person reads before granting
+  access. Signed out, the promise line under the form goes, as the board draws.
