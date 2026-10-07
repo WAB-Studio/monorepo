@@ -8,8 +8,10 @@ import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthStart } from "@/lib/validation/budget";
 import {
   dismissPlanNoticeSchema,
+  dismissPlanNoticesSchema,
   setRhythmSchema,
   type DismissPlanNoticeInput,
+  type DismissPlanNoticesInput,
   type SetRhythmInput,
 } from "@/lib/validation/rhythm";
 import { TIME_ZONE, todayInZone } from "@/lib/zone";
@@ -98,32 +100,60 @@ export async function setRhythm({ goalId, amount }: SetRhythmInput): Promise<Set
   return { ok: true };
 }
 
+// Carries a message key out of the transaction, so the write rolls back.
+class NamedError extends Error {}
+
 /**
- * Dismisses Hoy's notice for a month already over (RP-53). `greatest` ignores
- * `null`, so the first dismissal sets the column and an older month never
- * pulls it back. `goals_select_self` and the update policy scope the row to
- * its owner: another person's goal matches nothing.
+ * Dismisses Hoy's notices for months already over (RP-53) in one statement,
+ * all or nothing. `greatest` ignores `null`, so the first dismissal sets the
+ * column and an older month never pulls it back. The policies scope each row
+ * to its owner: another person's goal matches nothing, the count falls short
+ * and the throw rolls back what the others wrote. One goal sent twice keeps
+ * its latest month, since `update ... from` applies one arbitrary match.
  */
-export async function dismissPlanNotice(
-  input: DismissPlanNoticeInput,
+export async function dismissPlanNotices(
+  input: DismissPlanNoticesInput,
 ): Promise<DismissPlanNoticeResult> {
-  const parsed = dismissPlanNoticeSchema.safeParse(input);
+  const parsed = dismissPlanNoticesSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "month.errors.signedOut" };
 
-  const { goalId, month } = parsed.data;
-  if (month >= todayInZone().slice(0, 7)) return { ok: false, error: "month.errors.monthInvalid" };
+  const current = todayInZone().slice(0, 7);
+  if (parsed.data.notices.some(({ month }) => month >= current)) {
+    return { ok: false, error: "month.errors.monthInvalid" };
+  }
 
-  const rows = await withGoalsDb((tx) =>
-    tx.execute(sql`
-      update goals set plan_seen = greatest(plan_seen, ${monthStart(month)}::date)
-      where id = ${goalId} returning id
-    `),
-  );
-  if (rows.length === 0) return { ok: false, error: "month.errors.notFound" };
+  const latest = new Map<string, string>();
+  for (const { goalId, month } of parsed.data.notices) {
+    const seen = latest.get(goalId);
+    if (seen === undefined || month > seen) latest.set(goalId, month);
+  }
+  const payload = JSON.stringify([...latest].map(([id, month]) => ({ id, month: monthStart(month) })));
+
+  try {
+    await withGoalsDb(async (tx) => {
+      const rows = await tx.execute(sql`
+        update goals g set plan_seen = greatest(g.plan_seen, v.month)
+        from jsonb_to_recordset(${payload}::jsonb) as v(id uuid, month date)
+        where g.id = v.id returning g.id
+      `);
+      if (rows.length < latest.size) throw new NamedError("month.errors.notFound");
+    });
+  } catch (error) {
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
+    throw error;
+  }
 
   revalidatePath("/");
   return { ok: true };
+}
+
+export async function dismissPlanNotice(
+  input: DismissPlanNoticeInput,
+): Promise<DismissPlanNoticeResult> {
+  const parsed = dismissPlanNoticeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  return dismissPlanNotices({ notices: [parsed.data] });
 }

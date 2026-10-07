@@ -14,12 +14,20 @@ export const setRhythmSchema = z.object({
 
 export type SetRhythmInput = z.infer<typeof setRhythmSchema>;
 
-export const dismissPlanNoticeSchema = z.object({
-  goalId,
-  month: z
-    .string({ error: "month.errors.monthInvalid" })
-    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, { error: "month.errors.monthInvalid" }),
+const noticeMonth = z
+  .string({ error: "month.errors.monthInvalid" })
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, { error: "month.errors.monthInvalid" });
+
+export const dismissPlanNoticeSchema = z.object({ goalId, month: noticeMonth });
+
+export const dismissPlanNoticesSchema = z.object({
+  notices: z
+    .array(dismissPlanNoticeSchema, { error: "month.errors.invalid" })
+    .min(1, { error: "month.errors.invalid" })
+    .max(50, { error: "month.errors.invalid" }),
 });
+
+export type DismissPlanNoticesInput = z.infer<typeof dismissPlanNoticesSchema>;
 
 export type DismissPlanNoticeInput = z.infer<typeof dismissPlanNoticeSchema>;
 
