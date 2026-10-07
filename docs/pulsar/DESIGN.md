@@ -1000,3 +1000,17 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   orchestrator, module 381). The board draws the layout — centred, h1, «Podrá leer tus metas y anotar lo que hagas. Puedes
   revocarlo en Conexiones.», «Permitir» over «No permitir» — and not the removal of what a person reads before granting
   access. Signed out, the promise line under the form goes, as the board draws.
+
+## Decisions of 2026-10-06, after the product critic of train 4 (module 393, decided by the orchestrator, no board)
+
+- **On the plan with no rhythm, «Armar el plan» is the one solid act.** «Añadir una tarea» is outlined until the plan has
+  a rhythm, then solid as built (:114). A goal with no measure draws no rhythm form, so its «Añadir una tarea» stays solid.
+- **A sub-task's row on Semana says «de <parent>» as its second line**, Archivo muted, the pattern of
+  `HoyTareaMesSubtarea` (:255). A top-level task or a suelta draws no second line.
+- **«Mover el final» opens on the goal's own end.** The count it opens with names the goal's last day, and «Moverlo»
+  untouched moves nothing. A count that is not 1–520 says why under the field as it is typed, the field ringed, as the
+  phase form does (378).
+- **An archived goal whose end passed reads «terminó el <weekday day month>»**, as an ended goal does (:612), never
+  «N semanas · hasta el …». An archived goal whose end is still ahead keeps its weeks line.
+- **What is in the import box when the screen answers is what is read.** Text typed before the page settles is kept;
+  the stored draft fills the box only when it is empty. The box never changes under the person's hands.
