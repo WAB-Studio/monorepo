@@ -240,3 +240,95 @@ for (const [width, gap] of [
     }
   });
 }
+
+// Module 407 (RP-59): `/sueltas` and «N sin día» hold one-offs with no goal. A goal's
+// task with no day is in its plan (0014); one with a later day stays under
+// «con día». Exact counts and absences ride on the disposable `person`.
+async function seedGoal(db: postgres.Sql, personId: string, name: string, rhythm: number | null = null): Promise<string> {
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
+    values (${personId}, ${name}, ${plusDays(90)}, ${rhythm === null ? null : "horas"}, ${rhythm === null ? null : "hours"}, ${rhythm})
+    returning id
+  `;
+  return goal.id;
+}
+
+test("a goal's task with no day is not on /sueltas, not in «N esperan», and waits in the goal's plan (RP-59)", async ({
+  person,
+  browser,
+  db,
+}) => {
+  const stamp = Date.now();
+  const task = `Tarea de meta sin día ${stamp}`;
+  const goalId = await seedGoal(db, person.id, `Meta de la tarea ${stamp}`, 10);
+  await seedDayless(db, person.id, task, goalId);
+  const context = await browser.newContext({ storageState: person.sessionFile });
+
+  try {
+    const page = await context.newPage();
+    await page.goto("/sueltas");
+    await expect(page.getByText("Nada espera, ni sin día ni para otro día.")).toBeVisible();
+    await expect(page.getByText(task)).toHaveCount(0);
+
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: /(espera|esperan)$/ })).toHaveCount(0);
+
+    await page.goto(`/metas/${goalId}/plan`);
+    await expect(page.getByText(task).first()).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test("a goalless dayless one-off is under «sin día» and counts in Hoy's «N espera», beside a goal's task that does not (RP-59)", async ({
+  person,
+  browser,
+  db,
+}) => {
+  const stamp = Date.now();
+  const loose = `Suelta sin meta ${stamp}`;
+  const task = `Tarea de meta oculta ${stamp}`;
+  const goalId = await seedGoal(db, person.id, `Meta oculta ${stamp}`);
+  await seedDayless(db, person.id, loose);
+  await seedDayless(db, person.id, task, goalId);
+  const context = await browser.newContext({ storageState: person.sessionFile });
+
+  try {
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "1 espera", exact: true })).toBeVisible();
+
+    await page.goto("/sueltas");
+    await expect(page.getByRole("button", { name: loose, exact: true })).toBeVisible();
+    await expect(page.getByText("sin día", { exact: true })).toBeVisible();
+    await expect(page.getByText(task)).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("a goal's task for the day after tomorrow stays under «con día» with «de la meta» on /sueltas (RP-59, W4-Q5 a)", async ({
+  person,
+  browser,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalName = `Meta con día ${stamp}`;
+  const task = `Tarea de meta con día ${stamp}`;
+  const goalId = await seedGoal(db, person.id, goalName);
+  await db`
+    insert into goals.one_offs (user_id, name, day, goal_id)
+    values (${person.id}, ${task}, ${plusDays(2)}, ${goalId})
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile });
+
+  try {
+    const page = await context.newPage();
+    await page.goto("/sueltas");
+    await expect(page.getByText("con día", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: new RegExp(`^${task} .*de ${goalName}$`) })).toBeVisible();
+    await expect(page.getByText("Nada espera, ni sin día ni para otro día.")).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});

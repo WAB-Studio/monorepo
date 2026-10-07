@@ -294,3 +294,17 @@ test("the two loose lists run in overlapping transactions", async () => {
   assert.equal(wireOf.connections, 2);
   assert.equal(wireOf.overlap, true);
 });
+
+// Module 407 (RP-59): a goal's task with no day waits in its plan, never in the loose list.
+test("list_loose_one_offs keeps a goal's dayless task out of dayless and a goal's task with a later day in scheduled", async () => {
+  await session.actAs(asResolved(subject), async () => {
+    const waiting = await oneOffs.createOneOff({ name: "tarea de meta sin día", day: null, goalId: subjectGoal });
+    if (!waiting.ok) throw new Error(`createOneOff goal task: ${waiting.error}`);
+    const later = await oneOffs.createOneOff({ name: "tarea de meta con día", day: dayFrom(4), goalId: subjectGoal });
+    if (!later.ok) throw new Error(`createOneOff goal task later: ${later.error}`);
+  });
+  const result = await call("list_loose_one_offs", {});
+  const body = result.structuredContent as { dayless: { name: string }[]; scheduled: { name: string; day: string }[] };
+  assert.deepEqual(body.dayless.map((item) => item.name), ["sin día"]);
+  assert.ok(body.scheduled.some((item) => item.name === "tarea de meta con día" && item.day === dayFrom(4)));
+});
