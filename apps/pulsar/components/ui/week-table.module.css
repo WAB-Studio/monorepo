@@ -331,6 +331,16 @@
   padding-block-end: 0;
 }
 
+/* A mixed line: the words in Archivo, only its figures in mono. */
+.foldFoot .foldSum {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 .foldTally {
   display: flex;
   flex-direction: column;

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { type MessageKey, type Translator } from "@/i18n/translator";
-import { Face, Figure, Flex, Mark, Panel, Section, SectionLabel, Text, WeekFold, WeekTable } from "@/components/ui";
+import { Face, Figure, Flex, Mark, Panel, Section, Text, WeekFold, WeekTable } from "@/components/ui";
 import type { WeekTableCell, WeekTableColumn } from "@/components/ui/week-table";
 import { tallyDays } from "@/lib/day/tally";
 import type { DaySlot } from "@/lib/day/types";
@@ -114,7 +114,6 @@ export function WeekTableFace({
         ),
       }));
 
-  // A goal with nothing to mark still heads its group on the phone.
   const goalGroups = goals.map((goal) => {
     const progress = goalWeekProgress(goal, view.start);
     const label = progress
@@ -135,7 +134,9 @@ export function WeekTableFace({
     ...goalGroups,
     ...(looseRows.length > 0 ? [{ key: "one-offs", label: t("week.oneOffs.title"), rows: looseRows }] : []),
   ];
+  // Neither face heads a goal with nothing to mark; an ended note keeps its group.
   const tableGroups = foldGroups.filter((group) => group.rows.length > 0);
+  const phoneGroups = foldGroups.filter((group) => group.rows.length > 0 || ("note" in group && group.note));
 
   if (foldGroups.length === 0) return null;
 
@@ -144,12 +145,23 @@ export function WeekTableFace({
   );
   const footer = { label: t("week.table.footer"), cells };
 
-  // `SemanaEnParte.dc.html`: the phone names the partial days apart from
-  // «hechos», over the days that have come, and draws its legend. Without a
-  // partial day the per-day tally says it all.
+  // `SemanaEnParte.dc.html`: the phone footer carries the partial days, over
+  // the days that have come. Without one the per-day tally says it all.
   const lived = tallyDays(week).filter(({ day, total }) => day <= today && total > 0);
   const sum = (pick: (tally: (typeof lived)[number]) => number) => lived.reduce((acc, tally) => acc + pick(tally), 0);
   const partial = sum((tally) => tally.partial);
+  const phoneFooter =
+    partial > 0
+      ? {
+          ...footer,
+          label: t.rich("week.table.footerPartial", {
+            done: sum((tally) => tally.done),
+            total: sum((tally) => tally.total),
+            partial,
+            fig: (chunks) => <Figure variant="meta" value={chunks} />,
+          }),
+        }
+      : footer;
   // The key shows whenever any half dot is drawn, flexible rows included.
   const halfDrawn = foldGroups.some((group) =>
     group.rows.some((row) => row.cells.some((cell) => cell.state === "partial")),
@@ -166,22 +178,9 @@ export function WeekTableFace({
       ) : null}
       <Face on="phone">
         <Section as="div">
-          <WeekFold columns={columns} groups={foldGroups} footer={footer} />
+          <WeekFold columns={columns} groups={phoneGroups} footer={phoneFooter} />
           {halfDrawn ? (
             <>
-              {partial > 0 ? (
-                <Flex align="baseline" gap="2">
-                  <SectionLabel>{t("week.table.footer")}</SectionLabel>
-                  <Figure variant="meta" value={sum((tally) => tally.done)} />
-                  <Text variant="sentence">
-                    {t.rich("week.summary.rest", {
-                      total: sum((tally) => tally.total),
-                      partial,
-                      fig: (chunks) => <Figure variant="meta" value={chunks} />,
-                    })}
-                  </Text>
-                </Flex>
-              ) : null}
               <Flex wrap="wrap" gap="3" data-testid="week-legend">
                 {(
                   [

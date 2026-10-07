@@ -153,7 +153,7 @@ export function WeekFold({
 }: {
   columns: readonly WeekTableColumn[];
   groups: readonly WeekTableGroup[];
-  footer?: { label: string; cells: readonly (WeekTableTally | null)[] };
+  footer?: { label: ReactNode; cells: readonly (WeekTableTally | null)[] };
 }) {
   const shade = (column: number) => (columns[column]?.today ? styles.foldToday : undefined);
 
@@ -206,7 +206,7 @@ export function WeekFold({
       ))}
       {footer ? (
         <div className={styles.foldFoot}>
-          <p className={styles.foldGroupLabel}>{footer.label}</p>
+          <p className={join(styles.foldGroupLabel, typeof footer.label === "string" ? undefined : styles.foldSum)}>{footer.label}</p>
           <div className={styles.foldMarks}>
             {columns.map((column, index) => {
               const cell = footer.cells[index];
