@@ -47,12 +47,16 @@ touches it. Say in the report which layer you ran, and name the mutants you did 
 
 Run at most three suites at once. Nine GB of RAM holds three servers and three Chromiums.
 
+Start the dev server with `NODE_OPTIONS=--max-old-space-size=3072`. Restart it every eight mutants and
+whenever its RSS passes 3 GB. Each mutant is a recompile that `next dev` keeps in memory: one server
+reached 7.2 GB on 2026-10-06 and left the machine 2 GB. Re-run any mutant whose run straddled a restart.
+
 # Method
 
 One mutation at a time, by patch, never by stash:
 
 ```
-git diff > /tmp/clean.patch          # nothing pending: this file is empty
+git diff > private/clean.patch          # nothing pending: this file is empty
 <edit the one line>
 <run the covering layer>
 git checkout -- <file>               # or git apply -R of your own patch
