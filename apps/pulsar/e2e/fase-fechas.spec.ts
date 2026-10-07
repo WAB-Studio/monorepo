@@ -99,6 +99,63 @@ for (const [width, height] of WIDTHS) {
   });
 }
 
+for (const [width, height] of WIDTHS) {
+  test(`at ${width}px «Añadir la fase» under a refusal moves focus to the invalid field and writes nothing`, async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const { goalId } = await seedGoal(db, person.id);
+    const phaseCount = async () => {
+      const [row] = await db<{ count: string }[]>`select count(*)::text as count from goals.phases where goal_id = ${goalId}`;
+      return Number(row.count);
+    };
+    const before = await phaseCount();
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width, height },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto(`/metas/${goalId}/fases/nueva`);
+      const from = page.getByLabel(plan.phaseForm.fromLabel);
+      const to = page.getByLabel(plan.phaseForm.toLabel);
+      const submit = page.getByRole("button", { name: plan.phaseForm.submit });
+      await page.getByLabel(plan.phaseForm.aimLabel).fill("Una fase");
+
+      // Only the end passes the last week: «hasta» is ringed and takes focus.
+      await from.fill("6");
+      await to.fill("7");
+      await expect(to).toHaveAttribute("aria-invalid", "true");
+      await expect(from).not.toHaveAttribute("aria-invalid", "true");
+      await submit.click();
+      await expect(to).toBeFocused();
+      expect(await phaseCount()).toBe(before);
+
+      // The start passes it too: «desde» is the one ringed and takes focus.
+      await from.fill("7");
+      await expect(from).toHaveAttribute("aria-invalid", "true");
+      await expect(to).not.toHaveAttribute("aria-invalid", "true");
+      await submit.click();
+      await expect(from).toBeFocused();
+      expect(await phaseCount()).toBe(before);
+
+      // Overlapping «Fundamentos»: «desde» takes focus.
+      await to.fill("4");
+      await from.fill("3");
+      await expect(from).toHaveAttribute("aria-invalid", "true");
+      await to.focus();
+      await submit.click();
+      await expect(from).toBeFocused();
+      expect(await phaseCount()).toBe(before);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
 test("with no week left the form opens empty and offers «Mover el final»", async ({ person, browser, db }) => {
   const monday = weekOf(todayInZone())[0];
   const horizon = addWeeksToCivilDate(monday, 1);
