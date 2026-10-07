@@ -23,11 +23,9 @@ const dayAndMonth = (date: string) =>
 const CUT = "Diagnóstico";
 const DROPPED = "Repaso de verano";
 
-const plan = () =>
+const goalBlock = (title: string) =>
   [
-    "pulsar · plantilla 1",
-    "",
-    "# Fases recortadas",
+    `# ${title}`,
     `horizonte: ${plus(200)}`,
     "medida: horas de estudio · minutos",
     "",
@@ -39,6 +37,9 @@ const plan = () =>
     `- ${todayInZone().slice(0, 7)} · 12 h`,
   ].join("\n");
 
+const plan = (titles = ["Fases recortadas"]) =>
+  ["pulsar · plantilla 1", "", titles.map(goalBlock).join("\n\n")].join("\n");
+
 type Fixtures = {
   person: { id: string; sessionFile: string };
   browser: Browser;
@@ -48,6 +49,7 @@ async function review(
   { person, browser, baseURL }: Fixtures,
   run: (page: Page) => Promise<void>,
   width = 1280,
+  titles?: string[],
 ) {
   const context = await browser.newContext({
     storageState: person.sessionFile,
@@ -57,7 +59,7 @@ async function review(
   try {
     const page = await context.newPage();
     await page.goto("/metas/importar");
-    await page.getByLabel(messages.textLabel).fill(plan());
+    await page.getByLabel(messages.textLabel).fill(plan(titles));
     await page.getByRole("button", { name: "Leer el plan" }).click();
     await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
     await expect(
@@ -124,6 +126,36 @@ test.describe("the review says the cut (RP-37)", () => {
         expect(Math.abs(card.width - bar)).toBeLessThanOrEqual(1);
       },
       1440,
+    );
+  });
+
+  test("at 1440 with two goals the confirm bar spans both cards", async ({
+    person,
+    browser,
+    baseURL,
+  }) => {
+    await review(
+      { person, browser, baseURL },
+      async (page) => {
+        const first = (await page
+          .getByRole("region", { name: "Fases recortadas" })
+          .boundingBox())!;
+        const second = (await page
+          .getByRole("region", { name: "Segunda meta" })
+          .boundingBox())!;
+        const bar = (await page
+          .getByRole("button", { name: "Crear 2 metas" })
+          .evaluate((button) => {
+            const box = button.parentElement!.getBoundingClientRect();
+            return { x: box.x, width: box.width };
+          }))!;
+        const left = Math.min(first.x, second.x);
+        const right = Math.max(first.x + first.width, second.x + second.width);
+        expect(Math.abs(bar.x - left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(bar.x + bar.width - right)).toBeLessThanOrEqual(1);
+      },
+      1440,
+      ["Fases recortadas", "Segunda meta"],
     );
   });
 });

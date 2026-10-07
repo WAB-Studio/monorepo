@@ -529,7 +529,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
       {failure ? <Notice>{failure}</Notice> : null}
 
-      <ActionBar>
+      <ActionBar span={work.goals.length === 1 ? "column" : "full"}>
         <Button block onClick={confirm} disabled={pending || goalsKept === 0} aria-busy={pending || undefined}>
           {pending ? t("import.review.creating") : t("import.review.create", { count: goalsKept })}
         </Button>
