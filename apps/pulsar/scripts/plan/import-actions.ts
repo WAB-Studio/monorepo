@@ -124,7 +124,7 @@ horizonte: ${M12}-01
 medida: horas de estudio · minutos
 
 ## Fases
-- ${M0}-01 a ${shiftDay(`${M3}-01`, -1)} · Evals y harness
+- ${TODAY} a ${shiftDay(`${M3}-01`, -1)} · Evals y harness
 
 ## Meses
 - ${M0} · 12 h
@@ -157,7 +157,7 @@ horizonte: ${M12}-01
 medida: horas de estudio · minutos
 
 ## Fases
-- ${M0}-01 a ${shiftDay(`${M3}-01`, -1)} · Primera
+- ${TODAY} a ${shiftDay(`${M3}-01`, -1)} · Primera
 - ${M3}-01 a ${shiftDay(`${M6}-01`, -1)} · Segunda
 
 ## Meses
@@ -266,7 +266,7 @@ test("confirmImport: the template's example writes its goal and every row reads 
 
   const phases = await sql`
     select aim, starts_on::text as s, ends_on::text as e from goals.phases where goal_id = ${goalId}`;
-  assert.deepEqual(phases.map((p) => ({ ...p })), [{ aim: "Evals y harness", s: `${M0}-01`, e: shiftDay(`${M3}-01`, -1) }]);
+  assert.deepEqual(phases.map((p) => ({ ...p })), [{ aim: "Evals y harness", s: TODAY, e: shiftDay(`${M3}-01`, -1) }]);
 
   // Minutes (RP-35): 12 h and 20 h.
   const months = await sql`
