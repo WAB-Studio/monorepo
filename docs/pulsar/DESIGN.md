@@ -916,6 +916,9 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   phase form shows live, under the weeks, the days they cover («del lunes 5 de octubre al domingo 8 de noviembre») and
   the last week the goal allows, as «Mover el final» does. No schema change. Boards `FaseFechas`, `FaseFechasFuera`,
   `FaseFechasSolapa`, approved by the user 2026-10-06.
+- **The phase form rings the field that is out of range** (2026-10-06, decided by the orchestrator): «hasta» when only
+  the end passes the goal's last week, «desde» when the start does. `FaseFechasFuera` drew «desde» only because its
+  example started past. «Añadir la fase» under a refusal moves focus to that field, «desde» first.
 - **An imported phase that starts before its goal is cut to week 1**, decided by the user 2026-10-06. The import's
   review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board `ImportarFaseRecortada`,
   approved by the user 2026-10-06.

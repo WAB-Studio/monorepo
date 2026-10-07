@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
@@ -72,6 +72,8 @@ export function PhaseForm({
   const [fromWeek, setFromWeek] = useState(defaultFromWeek === null ? "" : String(defaultFromWeek));
   const [toWeek, setToWeek] = useState(defaultToWeek === null ? "" : String(defaultToWeek));
   const [error, setError] = useState<MessageKey | null>(null);
+  const fromRef = useRef<HTMLInputElement>(null);
+  const toRef = useRef<HTMLInputElement>(null);
 
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const lastWeek = horizonWeeksOf(openedOn, horizon);
@@ -123,7 +125,7 @@ export function PhaseForm({
   const submitWeeksRefusal = error && WEEK_ERRORS.includes(error) ? t(error) : undefined;
   const otherRefusal = error && !aimRefusal && !submitWeeksRefusal ? t(error) : undefined;
   const fromInvalid = pastFrom || overlapped !== undefined || submitWeeksRefusal !== undefined;
-  const toInvalid = pastTo || submitWeeksRefusal !== undefined;
+  const toInvalid = (pastTo && !pastFrom) || submitWeeksRefusal !== undefined;
 
   function handleSubmit() {
     if (pending) return;
@@ -141,7 +143,11 @@ export function PhaseForm({
     }
 
     const typedSpan = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data, horizon);
-    if (!phaseWithinHorizon(typedSpan, horizon) || overlapped) return;
+    if (!phaseWithinHorizon(typedSpan, horizon) || overlapped) {
+      // The refusal already reads in the hint; focus on the ringed field announces it.
+      (fromInvalid || !toInvalid ? fromRef : toRef).current?.focus();
+      return;
+    }
 
     const parsed = addPhaseSchema.safeParse({ goalId, aim, ...typedSpan });
     if (!parsed.success) {
@@ -181,6 +187,7 @@ export function PhaseForm({
             inputMode="numeric"
             min={1}
             step={1}
+            ref={fromRef}
             value={fromWeek}
             onChange={(event) => setFromWeek(event.target.value)}
             invalid={fromInvalid}
@@ -192,6 +199,7 @@ export function PhaseForm({
             inputMode="numeric"
             min={1}
             step={1}
+            ref={toRef}
             value={toWeek}
             onChange={(event) => setToWeek(event.target.value)}
             invalid={toInvalid}
