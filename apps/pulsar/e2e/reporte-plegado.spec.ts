@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 // `ReportePlegado.dc.html` and `ReporteImpresoMeses.dc.html` (module 379, RP-49):
@@ -168,5 +169,169 @@ test.describe("the report folds its weeks (RP-49)", () => {
       await context.close();
       await remove(db, person, [first.goalId, second.goalId]);
     }
+  });
+
+  // `pdftotext -bbox` words of the printed report, page by page, grouped into lines.
+  type Line = { page: number; top: number; bottom: number; text: string };
+  function printedLines(file: string): Line[] {
+    const box = execFileSync("pdftotext", ["-bbox", file, "-"], { encoding: "utf8" });
+    const lines: Line[] = [];
+    let page = 0;
+    const words: { page: number; x: number; top: number; bottom: number; text: string }[] = [];
+    for (const raw of box.split("\n")) {
+      if (raw.includes("<page ")) page += 1;
+      const found = /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">(.*)<\/word>/.exec(raw);
+      if (found) {
+        words.push({ page, x: Number(found[1]), top: Number(found[2]), bottom: Number(found[3]), text: found[4] });
+      }
+    }
+    for (const word of words.sort((a, b) => a.page - b.page || a.top - b.top || a.x - b.x)) {
+      const last = lines[lines.length - 1];
+      if (last && last.page === word.page && Math.abs(last.top - word.top) < 2) {
+        last.text += ` ${word.text}`;
+        last.bottom = Math.max(last.bottom, word.bottom);
+      } else {
+        lines.push({ page: word.page, top: word.top, bottom: word.bottom, text: word.text });
+      }
+    }
+    return lines;
+  }
+
+  // Past months, every row with a label, a long figure that wraps, a planned figure and «cerrado».
+  async function seedMonths(db: postgres.Sql, person: Person, name: string, months: number, unit: string) {
+    const today = todayInZone();
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${name}, ${plusDays(60)}, ${unit}, ${unit},
+              (date_trunc('month', ${today}::date) - (${months} || ' months')::interval + interval '3 days'))
+      returning id
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      select ${person.id}, ${goal.id}, (date_trunc('month', ${today}::date) - (n || ' months')::interval)::date, 777
+      from generate_series(1, ${months}) n
+    `;
+    return goal.id;
+  }
+
+  async function printTo(page: Page, file: string): Promise<Line[]> {
+    await page.emulateMedia({ media: "print" });
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, await page.pdf({ format: "A4" }));
+    return printedLines(file);
+  }
+
+  const MONTH_LABEL = /^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre) \d{4}$/;
+  const LONG_UNIT = "capítulos del manual avanzado";
+
+  test("on paper a month's row never breaks: its label, its figures and its estado land on one page", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goalId = await seedMonths(db, person, `Meta larga ${stamp}`, 40, LONG_UNIT);
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(`Meta larga ${stamp}`, { exact: true })).toBeVisible();
+      const lines = await printTo(page, resolve(process.cwd(), "private/export-pdf", `379-filas-${goalId}.pdf`));
+      const pages = Math.max(...lines.map((line) => line.page));
+      expect(pages, "the table crosses several pages").toBeGreaterThan(2);
+
+      // Every row is one label, one «cerrado» and one planned figure («777»): a row cut by a
+      // page leaves a page with more of one than of another.
+      const closedLabels = new Set(
+        Array.from({ length: 40 }, (_, i) => {
+          const day = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
+          day.setUTCMonth(day.getUTCMonth() - (i + 1));
+          return new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" })
+            .format(day)
+            .replace(" de ", " ");
+        }),
+      );
+      const rowsOn = (n: number) => {
+        const on = lines.filter((line) => line.page === n);
+        const count = (test: (text: string) => boolean) => on.filter((line) => test(line.text)).length;
+        return {
+          labels: count((text) => closedLabels.has(text)),
+          closed: on.flatMap((line) => line.text.split(" ")).filter((word) => word === "cerrado").length,
+          planned: on.flatMap((line) => line.text.split(" ")).filter((word) => word === "777").length,
+        };
+      };
+      let labelsTotal = 0;
+      for (let n = 1; n <= pages; n += 1) {
+        const found = rowsOn(n);
+        labelsTotal += found.labels;
+        expect(found.closed, `page ${n}: «cerrado» per label`).toBe(found.labels);
+        expect(found.planned, `page ${n}: planned figure per label`).toBe(found.labels);
+      }
+      expect(labelsTotal).toBe(40);
+    } finally {
+      await context.close();
+      await remove(db, person, [goalId]);
+    }
+  });
+
+  // Fourteen goals of different lengths: the page boundaries fall at every height of a section.
+  const SWEEP = [9, 4, 13, 6, 11, 3, 15, 8, 5, 12, 7, 10, 2, 14];
+
+  async function sweepOnPaper(
+    { person, browser, baseURL, db }: { person: Person; browser: Browser; baseURL: string | undefined; db: postgres.Sql },
+    check: (lines: Line[], names: string[]) => void,
+  ) {
+    const stamp = Date.now();
+    const goals = await Promise.all(
+      SWEEP.map(async (months, i) => {
+        const name = `Meta ${String.fromCharCode(65 + i)} ${stamp}`;
+        return { name, id: await seedMonths(db, person, name, months, "minutos") };
+      }),
+    );
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(goals[0].name, { exact: true }).first()).toBeVisible();
+      const lines = await printTo(page, resolve(process.cwd(), "private/export-pdf", `379-rotulos-${stamp}.pdf`));
+      expect(Math.max(...lines.map((line) => line.page)), "the report crosses several pages").toBeGreaterThan(2);
+      check(
+        lines,
+        goals.map((goal) => goal.name),
+      );
+    } finally {
+      await context.close();
+      await remove(db, person, goals.map((goal) => goal.id));
+    }
+  }
+
+  const SECTION_LABEL = /^(este mes · |hasta hoy$|fases$|tareas de |al terminar$)|· por mes$/i;
+
+  test("on paper a goal's heading and a section label are never the last line of a page", async ({ person, browser, baseURL, db }) => {
+    await sweepOnPaper({ person, browser, baseURL, db }, (lines, names) => {
+      const heading = new RegExp(`^(${names.join("|")})$`);
+      let checked = 0;
+      for (const [index, line] of lines.entries()) {
+        if (!heading.test(line.text) && !SECTION_LABEL.test(line.text)) continue;
+        checked += 1;
+        expect(lines[index + 1]?.page, `«${line.text}» ends page ${line.page}`).toBe(line.page);
+      }
+      // A heading, «este mes», «hasta hoy» and «por mes» for each goal.
+      expect(checked).toBe(names.length * 4);
+    });
+  });
+
+  test("on paper a «por mes» label sits on the page of its first month", async ({ person, browser, baseURL, db }) => {
+    await sweepOnPaper({ person, browser, baseURL, db }, (lines) => {
+      let checked = 0;
+      for (const [index, line] of lines.entries()) {
+        if (!/· por mes$/i.test(line.text)) continue;
+        checked += 1;
+        const firstRow = lines.slice(index + 1).find((later) => MONTH_LABEL.test(later.text));
+        expect(firstRow?.page, `«${line.text}» is parted from its first month`).toBe(line.page);
+      }
+      expect(checked).toBe(SWEEP.length);
+    });
   });
 });
