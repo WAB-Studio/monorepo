@@ -19,6 +19,8 @@ export type MoveHorizonActionProps = {
   goalId: string;
   name: string;
   openedOn: string;
+  // The stored horizon: the first day after the goal, which need not be a week's edge.
+  horizon: string;
   weeks: number;
   phases: { name: string; endsOn: string | null }[];
   // An ended goal offers the move as its main act.
@@ -35,6 +37,7 @@ export function MoveHorizonAction({
   goalId,
   name,
   openedOn,
+  horizon: storedHorizon,
   weeks,
   phases,
   solid = false,
@@ -55,6 +58,9 @@ export function MoveHorizonAction({
   );
 
   const typed = weeksSchema.safeParse(value);
+  // The opening count stands for the stored horizon itself, never for the
+  // week's edge that count would write.
+  const untouched = !solid && typed.success && typed.data === weeks;
 
   function refusalText(key: MessageKey, count: number): string {
     return t(key, {
@@ -75,6 +81,11 @@ export function MoveHorizonAction({
 
     if (!typed.success) {
       setError(t("goal.errors.horizonWeeksInvalid"));
+      return;
+    }
+
+    if (untouched) {
+      setOpen(false);
       return;
     }
 
@@ -112,9 +123,12 @@ export function MoveHorizonAction({
 
   const endsOn = typed.success
     ? t("goal.horizon.endsOn", {
-        date: civilDateLabel(dayBefore(horizonForWeeks(openedOn, typed.data)), true),
+        date: civilDateLabel(
+          dayBefore(untouched ? storedHorizon : horizonForWeeks(openedOn, typed.data)),
+          true,
+        ),
       })
-    : null;
+    : t("goal.errors.horizonWeeksInvalid");
 
   return (
     <>
@@ -137,7 +151,7 @@ export function MoveHorizonAction({
           step={1}
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          invalid={error !== null}
+          invalid={error !== null || !typed.success}
           hint={error ?? endsOn}
           autoFocus
         />

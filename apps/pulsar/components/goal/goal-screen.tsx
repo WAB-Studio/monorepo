@@ -121,6 +121,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       goalId={goal.id}
       name={goal.name}
       openedOn={openedOn}
+      horizon={goal.horizon}
       weeks={sheetWeeks}
       phases={goal.phases}
       solid={ended}
@@ -270,7 +271,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <Face on="desktop">
           <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
         </Face>
-        {ended && goal.endedOn ? (
+        {goal.endedOn ? (
           <Text as="p" variant="sentence">
             {endedOnWords(goal.endedOn, t)}
           </Text>
