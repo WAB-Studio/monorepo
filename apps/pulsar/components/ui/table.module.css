@@ -308,3 +308,60 @@
     color: var(--pulsar-ink);
   }
 }
+
+/* The fold (`ReportePlegado.dc.html`): a link-card, 56px tall, that opens the
+   table under it. The chevron turns down once open. */
+.foldSummary {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: 56px;
+  padding: 8px 16px;
+  border: 1px solid var(--pulsar-line);
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--pulsar-text-line-size);
+  color: var(--pulsar-ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.foldSummary::-webkit-details-marker {
+  display: none;
+}
+
+.foldSummary:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+}
+
+.foldChevron {
+  flex: none;
+  color: var(--pulsar-quiet);
+}
+
+.fold[open] .foldChevron {
+  transform: rotate(90deg);
+}
+
+.fold[open] .foldSummary {
+  margin-block-end: 16px;
+}
+
+/* A row never breaks across pages; a fold is screen-only. */
+@media print {
+  .stackRow,
+  .wide tr {
+    break-inside: avoid;
+  }
+
+  .caption {
+    break-after: avoid;
+  }
+
+  .fold {
+    display: none;
+  }
+}

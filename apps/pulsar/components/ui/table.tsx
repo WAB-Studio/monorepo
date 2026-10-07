@@ -21,6 +21,9 @@ export type TableRow = {
   // The phone face's trailing note: the wide face spreads it over columns
   // the phone has no room for, so the caller words it once for the phone.
   note?: ReactNode;
+  // The phone's one figure when it is not the wide face's cell: the wide
+  // «10 h de 12 h» reads «10 h» there, its «de 12 h» going in the note.
+  phoneFigure?: ReactNode;
   // A second line under the row label, on both faces: the week's dates.
   detail?: ReactNode;
   // Makes the row one link, a whole 48px or more tall, in ink (`MesesFilas.dc.html`).
@@ -57,6 +60,9 @@ type TableProps = {
   // Draws the phone's stack from 1024 to 1279px, where the shell's rail leaves
   // a two-column card too narrow for the wide face; the wide face returns at 1280.
   stackInCard?: boolean;
+  // Folds the whole table under a link-card with this text, closed
+  // (`ReportePlegado.dc.html`'s «Ver las 9 semanas»). Paper never prints it.
+  fold?: string;
 };
 
 function isEmpty(cell: ReactNode): boolean {
@@ -69,7 +75,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, fold }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -93,7 +99,9 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
 
   const join = (...names: (string | undefined)[]) => names.filter(Boolean).join(" ");
 
-  const phoneRow = (row: TableRow): ReactNode => (
+  const phoneRow = (row: TableRow): ReactNode => {
+    const figure = lead === undefined ? null : row.phoneFigure === undefined ? row.cells[lead] : row.phoneFigure;
+    return (
     <>
       <span className={styles.stackLabel}>
         {row.cells[0]}
@@ -101,16 +109,17 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
       </span>
       {lead === undefined ? null : (
         <span className={styles.stackFigure}>
-          {figureCell(row.cells[lead], unit, words)}
-          {unitWord && !isEmpty(row.cells[lead]) ? <span className={styles.unit}>{unitWord}</span> : null}
+          {figureCell(figure, unit, words)}
+          {unitWord && !isEmpty(figure) ? <span className={styles.unit}>{unitWord}</span> : null}
         </span>
       )}
       {row.note ? <span className={styles.stackNote}>{row.note}</span> : null}
     </>
-  );
+    );
+  };
 
-  return (
-    <div className={join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined)}>
+  const faces = (
+    <>
       <div className={styles.phone}>
         <span className={styles.caption}>{caption}</span>
         <ol className={styles.stack}>
@@ -182,6 +191,18 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
           ))}
         </tbody>
       </table>
-    </div>
+    </>
+  );
+
+  const className = join(styles.table, narrow ? styles.narrow : undefined, stackInCard ? styles.stackInCard : undefined);
+  if (fold === undefined) return <div className={className}>{faces}</div>;
+  return (
+    <details className={join(className, styles.fold)}>
+      <summary className={styles.foldSummary}>
+        {fold}
+        <ChevronRight size={16} strokeWidth={1.5} aria-hidden className={styles.foldChevron} />
+      </summary>
+      {faces}
+    </details>
   );
 }
