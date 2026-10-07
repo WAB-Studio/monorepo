@@ -316,6 +316,40 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("«Cancelar» stays enabled and closes the sheet while «Mover el final» is in flight; the held write never lands", async ({ page, db, personId }) => {
+      const late = await seedLate();
+      const goalId = await seedGoal(db, personId, 480, late.horizon);
+      await seedTasks(db, personId, goalId, late.tasks);
+      const horizonOf = async () =>
+        (await db<{ horizon: string }[]>`select to_char(horizon, 'YYYY-MM-DD') as horizon from goals.goals where id = ${goalId}`)[0].horizon;
+      // The server action is held at the network and aborted, never forwarded: nothing is written.
+      let held: (() => Promise<void>) | undefined;
+      let reached!: () => void;
+      const inFlight = new Promise<void>((resolve) => (reached = resolve));
+      await page.route("**/metas/**", async (route) => {
+        const request = route.request();
+        if (request.method() !== "POST" || !request.headers()["next-action"]) return route.fallback();
+        held = () => route.abort();
+        reached();
+      });
+      try {
+        await page.goto(`/metas/${goalId}/plan`);
+        await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
+        const sheet = page.getByRole("dialog");
+        await sheet.getByRole("button", { name: roadmap.moverFinal.move }).click();
+        await inFlight;
+        await expect(sheet.getByRole("button", { name: roadmap.moverFinal.pending })).toBeDisabled();
+        const cancel = sheet.getByRole("button", { name: roadmap.moverFinal.cancel });
+        await expect(cancel).toBeEnabled();
+        await cancel.click();
+        await expect(sheet).toBeHidden();
+        await held!();
+        expect(await horizonOf()).toBe(late.horizon);
+      } finally {
+        await drop(db, personId, goalId);
+      }
+    });
+
     test("«Mover el final» on a goal deleted under the open sheet keeps the sheet and says it failed", async ({ page, db, personId }) => {
       const late = await seedLate();
       const goalId = await seedGoal(db, personId, 480, late.horizon);
