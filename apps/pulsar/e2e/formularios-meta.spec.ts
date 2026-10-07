@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { test, expect } from "./fixtures";
+import plan from "../messages/es/plan.json";
 
 // UX 313: a refusal reads under the control it is about, with that control's
 // ring (`aria-invalid`), never in one line far from it; the phase form carries
@@ -87,22 +88,22 @@ for (const viewport of [
 
         await page.goto(`/metas/${goalId}/fases/nueva`);
         await expect(page.getByText("qué semanas")).toHaveCount(0);
-        await page.getByLabel("qué busca").fill("Objetivo");
+        await page.getByLabel(plan.phaseForm.aimLabel).fill("Objetivo");
         await page.getByLabel("desde la semana").fill("3");
         await page.getByLabel("hasta la semana").fill("2");
-        await page.getByRole("button", { name: "Añadirla" }).click();
+        await page.getByRole("button", { name: plan.phaseForm.submit }).click();
         await expect(page.getByLabel("desde la semana")).toHaveAttribute("aria-invalid", "true");
         await expect(page.getByLabel("hasta la semana")).toHaveAttribute("aria-invalid", "true");
-        await expect(page.getByLabel("qué busca")).not.toHaveAttribute("aria-invalid", "true");
+        await expect(page.getByLabel(plan.phaseForm.aimLabel)).not.toHaveAttribute("aria-invalid", "true");
         expect(
           await gapBelow(page.getByLabel("hasta la semana"), page.getByText("La fase termina antes de empezar.")),
         ).toBeLessThanOrEqual(16);
 
-        await page.getByLabel("qué busca").fill("");
+        await page.getByLabel(plan.phaseForm.aimLabel).fill("");
         await page.getByLabel("desde la semana").fill("1");
         await page.getByLabel("hasta la semana").fill("2");
-        await page.getByRole("button", { name: "Añadirla" }).click();
-        await expect(page.getByLabel("qué busca")).toHaveAttribute("aria-invalid", "true");
+        await page.getByRole("button", { name: plan.phaseForm.submit }).click();
+        await expect(page.getByLabel(plan.phaseForm.aimLabel)).toHaveAttribute("aria-invalid", "true");
         await expect(page.getByLabel("desde la semana")).not.toHaveAttribute("aria-invalid", "true");
       } finally {
         await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;

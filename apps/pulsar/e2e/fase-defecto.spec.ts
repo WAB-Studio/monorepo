@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
+import plan from "../messages/es/plan.json";
 
 async function createGoal(page: Page, name: string, horizonWeeks: string): Promise<string> {
   await page.goto("/metas/nueva");
@@ -26,8 +27,8 @@ test("the default span submits and lands; with no week left the fields open empt
     await page.goto(`/metas/${goalId}/fases/nueva`);
     await expect(page.getByLabel("desde la semana")).toHaveValue("1");
     await expect(page.getByLabel("hasta la semana")).toHaveValue("2");
-    await page.getByLabel("qué busca").fill(`Defecto ${Date.now()}`);
-    await page.getByRole("button", { name: "Añadirla" }).click();
+    await page.getByLabel(plan.phaseForm.aimLabel).fill(`Defecto ${Date.now()}`);
+    await page.getByRole("button", { name: plan.phaseForm.submit }).click();
     await page.waitForURL(`**/metas/${goalId}`);
     await expect(page.getByText("semanas 1–2")).toBeVisible();
 
@@ -61,8 +62,8 @@ test("a goal ending mid-week offers its partial last week as the default and lan
     await page.goto(`/metas/${goal.id}/fases/nueva`);
     await expect(page.getByLabel("desde la semana")).toHaveValue("1");
     await expect(page.getByLabel("hasta la semana")).toHaveValue("3");
-    await page.getByLabel("qué busca").fill(`Parcial ${Date.now()}`);
-    await page.getByRole("button", { name: "Añadirla" }).click();
+    await page.getByLabel(plan.phaseForm.aimLabel).fill(`Parcial ${Date.now()}`);
+    await page.getByRole("button", { name: plan.phaseForm.submit }).click();
     await page.waitForURL(`**/metas/${goal.id}`);
     await expect(page.getByText("semanas 1–3")).toBeVisible();
 

@@ -2,6 +2,7 @@ import { civilDateShort, todayInZone } from "@/lib/zone";
 import { monthOf } from "@/lib/plan/months";
 import common from "../messages/es/common.json";
 import { test, expect } from "./fixtures";
+import exportMessages from "../messages/es/export.json";
 
 const brand = common.brand;
 
@@ -46,7 +47,7 @@ test("every page reads «{place} · {brand}», /exportar keeps its dated title",
   }
 
   await page.goto("/exportar");
-  expect(await page.title()).toBe(`pulsar · ${civilDateShort(todayInZone())}`);
+  expect(await page.title()).toBe(`${exportMessages.printBrand} · ${civilDateShort(todayInZone())}`);
   await context.close();
 
   const out = await browser.newContext({ baseURL: baseURL! });

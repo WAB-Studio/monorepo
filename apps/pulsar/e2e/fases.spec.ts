@@ -6,6 +6,7 @@ import { weekIndex } from "@/components/goal/phase-weeks";
 import { civilDateInZone, dateToCivilDate } from "@/lib/zone";
 
 import { test, expect, laneNumber } from "./fixtures";
+import plan from "../messages/es/plan.json";
 
 // Opens `/metas/nueva`, the least it takes to open a goal (RP-11) — the same
 // helper `compromiso.spec.ts` and `varias-metas.spec.ts` each keep their own
@@ -61,15 +62,15 @@ test("a fresh goal draws its phase way in outlined and its commitment way in sol
     await expect(addPhaseLink).toBeVisible();
     await expect(addPhaseLink).toHaveClass(/\boutline\b/);
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveClass(/\bsolid\b/);
-    await expect(page.getByText("cero fases")).toBeVisible();
+    await expect(page.getByText("cero fases")).toHaveCount(0);
 
     // A goal just opened has nothing before it: the first span defaults to
     // weeks 1–4, counted from its own opening (today).
     await openNewPhaseForm(page, goalId);
     await expect(page.getByLabel("desde la semana")).toHaveValue("1");
     await expect(page.getByLabel("hasta la semana")).toHaveValue("4");
-    await page.getByLabel("qué busca").fill(aim);
-    await page.getByRole("button", { name: "Añadirla" }).click();
+    await page.getByLabel(plan.phaseForm.aimLabel).fill(aim);
+    await page.getByRole("button", { name: plan.phaseForm.submit }).click();
     await page.waitForURL(`**/metas/${goalId}`);
 
     await expect(page.getByText(aim)).toBeVisible();
@@ -147,8 +148,8 @@ test("a goal that already has a phase prefills the next span right after it, ref
   expect(to).toBeGreaterThanOrEqual(from);
 
   const aim = `Objetivo lane ${lane} ${Date.now()}`;
-  await page.getByLabel("qué busca").fill(aim);
-  await page.getByRole("button", { name: "Añadirla" }).click();
+  await page.getByLabel(plan.phaseForm.aimLabel).fill(aim);
+  await page.getByRole("button", { name: plan.phaseForm.submit }).click();
   await page.waitForURL(`**/metas/${goalId}`);
 
   await expect(page.getByText(aim)).toBeVisible();
@@ -158,10 +159,10 @@ test("a goal that already has a phase prefills the next span right after it, ref
   // Overlapping the phase just added: the day would no longer name a single
   // phase, so this is refused on screen, with no navigation and no extra row.
   await openNewPhaseForm(page, goalId);
-  await page.getByLabel("qué busca").fill(`Objetivo solapado ${Date.now()}`);
+  await page.getByLabel(plan.phaseForm.aimLabel).fill(`Objetivo solapado ${Date.now()}`);
   await page.getByLabel("desde la semana").fill(String(from));
   await page.getByLabel("hasta la semana").fill(String(to));
-  await page.getByRole("button", { name: "Añadirla" }).click();
+  await page.getByRole("button", { name: plan.phaseForm.submit }).click();
 
   await expect(page.getByText("Esas semanas ya tienen una fase. Elige otras.")).toBeVisible();
   expect(page.url()).toContain(`/metas/${goalId}/fases/nueva`);
@@ -170,10 +171,10 @@ test("a goal that already has a phase prefills the next span right after it, ref
   // Past the goal's own 500-week horizon: refused the same way, never a
   // silent acceptance.
   await openNewPhaseForm(page, goalId);
-  await page.getByLabel("qué busca").fill(`Objetivo tardío ${Date.now()}`);
+  await page.getByLabel(plan.phaseForm.aimLabel).fill(`Objetivo tardío ${Date.now()}`);
   await page.getByLabel("desde la semana").fill("501");
   await page.getByLabel("hasta la semana").fill("504");
-  await page.getByRole("button", { name: "Añadirla" }).click();
+  await page.getByRole("button", { name: plan.phaseForm.submit }).click();
 
   await expect(
     page.getByText("Esa fase pasa del horizonte de la meta. Elige semanas dentro de él."),
@@ -209,7 +210,7 @@ test("the goal's own commitment count drops when one is retired, though the row 
     await sheet.getByRole("button", { name: "Retirarlo" }).click();
     await expect(sheet).toBeHidden();
 
-    await expect(page.getByText("cero compromisos", { exact: true })).toBeVisible();
+    await expect(page.getByText("cero compromisos", { exact: true })).toHaveCount(0);
     await expect(page.getByText("un compromiso", { exact: true })).not.toBeVisible();
     // Retired, never hidden (RP-13): the row itself stays, marked, out of
     // the count above it.
