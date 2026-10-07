@@ -1410,7 +1410,8 @@ async function runDaylessCountAndOrderCheck(): Promise<void> {
  * `openedOn`, a one-off done on the day drawn is in `doneOneOffs` with its
  * fact and out of `oneOffs`, one done yesterday is in neither, and a dayless
  * one is in neither list but counts in `daylessCount` and is listed by
- * `listDaylessOneOffs`, unless it is done or its goal is archived. The dayless
+ * `listDaylessOneOffs`, unless it is done or belongs to a goal (RP-59: a
+ * goal's task waits in its plan). The dayless
  * count is measured against a baseline read first: this identity may hold
  * dayless rows of its own. Every row is deleted by id in `finally`.
  */
@@ -2670,7 +2671,7 @@ async function runMonthLineCheck(): Promise<void> {
       values (${userId}, ${estimated}, 'month-line child', null, ${parent.id})
     `;
     await db`
-      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, ${estimated}, 'month-line plain dayless')
+      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, null, 'month-line plain dayless')
     `;
     const baseline = (await loadDay("2010-10-20")).daylessCount;
     const listed = (await listDaylessOneOffs()).filter((o) => o.name.startsWith("month-line"));
@@ -2683,8 +2684,7 @@ async function runMonthLineCheck(): Promise<void> {
       select count(*)::int as n from goals.one_offs o
         where o.user_id = ${userId} and o.day is null and o.planned_month is null and o.parent_id is null
           and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
-          and (o.goal_id is null or exists (
-            select 1 from goals.goals g where g.id = o.goal_id and g.archived_at is null and g.horizon > '2010-10-20'::date))
+          and o.goal_id is null
     `;
     assert(
       "daylessCount excludes the month task and its sub-task and counts the plain one",
