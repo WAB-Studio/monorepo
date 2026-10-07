@@ -44,7 +44,7 @@ async function boxOf(page: Page, text: string) {
   });
 }
 
-test("at 1280 the commitments sit left, the end and the phases right, one of each act visible (RNP-17)", async ({
+test("at 1280 the commitments sit left, the end right and the phases under both, one of each act visible (RNP-17)", async ({
   page,
   db,
   personId,
@@ -62,9 +62,10 @@ test("at 1280 the commitments sit left, the end and the phases right, one of eac
       const { x, y } = el.getBoundingClientRect();
       return { x, y };
     });
-    expect(phase.x).toBeGreaterThan(commitment.x + 300);
+    // From 1024 the phases stand under both columns (module 369).
+    expect(phase.x).toBeLessThan(commitment.x + 100);
     expect(end.x).toBeGreaterThan(commitment.x + 300);
-    expect(end.y).toBeLessThan(phase.y);
+    expect(phase.y).toBeGreaterThan(end.y);
 
     // Each group sits in a bordered white card: commitments, the end, the phases.
     for (const text of ["Compromiso ancho", "Fase ancha", "el final"]) {
