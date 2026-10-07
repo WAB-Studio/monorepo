@@ -2308,8 +2308,8 @@ async function checkRoadmapSchema(): Promise<void> {
       assert("P190", fixed.in_plan === true, `insert naming planned_month lands in_plan, got ${fixed.in_plan}`);
 
       const [suelta] = await tx<{ id: string; in_plan: boolean }[]>`
-        insert into goals.one_offs (user_id, goal_id, name)
-        values (${subject}, ${measured.id}, 'suelta') returning id, in_plan`;
+        insert into goals.one_offs (user_id, goal_id, name, day)
+        values (${subject}, ${measured.id}, 'suelta', current_date + 1) returning id, in_plan`;
       assert("P191", suelta.in_plan === false, `insert with neither month nor parent stays out, got ${suelta.in_plan}`);
 
       const [unfixed] = await tx<{ id: string; in_plan: boolean }[]>`

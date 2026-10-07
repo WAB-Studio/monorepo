@@ -34,7 +34,7 @@ export const oneOffs = goalsSchema.table(
     estimate: integer(),
     // The fixed month (RP-51): null when the plan places the task. Written at insert and by the sheet's fix and unfix.
     plannedMonth: date(),
-    // A task of the plan (RP-50), apart from a goal's suelta. A trigger sets it at insert when a month or a parent is named; no UPDATE grant.
+    // A task of the plan (RP-50), apart from a goal's suelta. A trigger sets it at insert when a month or a parent is named, or when a goal's row has no day; no UPDATE grant.
     inPlan: boolean().notNull().default(false),
     // One level deep (RP-30). No UPDATE grant: a sub-task never changes hands.
     parentId: uuid().references((): AnyPgColumn => oneOffs.id, { onDelete: "cascade" }),

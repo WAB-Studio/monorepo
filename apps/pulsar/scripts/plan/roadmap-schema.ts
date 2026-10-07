@@ -41,7 +41,7 @@ test("an insert with a month lands in the plan, one with neither stays out", asy
         insert into goals.one_offs (user_id, goal_id, name, planned_month)
         values (${user}, ${goal.id}, 'a', '2026-12-01') returning in_plan, planned_month::text`;
       const [loose] = await tx<{ in_plan: boolean }[]>`
-        insert into goals.one_offs (user_id, goal_id, name) values (${user}, ${goal.id}, 'b') returning in_plan`;
+        insert into goals.one_offs (user_id, goal_id, name, day) values (${user}, ${goal.id}, 'b', current_date) returning in_plan`;
       assert.equal(dated.in_plan, true);
       assert.equal(dated.planned_month, "2026-12-01");
       assert.equal(loose.in_plan, false);
