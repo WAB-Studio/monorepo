@@ -206,7 +206,7 @@ test("fixTask: a sub-task, a one-off with no month and an id that is nobody's ar
   const childId = await created({ name: "RP-51 hija sola", day: null, parentId });
   assert.deepEqual(await fix({ oneOffId: childId, month: nextMonth }), { ok: false, error: "roadmap.errors.subTaskMonth" });
 
-  const plainId = await created({ name: "RP-51 suelta", day: null, goalId });
+  const plainId = await created({ name: "RP-51 suelta", day: today, goalId });
   assert.deepEqual(await fix({ oneOffId: plainId, month: nextMonth }), { ok: false, error: "month.errors.invalid" });
 
   const nobody = await fix({ oneOffId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", month: nextMonth });
