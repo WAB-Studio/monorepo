@@ -179,3 +179,14 @@ test("integer: every result over odd amounts and every month length is a whole n
     }
   }
 });
+
+test("a leap February at one minute a day plans exactly seven minutes for a week", () => {
+  const leap = weekPlanned({
+    weekStart: "2028-02-07",
+    weekEnd: "2028-02-13",
+    budgets: [{ month: "2028-02-01", amount: 29 }],
+    openedOn: "2028-01-01",
+    horizon: "2028-12-31",
+  });
+  assert.equal(leap, 7);
+});

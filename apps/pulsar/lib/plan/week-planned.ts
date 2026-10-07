@@ -22,8 +22,8 @@ export function weekPlanned(input: {
   const last = dayBefore(input.horizon);
   const from = input.weekStart > input.openedOn ? input.weekStart : input.openedOn;
   const to = input.weekEnd < last ? input.weekEnd : last;
-  // Every month length divides 27720, so each day's share stays an exact integer.
-  const scale = 27720;
+  // lcm(28, 29, 30, 31): every month length divides it, so each day's share is an exact integer.
+  const scale = 377580;
   let scaled = 0;
   let counted = false;
   const cursor = civilDateToDate(from);
