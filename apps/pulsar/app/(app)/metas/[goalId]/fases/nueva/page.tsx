@@ -41,6 +41,7 @@ export default async function NewPhasePage({
 
   const openedOn = civilDateInZone(new Date(goal.createdAt));
   const existingPhases = goal.phases.map((phase) => ({
+    name: phase.name,
     startsOn: phase.startsOn,
     // `phases.ends_on` is `NOT NULL` (db/schema/phases.ts): every phase
     // this app has ever written already closes. `Phase`'s own type

@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { addPhase } from "@/app/actions/plan";
 import { addPhaseSchema, phasesOverlap, phaseWithinHorizon, type PhaseSpan } from "@/lib/validation/plan";
-import { Button, Field, FieldPair, Page, ScreenHeader, Section, Text } from "@/components/ui";
+import { Button, Field, FieldPair, Figure, Page, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
+import { dayBefore, horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
+import { civilDateLabel } from "@/lib/zone";
 
 import { weeksToPhaseSpan } from "./phase-weeks";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -26,7 +28,7 @@ export type PhaseFormProps = {
   defaultToWeek: number | null;
   // Every phase the goal already has, spans alone: what the overlap refusal
   // checks against before the request ever reaches the server.
-  existingPhases: PhaseSpan[];
+  existingPhases: (PhaseSpan & { name: string })[];
 };
 
 // A week number typed by hand, bounded well under any real horizon — the
@@ -34,12 +36,12 @@ export type PhaseFormProps = {
 // so a mistyped digit reads as a message instead of reaching date arithmetic.
 const weekSchema = z.coerce.number().int().positive().max(2_600);
 
+const WEEKS_HINT = "phase-weeks-hint";
+
 const AIM_ERRORS: MessageKey[] = ["plan.errors.aimEmpty", "plan.errors.aimTooLong"];
 const WEEK_ERRORS: MessageKey[] = [
   "plan.errors.weekInvalid",
   "plan.errors.phaseBackwards",
-  "plan.errors.phasePastHorizon",
-  "plan.errors.phaseOverlap",
   "plan.errors.startsOnInvalid",
   "plan.errors.endsOnInvalid",
 ];
@@ -71,12 +73,57 @@ export function PhaseForm({
   const [toWeek, setToWeek] = useState(defaultToWeek === null ? "" : String(defaultToWeek));
   const [error, setError] = useState<MessageKey | null>(null);
 
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
+  const lastWeek = horizonWeeksOf(openedOn, horizon);
+  const lastDay = civilDateLabel(dayBefore(horizon));
+  const fromTyped = weekSchema.safeParse(fromWeek);
+  const toTyped = weekSchema.safeParse(toWeek);
+  const fromData = fromTyped.success ? fromTyped.data : null;
+  const toData = toTyped.success ? toTyped.data : null;
+  const ordered = fromData !== null && toData !== null && toData >= fromData;
+  const noRoom = defaultFromWeek === null && !ordered;
+
+  // The typed weeks read live: the days they cover, or the refusal naming the
+  // goal's last week, or the phase they overlap. Derived, never stored.
+  const span = ordered ? weeksToPhaseSpan(openedOn, fromData, toData, horizon) : null;
+  const pastFrom = fromData !== null && fromData > lastWeek;
+  const pastTo = toData !== null && toData > lastWeek;
+  const beyond = ordered && (pastFrom || pastTo);
+  const overlapped =
+    span && !beyond
+      ? [...existingPhases]
+          .sort((a, b) => a.startsOn.localeCompare(b.startsOn))
+          .find((phase) => phasesOverlap(span, phase))
+      : undefined;
+  const lastWeekFigures = { lastWeek, lastDay, ...fig };
+  const liveLine: ReactNode = beyond || noRoom
+    ? t.rich("plan.phaseForm.beyond", lastWeekFigures)
+    : overlapped
+      ? t.rich("plan.phaseForm.overlap", {
+          from: weekIndexOf(openedOn, overlapped.startsOn),
+          to: weekIndexOf(openedOn, overlapped.endsOn),
+          aim: overlapped.name,
+          next: weekIndexOf(openedOn, overlapped.endsOn) + 1,
+          ...fig,
+        })
+      : span
+        ? t.rich("plan.phaseForm.span", {
+            from: civilDateLabel(span.startsOn),
+            to: civilDateLabel(span.endsOn),
+            ...lastWeekFigures,
+          })
+        : null;
+  const showMoveEnd = beyond || noRoom;
+  const livePast = beyond || overlapped !== undefined;
+
   // A refusal reads at the field it is about, with its ring. The two week
   // fields share one sentence under the pair: a half-width hint would break
   // it into four lines.
   const aimRefusal = error && AIM_ERRORS.includes(error) ? t(error) : undefined;
-  const weeksRefusal = error && WEEK_ERRORS.includes(error) ? t(error) : undefined;
-  const otherRefusal = error && !aimRefusal && !weeksRefusal ? t(error) : undefined;
+  const submitWeeksRefusal = error && WEEK_ERRORS.includes(error) ? t(error) : undefined;
+  const otherRefusal = error && !aimRefusal && !submitWeeksRefusal ? t(error) : undefined;
+  const fromInvalid = pastFrom || overlapped !== undefined || submitWeeksRefusal !== undefined;
+  const toInvalid = pastTo || submitWeeksRefusal !== undefined;
 
   function handleSubmit() {
     if (pending) return;
@@ -93,17 +140,10 @@ export function PhaseForm({
       return;
     }
 
-    const span = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data, horizon);
-    if (!phaseWithinHorizon(span, horizon)) {
-      setError("plan.errors.phasePastHorizon");
-      return;
-    }
-    if (existingPhases.some((phase) => phasesOverlap(span, phase))) {
-      setError("plan.errors.phaseOverlap");
-      return;
-    }
+    const typedSpan = weeksToPhaseSpan(openedOn, fromResult.data, toResult.data, horizon);
+    if (!phaseWithinHorizon(typedSpan, horizon) || overlapped) return;
 
-    const parsed = addPhaseSchema.safeParse({ goalId, aim, ...span });
+    const parsed = addPhaseSchema.safeParse({ goalId, aim, ...typedSpan });
     if (!parsed.success) {
       setError(messageKey(parsed.error.issues[0].message));
       return;
@@ -143,7 +183,8 @@ export function PhaseForm({
             step={1}
             value={fromWeek}
             onChange={(event) => setFromWeek(event.target.value)}
-            invalid={weeksRefusal !== undefined}
+            invalid={fromInvalid}
+            aria-describedby={WEEKS_HINT}
           />
           <Field
             label={t("plan.phaseForm.toLabel")}
@@ -153,14 +194,16 @@ export function PhaseForm({
             step={1}
             value={toWeek}
             onChange={(event) => setToWeek(event.target.value)}
-            invalid={weeksRefusal !== undefined}
+            invalid={toInvalid}
+            aria-describedby={WEEKS_HINT}
           />
         </FieldPair>
-        {weeksRefusal ? (
-          <Text as="p" tone="ink" variant="sentence">
-            {weeksRefusal}
+        {submitWeeksRefusal || liveLine ? (
+          <Text as="p" id={WEEKS_HINT} tone={submitWeeksRefusal || livePast ? "ink" : "muted"} variant="sentence">
+            {submitWeeksRefusal ?? liveLine}
           </Text>
         ) : null}
+        {showMoveEnd ? <TextLink href={`/metas/${goalId}`}>{t("plan.phaseForm.moveEnd")}</TextLink> : null}
       </Section>
 
       {otherRefusal ? (
