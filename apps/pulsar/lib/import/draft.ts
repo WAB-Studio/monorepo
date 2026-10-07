@@ -207,3 +207,38 @@ export function withoutStrayEstimates(draft: ImportDraft): ImportDraft {
     ),
   };
 }
+
+// The phases that start before the goal opens (the day it is imported): each
+// begins that day instead. One that ends before it is dropped, see `phaseDrops`.
+export function phaseCuts(draft: ImportDraft, today: string): { path: string; aim: string; from: string }[] {
+  const cuts: { path: string; aim: string; from: string }[] = [];
+  draft.goals.forEach((goal, g) => {
+    goal.phases.forEach((phase, p) => {
+      if (phase.startsOn < today && phase.endsOn >= today) cuts.push({ path: `goals.${g}.phases.${p}`, aim: phase.aim, from: today });
+    });
+  });
+  return cuts;
+}
+
+// The phases wholly before the day the goal opens: nothing is left of them to keep.
+export function phaseDrops(draft: ImportDraft, today: string): { path: string; aim: string }[] {
+  const drops: { path: string; aim: string }[] = [];
+  draft.goals.forEach((goal, g) => {
+    goal.phases.forEach((phase, p) => {
+      if (phase.endsOn < today) drops.push({ path: `goals.${g}.phases.${p}`, aim: phase.aim });
+    });
+  });
+  return drops;
+}
+
+// The draft with the cut phases starting `today` and the dropped ones gone; nothing else changes.
+export function withCutPhases(draft: ImportDraft, today: string): ImportDraft {
+  return {
+    goals: draft.goals.map((goal) => ({
+      ...goal,
+      phases: goal.phases
+        .filter((phase) => phase.endsOn >= today)
+        .map((phase) => (phase.startsOn < today ? { ...phase, startsOn: today } : phase)),
+    })),
+  };
+}
