@@ -2836,3 +2836,10 @@ branch could pass until it was restored.
 - Run every `check:*` that writes the table before applying the migration locally, not after.
 - A constraint changed after a local apply is altered by hand (`DROP CONSTRAINT` + `ADD CONSTRAINT`) in the same words as
   the edited SQL, schema and snapshot. Drizzle will not re-run the file.
+
+## A lane's dev server started bare reads the remote project
+
+- `next dev` in a lane loads `apps/pulsar/.env.local`, which points at the remote project. The specs mint their
+  session on the local stack, so `/auth/confirm` refuses it and every spec reads `linkInvalid`.
+- Start a lane's server inside `scripts/supabase-local.sh exec`. Measured 2026-10-06: four agents on four lanes hit it
+  the same evening before each found it alone.
