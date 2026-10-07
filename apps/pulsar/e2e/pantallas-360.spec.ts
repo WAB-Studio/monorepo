@@ -4,6 +4,7 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import plan from "../messages/es/plan.json";
 
 // RNP-07 over every built screen and every sheet: at 360 × 740 (the
 // project's own viewport) nothing scrolls sideways, no two controls sit on
@@ -174,7 +175,7 @@ test("/metas/<id>/compromisos/nuevo holds at 360 (RNP-07)", async ({ page, db, p
 test("/metas/<id>/fases/nueva holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}/fases/nueva`);
-    await expect(page.getByText("Fase nueva")).toBeVisible();
+    await expect(page.getByText(plan.phaseForm.title)).toBeVisible();
     await expectHolds(page, 3);
   });
 });

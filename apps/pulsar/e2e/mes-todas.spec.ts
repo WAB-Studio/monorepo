@@ -2,6 +2,10 @@ import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import monthMessages from "../messages/es/month.json";
+
+const owesLine = (month: string, owes: string) =>
+  monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
 
 // `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio` (module 209, RP-43, RP-31):
 // this month of every open goal. Calendar-bound as `mes.spec.ts`: «last
@@ -116,7 +120,7 @@ test("each open goal draws its month: the line, the carried task first, the task
     await expect(carriedLabel).toBeVisible();
     await expect(ownLabel).toBeVisible();
     expect((await carriedLabel.boundingBox())!.y).toBeLessThan((await ownLabel.boundingBox())!.y);
-    await expect(timedBlock.getByText(`de ${label(lastMonth)} · debe 3 h`)).toBeVisible();
+    await expect(timedBlock.getByText(owesLine(label(lastMonth), "3 h"))).toBeVisible();
 
     const pagesBlock = page.locator("section", { has: page.getByRole("heading", { name: `Libros ${stamp}` }) });
     await expect(pagesBlock.getByText(`en ${label(thisMonth)} · sin monto este mes`)).toBeVisible();

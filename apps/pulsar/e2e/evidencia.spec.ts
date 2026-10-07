@@ -7,6 +7,7 @@ import sources from "../messages/es/sources.json";
 
 import { test, expect } from "./fixtures";
 import { todayInZone } from "../lib/zone";
+import plan from "../messages/es/plan.json";
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function weekLongName(civilDay: string): string {
@@ -129,12 +130,12 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
 
-    await page.getByRole("button", { name: "lo que ya sabe otra app", exact: true }).click();
+    await page.getByRole("button", { name: plan.commitmentForm.satisfaction.evidence, exact: true }).click();
     // The catalogue's one source, read by its own labelKey — never typed
     // here, `sources.json`'s own word.
     await expect(page.getByRole("button", { name: "diccionario", exact: true })).toBeVisible();
 
-    const thresholdField = page.getByLabel("umbral");
+    const thresholdField = page.getByLabel(plan.commitmentForm.thresholdLabel);
     await expect(thresholdField).toHaveValue("1");
     await thresholdField.fill(String(threshold));
 
