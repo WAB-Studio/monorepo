@@ -2857,3 +2857,12 @@ branch could pass until it was restored.
   «nothing else is here» on it fails whenever another spec seeds for it at the same moment.
 - Assert an absence or an exact count only on the disposable `person`. Measured 2026-10-06: `dia-pasado.spec.ts:314`
   and `dia-pasado-hechos.spec.ts:105` passed one CI run and failed the next on the same tree.
+
+## Un carril que cambia de rama sirve 404 en rutas que existen
+
+Un carril reutilizado guarda el `.next` del servidor que corrió la rama anterior. Con la rama nueva, `next dev`
+respondió 404 en `/metas/<id>/fases/nueva` y `/metas/<id>/compromisos/nuevo` para una meta que existía, y
+`fase-defecto.spec.ts` salió rojo sin defecto. Medido 2026-10-06 en el carril 6 (módulo 403).
+
+- Al cambiar la rama de un carril: `fuser -k <puerto>/tcp`, `rm -rf apps/<app>/.next`, y arrancar el servidor de nuevo.
+- Un 404 en una ruta que la rama sí tiene es primero esto, no un defecto.
