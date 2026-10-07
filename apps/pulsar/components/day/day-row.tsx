@@ -4,11 +4,11 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
-import { cadencePhrase, flexibleWords, metPhrase, rowMeta } from "@/lib/day/row-phrases";
+import { cadencePhrase, flexibleWords, metPhrase, partialPair, rowMeta } from "@/lib/day/row-phrases";
 import type { Cadence } from "@/lib/day/types";
 import { formatQuantity } from "@/lib/units/time";
 import { useTimeWords } from "@/components/ui/figure";
-import { Mark, Row, Text, type MarkState } from "@/components/ui";
+import { Figure, Mark, Row, Text, type MarkState } from "@/components/ui";
 
 import { QuantitySheet } from "./quantity-sheet";
 import { type MessageKey } from "@/i18n/translator";
@@ -72,14 +72,6 @@ export type DayRowProps = {
  * or `undoFact` for it (RP-05: a derived fact belongs to the app that
  * recorded it).
  */
-// «1 de 3 min»: when both read as one number and one word, the word is said once.
-function partialPair(logged: string, target: string): { logged: string; target: string } {
-  const [loggedNumber, loggedWord, ...loggedRest] = logged.split(" ");
-  const [, targetWord, ...targetRest] = target.split(" ");
-  const single = loggedRest.length === 0 && targetRest.length === 0 && loggedWord !== undefined;
-  return { logged: single && loggedWord === targetWord ? loggedNumber : logged, target };
-}
-
 export function DayRow({
   commitmentId,
   name,
@@ -142,7 +134,7 @@ export function DayRow({
     writtenLabel,
     partial:
       kind === "quantity" && loggedQuantity != null && factId !== undefined && target != null && unit != null
-        ? partialPair(formatQuantity(loggedQuantity, unit, words), formatQuantity(target, unit, words))
+        ? partialPair(formatQuantity(loggedQuantity, unit, words), formatQuantity(target, unit, words), unit)
         : null,
   });
 
@@ -171,7 +163,10 @@ export function DayRow({
         leading={<Mark state={markState} quiet={quiet} />}
         quiet={quiet}
         name={name}
-        meta={meta}
+        meta={meta?.map((part, index) =>
+          "figure" in part ? <Figure key={index} value={part.figure} variant="meta" /> : part.text,
+        )}
+        metaVariant="sentence"
         onClick={handleTap}
         disabled={!tappable || pending}
       />

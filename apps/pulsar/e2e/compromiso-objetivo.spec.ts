@@ -25,6 +25,11 @@ test("a quantity commitment reads its target on the goal: «15 min», «20 pági
     await page.goto(`/metas/${goal.id}`);
     await expect(page.getByText("15 min", { exact: true })).toBeVisible();
     await expect(page.getByText("20 páginas", { exact: true })).toBeVisible();
+    // The unit's text node follows a space character, never glued to the figure.
+    const before = await page
+      .getByText("páginas", { exact: true })
+      .evaluate((el) => (el.previousSibling?.textContent ?? "").slice(-1));
+    expect(before).toMatch(/^\s$/);
     await expect(page.getByText("minutos", { exact: true })).toHaveCount(0);
   } finally {
     await context.close();

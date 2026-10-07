@@ -86,7 +86,7 @@ function routes(world: World): Route[] {
     { name: "/semana", path: "/semana", back: null },
     { name: "/semana?semana=<past>", path: `/semana?semana=${pastMonday()}`, back: null },
     { name: "/mes", path: "/mes", back: null },
-    { name: "/sueltas", path: "/sueltas", back: /^Volver a / },
+    { name: "/sueltas", path: "/sueltas", back: /^Volver a /, cap: 640 },
     { name: "/metas", path: "/metas", back: null },
     { name: "/metas/nueva", path: "/metas/nueva", back: /^Volver a /, form: true },
     ...goalRoutes(world.measured, "measured"),

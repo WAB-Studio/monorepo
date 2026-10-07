@@ -32,7 +32,7 @@ export async function DaylessScreen() {
   };
 
   return (
-    <Page width="full">
+    <Page width="column">
       <ScreenHeader
         title={t("oneOffs.title")}
         back={{ href: "/", place: t("common.nav.today") }}

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
+import sources from "../messages/es/sources.json";
+
 import { test, expect } from "./fixtures";
 import { todayInZone } from "../lib/zone";
 
@@ -142,7 +144,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     // The goal screen's own words for it (`commitment-list.tsx`'s
     // `satisfactionWords`): the threshold just typed, plural, over the
     // source's own name.
-    await expect(page.getByText(`${threshold} búsquedas · diccionario`)).toBeVisible();
+    await expect(page.getByText(`${threshold} búsquedas · ${sources.readingLookups}`)).toBeVisible();
 
     const commitment = await commitmentByName(db, personId, commitmentName);
     expect(commitment).not.toBeNull();

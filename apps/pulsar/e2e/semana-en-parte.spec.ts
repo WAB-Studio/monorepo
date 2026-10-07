@@ -1,5 +1,7 @@
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
+
+import messages from "@/messages/es/week.json";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
@@ -124,12 +126,18 @@ test("the phone footer names the partial apart from «hechos» and draws the fou
     await withPage(browser, baseURL, person, 390, async (page) => {
       await page.goto(`/semana?semana=${lastMonday}`);
       await expect(markOf(page, lastMonday)).toHaveAttribute("data-state", "partial");
-      // One 30 of 30 day, one 29 of 30: «hechos 1 de 7 · 1 en parte».
-      await expect(page.getByText("de 7 · 1 en parte", { exact: true })).toBeVisible();
-      // The figure is the done count alone: the partial day is not added to it.
-      const rest = page.getByText("de 7 · 1 en parte", { exact: true });
-      await expect(rest.locator("xpath=preceding-sibling::*[1]")).toHaveText("1");
-      await expect(rest.locator("xpath=preceding-sibling::*[2]")).toHaveText("hechos");
+      // One 30 of 30 day, one 29 of 30; the figures come from the catalogue.
+      const sum = page.locator("p").filter({ hasText: /^hechos \d+ de \d+ · \d+ en parte$/ }).filter({ visible: true });
+      await expect(sum).toHaveText(
+        messages.table.footerPartial.replace(/<\/?fig>/g, "").replace("{done}", "1").replace("{total}", "7").replace("{partial}", "1"),
+      );
+      // Only the figures are mono; the words stay Archivo.
+      await expect(sum.locator("span")).toHaveCount(3);
+      const family = (loc: Locator) => loc.evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(await family(sum)).not.toBe(await family(sum.locator("span").first()));
+      expect(await family(sum.locator("span").first())).toMatch(/mono/i);
+      expect(await family(sum)).not.toMatch(/mono/i);
+      await expect(page.getByText(/hechos/i).filter({ visible: true })).toHaveCount(1);
       const legend = page.getByTestId("week-legend");
       await expect(legend).toBeVisible();
       for (const word of ["hecho", "por evidencia", "en parte", "pendiente"]) {

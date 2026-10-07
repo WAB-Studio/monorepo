@@ -433,16 +433,18 @@ deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and t
     );
     expect(lines).toBeLessThanOrEqual(2);
 
-    // The phases card follows the measure card by the row gap alone.
-    const gap = await page.evaluate(() => {
+    // The phases card stands under both columns (DESIGN «The goal at 1024 draws
+    // its phases on a full-width row»): it follows the lower of the commitments
+    // card and the measure card by the row gap alone.
+    const gap = await page.evaluate((longCommitment) => {
       const card = (text: string) => {
-        const label = [...document.querySelectorAll("*")].find((el) => el.children.length === 0 && el.textContent?.trim().toLowerCase() === text)!;
+        const label = [...document.querySelectorAll("*")].find((el) => el.children.length === 0 && el.textContent?.trim().toLowerCase() === text.toLowerCase())!;
         let node: Element | null = label;
         while (node && getComputedStyle(node).borderTopLeftRadius !== "14px") node = node.parentElement;
         return node!.getBoundingClientRect();
       };
-      return card("una fase").top - card("ver por semana").bottom;
-    });
+      return card("una fase").top - Math.max(card(longCommitment).bottom, card("ver por semana").bottom);
+    }, LONG_COMMITMENT);
     expect(gap).toBeGreaterThanOrEqual(0);
     expect(gap).toBeLessThanOrEqual(60);
   } finally {

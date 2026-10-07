@@ -28,10 +28,10 @@ export function horizonForWeeks(openedOn: string, weeks: number): string {
   return addWeeksToCivilDate(mondayOf(openedOn), weeks);
 }
 
-// The inverse of `horizonForWeeks`. A horizon written as opening + 7·N reads
-// back as N whatever weekday the goal opened on.
+// The week the goal's last day falls in. A horizon from `horizonForWeeks`
+// reads back as its N; one that falls mid-week counts that partial last week.
 export function horizonWeeksOf(openedOn: string, horizon: string): number {
-  return Math.max(0, weekIndexOf(openedOn, horizon) - 1);
+  return horizon <= openedOn ? 0 : weekIndexOf(openedOn, dayBefore(horizon));
 }
 
 export function dayBefore(day: string): string {
@@ -42,15 +42,21 @@ export function dayBefore(day: string): string {
 
 // The inverse of `weekIndexOf`: the civil dates a span of 1-based weeks
 // covers. Week 1 opens on `openedOn` itself; a later week opens on its own
-// Monday. The span closes on the Sunday of week `toWeek`.
+// Monday. The span closes on the Sunday of week `toWeek`, or on the goal's
+// last day when a `horizon` is given and week `toWeek` is the one holding it;
+// a week that opens at or after the horizon keeps its Sunday, so it stays past.
 export function weekSpan(
   openedOn: string,
   fromWeek: number,
   toWeek: number,
+  horizon?: string,
 ): { startsOn: string; endsOn: string } {
   const firstMonday = mondayOf(openedOn);
+  const sunday = dayBefore(addWeeksToCivilDate(firstMonday, toWeek));
+  const holdsLastDay = horizon !== undefined && addWeeksToCivilDate(firstMonday, toWeek - 1) < horizon;
+  const last = holdsLastDay ? dayBefore(horizon) : sunday;
   return {
     startsOn: fromWeek === 1 ? openedOn : addWeeksToCivilDate(firstMonday, fromWeek - 1),
-    endsOn: dayBefore(addWeeksToCivilDate(firstMonday, toWeek)),
+    endsOn: last < sunday ? last : sunday,
   };
 }

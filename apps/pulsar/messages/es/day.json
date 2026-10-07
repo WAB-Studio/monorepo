@@ -127,8 +127,8 @@
     "pace": "día {day} ·",
     "paceUnder": ", bajo el {threshold} %"
   },
-  "tally": "hechos {done} de {total}",
-  "tallyPartial": "hechos {done} de {total} · {partial} en parte",
+  "tally": "hechos <fig>{done}</fig> de <fig>{total}</fig>",
+  "tallyPartial": "hechos <fig>{done}</fig> de <fig>{total}</fig> · <fig>{partial}</fig> en parte",
   "met": {
     "week": "cumplida esta semana · {done} de {total}",
     "month": "cumplida este mes · {done} de {total}",

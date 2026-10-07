@@ -109,7 +109,7 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
   }
 });
 
-test("on the phone a goal with no commitment still draws its own section", async ({ person, browser, baseURL, db }) => {
+test("on the phone a goal with no commitment draws no section: the week draws a goal only when it has rows (DESIGN 2026-10-06)", async ({ person, browser, baseURL, db }) => {
   const goalName = `Meta sin compromisos ${Date.now()}`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
@@ -121,7 +121,8 @@ test("on the phone a goal with no commitment still draws its own section", async
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByRole("main").getByText(goalName).filter({ visible: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("main").getByText(goalName).filter({ visible: true })).toHaveCount(0);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;

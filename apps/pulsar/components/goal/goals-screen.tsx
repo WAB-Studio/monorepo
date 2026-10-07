@@ -113,35 +113,41 @@ export async function GoalsScreen({
         main={
           <>
             <Panel as="div">
-              <Section label={t("goal.list.openTitle")}>
-              <Flex
-                direction="column"
-                role="group"
-                aria-label={t("goal.list.openTitle")}
-              >
-                {open.map((goal) => (
-                  <Row
-                    key={goal.id}
-                    href={`/metas/${goal.id}`}
-                    name={goal.name}
-                    meta={t("goal.list.untilShort", { date: lastDay(goal) })}
-                    metaVariant="sentence"
-                    wideMeta={monthMeta(goal)}
-                    wideTrailing={
-                      goal.month ? (
-                        <Text variant="meta">
-                          {t("goal.list.untilShort", { date: lastDay(goal) })}
-                        </Text>
-                      ) : undefined
-                    }
-                    trailing={chevron}
-                  />
-                ))}
-              </Flex>
-              <Button asChild variant="outline" block>
-                <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
-              </Button>
-              </Section>
+              {open.length > 0 ? (
+                <Section label={t("goal.list.openTitle")}>
+                  <Flex
+                    direction="column"
+                    role="group"
+                    aria-label={t("goal.list.openTitle")}
+                  >
+                    {open.map((goal) => (
+                      <Row
+                        key={goal.id}
+                        href={`/metas/${goal.id}`}
+                        name={goal.name}
+                        meta={t("goal.list.untilShort", { date: lastDay(goal) })}
+                        metaVariant="sentence"
+                        wideMeta={monthMeta(goal)}
+                        wideTrailing={
+                          goal.month ? (
+                            <Text variant="meta">
+                              {t("goal.list.untilShort", { date: lastDay(goal) })}
+                            </Text>
+                          ) : undefined
+                        }
+                        trailing={chevron}
+                      />
+                    ))}
+                  </Flex>
+                  <Button asChild variant="outline" block>
+                    <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
+                  </Button>
+                </Section>
+              ) : (
+                <Button asChild block>
+                  <Link href="/metas/nueva">{t("goal.none.action")}</Link>
+                </Button>
+              )}
             </Panel>
 
             {ended.length > 0 ? (

@@ -54,11 +54,12 @@ test("the phone footer's words are Archivo and its figures mono; the legend word
     }
     await withPage(browser, baseURL, person.sessionFile, 360, async (page) => {
       await page.goto(`/semana?semana=${lastMonday}`);
-      const rest = page.getByText("de 7 · 1 en parte", { exact: true });
-      await expect(rest).toBeVisible();
-      expect(await font(rest)).not.toMatch(/mono/i);
-      expect(await font(rest.locator("span").first())).toMatch(/mono/i);
-      expect(await font(rest.locator("xpath=preceding-sibling::*[1]"))).toMatch(/mono/i);
+      // One footer sentence in Archivo; only its three figures are mono (371).
+      const sum = page.locator("p").filter({ hasText: /^hechos \d+ de \d+ · \d+ en parte$/ }).filter({ visible: true });
+      await expect(sum).toBeVisible();
+      expect(await font(sum)).not.toMatch(/mono/i);
+      await expect(sum.locator("span")).toHaveCount(3);
+      for (const figure of await sum.locator("span").all()) expect(await font(figure)).toMatch(/mono/i);
       const legendWord = page.getByTestId("week-legend").getByText("pendiente", { exact: true });
       expect(await font(legendWord)).not.toMatch(/mono/i);
     });

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { readFileSync } from "node:fs";
 import { parseTemplate } from "./template";
-import { draftRefusals, importDraftJsonSchema, importDraftSchema, strayEstimates, withoutStrayEstimates, type ImportDraft } from "./draft";
+import { draftRefusals, importDraftJsonSchema, importDraftSchema, phaseCuts, phaseDrops, strayEstimates, withCutPhases, withoutStrayEstimates, type ImportDraft } from "./draft";
 
 const TODAY = "2026-10-15";
 
@@ -294,4 +294,37 @@ test("importDraftSchema: a task and a sub-task take a note judged by the note's 
 
 test("importDraftJsonSchema: holds no note key, so the model proposes none", () => {
   assert.equal(JSON.stringify(importDraftJsonSchema).includes('"note"'), false);
+});
+
+const phaseOf = (aim: string, startsOn: string, endsOn: string) => ({ aim, startsOn, endsOn });
+const OPENS = "2026-10-06";
+
+test("phaseCuts and withCutPhases: a phase that starts before the goal opens begins that day and is listed", () => {
+  const raw = draft(goal({ phases: [phaseOf("Evals", "2026-10-01", "2026-12-31")] }));
+  assert.deepEqual(phaseCuts(raw, OPENS), [{ path: "goals.0.phases.0", aim: "Evals", from: OPENS }]);
+  assert.deepEqual(withCutPhases(raw, OPENS).goals[0].phases, [phaseOf("Evals", OPENS, "2026-12-31")]);
+  assert.deepEqual(phaseCuts(withCutPhases(raw, OPENS), OPENS), []);
+});
+
+test("phaseCuts and withCutPhases: a phase wholly before the goal opens is dropped and listed", () => {
+  const raw = draft(goal({ phases: [phaseOf("Vieja", "2026-08-01", "2026-09-30"), phaseOf("Viva", "2026-10-06", "2026-12-31")] }));
+  assert.deepEqual(phaseDrops(raw, OPENS), [{ path: "goals.0.phases.0", aim: "Vieja" }]);
+  assert.deepEqual(phaseCuts(raw, OPENS), []);
+  assert.deepEqual(withCutPhases(raw, OPENS).goals[0].phases, [phaseOf("Viva", "2026-10-06", "2026-12-31")]);
+});
+
+test("phaseCuts: two phases cut in one goal, each listed under its own index", () => {
+  const raw = draft(goal({ phases: [phaseOf("A", "2026-09-01", "2026-10-06"), phaseOf("B", "2026-10-01", "2026-12-31")] }));
+  assert.deepEqual(phaseCuts(raw, OPENS), [
+    { path: "goals.0.phases.0", aim: "A", from: OPENS },
+    { path: "goals.0.phases.1", aim: "B", from: OPENS },
+  ]);
+  assert.deepEqual(withCutPhases(raw, OPENS).goals[0].phases, [phaseOf("A", OPENS, "2026-10-06"), phaseOf("B", OPENS, "2026-12-31")]);
+});
+
+test("phaseCuts: a phase starting on the day or later is untouched, and so is the rest of the draft", () => {
+  const raw = draft(goal({ phases: [phaseOf("Hoy", OPENS, "2026-11-30"), phaseOf("Luego", "2026-12-01", "2027-01-31")] }));
+  assert.deepEqual(phaseCuts(raw, OPENS), []);
+  assert.deepEqual(phaseDrops(raw, OPENS), []);
+  assert.deepEqual(withCutPhases(raw, OPENS), raw);
 });

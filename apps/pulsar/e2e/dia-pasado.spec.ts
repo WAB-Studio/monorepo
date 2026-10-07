@@ -248,6 +248,29 @@ test("a day before every goal this person holds says it asked for nothing, with 
   }
 });
 
+test("at 1440 an empty past day keeps its line in the column, under its title (RP-44)", async ({ person, browser, db }) => {
+  const day = pastDay(LIMIT);
+  const opened = pastDay(LIMIT - 2);
+  const stamp = Date.now();
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  try {
+    await db`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${`Tardía ${stamp}`}, ${pastDay(-60)}, ${new Date(`${opened}T17:00:00Z`)})
+    `;
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/dia/${day}`);
+    const title = (await page.getByText("Ese día no pedía nada").boundingBox())!;
+    const line = (await page.getByText(/^tardía \d+ empezó el /i).boundingBox())!;
+    expect(Math.abs(line.x - title.x)).toBeLessThanOrEqual(1);
+    expect(line.y).toBeGreaterThan(title.y);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
 test("the seventh day back draws why there is no step further, the sixth draws the step (RP-06)", async ({
   page,
 }) => {
