@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
 import { amountOf } from "@/lib/plan/roadmap";
+import { nextMonth } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
@@ -85,7 +86,10 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
     const state = row.current
       ? t("month.months.current")
       : share
-        ? t("month.months.carried", { share: Math.floor((share.carried * 100) / share.planned) })
+        ? t("month.months.carriedTo", {
+            percent: Math.floor((share.carried * 100) / share.planned),
+            month: monthLabel(nextMonth(row.month)),
+          })
         : row.planned !== null && !started
           ? t("month.months.planned")
           : null;

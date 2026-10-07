@@ -351,12 +351,14 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
     <Panel>
       <Section>
         <Flex justify="between" align="center">
-          <SectionLabel>
-            {t("goal.detail.phasesCount", {
-              word: countWord(goal.phases.length, t, true),
-              count: goal.phases.length,
-            })}
-          </SectionLabel>
+          {goal.phases.length > 0 ? (
+            <SectionLabel>
+              {t("goal.detail.phasesCount", {
+                word: countWord(goal.phases.length, t, true),
+                count: goal.phases.length,
+              })}
+            </SectionLabel>
+          ) : null}
           {archived || ended ? null : (
             <Face on="desktop">
               <TextLink href={`/metas/${goal.id}/fases/nueva`}>
