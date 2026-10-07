@@ -24,8 +24,11 @@ test("at 390 the suelta field of a long goal shows its whole placeholder (RP-19)
     const field = page.getByLabel(day.newOneOff.labelForGoal.replace("{goal}", NAME));
     const placeholder = day.newOneOff.placeholderForGoalShort.replace("{goal}", NAME);
     await expect(field).toHaveAttribute("placeholder", placeholder);
-    // Chrome never overflows a placeholder, so measure its text in the input's own font.
-    const { text, room } = await field.evaluate((input: HTMLInputElement, shown) => {
+    // Chrome never overflows a placeholder, so measure its text in the input's own font,
+    // once the layout has given the field a width and the font has loaded.
+    await expect.poll(() => field.evaluate((input: HTMLInputElement) => input.clientWidth)).toBeGreaterThan(0);
+    const { text, room } = await field.evaluate(async (input: HTMLInputElement, shown) => {
+      await document.fonts.ready;
       const style = getComputedStyle(input);
       const context = document.createElement("canvas").getContext("2d")!;
       context.font = style.font;
