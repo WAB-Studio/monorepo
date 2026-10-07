@@ -4,12 +4,10 @@ import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
-import { ShiftProposal } from "@/components/month/task-row";
-import { carryShare, monthOfTask } from "@/lib/plan/carry";
-import { shiftOfferNow } from "@/lib/plan/shift-offer";
-import { listGoals, loadGoal, type GoalView } from "@/lib/queries/goal";
+import { amountOf } from "@/lib/plan/roadmap";
+import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
+import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
-import { todayInZone } from "@/lib/zone";
 import { Button, ListDetail, Page, ScreenHeader, Table, Text, type TableRow } from "@/components/ui";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
@@ -33,14 +31,8 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
   const openIndex = goal.months.findIndex((row) => row.month === open);
 
   if (!goal.measureUnit || !goal.measureName) {
-    const counts = new Map<string, number>();
-    for (const task of goal.tasks) {
-      if (task.parentId !== null) continue;
-      const month = monthOfTask(task);
-      if (month !== null) counts.set(month, (counts.get(month) ?? 0) + 1);
-    }
     const bare: TableRow[] = goal.months.map((row) => {
-      const count = counts.get(row.month) ?? 0;
+      const count = planMonthList(goal.plan, row.month).length;
       const tasks = (
         <Text tone="secondary">
           {count === 0
@@ -78,8 +70,9 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
 
   const rows: TableRow[] = goal.months.map((row) => {
     const started = row.past || row.current;
-    const share = row.past ? carryShare(goal.tasks, row.month.slice(0, 7) + "-01") : null;
-    const figure = row.planned === null ? null : formatQuantity(row.planned, unit, words);
+    const share = row.past ? planShare(goal.plan, row.month) : null;
+    const own = amountOf(row.month, goal.plan);
+    const figure = own === null ? null : formatQuantity(own, unit, words);
     const amount = (
       <Text tone="secondary">
         {figure === null
@@ -126,11 +119,10 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
 
 /**
  * `MesesFilas.dc.html` / `MesesListaDetalle.dc.html` / `MesesVacio.dc.html` /
- * `MesesSinMedida.dc.html` (RP-28, RP-31, RP-32, RP-48): the goal's months, and
+ * `MesesSinMedida.dc.html` (RP-28, RP-31, RP-32, RP-50): the goal's months, and
  * from 1024 the month beside them — the current one, or the first outside the
  * span. The amount of a month still to be planned opens the amount sheet
- * through `?planear=`; an ended or archived goal offers no sheet. `listGoals`
- * rides in the fan-out for the shift sheet's «las demás metas».
+ * through `?planear=`; an ended or archived goal offers no sheet.
  */
 export async function MonthsScreen({
   goalId,
@@ -141,7 +133,7 @@ export async function MonthsScreen({
   planning: string | null;
   returnPath: string;
 }) {
-  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
   const t = await getTranslations();
@@ -151,21 +143,6 @@ export async function MonthsScreen({
   const planHref = (month: string) => `/metas/${goal.id}/meses?planear=${month.slice(0, 7)}`;
 
   const unit = goal.measureUnit;
-  const today = todayInZone();
-  const offer = open
-    ? shiftOfferNow({
-        today,
-        horizon: goal.horizon,
-        budgets: goal.budgets,
-        months: goal.months,
-        phases: goal.phases,
-        tasks: goal.tasks,
-        shifts: goal.shifts,
-      })
-    : null;
-  const currentPhase =
-    goal.phases.find((phase) => phase.startsOn <= today && (phase.endsOn === null || today <= phase.endsOn))
-      ?.name ?? null;
   const planned = open && unit
     ? goal.months.find((row) => !row.past && row.month.slice(0, 7) === planning)
     : undefined;
@@ -191,27 +168,9 @@ export async function MonthsScreen({
       {target ? (
         <ListDetail
           show="list"
-          list={
-            <>
-              <MonthsList goal={goal} open={target.month} />
-              {offer ? (
-                <ShiftProposal
-                  compact
-                  goalId={goal.id}
-                  goalName={goal.name}
-                  month={offer.closedMonth.slice(0, 7)}
-                  plan={offer.plan}
-                  currentPhase={currentPhase}
-                  hasDoneTasks={goal.tasks.some((task) => task.doneOn !== null)}
-                  otherGoals={goals.filter((other) => other.id !== goal.id).map((other) => other.name)}
-                  see={t("month.shift.monthsAction")}
-                />
-              ) : null}
-            </>
-          }
+          list={<MonthsList goal={goal} open={target.month} />}
           detail={<MonthDetail
               goal={goal}
-              goals={goals}
               month={target.month.slice(0, 7)}
               from={`/metas/${goal.id}/meses`}
               heading

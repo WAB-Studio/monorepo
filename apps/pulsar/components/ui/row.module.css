@@ -25,6 +25,16 @@
   border-block-end: 0;
 }
 
+/* `MetaVerPlan`: a link row drawn as a white card, one box rather than a ruled
+   line. Doubled to outrank `.row`. */
+.card.card {
+  padding: 0 16px;
+  background: var(--pulsar-raised);
+  border: 1px solid var(--pulsar-line);
+  border-radius: 10px;
+}
+
+
 /* A row carries no fill and no ring, so disabled is the ink alone. */
 .row:disabled {
   cursor: default;

@@ -15,7 +15,6 @@ import {
   deleteOneOffSchema,
   editTaskSchema,
   fixTaskSchema,
-  moveTaskSchema,
   scheduleOneOffSchema,
   setOneOffNoteSchema,
   type SetOneOffNoteInput,
@@ -23,7 +22,6 @@ import {
   type CreateOneOffInput,
   type CompleteOneOffInput,
   type DeleteOneOffInput,
-  type MoveTaskInput,
   type EditTaskInput,
   type FixTaskInput,
 } from "@/lib/validation/one-off";
@@ -36,7 +34,6 @@ export type CompleteOneOffResult = DeclareFactResult;
 export type ScheduleOneOffResult = { ok: true } | { ok: false; error: MessageKey };
 export type DeleteOneOffResult = { ok: true } | { ok: false; error: MessageKey };
 export type SetOneOffNoteResult = { ok: true } | { ok: false; error: MessageKey };
-export type MoveTaskResult = { ok: true } | { ok: false; error: MessageKey };
 export type EditTaskResult = { ok: true } | { ok: false; error: MessageKey };
 export type FixTaskResult = EditTaskResult;
 
@@ -443,13 +440,6 @@ export async function editTask(input: EditTaskInput): Promise<EditTaskResult> {
 /** The month half of `editTask`, for the AI (RP-51): fixes, or unfixes with `null`. */
 export async function fixTask(input: FixTaskInput): Promise<FixTaskResult> {
   const parsed = fixTaskSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
-  return writeTask(parsed.data);
-}
-
-/** Fixes a task to a month. Stays for the MCP until 355 deletes it. */
-export async function moveTaskToMonth(input: MoveTaskInput): Promise<MoveTaskResult> {
-  const parsed = moveTaskSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
   return writeTask(parsed.data);
 }

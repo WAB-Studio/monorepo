@@ -2,6 +2,7 @@
   "plan": {
     "title": "El plan",
     "finish": "A este ritmo terminas el {date}, {days, plural, one {# día} other {# días}} antes de tu final.",
+    "finishOnEnd": "A este ritmo terminas el {date}, el día de tu final.",
     "rhythm": "Ritmo {hours} al mes",
     "change": "Cambiar",
     "currentMonth": "{month} · en curso",
@@ -9,6 +10,7 @@
     "startsHere": "Empieza aquí con {hours} y sigue en {month}.",
     "comesFrom": "Viene de {month}.",
     "part": "{part} de {total}",
+    "unestimated": "sin estimar",
     "fixedIn": "Fijada en {month}",
     "range": "{from} a {to}",
     "summary": "{count, plural, one {# tarea} other {# tareas}} · {hours}",
@@ -29,6 +31,7 @@
     "seePlan": "Ver el plan",
     "dismiss": "Entendido",
     "next": "Siguiente del plan · {hours}",
+    "endDate": "{day} de {month}",
     "titleDays": "Tu plan de {goal} se movió {days, plural, one {# día} other {# días}}",
     "bodyShort": "{month} cerró con {done} de {amount}. Lo que faltó pasó a {next}. Ahora terminas el {date}."
   },
@@ -69,7 +72,8 @@
     "minutes": "min",
     "newTitle": "Una tarea nueva",
     "goesTo": "va a: {month}",
-    "eyebrowLoose": "tarea suelta"
+    "eyebrowLoose": "tarea suelta",
+    "parentSum": "Suma lo de sus sub-tareas."
   },
   "errors": {
     "rhythmRange": "El ritmo va de 1 a 1 000 000 de minutos al mes.",
@@ -86,7 +90,8 @@
   "meta": {
     "planLabel": "el plan",
     "finish": "A este ritmo terminas el {date}",
-    "rhythmLine": "{amount} al mes · {reached} de {planned} en {month}"
+    "rhythmLine": "Ritmo <fig>{amount}</fig> al mes · <fig>{reached}</fig> de <fig>{planned}</fig> en {month}",
+    "build": "Armar el plan"
   },
   "ritmo": {
     "eyebrow": "ritmo · {goal}",

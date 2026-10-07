@@ -7,7 +7,7 @@ import { Text } from "./text";
 import styles from "./row.module.css";
 
 // docs/pulsar/DESIGN.md: a row is a real `<button>`, never a div, at least 56px
-// tall, ruled from the next by a hairline. Never a card, never a border box.
+// tall, ruled from the next by a hairline. A border box only as `card`, a link row the boards draw so.
 // Writing a fact costs one tap, so the whole row is the target (RNP-02).
 type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & {
   // What sits at the head of the row — usually the mark, sometimes a plain
@@ -57,6 +57,8 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // A control of its own at the row's end, a sibling of the row's button
   // because a button cannot hold one (`TareaNotaGuardada`'s note button).
   end?: ReactNode;
+  // A link row drawn as a white bordered card, not a ruled line.
+  card?: boolean;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -76,6 +78,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     wideTrailing,
     preview,
     end,
+    card,
     className,
     type = "button",
     disabled,
@@ -87,6 +90,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
   const merged = [
     styles.row,
     rule ? undefined : styles.flush,
+    card ? styles.card : undefined,
     onLeadingClick || end ? styles.split : undefined,
     className,
   ]

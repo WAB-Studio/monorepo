@@ -3,19 +3,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { ShiftProposal, TaskRow } from "@/components/month/task-row";
+import { TaskRow } from "@/components/month/task-row";
 import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
-import { carryShare, monthList, owedAt, type MonthItem, type Task } from "@/lib/plan/carry";
+import type { Task } from "@/lib/plan/carry";
+import type { PlanItem } from "@/lib/plan/roadmap";
 import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
-import { monthAmount, shiftOffered, shiftPlan } from "@/lib/plan/shift";
-import { listGoals, loadGoal, type GoalSummary, type GoalView } from "@/lib/queries/goal";
+import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
+import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
-import { todayInZone } from "@/lib/zone";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
-const dayFormat = new Intl.DateTimeFormat("es", { day: "numeric", month: "long", timeZone: "UTC" });
 
 function monthLabel(month: string): string {
   return monthFormat.format(new Date(`${month.slice(0, 7)}-01T12:00:00Z`));
@@ -44,22 +43,20 @@ function AddRow({ href, label, child }: { href: string; label: string; child?: b
 }
 
 /**
- * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (RP-30, RP-31,
- * RP-32, RP-48): the month's own content, as `loadGoal`'s `months` and 126's
- * `monthList` read it (carried ones first), the closed month's share from
- * `carryShare`, and the proposal from 142's `shiftOffered` and `shiftPlan`.
+ * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `RoadmapTramoMedio` (RP-30,
+ * RP-31, RP-32, RP-54): the month's own content, as the goal's plan places it
+ * (`planMonthList`, carried ones first) and the closed month's share from
+ * `planShare`.
  * `heading` draws the month's name as an `h2`, for the screen whose `h1` is
  * the list's title (`MesesListaDetalle.dc.html`).
  */
 export async function MonthDetail({
   goal,
-  goals,
   month,
   from,
   heading,
 }: {
   goal: GoalView;
-  goals: GoalSummary[];
   month: string;
   // The path the sheet returns to; the month page itself by default.
   from?: string;
@@ -76,7 +73,6 @@ export async function MonthDetail({
     min: (min) => units("min", { min }),
     join: (h, min) => units("join", { h, min }),
   };
-  const today = todayInZone();
   const name = monthLabel(mes);
   const unit = goal.measureUnit;
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
@@ -87,10 +83,10 @@ export async function MonthDetail({
   const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
 
-  const items = monthList(goal.tasks, mes, today);
+  const items = planMonthList(goal.plan, mes);
   const carried = items.filter((item) => item.carriedFrom !== null);
   const own = items.filter((item) => item.carriedFrom === null);
-  const share = closed ? carryShare(goal.tasks, mes) : null;
+  const share = closed ? planShare(goal.plan, mes) : null;
 
   const doneInMonth = sum(
     goal.tasks.filter(
@@ -119,7 +115,21 @@ export async function MonthDetail({
     note = t.rich("month.list.includesDone", { done: say(doneInMonth), ...fig });
   }
 
-  function item(entry: MonthItem) {
+  const openMonths = openMonthsOf(goal.plan);
+  const sheetOf = (task: Task, kids: Task[]) => ({
+    goalId: goal.id,
+    goalName: goal.name,
+    unit,
+    estimate: task.estimate,
+    planMonth: goal.roadmap.state === "planned" ? (planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null) : null,
+    months: task.parentId === null ? openMonths : [],
+    canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),
+    fixedMonth: task.plannedMonth?.slice(0, 7) ?? null,
+  });
+  // A pin means something only against a plan.
+  const pinOf = (task: Task) => (goal.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined);
+
+  function item(entry: PlanItem) {
     const { task, children } = entry;
     const childTotal = sum(children, (child) => child.estimate ?? 0);
     const childDone = sum(
@@ -127,12 +137,13 @@ export async function MonthDetail({
       (child) => child.estimate ?? 0,
     );
     const isParent = children.length > 0;
-    const owes = entry.carriedFrom !== null ? entry.owes : isParent ? childTotal : (task.estimate ?? 0);
+    const owes = entry.carriedFrom !== null ? entry.part : isParent ? childTotal : (task.estimate ?? 0);
 
+    const hasAmount = isParent ? children.some((child) => child.estimate !== null) : task.estimate !== null;
     let meta: ReactNode;
     if (entry.carriedFrom !== null) {
-      meta = entry.hasAmount
-        ? t.rich("month.list.owes", { month: monthLabel(entry.carriedFrom), owes: say(entry.owes), ...fig })
+      meta = hasAmount
+        ? t.rich("month.list.owes", { month: monthLabel(entry.carriedFrom), owes: say(entry.part), ...fig })
         : t("month.list.fromMonth", { month: monthLabel(entry.carriedFrom) });
     } else if (isParent) {
       meta = childTotal > 0 ? t.rich("month.list.doneOf", { done: say(childDone), total: say(childTotal), ...fig }) : undefined;
@@ -163,6 +174,18 @@ export async function MonthDetail({
           trailing={unit && owes > 0 ? say(owes) : undefined}
           note={task.note}
           noteEyebrow={noteEyebrow}
+          part={
+            entry.from !== null || entry.to !== null
+              ? {
+                  part: entry.part,
+                  hours: entry.hours,
+                  from: entry.from?.slice(0, 7) ?? null,
+                  to: entry.to?.slice(0, 7) ?? null,
+                }
+              : undefined
+          }
+          fixedMonth={pinOf(task)}
+          sheet={sheetOf(task, children)}
         />
         {children.map((child) => (
           <TaskRow
@@ -175,6 +198,7 @@ export async function MonthDetail({
             trailing={unit && child.estimate ? say(child.estimate) : undefined}
             note={child.note}
             noteEyebrow={noteEyebrow}
+            sheet={sheetOf(child, [])}
           />
         ))}
         {subtaskable ? (
@@ -185,42 +209,8 @@ export async function MonthDetail({
   }
 
   const carriedMonths = [...new Set(carried.map((entry) => entry.carriedFrom as string))];
-  const ownPlanned = sum(
-    own.map((entry) => entry.task),
-    (task) => owedAt(task, goal.tasks.filter((other) => other.parentId === task.id), "0000-01-01"),
-  );
+  const ownPlanned = own.reduce((total, entry) => total + entry.part, 0);
   const empty = items.length === 0;
-
-  const offered =
-    open &&
-    closed &&
-    shiftOffered({
-      month: mes,
-      today,
-      share,
-      amount: monthAmount(mes, goal.budgets, goal.months),
-      shifted: goal.shifts,
-    });
-  const plan = offered
-    ? shiftPlan({
-        closedMonth: mes,
-        today,
-        horizon: goal.horizon,
-        budgets: goal.budgets,
-        phases: goal.phases.flatMap((phase) =>
-          phase.endsOn === null
-            ? []
-            : [{ id: phase.id, aim: phase.name, startsOn: phase.startsOn, endsOn: phase.endsOn }],
-        ),
-        tasks: goal.tasks,
-      })
-    : null;
-  const currentPhase =
-    goal.phases.find((phase) => phase.startsOn <= today && (phase.endsOn === null || today <= phase.endsOn))
-      ?.name ?? null;
-  const lastDayOfToday = new Date(
-    Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0, 12),
-  );
 
   return (
     <Flex direction="column" gap={{ initial: "6", md: "7" }} maxWidth="720px">
@@ -296,20 +286,6 @@ export async function MonthDetail({
         </Text>
       ) : null}
 
-      {plan ? (
-        <ShiftProposal
-          goalId={goal.id}
-          goalName={goal.name}
-          month={month}
-          plan={plan}
-          currentPhase={currentPhase}
-          hasDoneTasks={goal.tasks.some((task) => task.doneOn !== null)}
-          otherGoals={goals.filter((other) => other.id !== goal.id).map((other) => other.name)}
-          proposal={t("month.shift.proposal", { month: name })}
-          see={t("month.shift.see")}
-          until={t("month.shift.until", { date: dayFormat.format(lastDayOfToday) })}
-        />
-      ) : null}
     </Flex>
   );
 }
@@ -321,7 +297,7 @@ export async function MonthDetail({
  * month open.
  */
 export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {
-  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
   const mes = `${month}-01`;
   if (!goal.months.some((entry) => entry.month === mes)) notFound();
@@ -337,7 +313,7 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
       <ListDetail
         show="detail"
         list={<MonthsList goal={goal} open={mes} />}
-        detail={<MonthDetail goal={goal} goals={goals} month={month} />}
+        detail={<MonthDetail goal={goal} month={month} />}
       />
     </Page>
   );

@@ -902,6 +902,53 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - «Septiembre cerró con 6 h de 12 h» counts the estimates of the tasks done that month, never the measure reached:
     what is missing is exactly what moved.
   - A one-off with no goal is renamed from the same sheet: **RP-57**.
+- **A pin means something only against a plan** (2026-10-06, decided by the orchestrator). A row draws the pin and «Fijada en …»
+  only when its goal has a rhythm and the task holds a month. A goal with no rhythm draws none on any row: every task
+  of it has a month and pinning all of them says nothing. The task's sheet still shows «Mes» there, with «Fijarla en»
+  selected for a task that holds a month.
+- **`RoadmapFijar` picks the month with chips** (2026-10-06, decided by the orchestrator): «Fijarla en» opens a row of
+  month chips, one selected, instead of a select; no select primitive exists in `components/ui`.
+- **The plan's notice on Hoy** (2026-10-06, decided by the orchestrator). A move under 7 days reads in days
+  (`RoadmapHoyMovidoDias`: «se movió 3 días», and no sentence about the rest running behind); from 7 days it reads in
+  whole weeks, rounded (`RoadmapHoyMovido`: «se movió 2 semanas»). With several goals the notices stack at the top of
+  Hoy, above the goal sections, each naming its goal. A move of 0 days draws none.
+- **A phase is written in weeks and reads its dates**, decided by the user 2026-10-06 after the wave-2 review. The
+  phase form shows live, under the weeks, the days they cover («del lunes 5 de octubre al domingo 8 de noviembre») and
+  the last week the goal allows, as «Mover el final» does. No schema change. Board still to draw.
+- **An imported phase that starts before its goal is cut to week 1**, decided by the user 2026-10-06. The import's
+  review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board still to draw.
+- **The goal at 1024 draws its phases on a full-width row under the two columns** (2026-10-06, decided by the
+  orchestrator): a 260 px phases column broke an aim into one word per line.
+- **Decided by the user 2026-10-06, after the roadmap and wave-2 critics:**
+  - A goal holds no fact before the day it opened. The AI refuses such a fact and says why; the past day never draws
+    the goal before it opened.
+  - A month's figure on the goal and the plan is the hours of the tasks done that month against its room, as Hoy's
+    notice counts («septiembre cerró con 6 h de 12 h»). The measure's total stays on its own line.
+  - «Mover el final» asks first: a sheet names the old and the new end («Mover el final del 29 de noviembre al 20 de
+    febrero»), «Moverlo» and «Cancelar». Supersedes the one tap of `RoadmapPasaElFinal`. Board still to draw.
+  - When several plans moved, Hoy draws one card: «N planes se movieron», a line per goal (how far, «Ver el plan»), one
+    «Entendido». Supersedes one card per goal (`RoadmapHoyMovido`) and the stacking decided earlier today. Board still
+    to draw.
+- **Decided by the orchestrator 2026-10-06, same reviews:**
+  - A task past the goal's end that starts inside it reads its part in its month («Empieza aquí con 10 h y sigue en
+    diciembre.»); only what falls after the end is listed under «después de tu final» (RP-54).
+  - A row under «después de tu final» opens the task's sheet, as every task row does.
+  - A month's header says which figure it is: the current month «5 h hechas de 12 h», a later one «12 h planeadas de
+    12 h». Board still to draw.
+  - Setting a goal's first rhythm raises no «se movió» notice: the plan starts there.
+  - A task with no estimate reads «sin estimar» as its trailing, muted, in every list of the plan.
+  - A parent's sheet says under «Nombre» why it has no estimate: «Suma lo de sus sub-tareas.»
+  - A task fixed to a month that has closed shows that month as the selected chip, closed, in its sheet.
+  - On `/sueltas` a suelta's name opens the RP-57 sheet; «Darle un día» is a row inside that sheet (W3-Q1).
+  - A goal's own dated one-off opens the same sheet with its name alone (W3-Q2).
+  - Figures use a plain zero, never the slashed one (W3-Q3).
+  - An imported phase that ends before its goal opens is dropped and listed in the import's review (W3-Q4).
+- **Wave 3 of the UX review, decided by the orchestrator 2026-10-06** (module 365):
+  - A past day's heading counts what «hechos» counts (:671, :846): «ese día pedía cinco» never adds a weekly row.
+  - The phone week draws a goal only when it has rows, and says «hechos» once, in its footer.
+  - An empty section draws no label: no «cero compromisos», «cero fases», «abiertas» over nothing.
+  - An archived goal with no task this month draws no month block.
+  - A unit is said once in a figure pair («7 de 90 kilómetros»); a stored phase reads from week 1 at the earliest.
 - **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
   - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
     on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
@@ -915,3 +962,15 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   system's multiples of 4). Chips in a row sit 8 apart and wrap by chip; the seven weekday chips sit 4 apart
   (`ChipRow`, `tight`). A field pair sits 8 apart, two fields sharing the width, or the first sized by the pair when
   it is narrow, a quantity beside its unit (`FieldPair`). No screen spaces either with `Flex gap` or `style`.
+
+- **`MetaVerPlan`, states the board does not draw** (2026-10-06, decided by the orchestrator).
+  - A goal with no rhythm: the row's first line reads «Armar el plan», with no second line; it still links to the plan.
+  - A goal with no task in the plan: no «el plan» section.
+  - The plan's end carries the year only when it is not the current year, as the rest of the screen does.
+
+- **The plan's months, module 349** (2026-10-06, decided by the orchestrator):
+  - A task past the goal's end appears only under «después de tu final», never again in the month holding its hours.
+  - A month past the goal's last month with no rows is dropped.
+  - A goal with no measure draws no figure and no bar on the plan's months.
+  - «Añadir una tarea» opens the sheet with no «va a» hint.
+  - A plan that ends on the goal's last day reads «A este ritmo terminas el {date}, el día de tu final.», never «0 días antes».

@@ -25,7 +25,9 @@ export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: Message
  * only the first rhythm (old null) sends the goal's undone top-level plan
  * tasks back to the plan. A task is done when it has a fact, or when it has
  * children and each of them has one. The guard trigger already leaves a
- * task with a fact alone; the clause says it again for the parent.
+ * task with a fact alone; the clause says it again for the parent. The first
+ * rhythm also marks last month seen: the plan starts there, so it has no
+ * month to have moved.
  * A goal the person cannot see, or one refused, updates and inserts nothing,
  * so the refusal needs no rollback.
  */
@@ -50,7 +52,11 @@ export async function setRhythm({ goalId, amount }: SetRhythmInput): Promise<Set
         where measure_unit is not null and archived_at is null and horizon > ${today}::date
       ),
       upd as (
-        update goals set rhythm = ${amount} where id in (select id from ok) returning id
+        update goals set rhythm = ${amount},
+          plan_seen = case when rhythm is null
+            then greatest(plan_seen, (date_trunc('month', ${today}::date) - interval '1 month')::date)
+            else plan_seen end
+        where id in (select id from ok) returning id
       ),
       ins as (
         insert into month_budgets (user_id, goal_id, month, amount)

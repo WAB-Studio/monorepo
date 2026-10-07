@@ -155,10 +155,17 @@ export function fillPlan(input: PlanInput): Roadmap {
   // Done items sit whole in their fixed month, else in their done day's month.
   for (const entry of entries) {
     if (!entry.done) continue;
-    const month = entry.fixedMonth ?? monthOf(entry.doneOn ?? today);
+    const doneMonth = monthOf(entry.doneOn ?? today);
+    // A task fixed to an earlier month and done later sits where it was done, carried from its own.
+    const carriedFrom = entry.fixedMonth !== null && entry.fixedMonth < doneMonth ? entry.fixedMonth : null;
+    const month = carriedFrom !== null ? doneMonth : (entry.fixedMonth ?? doneMonth);
     if (month < current) continue;
     if (month === current) take(month, entry.hours);
-    rows.push({ month, carried: false, item: toItem(entry, [{ month, part: entry.hours, endsOn: null }], 0, null, false) });
+    rows.push({
+      month,
+      carried: carriedFrom !== null,
+      item: toItem(entry, [{ month, part: entry.hours, endsOn: null }], 0, carriedFrom, false),
+    });
   }
 
   // Undone fixed items sit whole in their month, a past one in the current.

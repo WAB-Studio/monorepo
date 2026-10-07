@@ -5,11 +5,9 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (module 139,
-// RP-30, RP-31, RP-32, RP-48): one month of a goal, its carried tasks first,
-// and the shift a closed month offers. Calendar-bound as 135: the seeded
-// «last month» is always the month before today, so the proposal's window is
-// always open.
+// `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado` (module 139, RP-30,
+// RP-31, RP-32): one month of a goal, its carried tasks first. Calendar-bound
+// as 135: the seeded «last month» is always the month before today.
 
 // A mixed line: its sentence in Archivo, each figure (a span) in mono.
 async function expectFigures(line: Locator, figures: string[]) {
@@ -270,75 +268,6 @@ test("a goal with no measure's empty month promises no time; the back and «Todo
       await all.click();
       await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses$`));
     }
-  } finally {
-    await context.close();
-  }
-});
-
-test("a closed month over half carried proposes the shift; the sheet lists the moves; accepting moves the plan a month and the proposal is gone; at exactly half or two months back there is none (RP-48)", async ({
-  person,
-  browser,
-  baseURL,
-  db,
-}) => {
-  const stamp = Date.now();
-  const moved = await seedGoal(db, person.id, `Meta corre ${stamp}`);
-  await seedBudget(db, person.id, moved, thisMonth, 600);
-  await seedBudget(db, person.id, moved, following, 300);
-  await seedTask(db, person.id, moved, `Sigue ${stamp}`, lastMonth, 100);
-  await seedTask(db, person.id, moved, `Se mueve ${stamp}`, thisMonth, 60);
-
-  const half = await seedGoal(db, person.id, `Meta mitad ${stamp}`);
-  await seedTask(db, person.id, half, `Hecha ${stamp}`, lastMonth, 100, null, `${lastMonth.slice(0, 8)}15`);
-  await seedTask(db, person.id, half, `Falta ${stamp}`, lastMonth, 100);
-
-  const old = await seedGoal(db, person.id, `Meta vieja ${stamp}`, twoBack);
-  await seedTask(db, person.id, old, `Antigua ${stamp}`, twoBack, 100);
-
-  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
-  try {
-    const page = await context.newPage();
-    await page.setViewportSize({ width: 360, height: 740 });
-    const proposal = /Se arrastró más de la mitad de/;
-
-    await page.goto(`/metas/${half}/meses/${seg(lastMonth)}`);
-    await expect(page.getByText("cerrado · se arrastró 50 % · 1 h 40 min de 3 h 20 min")).toBeVisible();
-    await expect(page.getByText(proposal)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
-    await page.goto(`/metas/${old}/meses/${seg(twoBack)}`);
-    await expect(page.getByText("cerrado", { exact: true })).toBeVisible();
-    await expect(page.getByText(proposal)).toHaveCount(0);
-
-    await page.goto(`/metas/${moved}/meses/${seg(lastMonth)}`);
-    await expect(page.getByText(`Se arrastró más de la mitad de ${label(lastMonth)}.`)).toBeVisible();
-    // The box is drawn on the phone: a border, not a bare column.
-    const box = page.getByText(`Se arrastró más de la mitad de ${label(lastMonth)}.`).locator("xpath=ancestor::div[1]/..");
-    expect(await box.evaluate((el) => parseFloat(getComputedStyle(el).borderTopWidth))).toBeGreaterThan(0);
-    await expect(page.getByText(/^se puede hasta el \d+ de /)).toBeVisible();
-    await expect(page.getByText(`sigue en ${label(thisMonth)}`)).toBeVisible();
-    await page.getByRole("button", { name: "ver qué se corre" }).click();
-    const sheet = page.getByRole("dialog");
-    await expect(sheet.getByRole("heading", { name: "Correr un mes lo que sigue" })).toBeVisible();
-    await expect(sheet.getByText("1 tarea planeada")).toBeVisible();
-    await expect(sheet.getByText(/^montos de /)).toBeVisible();
-    await sheet.getByRole("button", { name: "Correr un mes" }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(page.getByText(proposal)).toHaveCount(0);
-
-    // One month later, read from a reload.
-    await page.reload();
-    await expect(page.getByText(proposal)).toHaveCount(0);
-    await page.goto(`/metas/${moved}/meses/${seg(following)}`);
-    await expect(page.getByText(`Se mueve ${stamp}`)).toBeVisible();
-    await expect(page.getByText("de 10 h", { exact: true })).toBeVisible();
-    const budgets = await db<{ month: string; amount: number }[]>`
-      select to_char(month, 'YYYY-MM') as month, amount from goals.month_budgets
-      where goal_id = ${moved} order by month
-    `;
-    expect(budgets.map((b) => `${b.month}:${b.amount}`)).toEqual([
-      `${seg(following)}:600`,
-      `${seg(nextMonth(following))}:300`,
-    ]);
   } finally {
     await context.close();
   }

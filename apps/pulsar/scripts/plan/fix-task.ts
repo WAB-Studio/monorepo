@@ -1,4 +1,4 @@
-// Drives `fixTask` and `moveTaskToMonth` (`app/actions/one-offs.ts`, RP-51) the way
+// Drives `fixTask` (`app/actions/one-offs.ts`, RP-51) the way
 // `task-actions.ts` drives its siblings: the action imported as a plain async
 // function, `server-only`, `next/headers` and `next/cache` stubbed before the
 // first `@/` import, and the cookie `harness:mint-session` left standing is
@@ -77,14 +77,6 @@ let actions: Actions;
 let createGoal: typeof import("@/app/actions/plan").createGoal;
 let pgCode: typeof import("@/lib/db-error").pgCode;
 
-async function move(input: Parameters<Actions["moveTaskToMonth"]>[0]) {
-  try {
-    return await actions.moveTaskToMonth(input);
-  } catch (error) {
-    assert.fail(`moveTaskToMonth threw ${pgCode(error) ?? "without a code"}`);
-  }
-}
-
 async function fix(input: Parameters<Actions["fixTask"]>[0]) {
   try {
     return await actions.fixTask(input);
@@ -150,12 +142,12 @@ after(async () => {
   await sql.end();
 });
 
-test("moveTaskToMonth: a task of this month moves to next month with its children, in at most three statements", async () => {
+test("fixTask: a task of this month moves to next month with its children, in at most three statements", async () => {
   const taskId = await created({ name: "RP-51 mover", day: null, goalId, plannedMonth: thisMonth });
   const childId = await created({ name: "RP-51 mover hija", day: null, parentId: taskId, estimate: undefined });
   revalidated.length = 0;
   wire = [];
-  const result = await move({ oneOffId: taskId, month: nextMonth });
+  const result = await fix({ oneOffId: taskId, month: nextMonth });
   const calls = (wire as string[]).map((q) => q.trim().toLowerCase());
   wire = null;
   assert.deepEqual(result, { ok: true });
@@ -182,18 +174,18 @@ test("moveTaskToMonth: a task of this month moves to next month with its childre
   assert.ok(!inOrigin.some((item) => item.task.id === taskId || item.children.some((child) => child.id === childId)));
 });
 
-test("moveTaskToMonth: a closed month and a month outside the span are refused and the task stays", async () => {
+test("fixTask: a closed month and a month outside the span are refused and the task stays", async () => {
   const taskId = await created({ name: "RP-51 quieta", day: null, goalId, plannedMonth: thisMonth });
-  const closed = await move({ oneOffId: taskId, month: lastMonth });
+  const closed = await fix({ oneOffId: taskId, month: lastMonth });
   assert.deepEqual(closed, { ok: false, error: "roadmap.errors.monthEnded" });
   for (const month of [monthFrom(today, -2), monthFrom(today, 2)]) {
-    const outside = await move({ oneOffId: taskId, month });
+    const outside = await fix({ oneOffId: taskId, month });
     assert.deepEqual(outside, { ok: false, error: "roadmap.errors.monthOutsideSpan" }, month);
   }
   assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
 });
 
-test("moveTaskToMonth: a done task and one with a done child are refused as doneTask", async () => {
+test("fixTask: a done task and one with a done child are refused as doneTask", async () => {
   const doneId = await created({ name: "RP-51 hecha", day: null, goalId, plannedMonth: thisMonth });
   const completed = await actions.completeOneOff({ oneOffId: doneId });
   assert.equal(completed.ok, true, JSON.stringify(completed));
@@ -204,26 +196,26 @@ test("moveTaskToMonth: a done task and one with a done child are refused as done
   assert.equal(childDone.ok, true, JSON.stringify(childDone));
 
   for (const id of [doneId, parentId]) {
-    assert.deepEqual(await move({ oneOffId: id, month: nextMonth }), { ok: false, error: "roadmap.errors.doneTask" });
+    assert.deepEqual(await fix({ oneOffId: id, month: nextMonth }), { ok: false, error: "roadmap.errors.doneTask" });
   }
   assert.deepEqual(await monthsOf(doneId, parentId), [`${thisMonth}-01`, `${thisMonth}-01`]);
 });
 
-test("moveTaskToMonth: a sub-task, a one-off with no month and an id that is nobody's are refused", async () => {
+test("fixTask: a sub-task, a one-off with no month and an id that is nobody's are refused", async () => {
   const parentId = await created({ name: "RP-51 padre solo", day: null, goalId, plannedMonth: thisMonth });
   const childId = await created({ name: "RP-51 hija sola", day: null, parentId });
-  assert.deepEqual(await move({ oneOffId: childId, month: nextMonth }), { ok: false, error: "roadmap.errors.subTaskMonth" });
+  assert.deepEqual(await fix({ oneOffId: childId, month: nextMonth }), { ok: false, error: "roadmap.errors.subTaskMonth" });
 
   const plainId = await created({ name: "RP-51 suelta", day: null, goalId });
-  assert.deepEqual(await move({ oneOffId: plainId, month: nextMonth }), { ok: false, error: "month.errors.invalid" });
+  assert.deepEqual(await fix({ oneOffId: plainId, month: nextMonth }), { ok: false, error: "month.errors.invalid" });
 
-  const nobody = await move({ oneOffId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", month: nextMonth });
+  const nobody = await fix({ oneOffId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", month: nextMonth });
   assert.deepEqual(nobody, { ok: false, error: "plan.errors.notFound" });
-  assert.deepEqual(await move({ oneOffId: parentId, month: "2026-13" }), { ok: false, error: "month.errors.monthInvalid" });
+  assert.deepEqual(await fix({ oneOffId: parentId, month: "2026-13" }), { ok: false, error: "month.errors.monthInvalid" });
   assert.deepEqual(await monthsOf(parentId, childId), [`${thisMonth}-01`, null]);
 });
 
-test("moveTaskToMonth: another person's task is not found and keeps its month; an archived goal's task is closed", async () => {
+test("fixTask: another person's task is not found and keeps its month; an archived goal's task is closed", async () => {
   const lane = laneNumber();
   const memberEmail = `harness-member${lane === 1 ? "" : `-${lane}`}@example.invalid`;
   const [member] = await sql<{ id: string }[]>`select id from auth.users where email = ${memberEmail}`;
@@ -236,7 +228,7 @@ test("moveTaskToMonth: another person's task is not found and keeps its month; a
     const [foreign] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, goal_id, name, planned_month)
       values (${member.id}, ${foreignGoal.id}, 'RP-51 tarea ajena', ${`${thisMonth}-01`}) returning id`;
-    assert.deepEqual(await move({ oneOffId: foreign.id, month: nextMonth }), { ok: false, error: "plan.errors.notFound" });
+    assert.deepEqual(await fix({ oneOffId: foreign.id, month: nextMonth }), { ok: false, error: "plan.errors.notFound" });
     assert.deepEqual(await monthsOf(foreign.id), [`${thisMonth}-01`]);
   } finally {
     await sql`delete from goals.goals where id = ${foreignGoal.id} and user_id = ${member.id}`;
@@ -249,7 +241,7 @@ test("moveTaskToMonth: another person's task is not found and keeps its month; a
   const taskId = await created({ name: "RP-51 de archivada", day: null, goalId: made.goalId, plannedMonth: thisMonth });
   const archived = await plan.archiveGoal({ goalId: made.goalId });
   if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
-  assert.deepEqual(await move({ oneOffId: taskId, month: nextMonth }), { ok: false, error: "month.errors.closed" });
+  assert.deepEqual(await fix({ oneOffId: taskId, month: nextMonth }), { ok: false, error: "month.errors.closed" });
   assert.deepEqual(await monthsOf(taskId), [`${thisMonth}-01`]);
 });
 

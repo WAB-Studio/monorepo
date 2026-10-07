@@ -58,6 +58,12 @@
   }
 }
 
+@media (min-width: 1024px) {
+  .page.column > :not(header) {
+    max-inline-size: 640px;
+  }
+}
+
 /* A screen with no rail: the 700px centred column holds at every width. */
 @media (min-width: 1024px) {
   .page.alone {
