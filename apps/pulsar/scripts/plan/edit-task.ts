@@ -231,9 +231,9 @@ test("editTask: a suelta takes a new name, done or not, and refuses estimate and
   assert.equal((await actions.completeOneOff({ oneOffId: looseId })).ok, true);
   assert.deepEqual(await edit({ oneOffId: looseId, name: "RP-57 hecha" }), { ok: true });
   assert.deepEqual(await rowOf(looseId), { name: "RP-57 hecha", estimate: null, planned_month: null });
-  // A goal's one-off outside the plan is no plan task.
+  // A goal's one-off outside the plan is no plan task: its name alone lands (rename-goal-one-off.ts).
   const goalLoose = await created({ name: "RP-57 de meta", day: null, goalId });
-  assert.deepEqual(await edit({ oneOffId: goalLoose, name: "otra" }), { ok: false, error: "month.errors.invalid" });
+  assert.deepEqual(await edit({ oneOffId: goalLoose, name: "otra", month: thisMonth }), { ok: false, error: "month.errors.invalid" });
 });
 
 test("editTask: a plan task with a day refuses a new month and the plan's return, and takes a new name", async () => {
