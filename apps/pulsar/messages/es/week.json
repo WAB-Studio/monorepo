@@ -4,10 +4,8 @@
   "todayMark": "· hoy",
   "table": {
     "caption": "La semana, un compromiso por fila y un día por columna",
-    "footer": "hechos"
-  },
-  "summary": {
-    "rest": "de <fig>{total}</fig> · <fig>{partial}</fig> en parte"
+    "footer": "hechos",
+    "footerPartial": "hechos <fig>{done}</fig> de <fig>{total}</fig> · <fig>{partial}</fig> en parte"
   },
   "legend": {
     "done": "hecho",
