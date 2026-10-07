@@ -364,6 +364,7 @@ function GoalPart({
         });
         const current = goal.months.findIndex((m) => m.current);
         const week = goal.weeks.find((w) => w.current);
+        const weekPlanned = goal.weekPlanned ?? null;
         const weekRows: TableRow[] = goal.weeks.map((w) => ({
           key: `week-${w.index}`,
           cells: [
@@ -398,10 +399,17 @@ function GoalPart({
                 <Section label={t("byWeek")}>
                   {week ? (
                     <Text as="p" variant="sentence">
-                      {t.rich("thisWeekDone", {
-                        done: week.total,
-                        fig: () => <Figure variant="meta" value={week.total} unit={unit as string} />,
-                      })}
+                      {weekPlanned === null
+                        ? t.rich("thisWeekDone", {
+                            done: week.total,
+                            fig: () => <Figure variant="meta" value={week.total} unit={unit as string} />,
+                          })
+                        : t.rich("thisWeek", {
+                            done: week.total,
+                            planned: weekPlanned,
+                            fig: () => <Figure variant="meta" segmented value={week.total} unit={unit as string} />,
+                            plan: () => <Figure variant="meta" segmented value={weekPlanned} unit={unit as string} />,
+                          })}
                     </Text>
                   ) : null}
                   <Table
