@@ -167,3 +167,29 @@ for (const width of [360, 1280]) {
     });
   });
 }
+
+// DESIGN: the week draws no goal group with neither rows nor an ended line, so
+// a goal that ended this week with nothing to mark still says when it ended.
+test("at 360 a goal ended this week with no commitment still reads «terminó el <día> · ver»", async ({
+  browser,
+  baseURL,
+  person,
+  db,
+}) => {
+  await withPerson(browser, baseURL, person, db, 360, async (page, personId) => {
+    const stamp = Date.now();
+    const name = `Meta sin filas ${stamp}`;
+    const openName = `Meta viva ${stamp}`;
+    await seedGoal(db, personId, openName, shift(today, 30));
+    const id = await seedGoal(db, personId, name, today);
+    await db`delete from goals.commitments where goal_id = ${id}`;
+    await open(page);
+    await expect(page.getByText(openName).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByText(`terminó el ${dayWords(shift(today, -1))} ·`).filter({ visible: true })).toHaveCount(
+      endedDrawn ? 1 : 0,
+    );
+    const link = page.getByRole("link", { name: `Abrir ${name}` }).filter({ visible: true });
+    await expect(link).toHaveCount(endedDrawn ? 1 : 0);
+    await expect(page.getByText(name).filter({ visible: true })).toHaveCount(endedDrawn ? NAME_DRAWS : 0);
+  });
+});
