@@ -1,5 +1,3 @@
-"use client";
-
 import { useTranslations } from "next-intl";
 
 import { SignInForm } from "@/components/account/sign-in-form";
