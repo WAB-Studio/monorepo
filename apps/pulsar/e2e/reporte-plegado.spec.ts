@@ -374,14 +374,19 @@ function minutesText(total: number): string {
   return `${h} h ${String(min).padStart(2, "0")} min`;
 }
 
-async function seedWeek(db: postgres.Sql, person: Person, amount: number | null) {
+async function seedWeek(
+  db: postgres.Sql,
+  person: Person,
+  amount: number | null,
+  span: { openedDaysAgo: number; horizonInDays: number } = { openedDaysAgo: 70, horizonInDays: 90 },
+) {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const today = todayInZone();
   const name = `Meta semana ${stamp}`;
-  const horizon = plusDays(90);
+  const horizon = plusDays(span.horizonInDays);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-    values (${person.id}, ${name}, ${horizon}, 'minutos', 'minutos', now() - interval '70 days')
+    values (${person.id}, ${name}, ${horizon}, 'minutos', 'minutos', now() - make_interval(days => ${span.openedDaysAgo}))
     returning id
   `;
   const months = [-1, 0, 1].map((offset) => firstOfMonth(today, offset));
@@ -403,7 +408,7 @@ async function seedWeek(db: postgres.Sql, person: Person, amount: number | null)
     insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
     values (${person.id}, ${goal.id}, ${commitment.id}, ${today}::date, 90)
   `;
-  const openedOn = plusDays(-70);
+  const openedOn = plusDays(-span.openedDaysAgo);
   return { goalId: goal.id, name, months, openedOn, horizon };
 }
 
@@ -479,4 +484,131 @@ test.describe("the report's week says what was planned for it (RP-58)", () => {
       await remove(db, person, [seeded.goalId]);
     }
   });
+});
+
+// The week's planned figure stops at the goal's last day (RP-58), not at Sunday.
+// Saturday and Sunday cannot show the difference.
+const weekday = (civilDateToDate(todayInZone()).getUTCDay() + 6) % 7;
+
+test("a goal ending this week counts its planned figure up to its last day, not to Sunday (RP-58)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  test.skip(weekday >= 5, "on this weekday the goal's last day is the week's last");
+  const seeded = await seedWeek(db, person, 720, { openedDaysAgo: 70, horizonInDays: 1 });
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 390, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    const main = page.getByRole("main");
+    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    const amounts = Object.fromEntries(seeded.months.map((month) => [month, 720]));
+    const planned = plannedByRule(amounts, seeded.openedOn, seeded.horizon);
+    expect(planned).toBeLessThan(plannedByRule(amounts, seeded.openedOn, "9999-12-31"));
+    const line = main.getByText(/^Esta semana: /).locator("visible=true");
+    await expect(line).toHaveCount(1);
+    const text = ((await line.textContent()) ?? "").replace(/\s+/g, " ").trim();
+    expect(text).toBe(`Esta semana: 1 h 30 min de ${minutesText(planned)}.`);
+  } finally {
+    await context.close();
+    await remove(db, person, [seeded.goalId]);
+  }
+});
+
+test("a goal of one week still reads «Esta semana» and holds its weeks table (RP-49, RP-17)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const seeded = await seedWeek(db, person, null, { openedDaysAgo: 0, horizonInDays: 1 });
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 390, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    const main = page.getByRole("main");
+    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    await expect(main.getByText(/^Esta semana: /).locator("visible=true")).toHaveCount(1);
+    await expect(main.getByText("por semana", { exact: true })).toBeVisible();
+    await expect(main.getByText("Ver la semana", { exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await remove(db, person, [seeded.goalId]);
+  }
+});
+
+const MONTH_ROW = /^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre) \d{4}/;
+
+test("on a phone a month not yet started shows no figure of its own, a started one does (RP-32)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const seeded = await seedWeek(db, person, 720);
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 390, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    const main = page.getByRole("main");
+    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    const rows = (await main.getByRole("listitem").allInnerTexts())
+      .map((text) => text.replace(/\s+/g, " ").trim())
+      .filter((text) => MONTH_ROW.test(text));
+    const current = rows.findIndex((text) => text.includes("en curso"));
+    expect(current).toBeGreaterThan(0);
+    expect(rows.length).toBeGreaterThan(current + 1);
+    // A month that began has what was reached; one that has not shows the dash.
+    for (const text of rows.slice(0, current + 1)) expect(text).not.toContain("—");
+    for (const text of rows.slice(current + 1)) expect(text).toContain("—");
+  } finally {
+    await context.close();
+    await remove(db, person, [seeded.goalId]);
+  }
+});
+
+test("the weeks table marks «en curso» on the current week's row and on no other (RP-17)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const seeded = await seedWeek(db, person, 720);
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    baseURL: baseURL!,
+    viewport: { width: 1280, height: 900 },
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    const main = page.getByRole("main");
+    await expect(main.getByText(seeded.name, { exact: true })).toBeVisible();
+    await main.locator("summary", { hasText: /^Ver las \d+ semanas$/ }).click();
+    const rows = main.locator("table", { has: page.locator("caption", { hasText: /semanas$/ }) }).locator("tbody tr");
+    const count = await rows.count();
+    expect(count).toBeGreaterThan(2);
+    // Opened 70 days ago, today is in its last week.
+    await expect(rows.nth(count - 1)).toContainText("en curso");
+    for (let index = 0; index < count - 1; index++) {
+      await expect(rows.nth(index)).not.toContainText("en curso");
+    }
+  } finally {
+    await context.close();
+    await remove(db, person, [seeded.goalId]);
+  }
 });

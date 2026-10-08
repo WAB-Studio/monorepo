@@ -370,3 +370,35 @@ for (const width of [390, 1440]) {
     });
   });
 }
+
+// RP-53, `RoadmapMoverFinalHoja`: the sheet names the goal's last day and the day the plan
+// ends, the year only off this year; a refusal does not outlive the sheet.
+test("«Mover el final» names the goal's last day and the plan's end, and a reopened sheet forgets a past failure (RP-53)", async ({ page, db, personId }) => {
+  const year = Number(thisYear);
+  // The goal ends on 31 Dec of this year; the plan, two months past it.
+  const monthsLeft = 12 - Number(today.slice(5, 7)) + 1;
+  const tasks = Array.from({ length: monthsLeft + 2 }, (_, i): [string, number] => [`Tarea ${i + 1}`, 480]);
+  const goalId = await seedGoal(db, personId, 480, `${year + 1}-01-01`);
+  await seedTasks(db, personId, goalId, tasks);
+  try {
+    await page.goto(`/metas/${goalId}/plan`);
+    await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
+    await expect(sheet).toContainText(
+      new RegExp(`^Mover el finalDel 31 de diciembre al \\d{1,2} de \\p{L}+ de ${year + 1}, donde termina el plan\\.`, "u"),
+    );
+
+    await drop(db, personId, goalId);
+    await sheet.getByRole("button", { name: roadmap.moverFinal.move }).click();
+    await expect(sheet.getByRole("alert")).toHaveText(roadmap.moverFinal.failed);
+    await sheet.getByRole("button", { name: roadmap.moverFinal.cancel }).click();
+    await expect(sheet).toBeHidden();
+
+    await page.getByRole("button", { name: roadmap.moverFinal.title }).click();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: roadmap.moverFinal.title })).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("alert")).toHaveCount(0);
+  } finally {
+    await drop(db, personId, goalId);
+  }
+});

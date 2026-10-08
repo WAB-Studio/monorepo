@@ -224,7 +224,7 @@ for (const [width, kind] of [[390, "days"], [390, "weeks"], [1440, "days"], [144
 // `RoadmapHoyMovidoVarios.dc.html` (module 391, RP-52): two moved plans and a
 // met one draw one card with a line per moved goal and one «Entendido» that
 // writes `plan_seen` for both.
-for (const width of [390, 1440]) {
+for (const width of [360, 390, 1440]) {
   test(`Hoy at ${width} draws one card for two moved plans, dismisses both at once and lists the met one never`, async ({
     person,
     browser,
@@ -303,6 +303,19 @@ for (const width of [390, 1440]) {
 
       await expect.soft(card, "two moved plans draw one card titled with the count").toHaveCount(1);
       await expect.soft(seen(/^Tu plan de .* se movió/), "no per-goal card stands beside it").toHaveCount(0);
+      const closedName = MONTHS[Number(closed.slice(5, 7)) - 1];
+      const nextName = MONTHS[Number(closed.slice(5, 7)) % 12];
+      await expect
+        .soft(
+          page
+            .getByText(
+              `${closedName[0].toUpperCase()}${closedName.slice(1)} cerró con menos de lo planeado. Lo que faltó pasó a ${nextName} y el resto se corrió detrás.`,
+              { exact: true },
+            )
+            .locator("visible=true"),
+          "the sentence opens with the closed month capitalised",
+        )
+        .toHaveCount(1);
       await expect
         .soft(
           seen(`Se movió ${dayCount} ${dayCount === 1 ? "día" : "días"}. Ahora terminas el ${endOf(days!)}.`),
@@ -316,7 +329,17 @@ for (const width of [390, 1440]) {
         )
         .toHaveCount(1);
       await expect.soft(seen(cases[2].name).first(), "the met goal stays a goal on Hoy").toBeVisible();
-      await expect.soft(page.getByRole("link", { name: roadmap.hoyMovido.seePlan }).locator("visible=true")).toHaveCount(2);
+      const links = page.getByRole("link", { name: roadmap.hoyMovido.seePlan }).locator("visible=true");
+      await expect.soft(links).toHaveCount(2);
+      // «Ver el plan» is a short label: a narrow phone squeezes the sentence beside it, never the link.
+      for (const link of await links.all()) {
+        const rows = await link.evaluate((node) => {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+        });
+        expect.soft(rows, "«Ver el plan» sits on one line").toBe(1);
+      }
       await expect.soft(page.getByRole("button", { name: roadmap.hoyMovido.dismiss }).locator("visible=true")).toHaveCount(1);
 
       await page.getByRole("button", { name: roadmap.hoyMovido.dismiss }).locator("visible=true").click();

@@ -2857,6 +2857,13 @@ branch could pass until it was restored.
   «nothing else is here» on it fails whenever another spec seeds for it at the same moment.
 - Assert an absence or an exact count only on the disposable `person`. Measured 2026-10-06: `dia-pasado.spec.ts:314`
   and `dia-pasado-hechos.spec.ts:105` passed one CI run and failed the next on the same tree.
+- Match a date's words with `\p{L}` and the `u` flag, never `\w`: `\w` is ASCII and skips «miércoles» and «sábado»,
+  so on those days a header spec measured the «hechos 0 de 6» tally instead (75 px off, 2026-10-07). Drive the longest
+  date by rewriting the eyebrow's text, so the check never waits for a Wednesday.
+- Read `docs/pulsar/SPEC.md` before "fixing" an order a spec expects. On 2026-10-07 a red e2e asked «most recent
+  first» for `ended_this_week`; the query was changed to `horizon desc` and broke three `check:day`/`check:plan`
+  assertions that pin RP-47's plan order. The e2e followed a DESIGN line RP-47 had superseded; it was the spec that was wrong.
+  The e2e only failed from a Wednesday, the first weekday that draws two endings.
 
 ## Un carril que cambia de rama sirve 404 en rutas que existen
 

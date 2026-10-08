@@ -167,7 +167,7 @@ test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser
   });
 });
 
-test("several goals ended this week read one line each, most recent first", async ({ browser, baseURL, person, db }) => {
+test("several goals ended this week read one line each, in plan order (RP-47)", async ({ browser, baseURL, person, db }) => {
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const stamp = Date.now();
     const older = `Antigua ${stamp}`;
@@ -180,13 +180,13 @@ test("several goals ended this week read one line each, most recent first", asyn
     await expect(page.getByText(openName).first()).toBeVisible();
     // Monday draws none, Tuesday only the newer one, Wednesday on both.
     const expected = [
-      ...(inThisWeek(1) ? [`${newer} terminó ayer ·`] : []),
       ...(inThisWeek(2) ? [`${older} terminó el ${dayWords(shift(today, -2))} ·`] : []),
+      ...(inThisWeek(1) ? [`${newer} terminó ayer ·`] : []),
     ];
     const lines = page.getByText(/ terminó (ayer|el) /);
     await expect(lines).toHaveCount(expected.length);
     const texts = await lines.allTextContents();
-    // The page's order is the test: most recent first.
+    // Seeded older first, so plan order puts it above the more recent one.
     expected.forEach((line, index) => expect(texts[index]).toContain(line));
   });
 });
