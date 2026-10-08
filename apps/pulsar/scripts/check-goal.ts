@@ -434,7 +434,7 @@ async function assertBoundsResolveToGoalRow(goalId: string, calls: DebugCall[]):
 
   const [expected] = await withGoalsDb((tx) =>
     tx.execute<{ expected_from: string; expected_to: string }>(sql`
-      select (g.created_at at time zone ${TIME_ZONE})::date as expected_from, g.horizon as expected_to
+      select (g.created_at at time zone ${TIME_ZONE})::date as expected_from, g.horizon - 1 as expected_to
       from "goals"."goals" g where g.id = ${goalId}
     `),
   );
