@@ -18,8 +18,15 @@ export type ForeignRow = Omit<LookupRecord, "id" | "device" | "deviceSeq"> & {
   deviceSeq: number;
 };
 
-/** Local rows above `afterLocalId`, in key order, at most `limit`. */
-export async function readSince(afterLocalId: number, limit: number): Promise<LookupRecord[]> {
+/**
+ * Rows above `afterLocalId`, in key order, at most `limit` of them. `own` is
+ * the local ones; `scannedThrough` is the `id` of the last row read, foreign
+ * or not, so a page of foreign rows still moves the caller past them.
+ */
+export async function readSince(
+  afterLocalId: number,
+  limit: number,
+): Promise<{ own: LookupRecord[]; scannedThrough: number | null; scanned: number }> {
   const database = await openLogDatabase();
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, "readonly");
@@ -27,8 +34,13 @@ export async function readSince(afterLocalId: number, limit: number): Promise<Lo
       .objectStore(STORE_NAME)
       .getAll(IDBKeyRange.lowerBound(afterLocalId, true), limit);
     request.onsuccess = () => {
-      // A foreign row never goes back up: it already has a device of its own.
-      resolve((request.result as LookupRecord[]).filter((row) => row.device == null));
+      const page = request.result as LookupRecord[];
+      resolve({
+        // A foreign row never goes back up: it already has a device of its own.
+        own: page.filter((row) => row.device == null),
+        scannedThrough: page.length > 0 ? page[page.length - 1].id! : null,
+        scanned: page.length,
+      });
     };
     request.onerror = () => reject(request.error);
   });
