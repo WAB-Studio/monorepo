@@ -164,6 +164,7 @@ test("RL-26: pressing the speak control fires no network request of its own", as
 
   // One settled word, never one request per keystroke or per click.
   const decoration = requests.filter((url) => url.includes("/api/word/"));
+  expect(decoration.length, "decoration never asked").toBeGreaterThanOrEqual(1);
   expect(decoration.length).toBeLessThanOrEqual(2);
 });
 
