@@ -36,7 +36,7 @@ test("a registered client reads back whole and spends no throttle slot", async (
     const callsBefore = await tx`select * from goals.oauth_calls`;
     const rows = await tx<{ id: string; client_name: string; redirect_uris: string[] }[]>`
       select * from goals.oauth_client_by_metadata_url(${url})`;
-    assert.deepEqual(rows, [{ id, client_name: "Asistente", redirect_uris: ["https://a.example.invalid/cb"] }]);
+    assert.deepEqual([...rows], [{ id, client_name: "Asistente", redirect_uris: ["https://a.example.invalid/cb"] }]);
     assert.deepEqual(await tx`select * from goals.oauth_calls`, callsBefore, "the lookup touched oauth_calls");
   });
 });
