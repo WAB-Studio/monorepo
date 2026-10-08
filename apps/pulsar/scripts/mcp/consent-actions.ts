@@ -183,7 +183,7 @@ test("an approval writes one code for the person and returns the redirect with c
   assert.match(url.searchParams.get("code") ?? "", /^plc_/);
 
   const [row] = await admin`select client_id, redirect_uri, resource, code_challenge from goals.oauth_codes
-    where user_id = ${subject.id}`;
+    where user_id = ${subject.id} and client_id = ${clientId}`;
   assert.equal(row.client_id, clientId);
   assert.equal(row.redirect_uri, REDIRECT);
   assert.equal(row.resource, resource);
