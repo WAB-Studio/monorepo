@@ -9,6 +9,7 @@ import { after, before, test } from "node:test";
 import postgres from "postgres";
 
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "../mcp/lib/people";
+import { pgCode } from "@/lib/db-error";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
 
 const admin = adminSql();
@@ -142,6 +143,10 @@ test("a parent with sub-tasks is still refused", async () => {
     oneOffs.createOneOff({ name: "hija", day: null, estimate: 10, parentId: parent.oneOffId }),
   );
   if (!child.ok) throw new Error(`createOneOff child: ${child.error}`);
-  await assert.rejects(() => as(() => facts.declareFact({ oneOffId: parent.oneOffId })));
+  // `facts_insert_self` refuses a fact on a parent: 42501, not any other failure.
+  await assert.rejects(
+    () => as(() => facts.declareFact({ oneOffId: parent.oneOffId })),
+    (error: unknown) => pgCode(error) === "42501",
+  );
   assert.equal(await factsOf(parent.oneOffId), 0);
 });
