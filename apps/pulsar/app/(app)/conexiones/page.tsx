@@ -39,6 +39,7 @@ export default async function ConnectionsPage() {
     name: token.name,
     revoked: token.revokedAt !== null,
     revokedAt: token.revokedAt ? stamp(token.revokedAt) : null,
+    expiredAt: token.expiredAt ? stamp(token.expiredAt) : null,
     created: stamp(token.createdAt),
     used: token.lastUsedAt ? stamp(token.lastUsedAt) : null,
   }));
