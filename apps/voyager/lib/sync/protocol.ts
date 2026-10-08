@@ -10,24 +10,35 @@ import { z } from "zod";
 // under a megabyte, so splitting the batch would only double the requests.
 export const SYNC_BATCH = 500;
 
+// Rows one reader may send in a UTC day, across every device. Bounds what a
+// signed-in caller can write into the shared database.
+export const SYNC_DAILY_ROW_CAP = 20_000;
+
+// `integer` and `smallint` columns: a number past them is a bad request, not a 500.
+const MAX_INT4 = 2_147_483_647;
+const MAX_INT2 = 32_767;
+
+// Largest epoch-ms a JavaScript `Date` holds; past it `toISOString` throws.
+const MAX_EPOCH_MS = 8_640_000_000_000_000;
+
 // One row of the reader's log, as it travels off the device that wrote it.
 // `deviceId` + `localId` is the row's identity: copying it twice never
 // duplicates it, on the way up or on the way down (RL-24).
 export const syncRowSchema = z.object({
   deviceId: z.uuid(),
-  localId: z.int().positive(),
-  at: z.int(), // epoch ms, the device's own clock
+  localId: z.int().positive().max(MAX_INT4),
+  at: z.int().min(0).max(MAX_EPOCH_MS), // epoch ms, the device's own clock
   text: z.string().min(1).max(500),
   normalised: z.string().min(1).max(500),
   kind: z.enum(["word", "phrase"]),
   outcome: z.enum(["exact", "inflected", "miss", "translated", "untranslated"]),
   headword: z.string().max(500).nullable(),
   rule: z.string().max(100).nullable(),
-  senses: z.int().min(0),
+  senses: z.int().min(0).max(MAX_INT4),
   translation: z.string().max(120).nullable(),
   dictionaryReady: z.boolean(),
   origin: z.enum(["device", "network"]).nullable(),
-  recordSchema: z.int().positive(),
+  recordSchema: z.int().positive().max(MAX_INT2),
 });
 
 // What a device sends: its own rows since the last upload, and the cursor of
@@ -35,11 +46,12 @@ export const syncRowSchema = z.object({
 // cursor tracks this device's own log, the download cursor tracks the
 // account's `received_at` — a device's own clock never orders the other one.
 //
-// `since`/`cursor` are opaque strings, not `z.iso.datetime()`: a single upload
+// `since`/`cursor` are opaque strings here, not `z.iso.datetime()`: a single upload
 // is one INSERT, so its rows share `received_at` to the microsecond, and a
 // scalar timestamp cursor either repeats or drops the rest of that group at a
 // page boundary. The route that mints and reads this string is the only file
-// that knows it also carries the tied row's `(deviceId, localId)`.
+// that knows it also carries the tied row's `(deviceId, localId)`; it treats a
+// string of any other shape as no cursor, never as a bad request.
 //
 // `deviceId` is top-level, not read off `rows[0]`: a pull-only round sends an
 // empty `rows`, and the device still has to be nameable there — a reader who
@@ -64,6 +76,43 @@ export const syncResponseSchema = z.object({
   rows: z.array(syncRowSchema.extend({ receivedAt: z.iso.datetime() })),
   cursor: z.string().min(1).nullable(),
 });
+
+// ---- the cursor ----
+
+// The tuple a cursor names: the last downloaded row's own clock plus the
+// `(deviceId, localId)` that makes it unique. `received_at` alone repeats
+// across an entire upload batch (one INSERT stamps every row with the same
+// `now()`), so a scalar cursor either replays or drops whatever else shares
+// that instant at a page boundary.
+export type Cursor = { receivedAt: string; deviceId: string; localId: number };
+
+// Opaque to the driver: it stores and echoes the string and never reads what is
+// inside. "|" never appears in an ISO timestamp or a UUID, so a plain split
+// is enough.
+export function encodeCursor(cursor: Cursor): string {
+  return `${cursor.receivedAt}|${cursor.deviceId}|${cursor.localId}`;
+}
+
+// Every shape Postgres will cast, and no other: the casts below throw on
+// anything else, and a thrown cast is a 500 the client retries forever. A
+// cursor this route cannot parse is treated as none — a full re-download,
+// harmless because the client's merge is idempotent on `[device, deviceSeq]`.
+const CURSOR_AT =
+  /^(?!0000)\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,6})?Z$/;
+const CURSOR_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CURSOR_LOCAL_ID = /^[1-9]\d{0,9}$/;
+
+export function decodeCursor(raw: string): Cursor | null {
+  const parts = raw.split("|");
+  if (parts.length !== 3) return null;
+  const [receivedAt, deviceId, localIdText] = parts;
+  if (!CURSOR_AT.test(receivedAt) || !CURSOR_UUID.test(deviceId) || !CURSOR_LOCAL_ID.test(localIdText)) return null;
+  // 31 February passes the pattern and not the calendar.
+  if (new Date(receivedAt).toISOString().slice(0, 10) !== receivedAt.slice(0, 10)) return null;
+  const localId = Number(localIdText);
+  if (localId > MAX_INT4) return null;
+  return { receivedAt, deviceId, localId };
+}
 
 export type SyncRow = z.infer<typeof syncRowSchema>;
 export type SyncRequest = z.infer<typeof syncRequestSchema>;

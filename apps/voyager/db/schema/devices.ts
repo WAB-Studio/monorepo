@@ -14,12 +14,15 @@ export const devices = reading.table(
       .notNull()
       .references(() => authUsers.id, { onDelete: "cascade" }),
     deviceId: uuid().notNull(),
-    // "Chrome on Android" — coarse on purpose: browser family and platform, both
-    // already in every request's user-agent header. No fingerprint, no extra entropy.
+    // "chrome:android" — coarse on purpose: browser family and platform codes, both
+    // already in every request's user-agent header. No fingerprint, no extra entropy,
+    // and no words: the screen translates the codes.
     label: text().notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-    // The only column this slice ever updates: pushed on every sync round.
+    // Pushed on every sync round.
     lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    // A retirement is final (RL-24): the trigger in migration 0004 refuses any change once set.
+    retiredAt: timestamp({ withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.deviceId] }),

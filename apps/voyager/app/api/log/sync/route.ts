@@ -3,7 +3,17 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { getReader, withReaderDb, type Transaction } from "@/lib/session";
-import { syncRequestSchema, SYNC_BATCH, type SyncResponse, type SyncRow } from "@/lib/sync/protocol";
+import { deviceLabel } from "@/lib/sync/device-label";
+import {
+  syncRequestSchema,
+  SYNC_BATCH,
+  SYNC_DAILY_ROW_CAP,
+  decodeCursor,
+  encodeCursor,
+  type Cursor,
+  type SyncResponse,
+  type SyncRow,
+} from "@/lib/sync/protocol";
 
 // Reads the session per request and answers a moving cursor: never a candidate
 // for the full route cache, on top of the `Cache-Control` this route also sets.
@@ -15,12 +25,13 @@ function json(body: unknown, status: number): Response {
   return Response.json(body, { status, headers: NO_STORE });
 }
 
-// The fifteen columns `authenticated` may write, in the grant's own order
-// (apps/voyager/db/migrations/0000_shallow_hammerhead.sql:74-78). `received_at`
-// is never here: no grant reaches it, only the server's own clock stamps it —
-// which is why a builder `.insert()` cannot be used (apps/orbit/db/insert-row.ts's
-// header: it would name `received_at` too, with the keyword `default`, and
-// Postgres checks the privilege on a named column even then).
+// The columns `authenticated` may insert into `lookups`, in the grant's own
+// order (apps/voyager/db/migrations/0000_shallow_hammerhead.sql:74-78).
+// `received_at` is never here: no grant reaches it, only the server's own
+// clock stamps it — which is why a builder `.insert()` cannot be used
+// (apps/orbit/db/insert-row.ts's header: it would name `received_at` too,
+// with the keyword `default`, and Postgres checks the privilege on a named
+// column even then).
 const INSERT_COLUMNS = sql.join(
   [
     "user_id",
@@ -42,104 +53,91 @@ const INSERT_COLUMNS = sql.join(
   sql`, `,
 );
 
-// Coarse on purpose (`db/schema/devices.ts`'s own comment on `label`):
-// browser family and platform, nothing that adds entropy a fingerprint would.
-// A pattern this loose over-matches on purpose — a wrong guess still reads
-// as "some browser", never as an error.
-function browserFamily(userAgent: string): string {
-  if (/Edg\//.test(userAgent)) return "Edge";
-  if (/OPR\/|Opera/.test(userAgent)) return "Opera";
-  if (/Firefox\//.test(userAgent)) return "Firefox";
-  if (/Chrome\/|CriOS\//.test(userAgent)) return "Chrome";
-  if (/Safari\//.test(userAgent)) return "Safari";
-  return "Browser";
+// The batch travels as ONE jsonb parameter, read back through typed columns:
+// a `values` list cannot sit behind the quota guard, and a `select` over
+// untyped parameters loses the column types an `insert … values` infers.
+// `at` goes as an ISO string so its millisecond survives as a `timestamptz`.
+function uploadedRows(rows: SyncRow[]): string {
+  return JSON.stringify(
+    rows.map((row) => ({
+      device_id: row.deviceId,
+      local_id: row.localId,
+      at: new Date(row.at).toISOString(),
+      text: row.text,
+      normalised: row.normalised,
+      kind: row.kind,
+      outcome: row.outcome,
+      headword: row.headword,
+      rule: row.rule,
+      senses: row.senses,
+      translation: row.translation,
+      dictionary_ready: row.dictionaryReady,
+      origin: row.origin,
+      record_schema: row.recordSchema,
+    })),
+  );
 }
 
-function platformName(userAgent: string): string {
-  if (/Android/.test(userAgent)) return "Android";
-  if (/iPhone|iPad|iPod/.test(userAgent)) return "iOS";
-  if (/Windows/.test(userAgent)) return "Windows";
-  if (/Mac OS X/.test(userAgent)) return "macOS";
-  if (/Linux/.test(userAgent)) return "Linux";
-  return "device";
-}
+type Upload = { status: "ok"; accepted: number } | { status: "retired" } | { status: "quota" };
 
-// The label the server derives instead of asking the client for one (the
-// module 31 decision, 2026-09-08): a modified client cannot write whatever it
-// wants onto its own account screen. Sliced to the 60 characters
-// `devices_label_length` admits; a missing header falls back rather than
-// failing the whole copy over a label.
-const DEFAULT_LABEL = "Unknown device";
-
-function deviceLabel(userAgent: string | null): string {
-  if (!userAgent) return DEFAULT_LABEL;
-  return `${browserFamily(userAgent)} on ${platformName(userAgent)}`.slice(0, 60);
-}
-
-// The three columns `authenticated` may insert into `devices`
-// (migration:89): `created_at` and `last_seen_at` are left to their defaults.
-const DEVICE_INSERT_COLUMNS = sql.join(
-  ["user_id", "device_id", "label"].map((column) => sql.identifier(column)),
-  sql`, `,
-);
-
-function uploadedRow(userId: string, row: SyncRow) {
-  // A string, not a `Date`: postgres.js's Bind step serializes a bound
-  // parameter by the OID Postgres describes back, and an ISO string reaches
-  // "unknown" there — which Postgres coerces from context, straight to
-  // `timestamptz`. A `Date` object hits that same describe-driven path
-  // wrong and throws (`Buffer.from` on a `Date`, not a string).
-  return sql`(${userId}, ${row.deviceId}, ${row.localId}, ${new Date(row.at).toISOString()},
-    ${row.text}, ${row.normalised}, ${row.kind}, ${row.outcome}, ${row.headword},
-    ${row.rule}, ${row.senses}, ${row.translation}, ${row.dictionaryReady},
-    ${row.origin}, ${row.recordSchema})`;
-}
-
-// Seals `reading.devices` (RL-25) and inserts the device's own batch,
-// `on conflict … do nothing` so a retried batch after a crash never
-// duplicates (RL-24) — one statement for every row in it, plus the one row
-// that seals the device. Both live in the same statement: the seal is a
-// data-modifying CTE, so Postgres runs it even when the insert beneath it
-// returns nothing (`retireDevice`'s own `gone` CTE, `docs/TRAPS.md:463-486`),
-// which keeps a resent, fully-duplicate batch sealing the device too.
-// `deviceId` is required on the wire (`syncRequestSchema`), so the `null`
-// guard below is unreached through this route; it stays for a caller
-// `writeUpload` gains later that is not fed a parsed request.
+// Seals `reading.devices` (RL-25) and inserts the device's own batch in ONE
+// statement, one round trip. `state` reads whether the device is retired and
+// how many rows this reader sent today (UTC, by `lookups_user_id_received_at_idx`);
+// the seal and the insert are data-modifying CTEs, so Postgres runs both
+// whether or not anything reads them (`docs/TRAPS.md:463-486`) and both sit
+// behind the same guard: a retired device, or a day past the cap, writes and
+// seals nothing. A resent, fully-duplicate batch still seals the device.
+// `on conflict … do nothing` keeps a retry after a crash from duplicating (RL-24).
+// `received_at` is the statement's `now()`: every row of a batch ties on it.
 async function writeUpload(
   tx: Transaction,
   userId: string,
-  deviceId: string | null,
+  deviceId: string,
   label: string,
   rows: SyncRow[],
-): Promise<number> {
-  if (deviceId === null) return 0;
-
-  if (rows.length === 0) {
-    await tx.execute(sql`
-      insert into reading.devices (${DEVICE_INSERT_COLUMNS})
-      values (${userId}, ${deviceId}, ${label})
-      on conflict (user_id, device_id) do update set last_seen_at = now()
-    `);
-    return 0;
-  }
-
-  const values = sql.join(
-    rows.map((row) => uploadedRow(userId, row)),
-    sql`, `,
-  );
-  const written = await tx.execute(sql`
-    with sealed as (
-      insert into reading.devices (${DEVICE_INSERT_COLUMNS})
-      values (${userId}, ${deviceId}, ${label})
-      on conflict (user_id, device_id) do update set last_seen_at = now()
+): Promise<Upload> {
+  const [state] = await tx.execute<{ retired: boolean; allowed: boolean; accepted: number }>(sql`
+    with state as (
+      select
+        exists (
+          select 1 from reading.devices
+          where user_id = ${userId} and device_id = ${deviceId} and retired_at is not null
+        ) as retired,
+        (
+          select count(*) from reading.lookups
+          where user_id = ${userId}
+            and received_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
+        ) as today
+    ),
+    gate as (
+      select retired, (not retired and today + ${rows.length} <= ${SYNC_DAILY_ROW_CAP}) as allowed from state
+    ),
+    sealed as (
+      insert into reading.devices (user_id, device_id, label)
+      select ${userId}, ${deviceId}, ${label} from gate where allowed
+      on conflict (user_id, device_id)
+        do update set last_seen_at = now(), label = excluded.label where devices.retired_at is null
+      returning 1
+    ),
+    written as (
+      insert into reading.lookups (${INSERT_COLUMNS})
+      select ${userId}, r.device_id, r.local_id, r."at", r."text", r.normalised, r.kind, r.outcome,
+             r.headword, r."rule", r.senses, r.translation, r.dictionary_ready, r.origin, r.record_schema
+      from jsonb_to_recordset(${uploadedRows(rows)}::text::jsonb) as r(
+        device_id uuid, local_id integer, "at" timestamptz, "text" text, normalised text, kind text,
+        outcome text, headword text, "rule" text, senses integer, translation text,
+        dictionary_ready boolean, origin text, record_schema smallint
+      )
+      where (select allowed from gate)
+      on conflict (user_id, device_id, local_id) do nothing
       returning 1
     )
-    insert into reading.lookups (${INSERT_COLUMNS})
-    values ${values}
-    on conflict (user_id, device_id, local_id) do nothing
-    returning received_at
+    select gate.retired, gate.allowed, (select count(*) from written)::int as accepted from gate
   `);
-  return written.length;
+
+  if (state.retired) return { status: "retired" };
+  if (!state.allowed) return { status: "quota" };
+  return { status: "ok", accepted: state.accepted };
 }
 
 // `at` and `received_at` travel as UTC wall-clock text with no zone marker,
@@ -171,31 +169,6 @@ type DownloadedRow = {
   received_at: string;
 };
 
-// The tuple a cursor names: the last downloaded row's own clock plus the
-// `(deviceId, localId)` that makes it unique. `received_at` alone repeats
-// across an entire upload batch (one INSERT stamps every row with the same
-// `now()`), so a scalar cursor either replays or drops whatever else shares
-// that instant at a page boundary.
-type Cursor = { receivedAt: string; deviceId: string; localId: number };
-
-// Opaque past this file: neither `protocol.ts` nor the driver reads what is
-// inside. "|" never appears in an ISO timestamp or a UUID, so a plain split
-// is enough.
-function encodeCursor(cursor: Cursor): string {
-  return `${cursor.receivedAt}|${cursor.deviceId}|${cursor.localId}`;
-}
-
-// A cursor this route cannot parse is treated as none: nobody has one stored
-// yet, so there is nothing to migrate, only a full resync to fall back to.
-function decodeCursor(raw: string): Cursor | null {
-  const parts = raw.split("|");
-  if (parts.length !== 3) return null;
-  const [receivedAt, deviceId, localIdText] = parts;
-  const localId = Number(localIdText);
-  if (!receivedAt || !deviceId || !Number.isInteger(localId)) return null;
-  return { receivedAt, deviceId, localId };
-}
-
 // Downloads what other devices copied since `since`, ordered by the same
 // tuple the comparison names, so the last row's own clock and identity are
 // the next cursor to send back (RL-22). No cursor at all — a first-ever sync
@@ -211,11 +184,9 @@ function decodeCursor(raw: string): Cursor | null {
 // filter on the query is the only place this is actually excluded.
 async function downloadRows(
   tx: Transaction,
-  since: string | null,
-  excludeDeviceId: string | null,
+  cursor: Cursor | null,
+  excludeDeviceId: string,
 ): Promise<DownloadedRow[]> {
-  const cursor = since ? decodeCursor(since) : null;
-
   // Never `${cursor.receivedAt}::timestamptz` alone: Postgres would then
   // describe that parameter as `timestamptz` (OID 1184), and postgres.js
   // serializes a bound value for that OID through `new Date(x).toISOString()`
@@ -232,7 +203,7 @@ async function downloadRows(
   // below are untouched, so a page still resumes from the last row it named.
   // Fewer rows now qualify per page — a device with rows of its own gets a
   // smaller page than before, never a skipped one.
-  const notOwn = excludeDeviceId ? sql`and device_id <> ${excludeDeviceId}::uuid` : sql``;
+  const notOwn = sql`and device_id <> ${excludeDeviceId}::uuid`;
 
   return tx.execute<DownloadedRow>(sql`
     select device_id, local_id, to_json(timezone('utc', "at")) as "at", text, normalised,
@@ -296,19 +267,26 @@ export async function POST(request: Request): Promise<Response> {
   const deviceId = rows.length > 0 ? rows[0].deviceId : parsed.data.deviceId;
   const label = deviceLabel(request.headers.get("user-agent"));
 
-  const [accepted, downloaded] = await withReaderDb(async (tx) => {
+  const sinceCursor = since ? decodeCursor(since) : null;
+
+  const outcome = await withReaderDb(async (tx) => {
     // Same statement order the contract names: upload, then download.
-    const accepted = await writeUpload(tx, reader.id, deviceId, label, rows);
-    const downloaded = await downloadRows(tx, since, deviceId);
-    return [accepted, downloaded] as const;
+    const upload = await writeUpload(tx, reader.id, deviceId, label, rows);
+    if (upload.status !== "ok") return upload;
+    return { status: "ok", accepted: upload.accepted, downloaded: await downloadRows(tx, sinceCursor, deviceId) } as const;
   });
 
-  const wireRows = downloaded.map(toWireRow);
+  if (outcome.status === "retired") return json({ error: "retired" }, 409);
+  if (outcome.status === "quota") return json({ error: "quota" }, 429);
+
+  const wireRows = outcome.downloaded.map(toWireRow);
   const last = wireRows[wireRows.length - 1];
+  // Echoes the cursor only when it was legible: a garbled one would otherwise
+  // come back and be stored again.
   const cursor = last
     ? encodeCursor({ receivedAt: last.receivedAt, deviceId: last.deviceId, localId: last.localId })
-    : since;
+    : sinceCursor && encodeCursor(sinceCursor);
 
-  const response: SyncResponse = { accepted, rows: wireRows, cursor };
+  const response: SyncResponse = { accepted: outcome.accepted, rows: wireRows, cursor };
   return json(response, 200);
 }
