@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 
 // Module 306: the header spaces eyebrow -> title at 6 px and title -> lead at 12 px (`SistemaEspacio.dc.html`).
 
@@ -29,7 +29,7 @@ test("Hoy holds 12 px between its title and the line under it", async ({ person,
   });
   try {
     const page = await context.newPage();
-    await page.goto("/");
+    await visit(page, "/");
     const title = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
     const lead = (await page.getByText(/^hechos \d+ de \d+/).boundingBox())!;
     expect(lead.y - (title.y + title.height)).toBeCloseTo(12, 0);
@@ -42,7 +42,7 @@ test("Hoy's controls row sits 12 px from the date, 6 px over the title, and its 
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 740 });
-  await page.goto("/");
+  await visit(page, "/");
   const header = page.locator("main > header:visible").first();
   await expect(header.getByRole("heading", { level: 1 })).toBeVisible();
   const row = header.locator("> div").first();

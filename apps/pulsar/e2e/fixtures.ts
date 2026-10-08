@@ -162,4 +162,18 @@ export function appAlerts(page: Page): Locator {
   return page.locator("body > :not(next-route-announcer)").locator('xpath=descendant-or-self::*[@role="alert"]');
 }
 
+// `load` fires with the loading fallback still standing, and the real page sits
+// in a hidden streamed div with no box: anchor on one visible `main` and the
+// fonts before any box or style is read (docs/TRAPS.md).
+export async function settled(page: Page): Promise<void> {
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator("main")).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+}
+
+export async function visit(page: Page, url: string): Promise<void> {
+  await page.goto(url);
+  await settled(page);
+}
+
 export { expect };
