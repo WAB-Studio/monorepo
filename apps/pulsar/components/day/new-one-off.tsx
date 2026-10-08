@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { createOneOff } from "@/app/actions/one-offs";
 import { createOneOffSchema } from "@/lib/validation/one-off";
-import { Button, Field, Flex, Mark, Text } from "@/components/ui";
+import { Button, Field, Flex, Mark, Text, TextLink } from "@/components/ui";
 import { dayWords } from "@/lib/day/day-words";
 import { todayInZone } from "@/lib/zone";
 
@@ -44,8 +44,10 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
   const [choice, setChoice] = useState<DayChoiceValue>(DEFAULT_DAY_CHOICE);
   const [error, setError] = useState<MessageKey | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [savedInPlan, setSavedInPlan] = useState(false);
 
   function savedMessage(kind: DayChoiceValue["kind"], day: string | null): string | null {
+    if (kind === "none" && goalId) return t("day.newOneOff.savedPlan", { goal: goalName ?? "" });
     if (kind === "none") return t("day.newOneOff.savedNone", { count: daylessCount + 1 });
     if (kind === "today" || day === null) return null;
     const words = dayWords(day, todayInZone());
@@ -80,6 +82,7 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
     }
     setError(null);
     setSaved(null);
+    setSavedInPlan(false);
 
     startTransition(() => {
       void createOneOff(parsed.data).then((result) => {
@@ -87,13 +90,17 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
           setName("");
           setChoice(DEFAULT_DAY_CHOICE);
           setSaved(savedMessage(choice.kind, day));
+          setSavedInPlan(choice.kind === "none" && Boolean(goalId));
         } else setError(result.error);
       });
     });
   }
 
   const dateError = choice.kind === "other" && error?.startsWith("day.errors.oneOffDay") ? error : null;
-  const nameError = dateError ? null : error;
+  const rawNameError = dateError ? null : error;
+  // The shared one-off schema speaks Hoy's field; a goal's field names a task.
+  const nameError =
+    goalId && rawNameError === "day.errors.oneOffNameEmpty" ? "month.task.nameEmpty" : rawNameError;
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -111,6 +118,7 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
           onChange={(event) => {
             setName(event.target.value);
             setSaved(null);
+            setSavedInPlan(false);
           }}
           disabled={pending}
         />
@@ -142,6 +150,12 @@ export function NewOneOff({ goalId, daylessCount = 0, goalName }: NewOneOffProps
       {saved ? (
         <Text as="p" role="status" tone="accent" variant="sentence">
           {saved}
+          {savedInPlan ? (
+            <>
+              {" "}
+              <TextLink href={`/metas/${goalId}/plan`}>{t("day.newOneOff.seePlan")}</TextLink>
+            </>
+          ) : null}
         </Text>
       ) : null}
     </form>
