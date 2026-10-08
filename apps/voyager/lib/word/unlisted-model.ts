@@ -3,15 +3,15 @@ import "server-only";
 import { z } from "zod";
 
 import { env } from "@/lib/env";
+import { providerFetch } from "@/lib/provider/fetch";
 import { MODEL_NAME } from "@/lib/word/model";
 
 const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
-// `reasoning_effort: "low"` is `lib/word/model.ts`'s choice, but not its
-// 700-token cap: that one covers two fields, and this route asks a third
-// while reasoning about a word it has no entry for. "coccidiosis" spends 576
-// reasoning tokens and "swishing" 1,024, so at 700 or 1,000 the whole budget
-// goes to reasoning and the call returns empty on `finish_reason: "length"`.
+// Same reasoning effort and token cap as `lib/word/model.ts`: this route asks
+// a third field while reasoning about a word it has no entry for.
+// "coccidiosis" spends 576 reasoning tokens and "swishing" 1,024, so a cap
+// of 1,000 or less leaves no content on `finish_reason: "length"`.
 const REASONING_EFFORT = "low";
 const MAX_OUTPUT_TOKENS = 2000;
 
@@ -82,20 +82,19 @@ export async function generateUnlistedAnswer(
     ],
   };
 
-  let response: Response;
-  try {
-    response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
+  const response = await providerFetch(
+    CHAT_COMPLETIONS_ENDPOINT,
+    {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-    });
-  } catch {
-    return null;
-  }
-  if (!response.ok) return null;
+    },
+    { name: "openai-unlisted" },
+  );
+  if (!response) return null;
 
   let payload: ChatCompletionsPayload;
   try {
