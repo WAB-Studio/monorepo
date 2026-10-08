@@ -22,12 +22,22 @@ const thisMonday = shift(today, -((civilDateToDate(today).getUTCDay() + 6) % 7))
 const lastMonday = shift(thisMonday, -7);
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
+const FULL_MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
 function rangeOf(monday: string): string {
   const sunday = shift(monday, 6);
-  const part = (day: string, withMonth: boolean) =>
-    `${Number(day.slice(8, 10))}${withMonth ? ` ${MONTHS[Number(day.slice(5, 7)) - 1]}` : ""}`;
-  const crosses = monday.slice(0, 7) !== sunday.slice(0, 7);
-  return `Del ${part(monday, crosses)} al ${part(sunday, crosses)}`;
+  const day = (d: string) => String(Number(d.slice(8, 10)));
+  const name = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
+  if (monday.slice(0, 7) !== sunday.slice(0, 7)) {
+    return messages.range.replace("{start}", `${day(monday)} ${name(monday)}`).replace("{end}", `${day(sunday)} ${name(sunday)}`);
+  }
+  return messages.rangeWithMonth
+    .replace("{start}", day(monday))
+    .replace("{end}", day(sunday))
+    .replace("{month}", FULL_MONTHS[Number(sunday.slice(5, 7)) - 1]);
 }
 
 const GOAL = "Inglés semana";

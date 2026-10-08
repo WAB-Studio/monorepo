@@ -1,6 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
+import day from "../messages/es/day.json";
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
@@ -27,13 +28,14 @@ function longName(day: string): string {
 
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-// «Del 21 al 27», or «Del 28 sep al 4 oct» across a month.
+// «Del 21 al 27 de octubre», or «Del 28 sep al 4 oct» across a month.
 function rangeOf(monday: string): string {
   const sunday = shift(monday, 6);
   const part = (day: string, withMonth: boolean) =>
     `${Number(day.slice(8, 10))}${withMonth ? ` ${MONTHS[Number(day.slice(5, 7)) - 1]}` : ""}`;
   const crosses = monday.slice(0, 7) !== sunday.slice(0, 7);
-  return `Del ${part(monday, crosses)} al ${part(sunday, crosses)}`;
+  const range = `Del ${part(monday, crosses)} al ${part(sunday, crosses)}`;
+  return crosses ? range : `${range} de ${day.monthLong[Number(sunday.slice(5, 7)) - 1]}`;
 }
 
 const today = todayInZone();

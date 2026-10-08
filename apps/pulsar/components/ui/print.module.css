@@ -42,8 +42,11 @@
     display: none !important;
   }
 
-  .block {
-    break-inside: avoid;
+  /* A section runs across pages between its rows (table.module.css); its
+     label and its goal's heading stay with what follows. */
+  .block h2,
+  .block section > :first-child {
+    break-after: avoid;
   }
 
   .only {

@@ -37,6 +37,8 @@ export type GoalReport = {
   carried: CarriedReport[];
   months: (MonthRow & { carried: number | null })[];
   weeks: ReviewWeek[];
+  // The current week's planned minutes (RP-58); null when it has no amount.
+  weekPlanned?: number | null;
   // A week crossing two months, cut at the month's edge: each part holds the
   // week's days that fall in `month` (the first of it), so a month's parts add up to it.
   weekSplits: WeekSplit[];

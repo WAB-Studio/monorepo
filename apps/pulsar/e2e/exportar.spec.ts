@@ -19,8 +19,9 @@ import exportMessages from "../messages/es/export.json";
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
 // Pages the two-goal seeded report takes on A4 with the carried notes
-// printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265; 317 spaced the sections: 11 to 10).
-const A4_PAGES = 10;
+// printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265; 317 spaced the sections: 11 to 10;
+// 379 printed the months alone and let a section run across pages: 10 to 6).
+const A4_PAGES = 6;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {
@@ -323,9 +324,10 @@ test.describe("the report page (RP-46, RP-35)", () => {
       await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
       await expect(page.getByText(phaseName)).toBeVisible();
       await expect(page.getByText(/^no mide nada · hasta el /)).toBeVisible();
-      for (const absent of ["hasta hoy", "por mes", "por semana"]) {
+      for (const absent of ["hasta hoy", "por semana"]) {
         await expect(page.getByText(absent, { exact: true })).toHaveCount(0);
       }
+      await expect(page.getByText(/· por mes$/)).toHaveCount(0);
       await expect(page.getByText(/\b0\b/)).toHaveCount(0);
     } finally {
       await context.close();
@@ -626,7 +628,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
     }
   });
 
-  test("RP-46 months: no unit word in the header, planned and share on both faces, each week under the month it starts in", async ({
+  test("RP-49 months: hecho against planned and estado on both faces, the closed month names where its share went", async ({
     person,
     browser,
     baseURL,
@@ -643,82 +645,51 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       await wide.setViewportSize({ width: 1280, height: 900 });
       await wide.goto("/exportar");
       const headers = wide
-        .locator("table", { hasText: "planeado" })
+        .locator("table", { hasText: "estado" })
         .first()
         .locator("thead th");
-      await expect(headers).toHaveText(["mes", "alcanzado", "planeado", ""]);
+      await expect(headers).toHaveText(["mes", "hecho", "estado"]);
       const closed = wide
-        .locator("table tbody tr", { hasText: /se arrastró \d+ %/ })
+        .locator("table tbody tr", { hasText: /\d+ % pasó a \p{L}+/u })
         .first();
       await expect(closed).toBeVisible();
-      await expect(closed.locator("td").nth(2)).toHaveText("10 h");
+      await expect(closed.locator("td").nth(1)).toContainText("de 10 h");
+      await expect(closed.locator("td").nth(2)).toContainText("cerrado");
+      // The month the share went to is the one after the closed month.
+      const next = monthLong(todayInZone());
+      await expect(closed.locator("td").nth(2)).toContainText(`pasó a ${next}`);
       await expect(
         wide
           .locator("table tbody tr[data-current]", { hasText: "en curso" })
           .first(),
       ).toBeVisible();
-      // Weeks are no table of their own: each sits under its month's row.
-      await expect(wide.getByText("por semana", { exact: true })).toHaveCount(0);
       await expect(
-        wide.getByText("por mes", { exact: true }).locator("visible=true"),
+        wide.getByText(/· por mes$/).locator("visible=true"),
       ).toHaveCount(1);
-      const rows = await wide
-        .locator("table")
-        .first()
-        .locator("tbody tr")
-        .evaluateAll((nodes) => nodes.map((node) => (node.querySelector("td")?.textContent ?? "").trim()));
-      expect(rows[0]).not.toMatch(/^sem /);
-      const months = [
-        "enero", "febrero", "marzo", "abril", "mayo", "junio",
-        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-      ];
-      const abbreviations = months.map((month) => month.slice(0, 3));
-      let owner = "";
-      let weeks = 0;
-      for (const row of rows) {
-        if (!row.startsWith("sem ")) {
-          owner = months.find((month) => row.startsWith(month)) ?? "";
-          continue;
-        }
-        weeks += 1;
-        // «31 ago–6 sep 2026» starts in its first month; «5–11 oct 2026» in its only one.
-        const span = /^sem \d+ · (\d+)(?: ([a-z]{3}))?(?: \d{4})?(?:–\d+ ([a-z]{3}))? \d{4}/.exec(row);
-        expect(span, row).not.toBeNull();
-        const startAbbreviation = span![2] ?? span![3];
-        expect(abbreviations[months.indexOf(owner)], row).toBe(startAbbreviation);
-        expect(row).toMatch(/\d{4}/);
-      }
-      expect(weeks).toBeGreaterThan(0);
 
       const phone = await context.newPage();
       await phone.setViewportSize({ width: 360, height: 740 });
       await phone.goto("/exportar");
       const note = phone
-        .locator("ol li", { hasText: /se arrastró \d+ %/ })
+        .locator("ol li", { hasText: /\d+ % pasó a \p{L}+/u })
         .first();
       await expect(note).toBeVisible();
-      await expect(note).toContainText(/de 10 h · se arrastró \d+ %/);
+      await expect(note).toContainText("cerrado");
       await expect(
         phone
-          .locator("ol li[data-current]", { hasText: /de 12 h · en curso/ })
+          .locator("ol li[data-current]", { hasText: /de 12 h/ })
           .first(),
-      ).toBeVisible();
-      await expect(
-        phone.getByText("por mes", { exact: true }).locator("visible=true"),
-      ).toHaveCount(1);
+      ).toContainText("en curso");
       await expect(
         phone.getByText(/^\d+ meses$/).locator("visible=true"),
       ).toHaveCount(1);
-      await expect(
-        phone.getByText(/^sem \d+ · /).locator("visible=true").first(),
-      ).toBeVisible();
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
     }
   });
 
-  test("RP-46 on paper: the head says pulsar with the year, the tasks and weeks sit under their goal and month, every date has its year, page 1 is used", async ({
+  test("RP-46 on paper: the head says pulsar with the year, the tasks sit under their goal, no week prints, every date has its year, page 1 is used", async ({
     person,
     browser,
     baseURL,
@@ -787,37 +758,77 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       expect(at(first.monthNote)).toBeGreaterThan(at(first.monthTask));
       expect(at(first.monthNote)).toBeLessThan(at(first.doneTask));
       expect(at(first.doneNote)).toBeGreaterThan(at(first.doneTask));
-      // A week's span sits inside its month's block: the closest month above names its start.
       const months = [
         "enero", "febrero", "marzo", "abril", "mayo", "junio",
         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
       ];
-      const marks = new RegExp(
-        `(?<month>(?:${months.join("|")}) \\d{4})|sem \\d+ · (?<day>\\d+)(?: (?<first>[a-z]{3}))?(?: \\d{4})?(?:–\\d+ (?<last>[a-z]{3}))? \\d{4}`,
-        "g",
-      );
-      let owner = "";
-      let placed = 0;
-      for (const found of block.matchAll(marks)) {
-        if (found.groups!.month) {
-          owner = found.groups!.month.split(" ")[0];
-          continue;
-        }
-        placed += 1;
-        expect(owner, found[0]).not.toBe("");
-        expect(owner.slice(0, 3), found[0]).toBe(found.groups!.first ?? found.groups!.last);
-      }
-      expect(placed).toBeGreaterThan(0);
+      // RP-49: only the months print; no week row reaches the sheet.
+      expect(flat).not.toMatch(/sem \d+ ·/);
       // Every printed date carries its year: a day and its month are followed by one within a span.
       const dayMonth = new RegExp(`\\d{1,2} (?:de )?(?:${months.map((name) => name.slice(0, 3)).join("|")})[a-z]*`, "g");
       const bare = [...flat.matchAll(dayMonth)]
         .filter((found) => !/\d{4}/.test(flat.slice(found.index, found.index + found[0].length + 22)))
         .map((found) => flat.slice(found.index, found.index + 40));
       expect(bare).toEqual([]);
-      // A week's span never breaks: every «sem N ·» opening carries its closing year on its own line.
-      const opened = all.split("\n").filter((line) => /sem \d+ ·/.test(line));
-      expect(opened.length).toBeGreaterThan(0);
-      for (const line of opened) expect(line).toMatch(/sem \d+ · .*\d{4}/);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("RP-46 on paper loses nothing: every goal and every month row the screen shows is in the PDF, in its goal", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const first = await seed(db, person);
+    await seedExtras(db, person, first);
+    const second = await seed(db, person);
+    await seedExtras(db, person, second);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      const main = page.getByRole("main");
+      const names = [first.name, second.name];
+      for (const name of names) {
+        await expect(main.getByRole("heading", { name, exact: true })).toHaveCount(1);
+      }
+      // On screen: per goal, the first column of its «mes» table.
+      const onScreen: string[][] = [];
+      for (const name of names) {
+        const table = main
+          .locator("section", { has: page.getByText(`${name} · por mes`, { exact: true }) })
+          .locator("table", { has: page.locator("thead th", { hasText: /^mes$/ }) })
+          .first();
+        const labels = (await table.locator("tbody tr td:first-child").allTextContents()).map((label) => label.trim());
+        expect(labels.length, `${name}: months on screen`).toBeGreaterThanOrEqual(4);
+        onScreen.push(labels);
+      }
+
+      await page.emulateMedia({ media: "print" });
+      const dir = resolve(process.cwd(), "private/export-pdf");
+      mkdirSync(dir, { recursive: true });
+      const file = resolve(dir, `379-completo-${first.goalId}.pdf`);
+      writeFileSync(file, await page.pdf({ format: "A4" }));
+      const lines = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" })
+        .split("\n")
+        .map((line) => line.trim());
+
+      // Each goal's heading is one line of its own; its months are the label lines up to the next goal.
+      const at = names.map((name) => lines.indexOf(name));
+      for (const [index, found] of at.entries()) expect(found, `${names[index]} heading in the PDF`).toBeGreaterThanOrEqual(0);
+      expect(lines.filter((line) => names.includes(line))).toHaveLength(names.length);
+      const label = /^[a-zñ]+ \d{4}$/;
+      const printed = at.map((from, index) =>
+        lines.slice(from, at[index + 1] ?? lines.length).filter((line) => label.test(line)),
+      );
+      expect(printed).toEqual(onScreen);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
@@ -1025,7 +1036,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
     return { goalId: goal.id, name };
   }
 
-  test("RP-46: a week crossing two months sits under both with its own span and share", async ({
+  test("RP-49: a week crossing two months is one week in the fold, with the whole week's total", async ({
     person,
     browser,
     baseURL,
@@ -1041,6 +1052,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       const page = await context.newPage();
       await page.goto("/exportar");
       await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await page.locator("summary", { hasText: /^Ver las \d+ semanas$/ }).click();
       const rows = await page
         .getByRole("main")
         .locator("table tbody tr")
@@ -1048,24 +1060,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
           nodes.map((node) => [...node.querySelectorAll("td")].map((cell) => (cell.textContent ?? "").trim())),
         );
       const split = rows.filter((cells) => /^sem 5 · /.test(cells[0]));
-      expect(split.map((cells) => [cells[0], cells[1]])).toEqual([
-        ["sem 5 · 28–30 sep 2026", "30 min"],
-        ["sem 5 · 1–4 oct 2026", "20 min"],
-      ]);
-      // Each month's weeks add up to its row.
-      const total = (cells: string[]) => Number(/(\d+) min/.exec(cells[1])?.[1] ?? 0);
-      const monthRow = (label: string) => rows.find((cells) => cells[0].startsWith(label))!;
-      const under = (label: string) => {
-        const at = rows.indexOf(monthRow(label));
-        let sum = 0;
-        for (const cells of rows.slice(at + 1)) {
-          if (!cells[0].startsWith("sem ")) break;
-          sum += total(cells);
-        }
-        return sum;
-      };
-      expect(under("septiembre")).toBe(total(monthRow("septiembre")));
-      expect(under("octubre")).toBe(total(monthRow("octubre")));
+      expect(split.map((cells) => [cells[0], cells[1]])).toEqual([["sem 5 · 28 sep–4 oct 2026", "50 min"]]);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -1144,7 +1139,7 @@ test.describe("the report's type and space (module 317)", () => {
         // A section's label sits 12 above its content; sections 32 apart.
         const gaps = await page.evaluate(() => {
           const labels = [...document.querySelectorAll("main section > *:first-child")]
-            .filter((node) => /^(este mes|hasta hoy|fases|tareas de|por mes)/.test(node.textContent ?? ""))
+            .filter((node) => /^(este mes|hasta hoy|fases|tareas de)|· por mes$/.test(node.textContent ?? ""))
             .map((node) => ({
               label: node.getBoundingClientRect(),
               next: node.nextElementSibling?.getBoundingClientRect() ?? null,

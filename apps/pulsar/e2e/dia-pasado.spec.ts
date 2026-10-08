@@ -312,17 +312,20 @@ test("/dia/<the eighth day back> lands on its own week, not on a 404 (RP-06, RP-
 });
 
 test("a past day steps both ways: the day after, Hoy from yesterday, and no empty section (RP-06)", async ({
-  page,
+  person,
+  browser,
   db,
-  personId,
 }) => {
   const empty = `Meta sin filas ${Date.now()}`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
-    values (${personId}, ${empty}, ${pastDay(-60)}, ${new Date(Date.now() - (LIMIT + 3) * 86_400_000)})
+    values (${person.id}, ${empty}, ${pastDay(-60)}, ${new Date(Date.now() - (LIMIT + 3) * 86_400_000)})
     returning id
   `;
+  // «Ese día no pedía nada» is an absence over the whole page: the person is the worker's own.
+  const context = await browser.newContext({ storageState: person.sessionFile });
   try {
+    const page = await context.newPage();
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "día siguiente" })).toHaveAttribute("href", "/");
     await expect(page.getByRole("link", { name: "día anterior" })).toHaveAttribute("href", `/dia/${pastDay(2)}`);
@@ -337,7 +340,8 @@ test("a past day steps both ways: the day after, Hoy from yesterday, and no empt
     await expect(page.getByRole("main").getByText(empty)).toHaveCount(0);
     await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
   } finally {
-    await deleteGoal(db, personId, goal.id);
+    await context.close();
+    await deleteGoal(db, person.id, goal.id);
   }
 });
 

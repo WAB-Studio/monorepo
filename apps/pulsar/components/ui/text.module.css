@@ -49,6 +49,7 @@
   font-size: 13px;
   font-weight: 400;
   letter-spacing: normal;
+  text-transform: none;
   line-height: 1.5;
   color: var(--pulsar-muted);
 }

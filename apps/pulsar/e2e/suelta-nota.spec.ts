@@ -171,8 +171,9 @@ test("/sueltas draws two lines of the note under the name and its button; a row 
     const bare = page.getByRole("button", { name: `Escribir una nota en «${bareName}»` });
     await expect(bare.locator(GREEN)).toHaveCount(0);
 
-    // The row's name opens the day sheet, never the note's.
+    // The row's name opens its sheet, never the note's; its day is a row inside.
     await page.getByRole("button", { name: new RegExp(`^${bareName}`) }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     await expect(page.getByRole("dialog")).toContainText("¿Para cuándo?");
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toBeHidden();

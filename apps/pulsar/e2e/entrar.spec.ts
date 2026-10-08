@@ -237,7 +237,7 @@ test("/entrar names the app and sits in the centred column at 1280 (318)", async
     await page.goto("/entrar");
     const title = page.getByRole("heading", { level: 1, name: account.title });
     await expect(title).toBeVisible();
-    await expect(page.getByText("Bitácora de metas", { exact: true })).toBeVisible();
+    await expect(page.getByText(account.eyebrow, { exact: true })).toBeVisible();
     expect((await title.boundingBox())!.x).toBeGreaterThanOrEqual(300);
   } finally {
     await context.close();

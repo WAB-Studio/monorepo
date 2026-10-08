@@ -103,8 +103,9 @@ export async function MonthDetail({
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: ReactNode = null;
   if (closed) {
-    note = share
-      ? t.rich("month.list.closedLine", {
+    note = share && share.carried > 0
+      ? t.rich("month.list.closedLineTo", {
+          next: monthLabel(nextMonth(mes)),
           share: Math.floor((share.carried * 100) / share.planned),
           owed: say(share.carried),
           planned: say(share.planned),

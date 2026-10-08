@@ -653,7 +653,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   «Dejar el azúcar terminó ayer · ver», then «terminó el lunes 28» later in the same week, gone once
   that week is over (a goal that ended on a Sunday is gone on the Monday). «ver» opens the goal.
   Board `HoyMetaTerminada.dc.html`, approved by the user 2026-09-29; the desktop face is the same line
-  under «Hoy». Several goals ended that week: one line each, most recent first. Only on today, never
+  under «Hoy». Several goals ended that week: one line each, in plan order (RP-47; «most recent first» superseded by the user's RP-47 of 2026-10-05, read 2026-10-07). Only on today, never
   on `/dia/<fecha>`, and never beside the all-ended card, which already names the last goal. Wording
   decided 2026-09-29 by the coordinator.
 - **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the
@@ -916,6 +916,9 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   phase form shows live, under the weeks, the days they cover («del lunes 5 de octubre al domingo 8 de noviembre») and
   the last week the goal allows, as «Mover el final» does. No schema change. Boards `FaseFechas`, `FaseFechasFuera`,
   `FaseFechasSolapa`, approved by the user 2026-10-06.
+- **The phase form rings the field that is out of range** (2026-10-06, decided by the orchestrator): «hasta» when only
+  the end passes the goal's last week, «desde» when the start does. `FaseFechasFuera` drew «desde» only because its
+  example started past. «Añadir la fase» under a refusal moves focus to that field, «desde» first.
 - **An imported phase that starts before its goal is cut to week 1**, decided by the user 2026-10-06. The import's
   review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board `ImportarFaseRecortada`,
   approved by the user 2026-10-06.
@@ -983,8 +986,17 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   `FaseFechas`, `FaseFechasFuera`, `FaseFechasSolapa`, `ImportarFaseRecortada`, `EntrarFormulario`, `EntrarEnviado`,
   `PermisoSinSesion`, `PermisoConSesion`, `SueltaHoja`, `SueltaHojaHecha`, `ReportePlegado`, `ReporteImpresoMeses`,
   `PalabrasDelPlan`. Canvas version 69. Where a board and the lines above disagree, the lines above win.
+- **`ReportePlegado`'s «Esta semana: [3 h] de [3 h].» keeps its second figure** (decided by the user 2026-10-06): it is
+  the month's planned amount prorated by day over the week (RP-58, module 392). Until 392 lands the line reads the done
+  figure alone. Options refused: owed over the remaining weeks (moves daily), dated tasks' estimates (empty for most goals).
+- **The report's split week is one row** (2026-10-06, orchestrator, module 379): a week across two months reads its
+  whole total once under the fold, no longer two halves.
 - **`MetaPlanHechas` settles where «hechas» reaches** (2026-10-06, read by the orchestrator from the approved board):
   the goal's plan row reads «5 h hechas de 12 h en octubre»; the block «lo medido» keeps the measure («6 h 40 min de
   estudio en octubre», RP-28). Hoy's month line and «Mes» (RP-43) keep the measure this round. No code retired.
 - **A fact before its goal opened is refused with «Ese día es anterior a cuando abriste esta meta.»** (2026-10-06,
   decided by the orchestrator; no board draws it).
+- **The consent screen keeps its «may / never» lists under `PermisoConSesion`'s lead** (2026-10-06, decided by the
+  orchestrator, module 381). The board draws the layout — centred, h1, «Podrá leer tus metas y anotar lo que hagas. Puedes
+  revocarlo en Conexiones.», «Permitir» over «No permitir» — and not the removal of what a person reads before granting
+  access. Signed out, the promise line under the form goes, as the board draws.

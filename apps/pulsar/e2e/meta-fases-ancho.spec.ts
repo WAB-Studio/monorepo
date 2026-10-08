@@ -126,3 +126,22 @@ test("at 390 «Renombrar» spans the column", async ({ page, db, personId }) => 
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
 });
+
+test("a phase wholly before the goal opened never reads a week below 1: «semanas 1–1»", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const goalId = await seedGoal(db, personId, `Meta fase pasada ${Date.now()}`);
+  try {
+    await db`
+      update goals.phases set starts_on = ${civilDateInZone(new Date(Date.now() - 40 * 86_400_000))},
+                              ends_on = ${civilDateInZone(new Date(Date.now() - 30 * 86_400_000))}
+      where goal_id = ${goalId} and user_id = ${personId}
+    `;
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText(/^semanas \d/)).toHaveText("semanas 1–1");
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});

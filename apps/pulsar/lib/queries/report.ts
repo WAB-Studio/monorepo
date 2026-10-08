@@ -10,6 +10,7 @@ import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { monthOf, toDate } from "@/lib/plan/months";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
+import { weekPlanned } from "@/lib/plan/week-planned";
 import {
   goalFigures,
   type CommitmentRow,
@@ -254,10 +255,22 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         const share = row.past ? planShare(planInput, row.month) : null;
         return {
           ...row,
-          carried: share ? Math.floor((share.carried * 100) / share.planned) : null,
+          carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
         };
       }),
       weeks: figures.weeks,
+      weekPlanned: (() => {
+        const week = figures.weeks.find((w) => w.current);
+        return week
+          ? weekPlanned({
+              weekStart: week.startsOn,
+              weekEnd: week.endsOn,
+              budgets: row.budgets,
+              openedOn,
+              horizon: row.goal.horizon,
+            })
+          : null;
+      })(),
       weekSplits: figures.weeks
         .filter((week) => monthOf(week.startsOn) !== monthOf(week.endsOn))
         .flatMap((week) => {

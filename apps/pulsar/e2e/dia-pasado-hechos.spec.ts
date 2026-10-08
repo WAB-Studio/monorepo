@@ -49,27 +49,32 @@ async function seedRow(
 }
 
 test("a past day with five daily rows (three done), a weekly row done and one partial reads «ese día pedía cinco» and «hechos 3 de 5 · 1 en parte»; the headings sum to the tally on three days (RP-44, RP-01)", async ({
-  page,
+  browser,
   db,
-  personId,
+  person,
 }) => {
   const stamp = Date.now();
   const days = [plusDays(-1), plusDays(-2), plusDays(-3)];
   const mainName = `Cinco ${stamp}`;
   const otherName = `Dos ${stamp}`;
-  const main = await seedGoal(db, personId, mainName);
-  const other = await seedGoal(db, personId, otherName);
+  const main = await seedGoal(db, person.id, mainName);
+  const other = await seedGoal(db, person.id, otherName);
+  // The exact counts are asserted over the whole page, so the person is the worker's own.
+  const context = await browser.newContext({
+    storageState: person.sessionFile,
+    viewport: { width: 390, height: 844 },
+  });
   try {
+    const page = await context.newPage();
     // Daily rows 1-3 done, 4 partial (quantity), 5 untouched; one weekly row done, each day.
-    for (let i = 1; i <= 3; i += 1) await seedRow(db, personId, main, { name: `Hecha ${i} ${stamp}`, done: days });
-    await seedRow(db, personId, main, { name: `Parte ${stamp}`, target: 10, done: days, quantity: 4 });
-    await seedRow(db, personId, main, { name: `Vacía ${stamp}`, done: [] });
-    await seedRow(db, personId, main, { name: `Semanal ${stamp}`, kind: "times_per_week", done: days });
+    for (let i = 1; i <= 3; i += 1) await seedRow(db, person.id, main, { name: `Hecha ${i} ${stamp}`, done: days });
+    await seedRow(db, person.id, main, { name: `Parte ${stamp}`, target: 10, done: days, quantity: 4 });
+    await seedRow(db, person.id, main, { name: `Vacía ${stamp}`, done: [] });
+    await seedRow(db, person.id, main, { name: `Semanal ${stamp}`, kind: "times_per_week", done: days });
     // A second goal: two daily rows and a weekly one, none done.
-    await seedRow(db, personId, other, { name: `Otra A ${stamp}`, done: [] });
-    await seedRow(db, personId, other, { name: `Otra B ${stamp}`, done: [] });
-    await seedRow(db, personId, other, { name: `Otra S ${stamp}`, kind: "times_per_week", done: [] });
-    await page.setViewportSize({ width: 390, height: 844 });
+    await seedRow(db, person.id, other, { name: `Otra A ${stamp}`, done: [] });
+    await seedRow(db, person.id, other, { name: `Otra B ${stamp}`, done: [] });
+    await seedRow(db, person.id, other, { name: `Otra S ${stamp}`, kind: "times_per_week", done: [] });
     for (const day of days) {
       await page.goto(`/dia/${day}`);
       const tally = page.getByText(/^hechos \d+ de \d+( · \d+ en parte)?$/);
@@ -98,21 +103,26 @@ test("a past day with five daily rows (three done), a weekly row done and one pa
     expect(fonts.figures).toHaveLength(3);
     for (const family of fonts.figures) expect(family).toMatch(/mono/i);
   } finally {
-    await db`delete from goals.goals where id = any(${[main, other]}) and user_id = ${personId}`;
+    await context.close();
+    await db`delete from goals.goals where id = any(${[main, other]}) and user_id = ${person.id}`;
   }
 });
 
-test("a goal whose rows that day are all weekly reads its name alone (RP-44)", async ({ page, db, personId }) => {
+test("a goal whose rows that day are all weekly reads its name alone (RP-44)", async ({ person, browser, db }) => {
   const stamp = Date.now();
   const name = `Solo semanal ${stamp}`;
-  const goal = await seedGoal(db, personId, name);
+  const goal = await seedGoal(db, person.id, name);
+  // The absence is asserted over the whole page, so the person is the worker's own.
+  const context = await browser.newContext({ storageState: person.sessionFile });
   try {
-    await seedRow(db, personId, goal, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [] });
+    await seedRow(db, person.id, goal, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [] });
+    const page = await context.newPage();
     await page.goto(`/dia/${plusDays(-1)}`);
     await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByText(/ese día pedía/)).toHaveCount(0);
   } finally {
-    await db`delete from goals.goals where id = ${goal} and user_id = ${personId}`;
+    await context.close();
+    await db`delete from goals.goals where id = ${goal} and user_id = ${person.id}`;
   }
 });
 

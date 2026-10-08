@@ -68,9 +68,10 @@ test("on Hoy a one-off's mark and name sit where a commitment's do, and its mark
     expect(Math.abs(split.mark - plain.mark)).toBeLessThanOrEqual(0.5);
     expect(Math.abs(split.name - plain.name)).toBeLessThanOrEqual(0.5);
 
-    // Two acts: the name opens the delete sheet, the mark completes.
+    // Two acts: the name opens its sheet, the mark completes.
     await page.getByRole("button", { name: oneOff, exact: true }).click();
-    await expect(page.getByRole("dialog")).toContainText("¿Borrarla?");
+    await expect(page.getByRole("dialog")).not.toContainText("¿Borrarla?");
+    await expect(page.getByRole("dialog").getByLabel("Nombre")).toHaveValue(oneOff);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toBeHidden();
     await rowOf(page, oneOff).getByRole("button", { name: "Marcar como hecho" }).click();

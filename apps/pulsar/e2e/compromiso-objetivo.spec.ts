@@ -11,11 +11,13 @@ function plusDays(n: number): string {
 
 test("a quantity commitment reads its target on the goal: «15 min», «20 páginas»", async ({ person, browser, db }) => {
   const context = await browser.newContext({ storageState: person.sessionFile });
+  let goalId: string | undefined;
   try {
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon)
       values (${person.id}, 'Meta objetivo', ${plusDays(90)}) returning id
     `;
+    goalId = goal.id;
     await db`
       insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
       values (${person.id}, ${goal.id}, 'Escuchar', 'daily', 'quantity', 15, 'minutos'),
@@ -33,6 +35,6 @@ test("a quantity commitment reads its target on the goal: «15 min», «20 pági
     await expect(page.getByText("minutos", { exact: true })).toHaveCount(0);
   } finally {
     await context.close();
-    await db`delete from goals.goals where user_id = ${person.id}`;
+    if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
   }
 });

@@ -25,6 +25,8 @@ reading app, the plan's done criterion, the Zod schema, the database schema.
    Never to decide what is correct.
 3. Write the tests.
 4. Kill each one with a mutation (below). A test you have not seen red is not written yet.
+   Dispatched before the worker, the code is not built yet: show each test red against the branch as it
+   stands, cover every row of the plan's Done table, and commit them. The worker makes them green.
 
 # Never
 

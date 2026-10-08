@@ -1,12 +1,14 @@
 import { ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
 import { TaskRow, type TaskRowProps } from "@/components/month/task-row";
-import { Flex, Progress, Row, Section } from "@/components/ui";
+import { Flex, Progress, Row, Section, Text } from "@/components/ui";
+import { Figure } from "@/components/ui/figure";
 import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
-import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
+import { doneIn, openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import type { GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 
@@ -28,6 +30,8 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
   };
   const unit = goal.measureUnit;
   const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
+  // A section header's figure stays with its unit: a non-breaking space in plain text.
+  const glue = (text: string) => text.replace(/ /g, "\u00a0");
   const thisYear = String(new Date().getFullYear());
   const { roadmap } = goal;
   const lastMonth = monthOf(roadmap.lastDay);
@@ -113,19 +117,19 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
     );
   }
 
-  function figureOf(month: PlanMonth): string | null {
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
+  // The current month counts what is done in it; a later one what the plan fills.
+  function figureOf(month: PlanMonth, current: boolean) {
     if (!unit || month.amount === null) return null;
-    const current = goal.month?.month === month.month ? goal.month : null;
-    return t("roadmap.plan.reached", {
-      done: say(current ? current.reached : month.filled),
-      amount: say(current?.planned ?? month.amount),
-    });
+    return current
+      ? t.rich("roadmap.plan.monthDone", { done: say(doneIn(goal.plan, month.month)), amount: say(month.amount), ...fig })
+      : t.rich("roadmap.plan.monthPlanned", { filled: say(month.filled), amount: say(month.amount), ...fig });
   }
 
-  function percentOf(month: PlanMonth): number | null {
+  function percentOf(month: PlanMonth, current: boolean): number | null {
     if (!unit || month.amount === null || month.amount <= 0) return null;
-    const current = goal.month?.month === month.month ? goal.month : null;
-    return Math.floor(((current ? current.reached : month.filled) * 100) / (current?.planned ?? month.amount));
+    const count = current ? doneIn(goal.plan, month.month) : month.filled;
+    return Math.floor((count * 100) / month.amount);
   }
 
   const whole = all ? months : months.slice(0, WHOLE);
@@ -140,8 +144,8 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
     <>
       {whole.map((month) => {
         const current = monthOf(goal.plan.today) === month.month;
-        const figure = figureOf(month);
-        const percent = percentOf(month);
+        const figure = figureOf(month, current);
+        const percent = percentOf(month, current);
         const label = current
           ? t("roadmap.plan.currentMonth", { month: monthName(month.month, thisYear) })
           : monthName(month.month, thisYear);
@@ -151,7 +155,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
             label={
               <Flex justify="between" gap="3">
                 <span>{label}</span>
-                {figure ? <span>{figure}</span> : null}
+                {figure ? <Text variant="sentence">{figure}</Text> : null}
               </Flex>
             }
           >
@@ -172,7 +176,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
                     })
                   : monthName(rest[0].month, thisYear)}
               </span>
-              <span>{t("roadmap.plan.summary", { count: restItems.size, hours: say(restHours) })}</span>
+              <span>{t("roadmap.plan.summary", { count: restItems.size, hours: glue(say(restHours)) })}</span>
             </Flex>
           }
         >
@@ -190,7 +194,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
           label={
             <Flex justify="between" gap="3">
               <span>{t("roadmap.pasaElFinal.afterEnd")}</span>
-              <span>{t("roadmap.pasaElFinal.summary", { count: pastItems.length, hours: say(pastHours) })}</span>
+              <span>{t("roadmap.pasaElFinal.summary", { count: pastItems.length, hours: glue(say(pastHours)) })}</span>
             </Flex>
           }
         >

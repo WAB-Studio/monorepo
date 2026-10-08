@@ -2613,6 +2613,9 @@ A fresh identity was not the cause.
   build, which has no badge, so it stayed green.
 - **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/pulsar/next.config.ts`. Never set
   `devIndicators: false`: errors would stay, but the badge is how a dev sees a real issue count.
+- **Also on the phone.** Bottom-right is the Metas tab's corner at 360: a spec that taps it (`varias-metas.spec.ts:16`)
+  reads «`<nextjs-portal>` subtree intercepts pointer events» under `next dev`, with no error behind the badge.
+  Measured 2026-10-06. Run the e2e against `npm run build` + `next start`, as `playwright.config.ts` says; never click `force`.
 
 ## The `pulsar-e2e` queue holds one waiting run, and a newer one cancels it
 
@@ -2833,3 +2836,31 @@ branch could pass until it was restored.
 - Run every `check:*` that writes the table before applying the migration locally, not after.
 - A constraint changed after a local apply is altered by hand (`DROP CONSTRAINT` + `ADD CONSTRAINT`) in the same words as
   the edited SQL, schema and snapshot. Drizzle will not re-run the file.
+
+## A lane's dev server started bare reads the remote project
+
+- `next dev` in a lane loads `apps/pulsar/.env.local`, which points at the remote project. The specs mint their
+  session on the local stack, so `/auth/confirm` refuses it and every spec reads `linkInvalid`.
+- Start a lane's server inside `scripts/supabase-local.sh exec`. Measured 2026-10-06: four agents on four lanes hit it
+  the same evening before each found it alone.
+
+## A machine crash leaves empty git objects
+
+- A WSL reset on 2026-10-06 left nine zero-byte files under `.git/objects`; a lane's `HEAD` then read `bad object`.
+- Find them with `find .git/objects -type f -empty`, move them out of `.git` (never delete), and `git fetch origin`:
+  every one of them was a pushed object and came back whole. An unpushed commit would not.
+- Restore every lane's tree after the crash too: a mutator's live mutant survives it uncommitted.
+
+## A whole-page absence on the shared person is a race
+
+- `personId` (`e2e/fixtures.ts`) is one person per lane, shared by both workers and every spec. A test that asserts
+  «nothing else is here» on it fails whenever another spec seeds for it at the same moment.
+- Assert an absence or an exact count only on the disposable `person`. Measured 2026-10-06: `dia-pasado.spec.ts:314`
+  and `dia-pasado-hechos.spec.ts:105` passed one CI run and failed the next on the same tree.
+- Match a date's words with `\p{L}` and the `u` flag, never `\w`: `\w` is ASCII and skips «miércoles» and «sábado»,
+  so on those days a header spec measured the «hechos 0 de 6» tally instead (75 px off, 2026-10-07). Drive the longest
+  date by rewriting the eyebrow's text, so the check never waits for a Wednesday.
+- Read `docs/pulsar/SPEC.md` before "fixing" an order a spec expects. On 2026-10-07 a red e2e asked «most recent
+  first» for `ended_this_week`; the query was changed to `horizon desc` and broke three `check:day`/`check:plan`
+  assertions that pin RP-47's plan order. The e2e followed a DESIGN line RP-47 had superseded; it was the spec that was wrong.
+  The e2e only failed from a Wednesday, the first weekday that draws two endings.

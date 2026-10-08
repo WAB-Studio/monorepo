@@ -29,10 +29,12 @@ function formatRangeEnd(day: string, monthNames: string[], withMonth: boolean): 
 function formatWeekRange(start: string, end: string, t: Translator): string {
   const monthNames = t.raw("week.monthShort") as string[];
   const sameMonth = start.slice(0, 7) === end.slice(0, 7);
-  return t("week.range", {
+  const ends = {
     start: formatRangeEnd(start, monthNames, !sameMonth),
     end: formatRangeEnd(end, monthNames, !sameMonth),
-  });
+  };
+  if (!sameMonth) return t("week.range", ends);
+  return t("week.rangeWithMonth", { ...ends, month: (t.raw("day.monthLong") as string[])[Number(end.slice(5, 7)) - 1] });
 }
 
 // The week's distance from today, said the way `SemanaPasada.dc.html` heads it.

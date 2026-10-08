@@ -55,15 +55,28 @@ for (const [width, expected] of [
   });
 }
 
-test("Hoy's controls row stands on the eyebrow's line, the eyebrow a date", async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 740 });
-  await page.goto("/");
-  const toggle = (await page.getByRole("button", { name: /modo (oscuro|claro)/ }).boundingBox())!;
-  const date = (await page.locator("main > header:visible").getByText(/^\w+ \d+ de \w+$/).first().boundingBox())!;
-  // The toggle and the date share one line, the toggle at its end.
-  expect(Math.abs(toggle.y + toggle.height / 2 - (date.y + date.height / 2))).toBeLessThan(6);
-  expect(toggle.x).toBeGreaterThan(date.x + date.width);
-});
+// `\w` is ASCII: on a miércoles or a sábado it skips the date and lands on the tally.
+const WEEKDAY_DATE = /^(lunes|martes|miércoles|jueves|viernes|sábado|domingo) \d+ de \p{L}+$/u;
+const LONGEST_DATE = "miércoles 30 de septiembre";
+
+// `longest` swaps the date's words in the page, so the line is measured on the
+// widest date the app can draw whatever day the suite runs.
+for (const width of [360, 390]) {
+  for (const longest of [false, true]) {
+    test(`Hoy's controls row stands on the eyebrow's line at ${width}, the eyebrow ${longest ? "the longest date" : "today's date"}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 740 });
+      await page.goto("/");
+      const dateLocator = page.locator("main > header:visible").getByText(WEEKDAY_DATE).first();
+      await expect(dateLocator).toBeVisible();
+      if (longest) await dateLocator.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
+      const toggle = (await page.getByRole("button", { name: /modo (oscuro|claro)/ }).boundingBox())!;
+      const date = (await dateLocator.boundingBox())!;
+      // The toggle and the date share one line, the toggle at its end.
+      expect(Math.abs(toggle.y + toggle.height / 2 - (date.y + date.height / 2))).toBeLessThan(6);
+      expect(toggle.x).toBeGreaterThan(date.x + date.width);
+    });
+  }
+}
 
 // No screen draws a linked eyebrow yet, so this reads the rule the primitive ships.
 async function ruleOf(page: Page, fragment: string) {

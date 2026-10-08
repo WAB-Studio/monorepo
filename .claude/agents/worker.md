@@ -23,6 +23,13 @@ An assignment: goal, files, contract, RF codes covered, done criterion.
 # While writing
 
 - Touch only the assignment's files.
+- Make the tester's tests green when the assignment names them. Never weaken, skip or delete one; a test
+  you think wrong goes under `Questions`.
+- Start a lane's dev server inside `scripts/supabase-local.sh exec`. Bare, it reads the remote project and
+  every minted session fails with `linkInvalid`.
+- Before you commit, drive each state of what you built: pending, refused, cancelled, empty, done. A button
+  that does nothing on a press is a defect, not a state.
+- Add a prop to a `components/ui` primitive for a variant. Never change its default for one screen.
 - Meet the assignment's contract to the letter.
 - Store money as an integer number of cents. Floating point is forbidden.
 - Derive balances from movements. Never store them in a column.

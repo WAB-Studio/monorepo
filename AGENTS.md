@@ -21,6 +21,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   `validator` judges one assignment and `auditor` judges the code. Neither ever says the app is thin.
 - Dispatch the `tester` when a module's proof matters more than its code. It writes the tests from
   the contract, never from the implementation, and shows every one of them red under a named mutation.
+- Dispatch the `tester` before the `worker` on every module that draws or changes a screen. It writes the
+  plan's Done table red; the worker makes it green. Decided by the user 2026-10-06, after four modules in
+  one evening went worker → validator → worker over clauses nobody had tested.
 - Dispatch the `mutator` before closing a slice, once the validator is green. It breaks the lines the
   branch itself changed and reports what no suite noticed. A survivor is a regression that ships in
   silence.

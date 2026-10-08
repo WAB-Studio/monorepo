@@ -164,7 +164,7 @@ test("a goal that already has a phase prefills the next span right after it, ref
   await page.getByLabel("hasta la semana").fill(String(to));
   await page.getByRole("button", { name: plan.phaseForm.submit }).click();
 
-  await expect(page.getByText("Esas semanas ya tienen una fase. Elige otras.")).toBeVisible();
+  await expect(page.getByText(new RegExp(`ya son de «${aim}»`))).toBeVisible();
   expect(page.url()).toContain(`/metas/${goalId}/fases/nueva`);
   expect(await phaseCount(db, goalId)).toBe(before + 1);
 
@@ -176,9 +176,7 @@ test("a goal that already has a phase prefills the next span right after it, ref
   await page.getByLabel("hasta la semana").fill("504");
   await page.getByRole("button", { name: plan.phaseForm.submit }).click();
 
-  await expect(
-    page.getByText("Esa fase pasa del horizonte de la meta. Elige semanas dentro de él."),
-  ).toBeVisible();
+  await expect(page.getByText(/La meta llega hasta la semana 500, el /)).toBeVisible();
   expect(page.url()).toContain(`/metas/${goalId}/fases/nueva`);
   expect(await phaseCount(db, goalId)).toBe(before + 1);
 });

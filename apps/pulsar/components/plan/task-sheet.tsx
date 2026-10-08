@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -36,8 +37,9 @@ function own(key: MessageKey): MessageKey {
 
 export type TaskSheetProps = {
   mode: "create" | "edit";
-  goalId: string;
-  goalName: string;
+  // Absent on a suelta (RP-57), which belongs to no goal.
+  goalId?: string;
+  goalName?: string;
   oneOffId?: string;
   name?: string;
   // In the goal's unit; null while the task has none.
@@ -51,11 +53,14 @@ export type TaskSheetProps = {
   // "YYYY-MM" of every open month of the goal's span.
   months: string[];
   done: boolean;
-  kind: "task" | "parent" | "child";
+  // "loose" takes its name alone: a suelta, or a goal's one-off outside the plan (`SueltaHoja`).
+  kind: "task" | "parent" | "child" | "loose";
   // RP-22: nothing done under it.
   canDelete: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // `/sueltas`: the way to the one-off's day, a row inside the sheet.
+  onGiveDay?: () => void;
 };
 
 /**
@@ -81,6 +86,7 @@ export function TaskSheet({
   canDelete,
   open,
   onOpenChange,
+  onGiveDay,
 }: TaskSheetProps) {
   const t = useTranslations();
   const router = useRouter();
@@ -117,8 +123,9 @@ export function TaskSheet({
     }
   }
 
-  const asksEstimate = unit !== null && kind !== "parent" && !done;
-  const asksMonth = kind !== "child" && !done;
+  const loose = kind === "loose";
+  const asksEstimate = unit !== null && kind !== "parent" && !loose && !done;
+  const asksMonth = kind !== "child" && !loose && !done;
 
   // Minutes (or the unit's count) typed; null while blank; a key for a figure the sheet refuses.
   function typed(): number | null | MessageKey {
@@ -163,7 +170,7 @@ export function TaskSheet({
       const parsed = createOneOffSchema.safeParse({
         name,
         day: null,
-        goalId,
+        goalId: goalId ?? null,
         estimate: amount,
         ...(fixes ? { plannedMonth: fixes } : { inPlan: true }),
       });
@@ -192,7 +199,11 @@ export function TaskSheet({
       <Sheet
         open={open}
         onOpenChange={onOpenChange}
-        label={t("roadmap.fijar.eyebrow", { goal: goalName })}
+        label={
+          goalName !== undefined
+            ? t("roadmap.fijar.eyebrow", { goal: goalName })
+            : t(done ? "oneOffs.sheet.eyebrowDone" : "oneOffs.sheet.eyebrow")
+        }
         title={mode === "create" ? t("roadmap.fijar.newTitle") : current}
       >
         <Flex direction="column" gap="5">
@@ -201,7 +212,15 @@ export function TaskSheet({
             value={name}
             onChange={(event) => setName(event.target.value)}
             invalid={refused("name") !== null}
-            hint={refused("name") ? t(refused("name")!.key) : kind === "parent" ? t("roadmap.fijar.parentSum") : undefined}
+            hint={
+              refused("name")
+                ? t(refused("name")!.key)
+                : kind === "parent"
+                  ? t("roadmap.fijar.parentSum")
+                  : loose && done
+                    ? t("oneOffs.sheet.doneHint")
+                    : undefined
+            }
             autoFocus={mode === "create"}
           />
 
@@ -313,6 +332,19 @@ export function TaskSheet({
           </Button>
         </SheetActions>
 
+        {onGiveDay && !done ? (
+          <Row
+            card
+            name={t("oneOffs.sheet.giveDay")}
+            trailing={<ChevronRight size={16} aria-hidden />}
+            rule={false}
+            onClick={() => {
+              onOpenChange(false);
+              onGiveDay();
+            }}
+            disabled={pending}
+          />
+        ) : null}
         {mode === "edit" && canDelete ? <Separator /> : null}
         {mode === "edit" && canDelete ? (
           <Flex justify="start">

@@ -131,3 +131,39 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     await db`delete from goals.goals where id = ${goal.id}`;
   }
 });
+
+test("an open goal that counts nothing draws no «hechos» line, and one counted row draws «hechos 0 de 1»", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalName = `Meta una cuenta ${stamp}`;
+  const row = `Única ${stamp}`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${goalName}, ${plusDays(90)}, now() - interval '20 days') returning id
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto("/");
+    await expect(page.locator("main")).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "Hoy", exact: true })).toBeVisible();
+    await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
+
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${person.id}, ${goal.id}, ${row}, 'daily', 'tap', now() - interval '20 days')
+    `;
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: new RegExp(`^${row}`) })).toBeVisible();
+    await expect(page.getByText("hechos 0 de 1", { exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await db`delete from goals.commitments where goal_id = ${goal.id}`;
+    await db`delete from goals.goals where id = ${goal.id}`;
+  }
+});

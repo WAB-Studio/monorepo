@@ -41,8 +41,8 @@ export function Consent({
   }
 
   return (
-    <Page alone>
-      <ScreenHeader title={t("title", { client })} eyebrow={t("eyebrow")} />
+    <Page alone middle>
+      <ScreenHeader title={t("title", { client })} eyebrow={t("eyebrow")} metaVariant="sentence" meta={t("consentLead")} />
       <ConsentList label={t("mayLabel")} items={MAY.map((key) => t(`may.${key}`))} mark="+" />
       <ConsentList label={t("neverLabel")} items={NEVER.map((key) => t(`never.${key}`))} mark="–" tone="muted" />
       {error ? <Notice role="alert">{root(error)}</Notice> : null}
