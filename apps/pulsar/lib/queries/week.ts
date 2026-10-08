@@ -59,6 +59,7 @@ type FactRow = {
   note: string | null;
   commitment_unit: string | null;
   one_off_name: string | null;
+  one_off_parent_name: string | null;
 };
 
 type WeekQueryRow = {
@@ -135,11 +136,13 @@ async function queryGoalsRow(
            and (p.ends_on is null or p.ends_on >= ${weekStart}::date)) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit,
-                 'one_off_name', o.name
+                 'one_off_name', o.name,
+                 'one_off_parent_name', p.name
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          left join "goals"."one_offs" o on o.id = f.one_off_id
+         left join "goals"."one_offs" p on p.id = o.parent_id
          where f.day between ${weekStart}::date and ${weekEnd}::date) as facts,
       (select coalesce(json_agg(json_build_object('commitment_id', f.commitment_id, 'day', f.day)), '[]'::json)
          from "goals"."facts" f
@@ -251,6 +254,8 @@ export type OneOffFact = {
   name: string;
   day: string;
   goalId: string | null;
+  // The parent task's name for a sub-task; null for a top-level or goalless one.
+  parentName: string | null;
 };
 
 /**
@@ -321,6 +326,7 @@ export async function loadWeek(anyDayInIt: string): Promise<{
         name: fact.one_off_name ?? "",
         day: fact.day,
         goalId: fact.goal_id,
+        parentName: fact.one_off_parent_name,
       })),
   };
 }

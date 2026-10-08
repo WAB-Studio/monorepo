@@ -83,17 +83,20 @@ export function AddTask({
   goalName,
   unit,
   months,
+  variant = "solid",
 }: {
   goalId: string;
   goalName: string;
   unit: string | null;
   months: string[];
+  // Outline while the rhythm form's own solid act is on screen: one per screen.
+  variant?: "solid" | "outline";
 }) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button onClick={() => setOpen(true)}>{t("roadmap.plan.addTask")}</Button>
+      <Button variant={variant} onClick={() => setOpen(true)}>{t("roadmap.plan.addTask")}</Button>
       <TaskSheet
         mode="create"
         goalId={goalId}

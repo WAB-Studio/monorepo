@@ -23,6 +23,7 @@ import {
   civilDayMonthShort,
   todayInZone,
   TIME_ZONE,
+  civilDateLabel,
 } from "@/lib/zone";
 import {
   Button,
@@ -121,6 +122,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       goalId={goal.id}
       name={goal.name}
       openedOn={openedOn}
+      horizon={goal.horizon}
       weeks={sheetWeeks}
       phases={goal.phases}
       solid={ended}
@@ -270,7 +272,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         <Face on="desktop">
           <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
         </Face>
-        {ended && goal.endedOn ? (
+        {goal.endedOn ? (
           <Text as="p" variant="sentence">
             {endedOnWords(goal.endedOn, t)}
           </Text>
@@ -307,6 +309,15 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               variant="measure"
             />
           ) : null}
+          <Text as="p" variant="sentence" tone="muted">
+            {t.rich("goal.detail.measureSince", {
+              date:
+                openedOn.slice(0, 4) === today.slice(0, 4)
+                  ? civilDateLabel(openedOn)
+                  : t("goal.detail.measureSinceYear", { date: civilDateLabel(openedOn), year: openedOn.slice(0, 4) }),
+              fig: (chunks) => <Figure variant="meta" value={chunks} />,
+            })}
+          </Text>
 
           {monthBlock}
 

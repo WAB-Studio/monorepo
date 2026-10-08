@@ -34,6 +34,7 @@ import {
   SheetActions,
   Text,
   TextArea,
+  TextLink,
 } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
@@ -159,6 +160,15 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const repeated = useMemo(() => new Set(work ? repeatedGoals(work, openGoalNames) : []), [work, openGoalNames]);
   const refusals = useMemo(() => (work ? draftRefusals(work, today) : []), [work, today]);
   const refused = useMemo(() => new Set(refusals.map((refusal) => refusal.path)), [refusals]);
+  // A goal refused whole says so once; what lies under it is not listed.
+  const listed = useMemo(
+    () =>
+      refusals.filter((refusal) => {
+        const g = refusal.path.split(".")[1];
+        return refusal.path.endsWith(".horizon") || !refused.has(`goals.${g}.horizon`);
+      }),
+    [refusals, refused],
+  );
   const sent = useMemo(() => (work ? markedDraft(work, unmarked, refused) : null), [work, unmarked, refused]);
 
   if (!loaded || !stored || !draft || !work || !sent) return <Page width="full" />;
@@ -209,6 +219,31 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const cuts = phaseCuts(work, today);
   const drops = new Set(phaseDrops(work, today).map((drop) => drop.path));
   const droppedAims = phaseDrops(work, today);
+
+  // What the bar says stays out: the one item by name, several by count.
+  function outLine(): ReactNode {
+    if (listed.length === 0) return null;
+    if (listed.length > 1) {
+      return t.rich("import.review.out.many", {
+        count: listed.length,
+        link: (chunks) => <TextLink href="#blocked">{chunks}</TextLink>,
+      });
+    }
+    const [, g, group, index, , child] = listed[0].path.split(".");
+    const goal = work!.goals[Number(g)];
+    let name = goal.name;
+    let subTasks = 0;
+    if (group === "phases") name = goal.phases[Number(index)].aim;
+    else if (group === "months") name = monthWord(goal.months[Number(index)].month, true);
+    else if (group === "commitments") name = goal.commitments[Number(index)].name;
+    else if (group === "tasks") {
+      const task = goal.tasks[Number(index)];
+      name = child === undefined ? task.name : task.children[Number(child)].name;
+      if (child === undefined) subTasks = task.children.length;
+    }
+    return t("import.review.out.one", { name, subTasks });
+  }
+  const out = outLine();
 
   async function confirm() {
     if (pending || goalsKept === 0) return;
@@ -321,6 +356,12 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     </Flex>
   );
 
+  const createButton = (
+    <Button block onClick={confirm} disabled={pending || goalsKept === 0} aria-busy={pending || undefined}>
+      {pending ? t("import.review.creating") : t("import.review.create", { count: goalsKept })}
+    </Button>
+  );
+
   const review = (
     <Flex direction="column" gap="6">
       <Text as="p" variant="sentence" tone="muted">
@@ -330,18 +371,13 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       {refusals.length > 0 ? (
         <Section>
           <Text asChild variant="heading">
-            <h2>{t("import.review.blocked.title")}</h2>
+            <h2 id="blocked">{t("import.review.blocked.title")}</h2>
           </Text>
           <Text as="p" variant="sentence" tone="muted">
             {t("import.review.blocked.hint")}
           </Text>
           <div>
-          {refusals
-            // A goal refused whole says so once; what lies under it is not listed.
-            .filter((refusal) => {
-              const g = refusal.path.split(".")[1];
-              return refusal.path.endsWith(".horizon") || !refused.has(`goals.${g}.horizon`);
-            })
+          {listed
             .map((refusal) => blockedRow(refusal.path, refusal.key, refusal.values))}
           </div>
         </Section>
@@ -530,9 +566,16 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       {failure ? <Notice>{failure}</Notice> : null}
 
       <ActionBar span={work.goals.length === 1 ? "column" : "full"}>
-        <Button block onClick={confirm} disabled={pending || goalsKept === 0} aria-busy={pending || undefined}>
-          {pending ? t("import.review.creating") : t("import.review.create", { count: goalsKept })}
-        </Button>
+        {out ? (
+          <Flex direction="column" gap="2">
+            <Text as="p" variant="sentence" tone="muted">
+              {out}
+            </Text>
+            {createButton}
+          </Flex>
+        ) : (
+          createButton
+        )}
       </ActionBar>
     </Flex>
   );

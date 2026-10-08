@@ -31,6 +31,8 @@ const m0 = monthOf(today);
 const lastMonth = monthOf(dayBefore(m0));
 const horizon = [1, 2, 3, 4, 5, 6].reduce((month) => nextMonth(month), m0);
 const stamp = Date.now();
+const monthDone = roadmap.plan.monthDone.replace(/<\/?fig>/g, "").replace("{done}", "5 h").replace("{amount}", "12 h");
+const escaped = monthDone.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 type Db = import("postgres").Sql;
 
@@ -88,7 +90,7 @@ test.describe("the plan screen at 390 (RoadmapMesCifras, RoadmapMoverFinalFallo)
     const goalId = await seedPlan(db, person.id);
     try {
       await page.goto(`/metas/${goalId}/plan`);
-      const line = page.locator("main *").filter({ hasText: /^\s*5 h hechas de 12 h\s*$/i }).last();
+      const line = page.locator("main *").filter({ hasText: new RegExp(`^\\s*${escaped}\\s*$`, "i") }).last();
       await expect(line).toBeVisible();
       const style = await line.evaluate((el) => {
         const cs = getComputedStyle(el);
@@ -98,7 +100,7 @@ test.describe("the plan screen at 390 (RoadmapMesCifras, RoadmapMoverFinalFallo)
       expect(style.spacing).toMatch(/^(normal|0px)$/);
       expect(style.family).not.toMatch(/mono/i);
       expect(style.size).toBe("13px");
-      expect(style.rendered).toBe("5 h hechas de 12 h");
+      expect(style.rendered).toBe(monthDone);
     } finally {
       await dropGoals(db, person.id, [goalId]);
     }

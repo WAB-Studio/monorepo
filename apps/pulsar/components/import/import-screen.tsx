@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -61,6 +61,12 @@ export function ImportScreen() {
   // stored text shows once hydrated. What the person types wins from then on.
   const stored = useSyncExternalStore(subscribeNothing, () => readSource() ?? "", () => "");
   const [typed, setTyped] = useState<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  // The server's box is live before the scripts land: what it holds at hydration was typed.
+  useLayoutEffect(() => {
+    const early = box.current?.value ?? "";
+    if (early !== "") setTyped(early);
+  }, []);
   const text = typed ?? stored;
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -177,6 +183,7 @@ export function ImportScreen() {
           {placed?.place === "top" ? notice : null}
 
           <TextArea
+            ref={box}
             label={t("import.textLabel")}
             placeholder={t("import.placeholder")}
             rows={failure ? 8 : 10}

@@ -72,7 +72,7 @@ for (const width of [390, 1440]) {
       await expect.soft(title, "a goal whose month closed short draws the card").toHaveCount(1);
       await expect.soft(seen(new RegExp(`^Tu plan de ${metName}`)), "a goal whose month met its room draws none").toHaveCount(0);
       await expect.soft(seen(/cerró con 5 h de 12 h\./)).toHaveCount(1);
-      await expect.soft(seen("Siguiente del plan · 10 h").first(), "the next task reads the part, not the estimate").toBeVisible();
+      await expect.soft(seen("Siguiente del plan · 10 h este mes").first(), "the next task reads the part, labelled").toBeVisible();
       await expect.soft(page.getByRole("link", { name: "Ver el plan" }).locator("visible=true")).toHaveAttribute(
         "href",
         `/metas/${short}/plan`,
