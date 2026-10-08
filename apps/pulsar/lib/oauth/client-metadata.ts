@@ -2,6 +2,7 @@ import { lookup } from "node:dns/promises";
 import { request } from "node:https";
 import { isIP } from "node:net";
 
+import { ipv6Bytes } from "@/lib/net/ipv6";
 import { registrationSchema } from "@/lib/oauth/clients";
 
 const MAX_BYTES = 64 * 1024;
@@ -16,6 +17,8 @@ export type MetadataDeps = {
   timeoutMs?: number;
   // Counts one registration against the caller's address; the default claims the `register` bucket.
   claim?: (headers: CallerHeaders) => Promise<boolean>;
+  // Reads a client already registered under the URL; it spends nothing.
+  lookup?: (url: string) => Promise<MetadataClient | null>;
 };
 
 export type CallerHeaders = { get(name: string): string | null };
@@ -24,6 +27,16 @@ async function claimRegistration(headers: CallerHeaders): Promise<boolean> {
   const { callerAddress, claimCall } = await import("@/lib/oauth/throttle");
 
   return (await claimCall("register", callerAddress({ headers }))).ok;
+}
+
+async function storedClient(url: string): Promise<MetadataClient | null> {
+  const { sql } = await import("drizzle-orm");
+  const { db } = await import("@/db/client");
+  const rows = await db.execute<{ id: string; client_name: string; redirect_uris: string[] }>(sql`
+    select * from goals.oauth_client_by_metadata_url(${url})`);
+  const row = rows[0];
+
+  return row ? { id: row.id, name: row.client_name, redirectUris: row.redirect_uris } : null;
 }
 
 function privateV4(address: string): boolean {
@@ -42,32 +55,13 @@ function privateV4(address: string): boolean {
   );
 }
 
-// The 16 bytes of an IPv6 literal, however it is written: `::`, a dotted v4 tail, a zone id.
-function v6Bytes(address: string): number[] {
-  const text = address.split("%")[0].toLowerCase();
-  const dotted = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(text);
-  let head = text;
-  const tail: number[] = [];
-  if (dotted) {
-    head = `${dotted[1]}0:0`;
-    const octets = dotted[2].split(".").map(Number);
-    tail.push(octets[0] * 256 + octets[1], octets[2] * 256 + octets[3]);
-  }
-  const [left, right] = head.split("::");
-  const groups = (part: string | undefined) => (part ? part.split(":").map((g) => parseInt(g, 16)) : []);
-  const front = groups(left);
-  const back = right === undefined ? [] : groups(right);
-  const words = right === undefined ? front : [...front, ...Array<number>(8 - front.length - back.length).fill(0), ...back];
-  if (dotted) words.splice(6, 2, ...tail);
-  return words.flatMap((word) => [word >> 8, word & 0xff]);
-}
-
 export function privateAddress(address: string): boolean {
   const kind = isIP(address);
   if (kind === 4) return privateV4(address);
   if (kind !== 6) return true;
 
-  const bytes = v6Bytes(address);
+  const bytes = ipv6Bytes(address);
+  if (!bytes) return true;
   const v4 = (at: number) => bytes.slice(at, at + 4).join(".");
   const zeros = (to: number) => bytes.slice(0, to).every((byte) => byte === 0);
 
@@ -159,11 +153,14 @@ function fetchDocument(url: string, address: string, deps: MetadataDeps): Promis
  * buys share the registration limit (RNP-19), counted here so every caller —
  * the token route, the consent act, the consent page — is bound by it. A refused
  * claim reads as an unknown client. `caller` is the request's headers.
+ * A URL already registered is read back without the fetch or the claim, when
+ * `want` is absent or its redirect is among the stored ones.
  */
 export async function clientFromMetadataUrl(
   url: string,
   caller: CallerHeaders,
   deps: MetadataDeps = {},
+  want?: { redirectUri: string },
 ): Promise<MetadataClient | null> {
   let parsed: URL;
   try {
@@ -173,6 +170,9 @@ export async function clientFromMetadataUrl(
   }
   if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) return null;
   if (parsed.pathname === "/" || parsed.href !== url) return null;
+
+  const stored = await (deps.lookup ?? storedClient)(url);
+  if (stored && (!want || stored.redirectUris.includes(want.redirectUri))) return stored;
 
   const host = parsed.hostname.replace(/^\[|\]$/g, "");
   let addresses: string[];

@@ -67,3 +67,18 @@ test("the limits are ten registrations an hour and thirty token requests in five
     token: { cap: 30, windowSeconds: 300 },
   });
 });
+
+test("on Vercel the address is the platform's header, never the client's", () => {
+  const previous = process.env.VERCEL;
+  process.env.VERCEL = "1";
+  try {
+    const request = new Request("http://x.test/", {
+      headers: { "x-forwarded-for": "1.1.1.1", "x-vercel-forwarded-for": "2.2.2.2" },
+    });
+    assert.equal(callerAddress(request), "2.2.2.2");
+    assert.equal(callerAddress(from("1.1.1.1")), "unknown");
+  } finally {
+    if (previous === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = previous;
+  }
+});
