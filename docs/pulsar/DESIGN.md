@@ -1041,3 +1041,11 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
     in lower case.
   - A goal's task with no day is a task of the goal's plan: it never shows on `/sueltas`, never counts in «N sin día»,
     and Hoy never calls it suelto (RP-59).
+
+## Decisions of 2026-10-08, after the pulsar audit
+
+- **The consent screen names where it sends you back** (B2, approved by the user 2026-10-08, boards `PermisoDominio` and
+  `PermisoDominioLocal`). Under the h1, in mono 13 px, ink colour: «al permitir, vuelves a **claude.ai**» — the
+  `redirect_uri`'s host, with its port when it has one (`localhost:33418` for Claude Code), never the path. It sits
+  between the h1 and the lead, before the «may / never» lists and the buttons. Signed out nothing changes:
+  `PermisoSinSesion` names neither client nor domain, since nothing is validated before sign-in.

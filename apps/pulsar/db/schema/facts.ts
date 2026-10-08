@@ -46,10 +46,15 @@ export const facts = goalsSchema.table(
     // row never doubles under two taps and a `quantity` row's "Cambiar"
     // deletes the old one first, so this is never in their way, only in a
     // race's. Partial on `commitment_id is not null`: a one-off's fact keeps
-    // no such limit (RP-19/RP-22 name no such invariant).
+    // no such per-day limit.
     uniqueIndex("facts_commitment_day_unique")
       .on(t.commitmentId, t.day)
       .where(sql`${t.commitmentId} is not null`),
+    // A one-off is done once: a second fact for it is refused whatever the
+    // path (an action, the AI door, a race). A commitment keeps one per day.
+    uniqueIndex("facts_one_off_unique")
+      .on(t.oneOffId)
+      .where(sql`${t.oneOffId} is not null`),
     // A line, not a journal entry.
     check("facts_note_length", sql`length(${t.note}) <= 280`),
     // Exactly one of the two, never both and never neither: a fact satisfies
