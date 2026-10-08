@@ -2893,3 +2893,16 @@ Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, whic
   `Escape` may close only the inner step.
 - Never add a retry or a second `Escape` to buy quiet. Save `private/playwright-results/` first; the CI log is kept at
   `private/ci-431-e2e4.log` in the main checkout.
+
+### `columnas-espacio.spec.ts:26` measured an empty Hoy before it was visible
+
+Measured 2026-10-08 on CI run 37823517494, `[mobile] e2e/columnas-espacio.spec.ts:26` («at 1440 an empty Hoy spaces its heading,
+paragraph and buttons»), failed at `:33`: `expect(rects.length).toBeGreaterThanOrEqual(4)` — `Expected: >= 4`, `Received: 0`. The
+1024 twin of the same spec passed 1.5 s earlier on the same shard.
+
+- Cause: `siblingRects` runs `locator.evaluate` right after `goto`. `evaluate` waits for the node to attach, not to be visible, so
+  it read the children's boxes while they were still zero-sized and the filter on `width > 0` dropped them all.
+- Fix: `await expect(getByText("Todavía no hay nada que anotar.")).toBeVisible()` before measuring; the two other specs of the file
+  that measure `main` right after `goto` wait on `main` being visible. No retry, no sleep, no `waitForTimeout`.
+- Footprint: `private/ci-reds/425/columnas-espacio-footprint.txt` in the main checkout.
+- Any spec that measures with `evaluate` after `goto` takes the same wait first.
