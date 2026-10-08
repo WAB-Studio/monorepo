@@ -155,4 +155,99 @@ test.describe("the create bar says what stays out (RP-37)", () => {
       { width: 1440, height: 900 },
     );
   });
+  test("two out: the line counts them, «Sin 2 cosas», and names neither", async ({ person, browser, baseURL }) => {
+    const text = plan(goal("Con dos fuera", { tasks: [parentWithAmount("Primera"), parentWithAmount("Segunda")] }));
+    await review({ person, browser, baseURL }, text, async (_page, bar) => {
+      await expect(bar).toContainText("Sin 2 cosas que no se pueden crear.");
+      await expect(lineOf(bar)).not.toContainText("Primera");
+    });
+  });
+
+  test("a task refused with two sub-tasks: the line says «y sus 2 sub-tareas»", async ({ person, browser, baseURL }) => {
+    const parent = [`- ${month} · 4 h · ${OUT}`, "  - 1 h · Uno", "  - 1 h · Dos"].join("\n");
+    await review({ person, browser, baseURL }, plan(goal("Con dos hijas", { tasks: [parent] })), async (_page, bar) => {
+      await expect(bar).toContainText(`Sin «${OUT}» y sus 2 sub-tareas: no se puede crear.`);
+    });
+  });
+
+  test("a phase refused alone: the line names the phase, not the goal", async ({ person, browser, baseURL }) => {
+    const text = plan(
+      [
+        "# Meta de la fase",
+        `horizonte: ${plus(200)}`,
+        "medida: horas de estudio · minutos",
+        "",
+        "## Fases",
+        `- ${plus(150)} a ${plus(260)} · Fase larga`,
+        "",
+        "## Meses",
+        `- ${month} · 12 h`,
+      ].join("\n"),
+    );
+    await review({ person, browser, baseURL }, text, async (_page, bar) => {
+      await expect(lineOf(bar)).toHaveText("Sin «Fase larga»: no se puede crear.");
+    });
+  });
+
+  test("a month refused alone: the line names the month, not the goal", async ({ person, browser, baseURL }) => {
+    const text = plan(
+      [
+        "# Meta del mes",
+        `horizonte: ${plus(200)}`,
+        "medida: horas de estudio · minutos",
+        "",
+        "## Meses",
+        `- ${month} · 12 h`,
+        "- 2020-03 · 5 h",
+      ].join("\n"),
+    );
+    await review({ person, browser, baseURL }, text, async (_page, bar) => {
+      await expect(lineOf(bar)).toHaveText("Sin «marzo de 2020»: no se puede crear.");
+    });
+  });
+
+  // The template refuses a quantity on a goal with no measure at its own line, so only
+  // a model's draft, kept in the tab, reaches the review with one.
+  test("a commitment refused alone: the line names the commitment, not the goal", async ({ person, browser, baseURL }) => {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 390, height: 844 } });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas/importar");
+      const stored = {
+        via: "model",
+        source: null,
+        sourceName: null,
+        unmarked: null,
+        draft: {
+          goals: [
+            {
+              name: "Meta del compromiso",
+              horizon: plus(200),
+              measure: null,
+              phases: [],
+              months: [],
+              tasks: [],
+              commitments: [
+                {
+                  name: "Correr lejos",
+                  cadenceKind: "daily",
+                  cadenceWeekdays: null,
+                  cadenceN: null,
+                  satisfaction: "quantity",
+                  targetQuantity: 5,
+                  unit: "km",
+                },
+              ],
+            },
+          ],
+        },
+      };
+      await page.evaluate((value) => sessionStorage.setItem("pulsar.import-draft", JSON.stringify(value)), stored);
+      await page.goto("/metas/importar/revisar");
+      const bar = page.getByRole("button", { name: /^Crear \d+ metas?$/ }).locator("xpath=..");
+      await expect(lineOf(bar)).toHaveText("Sin «Correr lejos»: no se puede crear.");
+    } finally {
+      await context.close();
+    }
+  });
 });
