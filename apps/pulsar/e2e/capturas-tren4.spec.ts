@@ -304,13 +304,14 @@ test.describe("F. a closed month that carried nothing reads «cerrado» alone", 
 
   test("the goal's Meses list", async ({ mine: page }) => {
     await page.goto(`/metas/${goalId}/meses`);
-    await expect(page.getByRole("listitem").first()).toBeVisible();
+    await expect(page.getByRole("main").getByText(`Meta cerrada ${stamp}`).first()).toBeVisible();
     expect(await body(page)).not.toMatch(zero);
   });
 
   test("the Mes tab on the closed month", async ({ mine: page }) => {
     await page.goto(`/mes?mes=${lastMonth.slice(0, 7)}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("main").getByText(`Meta cerrada ${stamp}`).first()).toBeVisible();
     expect(await body(page)).not.toMatch(zero);
   });
 });
