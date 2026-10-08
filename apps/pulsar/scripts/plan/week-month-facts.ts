@@ -133,3 +133,24 @@ test("loadWeek: a «1 al mes» met before the week, in the prior month, asks not
   const week = await loadWeek("2026-02-25");
   assert.deepEqual(askedDays(week, made.commitmentId), [0, 0, 0, 0, 0, 0, 1]);
 });
+
+test("loadWeek: a «4 al mes» with two taps in the month and two in the month before still asks the third week", async () => {
+  const plan = await import("@/app/actions/plan");
+  const made = await plan.addCommitment({
+    goalId,
+    name: "week-month-facts: otro mes",
+    cadenceKind: "times_per_month",
+    cadenceN: 4,
+    satisfaction: "tap",
+  });
+  if (!made.ok) throw new Error(`addCommitment: ${made.error}`);
+  const [owner] = await sql<{ user_id: string }[]>`select user_id from goals.goals where id = ${goalId}`;
+  await sql`update goals.commitments set created_at = now() - interval '200 days' where id = ${made.commitmentId}`;
+  const before = priorMonth(`${thirdWeekDay.slice(0, 7)}-01`);
+  for (const day of [`${thirdWeekDay.slice(0, 7)}-01`, `${thirdWeekDay.slice(0, 7)}-02`, `${before}-10`, `${before}-11`]) {
+    await sql`insert into goals.facts (user_id, goal_id, commitment_id, day)
+              values (${owner.user_id}, ${goalId}, ${made.commitmentId}, ${day}::date)`;
+  }
+  const week = await loadWeek(thirdWeekDay);
+  assert.deepEqual(askedDays(week, made.commitmentId), [1, 1, 1, 1, 1, 1, 1]);
+});

@@ -70,7 +70,7 @@ async function expectRow(page: Page, name: string, done: number) {
   await expect(marks(page, name, "no pedía")).toHaveCount(7 - done);
 }
 
-test("a tap made after the month's quota was met is still drawn «hecho» (phone and 1440)", async ({
+test("the screen draws what the query asks: the tap after the met quota is «hecho», the days it does not ask are «no pedía» (phone and 1440)", async ({
   person,
   browser,
   baseURL,
@@ -88,38 +88,6 @@ test("a tap made after the month's quota was met is still drawn «hecho» (phone
   // Two taps in the first days meet «2 al mes»; the third is this week's.
   // A declared fact is never hidden: it draws «hecho» though that day no longer asks.
   await seedMonthly(db, person.id, goalId, name, 2, [`${month}-01`, `${month}-02`, today]);
-
-  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
-  try {
-    const page = await context.newPage();
-    for (const size of VIEWPORTS) {
-      await page.setViewportSize(size);
-      await page.goto("/semana");
-      await expect(page.locator("main")).toHaveCount(1);
-      await expectRow(page, name, 1);
-    }
-  } finally {
-    await context.close();
-    await db`delete from goals.goals where id = ${goalId}`;
-  }
-});
-
-test("a month not yet met still asks: the tap this week is drawn (phone and 1440)", async ({
-  person,
-  browser,
-  baseURL,
-  db,
-}) => {
-  const today = todayInZone();
-  const monday = weekOf(today)[0];
-  test.skip(
-    monday.slice(0, 7) !== today.slice(0, 7) || dayOfMonth(monday) < 3,
-    "the month's days 1 and 2 must fall before this week's Monday and inside this month; early in the month the calendar has no week to test",
-  );
-  const month = today.slice(0, 7);
-  const name = `Abierto ${Date.now()}`;
-  const goalId = await seedGoal(db, person.id, `Meta mes abierto ${Date.now()}`);
-  await seedMonthly(db, person.id, goalId, name, 4, [`${month}-01`, `${month}-02`, today]);
 
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
