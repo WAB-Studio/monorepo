@@ -156,7 +156,7 @@ function fixture() {
       fresh: await seedPersonal(owner, "fresh", ago(89), ago(200)),
       neverUsed: await seedPersonal(owner, "never used", null, times.createdNever),
       gone: await seedPersonal(owner, "gone", ago(100), ago(200), ago(1)),
-      lapsedConnection: await seedConnection(owner, "lapsed connection", ago(91)),
+      lapsedConnection: await seedConnection(owner, "lapsed connection", ago(90, -1_800_000)),
       liveConnection: await seedConnection(owner, "live connection", ago(89)),
     };
     const list = await session.actAs(asResolved(owner), () => tokens.listAccessTokens());
@@ -184,7 +184,7 @@ test("a personal key never used counts from its creation", async () => {
   assert.equal(token.expiredAt, new Date(times.createdNever.getTime() + 90 * DAY).toISOString());
 });
 
-test("a connection whose last use was 91 days ago has expired, one from 89 days ago has not", async () => {
+test("a connection whose last use was 90 days and half an hour ago has expired, one from 89 days ago has not", async () => {
   assert.notEqual((await read("lapsedConnection")).token.expiredAt, null);
   assert.equal((await read("liveConnection")).token.expiredAt, null);
 });
