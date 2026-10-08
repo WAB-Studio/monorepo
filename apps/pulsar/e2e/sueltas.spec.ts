@@ -62,7 +62,7 @@ test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds
     await expect(page).toHaveURL(/\/sueltas$/);
 
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: new RegExp(`^${plannedName} de `) })).toBeVisible();
+    await expect(page.getByRole("button", { name: new RegExp(`^${plannedName} .*de ${goalName}`) })).toBeVisible();
     await expect(page.getByText(`de ${goalName}`)).toBeVisible();
     await expect(page.getByRole("navigation").getByRole("link", { name: "Hoy" })).toHaveAttribute(
       "aria-current",
@@ -70,7 +70,7 @@ test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds
     );
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
-    await page.getByRole("button", { name: new RegExp(`^${plannedName} de `) }).click();
+    await page.getByRole("button", { name: new RegExp(`^${plannedName} .*de ${goalName}`) }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   } finally {

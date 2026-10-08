@@ -32,9 +32,8 @@ function openGoal(day: string) {
 export async function listDaylessOneOffs(): Promise<DaylessOneOff[]> {
   const rows = await withGoalsDb((tx) =>
     tx.execute<DaylessRow>(sql`
-      select o.id, o.name, o.goal_id, g.name as goal_name, o.note
+      select o.id, o.name, o.goal_id, null::text as goal_name, o.note
         from "goals"."one_offs" o
-        left join "goals"."goals" g on g.id = o.goal_id
         where o.day is null
           and o.planned_month is null and o.parent_id is null
           and not exists (
