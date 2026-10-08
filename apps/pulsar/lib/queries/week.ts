@@ -80,7 +80,9 @@ type EvidenceOutcome = {
  * One statement, four subqueries: every open goal, every commitment not
  * retired before the week's own first day (a commitment retired mid-week
  * must still explain the days it lived through), every phase touching the
- * week, and every fact of the week's seven civil days — a one-off's own fact
+ * week, and every fact from the first of the Monday's month to the week's
+ * Sunday (`loadWeek` narrows what is drawn back to the seven days; the rest
+ * only tells a «N al mes» its month is met) — a one-off's own fact
  * included, unfiltered here the same way `lib/queries/day.ts` leaves it
  * (RP-20): no new round trip, the same `to_jsonb(f)` this file already
  * selected already carries `one_off_id` and `goal_id`, only the mapping step
@@ -143,7 +145,7 @@ async function queryGoalsRow(
          left join "goals"."commitments" c on c.id = f.commitment_id
          left join "goals"."one_offs" o on o.id = f.one_off_id
          left join "goals"."one_offs" p on p.id = o.parent_id
-         where f.day between ${weekStart}::date and ${weekEnd}::date) as facts,
+         where f.day between least(${weekStart}::date, date_trunc('month', ${weekStart}::date)::date) and ${weekEnd}::date) as facts,
       (select coalesce(json_agg(json_build_object('commitment_id', f.commitment_id, 'day', f.day)), '[]'::json)
          from "goals"."facts" f
          where f.commitment_id is not null
@@ -303,12 +305,27 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   // commitment's slot (RP-20's own dot is `oneOffFacts` below, read by
   // module 17's screen, never by `deriveWeek`, which stays exactly as module
   // 4 left it) — the same filter `lib/queries/day.ts` applies.
-  const facts = row.facts
+  const monthFacts = row.facts
     .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);
+  const weekFacts = monthFacts.filter((fact) => fact.day >= weekStart);
   const evidence = toEvidenceByCommitment(row.commitments, evidenceOutcome.bySourceKey);
 
-  const view = deriveWeek({ commitments, phases, facts, evidence, day: anyDayInIt });
+  // What asks comes from the month's facts; what is drawn comes from the
+  // week's own, so a tap made after a month was met stays «hecho» though its
+  // day no longer asks. The week-only derivation asks a superset of the other.
+  const asking = deriveWeek({ commitments, phases, facts: monthFacts, evidence, day: anyDayInIt });
+  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt });
+  const view: WeekView = {
+    ...drawn,
+    days: drawn.days.map((dayView, i) => {
+      const asked = new Set(asking.days[i].slots.map((slot) => slot.commitmentId));
+      return {
+        ...dayView,
+        slots: dayView.slots.filter((slot) => asked.has(slot.commitmentId) || slot.satisfied || slot.partial),
+      };
+    }),
+  };
 
   return {
     view,
@@ -320,7 +337,7 @@ export async function loadWeek(anyDayInIt: string): Promise<{
     // is exactly the row `facts` throws away (RP-19's own shape — "one
     // subject" means never both), read back out here instead.
     oneOffFacts: row.facts
-      .filter((fact) => fact.one_off_id !== null)
+      .filter((fact) => fact.one_off_id !== null && fact.day >= weekStart)
       .map((fact) => ({
         oneOffId: fact.one_off_id as string,
         name: fact.one_off_name ?? "",

@@ -158,7 +158,7 @@ function toReportTask(item: PlanItem): ReportTask {
   };
 }
 
-// The days `loadGoal` would have read: its own opening to its horizon.
+// The days `loadGoal` would have read: its own opening to the day before its horizon.
 function withinGoal(
   bySourceKey: Record<string, EvidenceDay[]>,
   openedOn: string,
@@ -166,7 +166,7 @@ function withinGoal(
 ): Record<string, EvidenceDay[]> {
   const bounded: Record<string, EvidenceDay[]> = {};
   for (const [key, days] of Object.entries(bySourceKey)) {
-    bounded[key] = days.filter((day) => day.day >= openedOn && day.day <= horizon);
+    bounded[key] = days.filter((day) => day.day >= openedOn && day.day < horizon);
   }
   return bounded;
 }
