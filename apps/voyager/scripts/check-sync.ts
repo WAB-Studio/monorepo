@@ -4,17 +4,18 @@
  * migration (AGENTS.md, "Verification"), and the real statements of
  * `lib/sync/upload.ts` and `lib/sync/devices.ts` through them.
  *
- * A single `sql.begin` holds every statement below and always throws at the
- * end to force a ROLLBACK. The two subjects are `randomUUID()`, their
- * `auth.users` rows are inserted inside that same transaction, and nothing
- * survives it: `npm run harness:census` does not move and
- * `@repo/harness-registry` is never needed.
+ * S1-S21 run in transactions that always throw at the end to force a
+ * ROLLBACK: their subjects' `auth.users` rows are inserted inside them and
+ * nothing survives. S22 needs real commits, so its one reader is registered
+ * through `@repo/harness-registry` in the same transaction that creates it,
+ * and deleted at the end; a run killed in between leaves a row that
+ * `harness:census` counts and `harness:reap` prunes.
  */
 import { randomUUID } from "node:crypto";
 
 import Module from "node:module";
 
-import { assertSuiteDatabase } from "@repo/harness-registry";
+import { assertSuiteDatabase, closeRun, openRun } from "@repo/harness-registry";
 import { settleSessionSql } from "@repo/supabase-auth/settle";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -356,8 +357,18 @@ async function main() {
         });
       assert("S15", forgedDeviceCode === "42501", `sqlstate = ${forgedDeviceCode ?? "none"}`);
 
-      const touched = await tx`update reading.devices set last_seen_at = now() where user_id = ${owner}`;
-      assert("S16", touched.count === 0, `rows updated = ${touched.count}`);
+      // No `where`, no `returning`: a column reference would bring the SELECT
+      // policy in and hide what the UPDATE policy's own `using` lets through.
+      let touched: number | undefined;
+      let touchCode: string | undefined;
+      await tx
+        .savepoint(async (sp) => {
+          touched = (await sp`update reading.devices set last_seen_at = now()`).count;
+        })
+        .catch((error: unknown) => {
+          touchCode = pgCode(error);
+        });
+      assert("S16", touchCode === undefined && touched === 0, `rows updated = ${touched ?? "n/a"}, sqlstate = ${touchCode ?? "none"}`);
 
       await enterUserContext(tx, owner);
       const reader = readerTx(tx);
@@ -461,10 +472,16 @@ async function main() {
   // commits, so its reader is a committed row this block deletes at the end
   // (the cascade takes the devices and lookups with it).
   const racer = randomUUID();
+  const racerEmail = `harness-reader-${racer}@example.invalid`;
   const raceCap = 2;
   const race = postgres(process.env.DATABASE_URL!, { prepare: false, max: 3, connection: { search_path: "reading, public" } });
   try {
-    await race`insert into auth.users (id) values (${racer})`;
+    const run = await openRun("rls", race);
+    await race.begin(async (tx) => {
+      await tx`insert into auth.users (id, email) values (${racer}, ${racerEmail})`;
+      await tx`insert into harness.identities (user_id, run_id, email, disposition)
+        values (${racer}, ${run}, ${racerEmail}, 'ephemeral')`;
+    });
     const firstDevice = randomUUID();
     const secondDevice = randomUUID();
 
@@ -498,7 +515,12 @@ async function main() {
     let waited = false;
     for (let attempt = 0; attempt < 100 && !waited && !secondDone; attempt += 1) {
       const [{ count }] = await race<{ count: string }[]>`
-        select count(*)::text as count from pg_locks where locktype = 'advisory' and not granted`;
+        with quota as (select hashtextextended(${racer}::text || ':sync-quota', 0) as key)
+        select count(*)::text as count from pg_locks, quota
+        where locktype = 'advisory' and not granted and objsubid = 1
+          and database = (select oid from pg_database where datname = current_database())
+          and classid::bigint = (quota.key >> 32) & 4294967295
+          and objid::bigint = quota.key & 4294967295`;
       waited = count !== "0";
       if (!waited) await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -514,7 +536,9 @@ async function main() {
       `first -> ${firstStatus}, second waited on the lock = ${waited}, second -> ${secondUpload.status}, rows ${raced} for a cap of ${raceCap}`,
     );
   } finally {
+    await race`delete from harness.identities where user_id = ${racer}`;
     await race`delete from auth.users where id = ${racer}`;
+    await closeRun(race);
     await race.end();
   }
 

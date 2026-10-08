@@ -10,6 +10,7 @@ import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 import { verifyMagicLink } from "../lib/auth/verify-magic-link";
 import { DATABASE_VERSION } from "../lib/log/record";
+import { SYNC_DAILY_ROW_CAP } from "../lib/sync/protocol";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
 
@@ -735,4 +736,82 @@ test("RL-49: verifyMagicLink calls verifyOtp exactly once and names the reason, 
   }, undefined);
   expect(successCalls, "verifyOtp calls for a successful verification").toBe(1);
   expect(success).toEqual({ ok: true, user: { id: "reader-1" } });
+});
+
+function oneRowRound(deviceId: string) {
+  return {
+    deviceId,
+    since: null,
+    rows: [
+      {
+        deviceId,
+        localId: 1,
+        at: Date.now(),
+        text: "status-guard",
+        normalised: "status-guard",
+        kind: "word",
+        outcome: "miss",
+        headword: null,
+        rule: null,
+        senses: 0,
+        translation: null,
+        dictionaryReady: true,
+        origin: null,
+        recordSchema: DATABASE_VERSION,
+      },
+    ],
+  };
+}
+
+test("RL-24: a round from a retired device answers 409 retired and writes nothing", async ({ page }) => {
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const runId = await openRun("e2e", sql);
+  const { id: readerId, hash } = await mintReaderIdentity(sql, runId);
+  const retired = randomUUID();
+
+  try {
+    await sql`insert into reading.devices (user_id, device_id, label, retired_at)
+      values (${readerId}, ${retired}, 'unknown:unknown', now())`;
+    await signInAs(page, hash);
+
+    const response = await page.request.post("/api/log/sync", { data: oneRowRound(retired) });
+    expect(response.status()).toBe(409);
+    expect(await response.json()).toEqual({ error: "retired" });
+
+    const [{ count }] = await sql<{ count: string }[]>`
+      select count(*)::text as count from reading.lookups where user_id = ${readerId}`;
+    expect(count).toBe("0");
+  } finally {
+    await dropReaderIdentity(sql, readerId);
+    await closeRun(sql);
+    await sql.end();
+  }
+});
+
+test("RL-22: a round past the reader's daily row cap answers 429 quota and writes nothing", async ({ page }) => {
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const runId = await openRun("e2e", sql);
+  const { id: readerId, hash } = await mintReaderIdentity(sql, runId);
+  const seeded = randomUUID();
+
+  try {
+    // Today's full cap, already received from another of the reader's devices.
+    await sql`insert into reading.lookups
+      (user_id, device_id, local_id, at, text, normalised, kind, outcome, senses, dictionary_ready, record_schema)
+      select ${readerId}::uuid, ${seeded}::uuid, n, now(), 'x', 'x', 'word', 'exact', 0, true, ${DATABASE_VERSION}::smallint
+      from generate_series(1, ${SYNC_DAILY_ROW_CAP}::int) as n`;
+    await signInAs(page, hash);
+
+    const response = await page.request.post("/api/log/sync", { data: oneRowRound(randomUUID()) });
+    expect(response.status()).toBe(429);
+    expect(await response.json()).toEqual({ error: "quota" });
+
+    const [{ count }] = await sql<{ count: string }[]>`
+      select count(*)::text as count from reading.lookups where user_id = ${readerId}`;
+    expect(count).toBe(String(SYNC_DAILY_ROW_CAP));
+  } finally {
+    await dropReaderIdentity(sql, readerId);
+    await closeRun(sql);
+    await sql.end();
+  }
 });

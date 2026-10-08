@@ -99,7 +99,7 @@ async function checkRole(role: "anon" | "authenticated"): Promise<void> {
     });
 }
 
-// Module 502: a device's retirement is stored and final. Unlike the blocks
+// A device's retirement is stored and final. Unlike the blocks
 // above these need a real policy subject, so two `auth.users` rows are
 // inserted inside the transaction and the forced rollback takes them back.
 async function enterUserContext(tx: postgres.TransactionSql, subject: string): Promise<void> {
