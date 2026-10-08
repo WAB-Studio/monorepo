@@ -2504,7 +2504,7 @@ async function checkAuditoria0015(): Promise<void> {
       for (const [code, back] of [["P215", 2], ["P216", 3]] as const) {
         const written = await attempt(
           tx,
-          (sp) => sp`insert into goals.facts (user_id, commitment_id, day) values (${subject}, ${commitment.id}, current_date - ${back})`,
+          (sp) => sp`insert into goals.facts (user_id, commitment_id, day) values (${subject}, ${commitment.id}, current_date - ${back}::int)`,
         );
         assert(code, written.code === undefined, `commitment fact ${back - 1} (one_off_id null), sqlstate = ${written.code ?? "none"}`);
       }
