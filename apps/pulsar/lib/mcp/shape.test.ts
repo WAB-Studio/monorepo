@@ -44,7 +44,7 @@ function goalView(unit: string | null): GoalView {
     measureUnit: unit,
     archivedAt: null,
     measureTotal: 570,
-    phases: [{ id: ID(11), name: "Arranque", startsOn: "2026-08-17", endsOn: null }],
+    phases: [{ id: ID(11), name: "Arranque", startsOn: "2026-08-17", endsOn: "2026-09-27" }],
     commitments: [
       {
         id: ID(12),
@@ -283,7 +283,7 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
         { commitmentId: ID(12), satisfied: true, satisfiedBy: "declared", labelKey: null, quantity: 45, partial: false },
         { commitmentId: ID(14), satisfied: false, satisfiedBy: null, labelKey: null, quantity: null, partial: false },
       ],
-      phase: { id: ID(11), name: "Arranque", startsOn: "2026-08-17", endsOn: null },
+      phase: { id: ID(11), name: "Arranque", startsOn: "2026-08-17", endsOn: "2026-09-27" },
     },
     evidence: "unreadable",
     goals: [

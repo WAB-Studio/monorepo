@@ -134,12 +134,12 @@ test("deriveDay: a commitment that does not ask today has no slot at all", () =>
 
 // --- phaseOn ---
 
-function phase(id: string, startsOn: string, endsOn: string | null): Phase {
+function phase(id: string, startsOn: string, endsOn: string): Phase {
   return { id, name: id, startsOn, endsOn };
 }
 
 test("phaseOn: the phase whose span holds the day", () => {
-  const phases = [phase("unlock", "2026-01-01", "2026-01-28"), phase("precision", "2026-01-29", null)];
+  const phases = [phase("unlock", "2026-01-01", "2026-01-28"), phase("precision", "2026-01-29", "2026-02-28")];
   assert.equal(phaseOn(phases, "2026-01-15")?.id, "unlock");
   assert.equal(phaseOn(phases, "2026-02-01")?.id, "precision");
 });

@@ -60,7 +60,8 @@ type Entry = {
 
 type Placed = { month: string; part: number; endsOn: string | null };
 
-function doneDayOf(task: PlanTask, children: PlanTask[]): string | null {
+// The last day of a task's children, once all are done; a leaf's own.
+export function doneDayOf(task: PlanTask, children: PlanTask[]): string | null {
   if (children.length === 0) return task.doneOn;
   let last: string | null = null;
   for (const child of children) {

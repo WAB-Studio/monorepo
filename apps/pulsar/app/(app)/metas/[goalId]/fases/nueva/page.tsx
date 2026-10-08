@@ -43,13 +43,7 @@ export default async function NewPhasePage({
   const existingPhases = goal.phases.map((phase) => ({
     name: phase.name,
     startsOn: phase.startsOn,
-    // `phases.ends_on` is `NOT NULL` (db/schema/phases.ts): every phase
-    // this app has ever written already closes. `Phase`'s own type
-    // allows an open-ended span for a future cadence this engine does
-    // not yet write; a far sentinel keeps that case refusing correctly
-    // — an open phase overlapping anything after its own start — rather
-    // than collapsing it to a single day.
-    endsOn: phase.endsOn ?? "9999-12-31",
+    endsOn: phase.endsOn,
   }));
   const span = defaultPhaseWeeks({ openedOn, horizon: goal.horizon, phases: existingPhases });
 
