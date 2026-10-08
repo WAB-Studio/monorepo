@@ -49,6 +49,16 @@ export async function claimCall(
   return wait === 0 ? { ok: true } : { ok: false, retryAfter: wait };
 }
 
+// A registered client by its metadata URL, read before any person exists and without spending a slot.
+export async function clientByMetadataUrl(
+  url: string,
+): Promise<{ id: string; name: string; redirectUris: string[] } | null> {
+  const rows = await db.execute<{ id: string; client_name: string; redirect_uris: string[] }>(sql`
+    select * from goals.oauth_client_by_metadata_url(${url})`);
+
+  return rows[0] ? { id: rows[0].id, name: rows[0].client_name, redirectUris: rows[0].redirect_uris } : null;
+}
+
 export function tooMany(retryAfter: number, cors: Record<string, string>): Response {
   return new Response(JSON.stringify({ error: "too_many_requests" }), {
     status: 429,

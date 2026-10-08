@@ -30,13 +30,9 @@ async function claimRegistration(headers: CallerHeaders): Promise<boolean> {
 }
 
 async function storedClient(url: string): Promise<MetadataClient | null> {
-  const { sql } = await import("drizzle-orm");
-  const { db } = await import("@/db/client");
-  const rows = await db.execute<{ id: string; client_name: string; redirect_uris: string[] }>(sql`
-    select * from goals.oauth_client_by_metadata_url(${url})`);
-  const row = rows[0];
+  const { clientByMetadataUrl } = await import("@/lib/oauth/throttle");
 
-  return row ? { id: row.id, name: row.client_name, redirectUris: row.redirect_uris } : null;
+  return clientByMetadataUrl(url);
 }
 
 function privateV4(address: string): boolean {
