@@ -70,7 +70,7 @@ async function expectRow(page: Page, name: string, done: number) {
   await expect(marks(page, name, "no pedía")).toHaveCount(7 - done);
 }
 
-test("a month already met asks nothing on this week's days: a tap beyond the quota draws no mark (phone and 1440)", async ({
+test("a tap made after the month's quota was met is still drawn «hecho» (phone and 1440)", async ({
   person,
   browser,
   baseURL,
@@ -86,6 +86,7 @@ test("a month already met asks nothing on this week's days: a tap beyond the quo
   const name = `Cumplido ${Date.now()}`;
   const goalId = await seedGoal(db, person.id, `Meta mes cumplido ${Date.now()}`);
   // Two taps in the first days meet «2 al mes»; the third is this week's.
+  // A declared fact is never hidden: it draws «hecho» though that day no longer asks.
   await seedMonthly(db, person.id, goalId, name, 2, [`${month}-01`, `${month}-02`, today]);
 
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
@@ -95,7 +96,7 @@ test("a month already met asks nothing on this week's days: a tap beyond the quo
       await page.setViewportSize(size);
       await page.goto("/semana");
       await expect(page.locator("main")).toHaveCount(1);
-      await expectRow(page, name, 0);
+      await expectRow(page, name, 1);
     }
   } finally {
     await context.close();
@@ -167,7 +168,7 @@ test("the week that holds the 1st counts each day against its own month (phone a
   }
 });
 
-test("a past week reads its own month: the month met in its first week asks nothing in the third (phone and 1440)", async ({
+test("a past week keeps drawing a tap made after its month's quota was met (phone and 1440)", async ({
   person,
   browser,
   baseURL,
@@ -186,7 +187,7 @@ test("a past week reads its own month: the month met in its first week asks noth
       await page.setViewportSize(size);
       await page.goto(`/semana?semana=${thirdWeek[0]}`);
       await expect(page.locator("main")).toHaveCount(1);
-      await expectRow(page, name, 0);
+      await expectRow(page, name, 1);
     }
   } finally {
     await context.close();

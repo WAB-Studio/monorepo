@@ -1,0 +1,116 @@
+// `loadWeek` feeds `deriveWeek` the facts a «N al mes» needs to know its month
+// is met (RP-12): from the 1st, not from the week's Monday. Driven on a past
+// month so the verdict does not depend on the day the suite runs.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import Module from "node:module";
+import { resolve } from "node:path";
+import { after, before, test } from "node:test";
+
+import postgres from "postgres";
+
+function laneNumber(): number {
+  const raw = process.env.HARNESS_LANE?.trim();
+  if (!raw) return 1;
+  if (!/^[1-9][0-9]*$/.test(raw)) {
+    throw new Error(`HARNESS_LANE must be a positive integer, not "${raw}"`);
+  }
+  return Number(raw);
+}
+
+type StoredCookie = { name: string; value: string };
+
+function loadCookies(): StoredCookie[] {
+  const file = resolve(process.cwd(), `private/session-${laneNumber()}.json`);
+  let state: { cookies: StoredCookie[] };
+  try {
+    state = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    throw new Error(`no session at ${file} — run harness:mint-session first`);
+  }
+  if (state.cookies.length === 0) throw new Error(`${file} carries no cookie`);
+  return state.cookies.map(({ name, value }) => ({ name, value }));
+}
+
+function installStubs(cookies: StoredCookie[]): void {
+  const untyped = Module as unknown as {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+  };
+  const originalLoad = untyped._load;
+  untyped._load = (request, parent, isMain) => {
+    if (request === "server-only") return {};
+    if (request === "next/headers") {
+      return { cookies: async () => ({ getAll: () => cookies, set() {} }) };
+    }
+    if (request === "next/cache") return { revalidatePath() {} };
+    return originalLoad(request, parent, isMain);
+  };
+}
+
+function priorMonth(day: string): string {
+  const index = Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 2;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
+const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+
+let goalId: string;
+let metId: string;
+let openId: string;
+let thirdWeekDay: string;
+let loadWeek: typeof import("@/lib/queries/week").loadWeek;
+
+before(async () => {
+  installStubs(loadCookies());
+  const plan = await import("@/app/actions/plan");
+  ({ loadWeek } = await import("@/lib/queries/week"));
+  const { todayInZone } = await import("@/lib/zone");
+  const month = priorMonth(todayInZone());
+  thirdWeekDay = `${month}-15`;
+
+  const horizon = `${Number(todayInZone().slice(0, 4)) + 1}-12-31`;
+  const created = await plan.createGoal({ name: "week-month-facts.ts probe", horizon });
+  if (!created.ok) throw new Error(`createGoal: ${created.error}`);
+  goalId = created.goalId;
+  async function monthly(name: string, count: number): Promise<string> {
+    const made = await plan.addCommitment({
+      goalId,
+      name,
+      cadenceKind: "times_per_month",
+      cadenceN: count,
+      satisfaction: "tap",
+    });
+    if (!made.ok) throw new Error(`addCommitment: ${made.error}`);
+    return made.commitmentId;
+  }
+  metId = await monthly("week-month-facts: cumplido", 2);
+  openId = await monthly("week-month-facts: abierto", 3);
+  const [owner] = await sql<{ user_id: string }[]>`select user_id from goals.goals where id = ${goalId}`;
+  await sql`update goals.goals set created_at = now() - interval '90 days' where id = ${goalId}`;
+  await sql`update goals.commitments set created_at = now() - interval '90 days' where goal_id = ${goalId}`;
+  for (const id of [metId, openId]) {
+    for (const day of [`${month}-01`, `${month}-02`]) {
+      await sql`insert into goals.facts (user_id, goal_id, commitment_id, day)
+                values (${owner.user_id}, ${goalId}, ${id}, ${day}::date)`;
+    }
+  }
+});
+
+after(async () => {
+  if (goalId) await sql`delete from goals.goals where id = ${goalId}`;
+  await sql.end();
+});
+
+function askedDays(week: Awaited<ReturnType<typeof loadWeek>>, id: string): number[] {
+  return week.view.days.map((day) => day.slots.filter((slot) => slot.commitmentId === id).length);
+}
+
+test("loadWeek: a «2 al mes» met on the 1st and 2nd asks nothing in the third week", async () => {
+  const week = await loadWeek(thirdWeekDay);
+  assert.deepEqual(askedDays(week, metId), [0, 0, 0, 0, 0, 0, 0]);
+});
+
+test("loadWeek: a «3 al mes» with two taps still asks every day of the third week", async () => {
+  const week = await loadWeek(thirdWeekDay);
+  assert.deepEqual(askedDays(week, openId), [1, 1, 1, 1, 1, 1, 1]);
+});
