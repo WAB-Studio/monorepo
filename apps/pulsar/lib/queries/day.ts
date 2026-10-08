@@ -299,10 +299,7 @@ async function queryGoalsRow(
            and not exists (
              select 1 from "goals"."facts" f where f.one_off_id = o.id
            )
-           and (o.goal_id is null or exists (
-             select 1 from "goals"."goals" g
-             where g.id = o.goal_id and ${openGoal("g", day)}
-           ))) as dayless_count,
+           and o.goal_id is null) as dayless_count,
       (select count(*)::int
          from "goals"."one_offs" o
          where o.day > ${day}::date
