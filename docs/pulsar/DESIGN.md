@@ -1036,6 +1036,8 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
     the current month «5 h de 12 h en tareas hechas»; a later month keeps «12 h planeadas de 12 h».
   - `HoyTareaDeMeta` (408): the field at a goal's foot is labelled «Una tarea de {goal}»; on «sin día» it answers
     «Anotada en el plan de {goal}.» with «ver el plan»; an empty name answers «Escribe qué hay que hacer.». The goalless
-    field keeps «Algo suelto».
+    field keeps «Algo suelto». Boards `HoyTareaDeMeta`, `HoyTareaDeMetaAnotada`, `HoyTareaDeMetaVacia` drawn 2026-10-07 and
+    approved by the user that day: the empty field's placeholder reads «Una tarea de {goal}…», the link «ver el plan»
+    in lower case.
   - A goal's task with no day is a task of the goal's plan: it never shows on `/sueltas`, never counts in «N sin día»,
     and Hoy never calls it suelto (RP-59).
