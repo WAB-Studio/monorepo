@@ -42,15 +42,14 @@ test("planUploadRound: a surrogate pair on the cut is dropped whole", () => {
   assert.equal(rows[0].text, "a".repeat(499));
 });
 
-test("planUploadRound: foreign rows are skipped and through is the last id scanned", () => {
-  const { rows, through } = planUploadRound(
+test("planUploadRound: foreign rows are skipped", () => {
+  const { rows } = planUploadRound(
     [row(1), row(2, { device: "other", deviceSeq: 9 }), row(3, { device: "other", deviceSeq: 10 })],
     DEVICE,
   );
   assert.deepEqual(rows.map((r) => r.localId), [1]);
-  assert.equal(through, 3);
 });
 
-test("planUploadRound: an empty page has no through", () => {
-  assert.deepEqual(planUploadRound([], DEVICE), { rows: [], through: null });
+test("planUploadRound: an empty page has no rows", () => {
+  assert.deepEqual(planUploadRound([], DEVICE), { rows: [] });
 });

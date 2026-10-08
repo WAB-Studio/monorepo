@@ -31,15 +31,13 @@ function toSyncRow(row: LookupRecord, deviceId: string): SyncRow {
 }
 
 /**
- * One upload page: the local rows, cut to what the wire admits, and the `id`
- * of the last row scanned, foreign or not.
+ * One upload page: the local rows, cut to what the wire admits.
  */
 export function planUploadRound(
   scanned: LookupRecord[],
   deviceId: string,
-): { rows: SyncRow[]; through: number | null } {
+): { rows: SyncRow[] } {
   return {
     rows: scanned.filter((row) => row.device == null).map((row) => toSyncRow(row, deviceId)),
-    through: scanned.length > 0 ? scanned[scanned.length - 1].id! : null,
   };
 }

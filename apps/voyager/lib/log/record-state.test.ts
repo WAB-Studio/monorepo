@@ -7,8 +7,12 @@ test("writeSyncState: when the stored row cannot be read, nothing is put", async
   let puts = 0;
   const database = {
     onclose: null,
-    transaction: () => ({
-      objectStore: () => ({
+    transaction: () => {
+      const transaction: { oncomplete: null | (() => void); onerror: null; onabort: null; objectStore: () => unknown } = {
+        oncomplete: null,
+        onerror: null,
+        onabort: null,
+        objectStore: () => ({
         get: () => {
           const request: { onsuccess: null | (() => void); onerror: null | (() => void); error: Error; result?: unknown } = {
             onsuccess: null,
@@ -20,10 +24,12 @@ test("writeSyncState: when the stored row cannot be read, nothing is put", async
         },
         put: () => {
           puts += 1;
+          queueMicrotask(() => transaction.oncomplete?.());
         },
       }),
-      oncomplete: null,
-    }),
+      };
+      return transaction;
+    },
   };
   (globalThis as { indexedDB?: unknown }).indexedDB = {
     open: () => {
