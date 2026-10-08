@@ -287,6 +287,8 @@ test("RL-24: the copy fires on hide, never on a keystroke, and the request lands
       pulledThroughCursor: null,
       lastSyncedAt: null,
       enabled: true,
+      readerId: null,
+      retired: false,
     },
     lookups: [
       {
@@ -397,6 +399,8 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
         pulledThroughCursor: null,
         lastSyncedAt: null,
         enabled: true,
+        readerId: null,
+        retired: false,
       },
       lookups: Array.from({ length: 3 }, (_, index) => ({
         schema: 2,
