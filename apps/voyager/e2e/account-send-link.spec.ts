@@ -28,11 +28,66 @@ async function mockSendSignInLinkResult(page: Page, result: { ok: true } | { ok:
   });
 }
 
+// THE RULE: no test in this file may run the real `sendSignInLink`. The guard
+// in `app/actions/account.ts` fails open on a DNS error, so a send that
+// reaches it on a machine without DNS mails a real address and mints an
+// `auth.users` row. Every action POST goes through the route below unless a
+// test installed its own (the latest-registered route wins), and one that
+// slips through is aborted before it leaves the browser and fails the test.
+const RULE_MESSAGE =
+  "sendSignInLink POST left the browser with no simulated answer: account-send-link.spec.ts never runs the real action";
+
+let unsimulatedPosts: string[] = [];
+let realActionEmail: string | null = null;
+
+test.beforeEach(async ({ page }) => {
+  unsimulatedPosts = [];
+  realActionEmail = null;
+  await page.route("**/cuenta", async (route) => {
+    const request = route.request();
+    if (request.method() !== "POST" || !request.headers()["next-action"]) {
+      await route.continue();
+      return;
+    }
+    // The one exception: an address that zod rejects before any DNS or
+    // Supabase call, named by the test through `allowRealActionFor`.
+    if (realActionEmail !== null && (request.postData() ?? "").includes(realActionEmail)) {
+      await route.continue();
+      return;
+    }
+    unsimulatedPosts.push(request.url());
+    await route.abort();
+  });
+});
+
+test.afterEach(() => {
+  expect(unsimulatedPosts, RULE_MESSAGE).toEqual([]);
+});
+
+// For a value `sendSignInLink`'s zod schema refuses outright: the action
+// answers `emailInvalid` before it resolves DNS or calls Supabase.
+function allowRealActionFor(invalidEmail: string): void {
+  expect(invalidEmail.includes("@"), "only an address zod rejects may reach the real action").toBe(false);
+  realActionEmail = invalidEmail;
+}
+
 async function submit(page: Page, email: string): Promise<void> {
   await page.goto("/cuenta");
   await page.getByRole("textbox", { name: messages.account.emailLabel }).fill(email);
   await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
 }
+
+// Fails by design (`test.fail`): it submits with no simulated answer and the
+// guard must abort the POST and fail the test. If the guard stops biting this
+// test goes green-by-failure red. The address carries no `@`, so even without
+// the guard the real action refuses it before DNS or Supabase.
+test("the guard fails a test that lets the action POST out unsimulated", async ({ page }) => {
+  test.fail();
+  await submit(page, "sentinel-no-at-sign");
+
+  await expect.poll(() => unsimulatedPosts.length).toBeGreaterThan(0);
+  expect(unsimulatedPosts, RULE_MESSAGE).toEqual([]);
+});
 
 test("a 429 asking for the link says to wait, not the generic failure", async ({ page }) => {
   await mockSendSignInLinkResult(page, { ok: false, error: "rateLimited" });
@@ -51,8 +106,9 @@ test("a non-429 failure still says the generic 'could not send', not the rate-li
 });
 
 test("an invalid email keeps its own copy, no mock involved", async ({ page }) => {
-  // No route mock here: `sendSignInLink`'s zod check rejects before any
-  // Supabase call, so this exercises the real action.
+  // `sendSignInLink`'s zod check rejects before any DNS or Supabase call, so
+  // this is the one test that exercises the real action.
+  allowRealActionFor("not-an-email");
   await submit(page, "not-an-email");
 
   await expect(page.getByText(messages.account.errors.emailInvalid)).toBeVisible();
@@ -151,34 +207,30 @@ test("on a real connection the happy path is unchanged: no wait for the offline 
   await expect(page.getByText(messages.account.sent)).toBeVisible({ timeout: 2_000 });
 });
 
-// From here down: `example.com` (RFC 7505 §6 gives it as the null-MX
-// example, and a live lookup confirms it: `[{"exchange":"","priority":0}]`)
-// and a domain guaranteed never to exist. No `page.route` mock on either —
-// the real action has to reject them itself, before it ever reaches
-// Supabase. `sendFailed`/`rateLimited` only come back from a Supabase error,
-// so seeing neither, alongside the new copy, is the proof the call never
-// went out — the only branch that returns `domainUndeliverable` is the one
-// before `signInWithOtp`.
+// The dead-domain screen is driven with the action's answer simulated: the
+// real action would resolve DNS and, where DNS fails, send for real. The
+// guard itself is proved by calling `isDomainDeliverable` directly, below.
 //
-// NEVER disable that guard while these two run. They submit the real form to
-// the real Supabase, and the guard is the only thing standing between them
-// and a live send: it mints an `auth.users` row and mails the user's own
-// Gmail, which bounces back to their inbox. It happened on 2026-09-10 —
-// these exact two addresses, mutated to prove the guard bites. Prove it by
-// calling `isDomainDeliverable` directly, the way the tests below already do.
-test("a domain with a null MX (RFC 7505) is rejected on-screen, never reaching Supabase", async ({ page }) => {
-  await submit(page, "lector.prueba@example.com");
+// NEVER disable that guard while any test here submits the form. It is the
+// only thing between a send and a live Supabase: it mints an `auth.users` row
+// and mails the user's own Gmail, which bounces back to their inbox. It
+// happened on 2026-09-10.
+test("a dead-domain answer paints its own copy, and neither of the other two", async ({ page }) => {
+  await mockSendSignInLinkResult(page, { ok: false, error: "domainUndeliverable" });
+  await submit(page, "reader@example.com");
 
   await expect(page.getByText(messages.account.errors.domainUndeliverable)).toBeVisible();
   await expect(page.getByText(messages.account.errors.sendFailed)).toHaveCount(0);
   await expect(page.getByText(messages.account.errors.rateLimited)).toHaveCount(0);
 });
 
-test("a domain with no DNS records at all is rejected the same way", async ({ page }) => {
-  await submit(page, "reader@asdkjhqwe-no-existe-1234.com");
+test("a domain with a null MX (RFC 7505) is not deliverable", async () => {
+  // `example.com`: RFC 7505 §6 gives it as the null-MX example.
+  await expect(isDomainDeliverable("example.com")).resolves.toBe(false);
+});
 
-  await expect(page.getByText(messages.account.errors.domainUndeliverable)).toBeVisible();
-  await expect(page.getByText(messages.account.errors.sendFailed)).toHaveCount(0);
+test("a domain with no DNS records at all is not deliverable", async () => {
+  await expect(isDomainDeliverable("asdkjhqwe-no-existe-1234.com")).resolves.toBe(false);
 });
 
 // The acceptance path is proved against `isDomainDeliverable` directly, not
@@ -195,7 +247,7 @@ test("an ordinary domain with a real MX is deliverable", async () => {
   await expect(isDomainDeliverable("gmail.com")).resolves.toBe(true);
 });
 
-test("a resolver error that is not 'no such record' fails open", async () => {
+test("a resolver error that is not 'no such record' fails open (today's behaviour, not a promise)", async () => {
   const brokenResolvers = {
     resolveMx: () => Promise.reject(Object.assign(new Error("queryMx ESERVFAIL"), { code: "ESERVFAIL" })),
     resolve4: () => Promise.reject(Object.assign(new Error("queryA ESERVFAIL"), { code: "ESERVFAIL" })),
