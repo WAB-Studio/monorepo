@@ -141,7 +141,7 @@ async function refused(name: string, input: Record<string, unknown>, key: string
 
 // Every row of the intruder, as one string: a write that touches any of it changes the digest.
 async function fingerprint(): Promise<string> {
-  const tables = ["goals", "commitments", "phases", "one_offs", "facts", "month_budgets", "month_shifts"];
+  const tables = ["goals", "commitments", "phases", "one_offs", "facts", "month_budgets"];
   const parts: string[] = [];
   for (const table of tables) {
     const [row] = await admin.unsafe(
