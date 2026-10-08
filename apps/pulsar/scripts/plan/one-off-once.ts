@@ -83,6 +83,8 @@ test("a second mark of a done one-off answers the fact it has and writes nothing
   assert.equal(await factsOf(oneOffId), 1);
 });
 
+// With migration 0015 the «lock removed» and «prior read removed» mutants are equivalent: the unique index,
+// `on conflict do nothing` and the re-read by `one_off_id` leave one fact either way.
 test("two marks at once leave one fact and both answer it", async () => {
   const oneOffId = await freshLoose();
   const [a, b] = await Promise.all([
