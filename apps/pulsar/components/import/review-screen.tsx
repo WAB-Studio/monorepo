@@ -229,7 +229,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         link: (chunks) => <TextLink href="#blocked">{chunks}</TextLink>,
       });
     }
-    const [, g, group, index, , child] = listed[0].path.split(".");
+    const [, g, group, index] = listed[0].path.split(".");
     const goal = work!.goals[Number(g)];
     let name = goal.name;
     let subTasks = 0;
@@ -238,8 +238,8 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     else if (group === "commitments") name = goal.commitments[Number(index)].name;
     else if (group === "tasks") {
       const task = goal.tasks[Number(index)];
-      name = child === undefined ? task.name : task.children[Number(child)].name;
-      if (child === undefined) subTasks = task.children.length;
+      name = task.name;
+      subTasks = task.children.length;
     }
     return t("import.review.out.one", { name, subTasks });
   }
