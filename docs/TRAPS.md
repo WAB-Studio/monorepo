@@ -2881,3 +2881,15 @@ respondió 404 en `/metas/<id>/fases/nueva` y `/metas/<id>/compromisos/nuevo` pa
 
 - Reinicia el servidor tras aplicar cada mutación: `fuser -k <puerto>/tcp` y arrancarlo de nuevo.
 - Un mutante que sobrevive bajo `next dev` no cuenta hasta que sobrevive con el servidor recién arrancado.
+
+### `suelta-nota.spec.ts:179` once kept the sheet open after Escape on mobile
+
+Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, which touched no one-off or dialog code):
+`[mobile] e2e/suelta-nota.spec.ts:124` failed at `:179`, `expect(getByRole('dialog')).toBeHidden()` — the Radix sheet
+(`data-state="open"`) stayed after `Escape`, 14 resolutions over 5 s. The rerun of that shard alone, same commit, passed.
+`integracion` passed the same spec at 8cc4e341.
+
+- Treat a second occurrence as a defect, not a flake: the step before opens «¿Para cuándo?» inside the sheet, and one
+  `Escape` may close only the inner step.
+- Never add a retry or a second `Escape` to buy quiet. Save `private/playwright-results/` first; the CI log is kept at
+  `private/ci-431-e2e4.log` in the main checkout.

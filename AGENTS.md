@@ -379,6 +379,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Validate on the server with the same Zod schema that validates the form.
 - Move every interface string into next-intl. Hardcoding is forbidden.
 - Compose a screen from `components/ui` and its props. Never write a utility class outside it.
+- Count an inline `style={{…}}` and a CSS module outside `components/ui` as a utility class. Decided by the user 2026-10-08.
 - Reach `localStorage`, `sessionStorage` and IndexedDB from `lib/` alone. A screen that needs one
   gets a function there. Never silence the lint rule with a disable. Decided by the user 2026-09-19.
 - Add a prop to the primitive when a screen needs a variant. Never patch one from outside.
