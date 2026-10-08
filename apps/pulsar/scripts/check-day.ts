@@ -1346,7 +1346,7 @@ async function runPhaseDayBoundCheck(): Promise<void> {
 }
 
 /**
- * Proves `daylessCount` counts only the dayless (RP-21), against a baseline
+ * Proves `daylessCount` counts only the dayless (RP-59), against a baseline
  * read first, with two dayless and one dated-undone one-off so the two sets
  * differ in size, and that `listDaylessOneOffs` reads them oldest first.
  */
@@ -1410,7 +1410,8 @@ async function runDaylessCountAndOrderCheck(): Promise<void> {
  * `openedOn`, a one-off done on the day drawn is in `doneOneOffs` with its
  * fact and out of `oneOffs`, one done yesterday is in neither, and a dayless
  * one is in neither list but counts in `daylessCount` and is listed by
- * `listDaylessOneOffs`, unless it is done or its goal is archived. The dayless
+ * `listDaylessOneOffs`, unless it is done or belongs to a goal (RP-59: a
+ * goal's task waits in its plan). The dayless
  * count is measured against a baseline read first: this identity may hold
  * dayless rows of its own. Every row is deleted by id in `finally`.
  */
@@ -2394,6 +2395,7 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runMonthTaskCheck();
   await runPastWeekCheck();
   await runPlanReadCheck();
+  await runGoallessDaylessCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -2669,7 +2671,7 @@ async function runMonthLineCheck(): Promise<void> {
       values (${userId}, ${estimated}, 'month-line child', null, ${parent.id})
     `;
     await db`
-      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, ${estimated}, 'month-line plain dayless')
+      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, null, 'month-line plain dayless')
     `;
     const baseline = (await loadDay("2010-10-20")).daylessCount;
     const listed = (await listDaylessOneOffs()).filter((o) => o.name.startsWith("month-line"));
@@ -2682,8 +2684,7 @@ async function runMonthLineCheck(): Promise<void> {
       select count(*)::int as n from goals.one_offs o
         where o.user_id = ${userId} and o.day is null and o.planned_month is null and o.parent_id is null
           and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
-          and (o.goal_id is null or exists (
-            select 1 from goals.goals g where g.id = o.goal_id and g.archived_at is null and g.horizon > '2010-10-20'::date))
+          and o.goal_id is null
     `;
     assert(
       "daylessCount excludes the month task and its sub-task and counts the plain one",
@@ -2982,6 +2983,107 @@ async function runPlanReadCheck(): Promise<void> {
   } finally {
     if (goalIds.length > 0) {
       await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
+    await db.end();
+  }
+}
+
+// Module 407 (RP-59): `/sueltas` and «N sin día» hold one-offs with no goal.
+// A goal's task with no day is a task of its plan (0014), so it is in neither
+// the list nor the count; a goal's task with a later day stays in
+// `listScheduledOneOffs`. Counts are deltas on a baseline read first.
+async function runGoallessDaylessCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { listDaylessOneOffs, listScheduledOneOffs } = await import("@/lib/queries/one-offs");
+  const { createGoal } = await import("@/app/actions/plan");
+  const { createOneOff } = await import("@/app/actions/one-offs");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runGoallessDaylessCheck: no verified session");
+  const today = todayInZone();
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  const oneOffIds: string[] = [];
+  const baseline = await loadDay(today);
+  const baselineScheduled = baseline.scheduledCount;
+
+  try {
+    const goal = await createGoal({ name: "check-day 407 probe", horizon: "2099-12-31" });
+    if (!goal.ok) throw new Error(`runGoallessDaylessCheck: createGoal failed: ${goal.error}`);
+    goalIds.push(goal.goalId);
+
+    const task = await createOneOff({ name: "check-day 407 goal task", day: null, goalId: goal.goalId });
+    if (!task.ok) throw new Error(`runGoallessDaylessCheck: createOneOff (goal task) failed: ${task.error}`);
+    oneOffIds.push(task.oneOffId);
+
+    const afterTask = await loadDay(today);
+    assert(
+      "a goal's dayless task does not move daylessCount",
+      afterTask.daylessCount === baseline.daylessCount,
+      `baseline ${baseline.daylessCount}, now ${afterTask.daylessCount}`,
+    );
+
+    const loose = await createOneOff({ name: "check-day 407 loose", day: null });
+    if (!loose.ok) throw new Error(`runGoallessDaylessCheck: createOneOff (loose) failed: ${loose.error}`);
+    oneOffIds.push(loose.oneOffId);
+
+    const afterLoose = await loadDay(today);
+    assert(
+      "a goalless dayless one-off moves daylessCount by one",
+      afterLoose.daylessCount === baseline.daylessCount + 1,
+      `baseline ${baseline.daylessCount}, now ${afterLoose.daylessCount}`,
+    );
+
+    const listed = await listDaylessOneOffs();
+    const ids = listed.map((row) => row.id);
+    assert(
+      "listDaylessOneOffs lists the goalless one-off and not the goal's task",
+      ids.includes(loose.oneOffId) && !ids.includes(task.oneOffId),
+      `ids = ${JSON.stringify(ids)}`,
+    );
+    assert(
+      "every listed dayless one-off reads no goal",
+      listed.every((row) => row.goalId === null && row.goalName === null),
+      JSON.stringify(listed.filter((row) => row.goalId !== null)),
+    );
+    assert(
+      "listDaylessOneOffs and daylessCount agree with a goal's task and a goalless one seeded",
+      listed.length === afterLoose.daylessCount,
+      `${listed.length} listed, ${afterLoose.daylessCount} counted`,
+    );
+    const [planRow] = await db<{ in_plan: boolean; day: string | null }[]>`
+      select in_plan, day::text as day from goals.one_offs where id = ${task.oneOffId}
+    `;
+    assert(
+      "the goal's task is in its plan with no day",
+      planRow.in_plan === true && planRow.day === null,
+      JSON.stringify(planRow),
+    );
+
+    const later = addDays(today, 2);
+    const dated = await createOneOff({ name: "check-day 407 goal task later", day: later, goalId: goal.goalId });
+    if (!dated.ok) throw new Error(`runGoallessDaylessCheck: createOneOff (dated) failed: ${dated.error}`);
+    oneOffIds.push(dated.oneOffId);
+    const scheduled = await listScheduledOneOffs(today);
+    const row = scheduled.find((item) => item.id === dated.oneOffId);
+    assert(
+      "a goal's task with a later day stays in listScheduledOneOffs with its goal",
+      row !== undefined && row.day === later && row.goalId === goal.goalId,
+      `row = ${JSON.stringify(row)}`,
+    );
+    assert(
+      "and counts in scheduledCount",
+      (await loadDay(today)).scheduledCount === baselineScheduled + 1,
+      `baseline ${baselineScheduled}`,
+    );
+  } finally {
+    if (oneOffIds.length > 0) {
+      await db`delete from goals.one_offs where id in ${db(oneOffIds)} and user_id = ${person.id}`;
+    }
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${person.id}`;
     }
     await db.end();
   }
