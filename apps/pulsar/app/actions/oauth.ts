@@ -19,8 +19,8 @@ const siteUrl = () => env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
 
 // A client named by its metadata document is fetched and registered here; any
 // other id is looked up. Unknown to both is `null`.
-async function findClient(clientId: string): Promise<KnownClient | null> {
-  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await headers());
+async function findClient(clientId: string, redirectUri: string): Promise<KnownClient | null> {
+  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await headers(), {}, { redirectUri });
 
   const rows = await withGoalsDb((tx) =>
     tx.execute<{ id: string; redirect_uris: string[] }>(sql`
@@ -44,7 +44,7 @@ async function check(input: unknown): Promise<Checked> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "oauth.errors.signedOut" };
 
-  const client = await findClient(request.client_id);
+  const client = await findClient(request.client_id, request.redirect_uri);
   if (!client) return { ok: false, error: "oauth.errors.clientUnknown" };
   if (!redirectAllowed(client, request.redirect_uri)) return { ok: false, error: "oauth.errors.redirectMismatch" };
 
@@ -86,5 +86,5 @@ export async function denyAuthorization(input: unknown): Promise<ConsentResult> 
   const checked = await check(input);
   if (!checked.ok) return checked;
 
-  return { ok: true, redirectTo: backTo(checked.request, { error: "access_denied" }) };
+  return { ok: true, redirectTo: backTo(checked.request, { error: "access_denied", iss: siteUrl() }) };
 }
