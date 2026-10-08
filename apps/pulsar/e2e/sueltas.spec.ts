@@ -5,7 +5,7 @@ import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // The one-offs with no day wait in `/sueltas` (`SueltasSinDia.dc.html`): each
-// is done, given a day or deleted from there (RP-21, RNP-07).
+// is done, given a day or deleted from there (RP-59, RNP-07).
 
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
@@ -36,7 +36,7 @@ async function rowOf(db: postgres.Sql, oneOffId: string) {
   `;
 }
 
-test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds at 360 (RP-21, RNP-07)", async ({
+test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds at 360 (RP-59, RNP-07)", async ({
   page,
   db,
   personId,
@@ -79,7 +79,7 @@ test("Hoy's link opens the list, which names the goal, marks Hoy's tab and holds
   }
 });
 
-test("given «hoy» it leaves the list and draws on Hoy (RP-21)", async ({ page, db, personId }) => {
+test("given «hoy» it leaves the list and draws on Hoy (RP-59)", async ({ page, db, personId }) => {
   const name = `Suelta para hoy ${Date.now()}`;
   const oneOffId = await seedDayless(db, personId, name);
 
@@ -101,7 +101,7 @@ test("given «hoy» it leaves the list and draws on Hoy (RP-21)", async ({ page,
   }
 });
 
-test("given «mañana» it leaves the list and does not draw on Hoy (RP-21)", async ({
+test("given «mañana» it leaves the list and does not draw on Hoy (RP-59)", async ({
   page,
   db,
   personId,
@@ -127,7 +127,7 @@ test("given «mañana» it leaves the list and does not draw on Hoy (RP-21)", as
   }
 });
 
-test("completed from the list it lands in «hechas hoy» (RP-21, RP-19)", async ({ page, db, personId }) => {
+test("completed from the list it lands in «hechas hoy» (RP-59, RP-19)", async ({ page, db, personId }) => {
   const name = `Suelta hecha desde la lista ${Date.now()}`;
   const oneOffId = await seedDayless(db, personId, name);
 
@@ -176,7 +176,7 @@ test("deleted from the sheet its row is gone from the database, and the last one
 });
 
 for (const width of [360, 390, 1280, 1440]) {
-  test(`the header is one h1 and a way back to Hoy, at ${width} (RP-21, RNP-16, RNP-17)`, async ({ page }) => {
+  test(`the header is one h1 and a way back to Hoy, at ${width} (RP-59, RNP-16, RNP-17)`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 1024 ? 800 : 900 });
     await page.goto("/sueltas");
 
@@ -200,7 +200,7 @@ for (const [width, gap] of [
   [360, "32px"],
   [1280, "40px"],
 ] as const) {
-  test(`the groups sit ${gap} apart, the goal's line is a sentence, its day a figure, «ver hoy» a link, at ${width} (RP-21, RNP-07)`, async ({
+  test(`the groups sit ${gap} apart, the goal's line is a sentence, its day a figure, «ver hoy» a link, at ${width} (RP-59, RNP-07)`, async ({
     page,
     db,
     personId,

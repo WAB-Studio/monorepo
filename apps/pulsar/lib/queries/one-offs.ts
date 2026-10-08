@@ -3,7 +3,6 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { withGoalsDb } from "@/lib/session";
-import { todayInZone } from "@/lib/zone";
 
 export type DaylessOneOff = {
   id: string;

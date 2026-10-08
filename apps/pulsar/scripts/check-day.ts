@@ -1346,7 +1346,7 @@ async function runPhaseDayBoundCheck(): Promise<void> {
 }
 
 /**
- * Proves `daylessCount` counts only the dayless (RP-21), against a baseline
+ * Proves `daylessCount` counts only the dayless (RP-59), against a baseline
  * read first, with two dayless and one dated-undone one-off so the two sets
  * differ in size, and that `listDaylessOneOffs` reads them oldest first.
  */
