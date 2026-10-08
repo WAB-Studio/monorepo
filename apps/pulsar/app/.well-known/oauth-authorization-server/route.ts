@@ -1,13 +1,9 @@
 import { env } from "@/lib/env";
+import { cors } from "@/lib/http/cors";
 
 export const runtime = "nodejs";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Max-Age": "86400",
-};
+const CORS = cors("GET");
 
 // RFC 8414 §2: `issuer` is the very string 190's resource metadata names.
 export function GET(): Response {

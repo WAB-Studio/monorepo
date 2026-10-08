@@ -165,5 +165,6 @@ test("no request leaves the device while typing, past the dictionary asset itsel
   // decoration route, never one per keystroke.
   const decoration = requestUrls.filter((url) => url.includes("/api/word/"));
   console.log(`decoration requests for one settled word: ${decoration.length}`);
+  expect(decoration.length, "decoration never asked").toBeGreaterThanOrEqual(1);
   expect(decoration.length).toBeLessThanOrEqual(2);
 });

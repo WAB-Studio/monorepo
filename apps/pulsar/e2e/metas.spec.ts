@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `/metas` (`MetasCentro`, `MetasCentroEscritorio`; RP-11, RP-24, RP-27, RP-46,
@@ -111,7 +111,7 @@ for (const width of [360, 390, 1280, 1440]) {
         await page.waitForURL(new RegExp(`/metas/${id}$`));
       }
 
-      await page.goto("/metas");
+      await visit(page, "/metas");
       // «Importar un plan» comes before «Exportar»: above on the phone, left or above in the plan column.
       const importBox = await page.getByRole("link", { name: /^Importar un plan/ }).boundingBox();
       const exportBox = await page.getByRole("link", { name: /^Exportar/ }).boundingBox();

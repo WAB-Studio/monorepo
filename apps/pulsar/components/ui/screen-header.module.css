@@ -180,3 +180,13 @@
     inline-size: auto;
   }
 }
+
+.lead.lead.lead {
+  font-size: 13px;
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.lead strong {
+  font-weight: 600;
+}

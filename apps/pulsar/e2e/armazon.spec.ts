@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, settled, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RNP-16, RNP-17, RNP-07: the shell's facts are true of every signed-in route
@@ -158,6 +158,7 @@ for (const width of WIDTHS) {
         const at = `${route.name} at ${width}`;
         await page.goto(route.path);
         await loaded(page);
+        await settled(page);
 
         expect.soft(await page.getByRole("heading", { level: 1 }).count(), `${at}: one h1`).toBe(1);
 

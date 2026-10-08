@@ -30,7 +30,7 @@ export function authorizationRequestSchema(siteUrl: string) {
       .refine(redirectUriValid, { error: "oauth.errors.redirectUri" }),
     code_challenge: z
       .string({ error: "oauth.errors.codeChallenge" })
-      .min(1, { error: "oauth.errors.codeChallenge" }),
+      .regex(/^[A-Za-z0-9_-]{43}$/, { error: "oauth.errors.codeChallenge" }),
     code_challenge_method: z.literal("S256", { error: "oauth.errors.codeChallengeMethod" }),
     state: z.string({ error: "oauth.errors.state" }).max(500, { error: "oauth.errors.state" }).optional(),
     resource: z.literal(resource, { error: "oauth.errors.resource" }),

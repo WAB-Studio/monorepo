@@ -66,11 +66,6 @@ export const goals = goalsSchema.table(
       using: sql`${authUid} = ${t.userId}`,
       withCheck: sql`${authUid} = ${t.userId}`,
     }),
-    pgPolicy("goals_delete_self", {
-      for: "delete",
-      to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId}`,
-    }),
   ],
 );
 

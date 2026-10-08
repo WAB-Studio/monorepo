@@ -16,8 +16,8 @@ type Query = Record<string, string | string[] | undefined>;
 
 type KnownClient = { name: string; redirectUris: string[] };
 
-async function readClient(clientId: string): Promise<KnownClient | null> {
-  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await headers());
+async function readClient(clientId: string, redirectUri: string): Promise<KnownClient | null> {
+  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await headers(), {}, { redirectUri });
 
   const rows = await withGoalsDb((tx) =>
     tx.execute<{ client_name: string; redirect_uris: string[] }>(sql`
@@ -56,7 +56,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
     return <SignedOut client={t("anonymousClient")} next={ownUrl(query)} />;
   }
 
-  const client = await readClient(request.client_id);
+  const client = await readClient(request.client_id, request.redirect_uri);
   if (!client || !redirectAllowed(client, request.redirect_uri)) return <Invalid />;
 
   return <Consent client={client.name} email={person.email} request={request} />;

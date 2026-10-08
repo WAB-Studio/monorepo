@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, settled, visit } from "./fixtures";
 
 // UX 303 and 307: a field's label is Archivo 13 in ink secondary, the hint keeps
 // 20 px before the next control, and a selected chip is the soft accent fill,
@@ -12,6 +12,7 @@ test("a field label is Archivo 13 and a selected cadence chip is not the primary
 
   await page.getByRole("link", { name: "Añadir un compromiso" }).click();
   await page.waitForURL("**/compromisos/nuevo");
+  await settled(page);
 
   const label = await page.locator("label", { hasText: "qué es" }).evaluate((el) => {
     const style = getComputedStyle(el);
@@ -41,7 +42,7 @@ test("a field label is Archivo 13 and a selected cadence chip is not the primary
   expect(chipFill).toBe(soft);
 
   // The hint, where a form has one, leaves 20 px before the next control.
-  await page.goto(goalUrl.replace(/\/metas\/.*/, "/conexiones"));
+  await visit(page, goalUrl.replace(/\/metas\/.*/, "/conexiones"));
   const gap = await page.evaluate(() => {
     const hint = [...document.querySelectorAll("span")].find((s) => /para reconocerla/i.test(s.textContent ?? ""));
     const next = hint?.closest("form, div")?.nextElementSibling ?? hint?.parentElement?.nextElementSibling;
@@ -59,10 +60,10 @@ test("a field label and a text area label hold 8 px before their control", async
       const label = (el as HTMLInputElement).labels![0];
       return el.getBoundingClientRect().top - label.getBoundingClientRect().bottom;
     });
-  await page.goto("/metas/nueva");
+  await visit(page, "/metas/nueva");
   expect(await gap("input")).toBeGreaterThanOrEqual(8);
   expect(await gap("input")).toBeLessThan(10);
-  await page.goto("/metas/importar");
+  await visit(page, "/metas/importar");
   expect(await gap("textarea")).toBeGreaterThanOrEqual(8);
   expect(await gap("textarea")).toBeLessThan(10);
 });

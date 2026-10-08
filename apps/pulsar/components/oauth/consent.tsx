@@ -7,6 +7,8 @@ import { approveAuthorization, denyAuthorization } from "@/app/actions/oauth";
 import { Button, Notice, Page, ScreenHeader, Text } from "@/components/ui";
 import type { AuthorizationRequest } from "@/lib/validation/oauth";
 
+import { returnHost } from "@/lib/oauth/return-host";
+
 import { ConsentList } from "./consent-list";
 import { type MessageKey } from "@/i18n/translator";
 
@@ -42,7 +44,13 @@ export function Consent({
 
   return (
     <Page alone middle>
-      <ScreenHeader title={t("title", { client })} eyebrow={t("eyebrow")} metaVariant="sentence" meta={t("consentLead")} />
+      <ScreenHeader
+        title={t("title", { client })}
+        eyebrow={t("eyebrow")}
+        lead={t.rich("returnsTo", { address: returnHost(request.redirect_uri), host: (chunks) => <strong>{chunks}</strong> })}
+        metaVariant="sentence"
+        meta={t("consentLead")}
+      />
       <ConsentList label={t("mayLabel")} items={MAY.map((key) => t(`may.${key}`))} mark="+" />
       <ConsentList label={t("neverLabel")} items={NEVER.map((key) => t(`never.${key}`))} mark="–" tone="muted" />
       {error ? <Notice role="alert">{root(error)}</Notice> : null}

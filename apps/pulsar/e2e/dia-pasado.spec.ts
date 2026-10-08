@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-06's own screen (`DiaPasado.dc.html`): a day already past, reached by a
@@ -260,7 +260,7 @@ test("at 1440 an empty past day keeps its line in the column, under its title (R
     `;
     const page = await context.newPage();
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/dia/${day}`);
+    await visit(page, `/dia/${day}`);
     const title = (await page.getByText("Ese día no pedía nada").boundingBox())!;
     const line = (await page.getByText(/^tardía \d+ empezó el /i).boundingBox())!;
     expect(Math.abs(line.x - title.x)).toBeLessThanOrEqual(1);

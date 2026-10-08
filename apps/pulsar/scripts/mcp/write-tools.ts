@@ -141,7 +141,7 @@ async function refused(name: string, input: Record<string, unknown>, key: string
 
 // Every row of the intruder, as one string: a write that touches any of it changes the digest.
 async function fingerprint(): Promise<string> {
-  const tables = ["goals", "commitments", "phases", "one_offs", "facts", "month_budgets", "month_shifts"];
+  const tables = ["goals", "commitments", "phases", "one_offs", "facts", "month_budgets"];
   const parts: string[] = [];
   for (const table of tables) {
     const [row] = await admin.unsafe(
@@ -442,6 +442,18 @@ test("fix_task refuses a month before the goal opened and one past its end, and 
   await refused("fix_task", { one_off_id: id, month: monthFrom(24) }, "roadmap.errors.monthOutsideSpan", roadmap.errors.monthOutsideSpan);
   const [row] = await door`select planned_month from goals.one_offs where id = ${id}`;
   assert.equal(row.planned_month, null);
+});
+
+test("the intruder's fingerprint sees its facts: adding one moves the digest, removing it puts it back", async () => {
+  const before = await fingerprint();
+  const [fact] = await admin`
+    insert into goals.facts (user_id, one_off_id, day) values (${intruder.id}, ${intruderLoose}, current_date) returning id`;
+  try {
+    assert.notEqual(await fingerprint(), before, "a new fact of the intruder left the digest where it was");
+  } finally {
+    await admin`delete from goals.facts where id = ${fact.id}`;
+  }
+  assert.equal(await fingerprint(), before);
 });
 
 test("every tool on the intruder's target answers the act's not-found key and writes nothing", async () => {

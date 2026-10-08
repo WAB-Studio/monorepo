@@ -35,19 +35,6 @@ export const phases = goalsSchema.table(
       to: authenticatedRole,
       withCheck: sql`${authUid} = ${t.userId}`,
     }),
-    // Backed by `UPDATE (starts_on, ends_on)` alone: a phase moves in time, its
-    // aim never changes (RP-34).
-    pgPolicy("phases_update_self", {
-      for: "update",
-      to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId}`,
-      withCheck: sql`${authUid} = ${t.userId}`,
-    }),
-    pgPolicy("phases_delete_self", {
-      for: "delete",
-      to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId}`,
-    }),
   ],
 );
 

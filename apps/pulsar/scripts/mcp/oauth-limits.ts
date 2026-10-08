@@ -171,7 +171,7 @@ const grants: Record<string, Record<string, string>> = {
 };
 
 for (const grant of Object.keys(grants)) {
-  test(`a ${grant} request naming a metadata URL spends the registration limit before it reads`, async () => {
+  test(`a ${grant} request naming a new metadata URL spends the registration limit before it reads`, async () => {
     await outwait(3600, 60);
     const e = `${prefix()}::1`;
     remember(e);
@@ -189,6 +189,29 @@ for (const grant of Object.keys(grants)) {
     assert.ok(answers.every((status) => status === 400), `answers ${answers}`);
     assert.equal(await callsOf(e, "register"), 12, "the metadata read did not claim the register bucket");
     assert.equal(await callsOf(e, "token"), 12);
+  });
+}
+
+for (const grant of Object.keys(grants)) {
+  test(`a ${grant} request naming a registered metadata URL spends no registration`, async () => {
+    await outwait(300, 30);
+    const g = `${prefix()}::1`;
+    remember(g);
+    const known = `https://192.0.2.1/stored-${run}-${grant}.json`;
+    await admin`
+      insert into goals.oauth_clients (client_name, redirect_uris, metadata_url)
+      values (${`limits-${run}-stored-${grant}`}, ${[REDIRECT]}, ${known})`;
+    for (let n = 0; n < 11; n += 1) {
+      const response = await fetch(`${base}/oauth/token`, {
+        method: "POST",
+        headers: { "x-forwarded-for": g },
+        body: new URLSearchParams({ ...grants[grant], client_id: known }),
+      });
+      await response.text();
+      assert.equal(response.status, 400, `request ${n + 1}`);
+    }
+    assert.equal(await callsOf(g, "register"), 0, "a registered client spent the register bucket");
+    assert.equal(await callsOf(g, "token"), 11);
   });
 }
 

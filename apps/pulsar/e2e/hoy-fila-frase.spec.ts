@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Module 368: a commitment row's second line is a sentence in Archivo whose
@@ -46,7 +46,7 @@ for (const width of [390, 1440]) {
     });
     try {
       const page = await context.newPage();
-      await page.goto("/");
+      await visit(page, "/");
 
       const fonts = async (name: string) =>
         page.getByRole("button", { name: new RegExp(`^${name}`) }).evaluate((row) => {

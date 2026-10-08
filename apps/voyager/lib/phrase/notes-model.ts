@@ -1,10 +1,11 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { providerFetch } from "@/lib/provider/fetch";
 import { notesResponseSchema, type PhraseNoteAnswer } from "@/lib/phrase/notes-protocol";
 
-// RL-46's one model — the same choice `word/model.ts` made for RL-41/RL-42,
-// on the same measured grounds (never a flagship, never "minimal" reasoning).
+// RL-46's one model: the cheapest tier, never a flagship, never "minimal"
+// reasoning.
 export const NOTES_MODEL_NAME = "gpt-5-nano";
 
 const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
@@ -81,20 +82,19 @@ export async function generateNotes(
     ],
   };
 
-  let response: Response;
-  try {
-    response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
+  const response = await providerFetch(
+    CHAT_COMPLETIONS_ENDPOINT,
+    {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-    });
-  } catch {
-    return null;
-  }
-  if (!response.ok) return null;
+    },
+    { name: "openai-notes" },
+  );
+  if (!response) return null;
 
   let payload: ChatCompletionsPayload;
   try {

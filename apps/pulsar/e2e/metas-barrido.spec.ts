@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 
 // Module 312: the sweep of `/metas` and the goal screen (RNP-07, RNP-17).
 async function seedGoal(db: postgres.Sql, personId: string, name: string) {
@@ -38,7 +38,7 @@ for (const width of [360, 1280]) {
     const goalId = await seedGoal(db, person.id, `Vacía ${Date.now()}`);
     const { context, page } = await open(browser, person.sessionFile, width, 900);
     try {
-      await page.goto(`/metas/${goalId}`);
+      await visit(page, `/metas/${goalId}`);
       const solid = (name: string) =>
         page.getByRole("link", { name }).evaluateAll((links) => {
           const link = links[0] as HTMLElement;

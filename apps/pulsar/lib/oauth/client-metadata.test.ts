@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import test, { mock } from "node:test";
 import { Readable } from "node:stream";
 
-import { clientFromMetadataUrl, privateAddress, type MetadataDeps } from "./client-metadata";
+import { clientFromMetadataUrl, privateAddress, type MetadataClient, type MetadataDeps } from "./client-metadata";
 
 // What the default claim reads from the database: `wait` 0 admits, any other value refuses.
 const claimed = { wait: 0, statements: 0 };
@@ -32,13 +32,13 @@ const json = (body: unknown, over: Res = {}): Res => ({
   headers: { "content-type": "application/json", ...over.headers },
 });
 
-type Calls = { request: number; register: number; resolve: number; claim: number; options?: Record<string, unknown> };
+type Calls = { request: number; register: number; resolve: number; claim: number; lookup: number; options?: Record<string, unknown> };
 
 function run(
   url: string,
-  over: { admit?: boolean; defaultClaim?: boolean; response?: () => Promise<Res> | Res; resolve?: () => string[]; address?: string; timeoutMs?: number } = {},
+  over: { stored?: MetadataClient | null; want?: { redirectUri: string }; admit?: boolean; defaultClaim?: boolean; response?: () => Promise<Res> | Res; resolve?: () => string[]; address?: string; timeoutMs?: number } = {},
 ) {
-  const calls: Calls = { request: 0, register: 0, resolve: 0, claim: 0 };
+  const calls: Calls = { request: 0, register: 0, resolve: 0, claim: 0, lookup: 0 };
   const deps: MetadataDeps = {
     request: ((_url: string, options: Record<string, unknown>, cb: (res: unknown) => void) => {
       const req = new EventEmitter() as EventEmitter & { end: () => void; destroy: () => void };
@@ -63,6 +63,10 @@ function run(
       return "client-1";
     },
     timeoutMs: over.timeoutMs,
+    lookup: async () => {
+      calls.lookup++;
+      return over.stored ?? null;
+    },
     claim: over.defaultClaim
       ? undefined
       : async () => {
@@ -70,7 +74,7 @@ function run(
           return over.admit ?? true;
         },
   };
-  return clientFromMetadataUrl(url, new Headers(), deps).then((client) => ({ client, calls }));
+  return clientFromMetadataUrl(url, new Headers(), deps, over.want).then((client) => ({ client, calls }));
 }
 
 test("a valid document yields the registered client", async () => {
@@ -275,6 +279,7 @@ test("malformed JSON and non-object bodies are refused", async () => {
 test("a DNS failure is refused", async () => {
   const client = await clientFromMetadataUrl(URL_OK, new Headers(), {
     claim: async () => true,
+    lookup: async () => null,
     resolve: async () => {
       throw new Error("ENOTFOUND");
     },
@@ -325,4 +330,49 @@ test("the end of 172.16.0.0/12 is private and so is anything that is no address"
   assert.equal(privateAddress("172.31.255.255"), true);
   assert.equal(privateAddress("172.32.0.1"), false);
   assert.equal(privateAddress("not-an-ip"), true);
+});
+
+const STORED: MetadataClient = { id: "stored-1", name: "Stored", redirectUris: ["https://a/cb"] };
+
+test("a stored client is read back without resolving, claiming or fetching", async () => {
+  const { client, calls } = await run(URL_OK, { stored: STORED });
+  assert.deepEqual(client, STORED);
+  assert.deepEqual([calls.claim, calls.resolve, calls.request, calls.register], [0, 0, 0, 0]);
+});
+
+test("an unknown URL claims once, before the fetch", async () => {
+  const order: string[] = [];
+  const client = await clientFromMetadataUrl(URL_OK, new Headers(), {
+    lookup: async () => null,
+    resolve: async () => ["93.184.216.34"],
+    claim: async () => {
+      order.push("claim");
+      return true;
+    },
+    register: async () => "client-1",
+    request: ((_url: string, _options: unknown, cb: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & { end: () => void; destroy: () => void };
+      req.destroy = () => {};
+      req.end = () => {
+        order.push("request");
+        const res = Readable.from([Buffer.from(JSON.stringify(doc()))]);
+        Object.assign(res, { statusCode: 200, headers: { "content-type": "application/json" } });
+        cb(res);
+      };
+      return req;
+    }) as unknown as MetadataDeps["request"],
+  });
+  assert.ok(client);
+  assert.deepEqual(order, ["claim", "request"]);
+});
+
+test("a redirect the stored client lacks fetches the document again", async () => {
+  const { calls } = await run(URL_OK, { stored: STORED, want: { redirectUri: "https://b/cb" } });
+  assert.deepEqual([calls.claim, calls.request, calls.register], [1, 1, 1]);
+});
+
+test("a redirect the stored client has is served from the row", async () => {
+  const { client, calls } = await run(URL_OK, { stored: STORED, want: { redirectUri: "https://a/cb" } });
+  assert.deepEqual(client, STORED);
+  assert.deepEqual([calls.claim, calls.request], [0, 0]);
 });

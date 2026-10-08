@@ -2,16 +2,12 @@ import "server-only";
 
 import type { Sense } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
+import { providerFetch } from "@/lib/provider/fetch";
 import { textResponseSchema, type WordText } from "@/lib/word/protocol";
 
-// Raised from `gpt-5-nano`: nano answered snuff's missing senses 0 of 4
-// real calls (`null`, `null`, `null`, `[]`) and repeated a sense already
-// listed on frisk; mini answered 4 of 4, new and real. Mini is 5x the
-// token price but reasons less to get there — 505 output tokens average
-// against nano's 779 — so the real multiple is 3.3x: $1.05 against $0.32 a
-// month at this reader's own rate. The definition and the example are not
-// the reason: measured separately, both models write them well, and
-// nano's is the cleaner of the two. The gain is in `translations` alone.
+// Mini over nano: nano left snuff's missing senses empty on 4 of 4 real
+// calls and repeated a sense already listed; mini filled all 4. The gain is
+// in `translations` alone — both write the definition and example well.
 export const MODEL_NAME = "gpt-5-mini";
 
 const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
@@ -116,20 +112,19 @@ export async function generateWordText(
     ],
   };
 
-  let response: Response;
-  try {
-    response = await fetch(CHAT_COMPLETIONS_ENDPOINT, {
+  const response = await providerFetch(
+    CHAT_COMPLETIONS_ENDPOINT,
+    {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
-    });
-  } catch {
-    return null;
-  }
-  if (!response.ok) return null;
+    },
+    { name: "openai-text" },
+  );
+  if (!response) return null;
 
   let payload: ChatCompletionsPayload;
   try {

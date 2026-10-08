@@ -109,11 +109,6 @@ export const commitments = goalsSchema.table(
       using: sql`${authUid} = ${t.userId}`,
       withCheck: sql`${authUid} = ${t.userId}`,
     }),
-    pgPolicy("commitments_delete_self", {
-      for: "delete",
-      to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId}`,
-    }),
   ],
 );
 

@@ -11,7 +11,10 @@ holds only what a person could not guess from the code.
 
 Measured 2026-09-10, module 8 (the photo credits in `/cuenta`).
 
-`/api/word/photo` stores and returns **bare licence codes** — `by`, `by-sa`, `cc0`, `pdm`. The
+**Superseded as to its subject:** `/api/word/photo` and the credits list were removed with RL-36 (retired
+2026-09-14). The lesson below stands; the route no longer exists.
+
+The route stored and returned **bare licence codes** — `by`, `by-sa`, `cc0`, `pdm`. The
 component was supposed to turn those into a name a reader recognises, using the
 `account.info.photoLicence` map module 3 had already shipped. It never did: it interpolated
 `credit.licence` verbatim, so a real row rendered «osde8info · by-sa» where the board says
@@ -842,32 +845,17 @@ shows green for the wrong reason — which is exactly the failure a negative con
 
 ### The voyager suite drives the real decoration routes, and pays for them
 
-Counted 2026-09-11 across `apps/voyager/e2e`: **11 of the 19 spec files search for words and
-intercept nothing.** Only `export`, `speak`, `sync`, `url` and `word` call
-`page.route("**/api/word/photo", ...)`; `log.spec.ts` (15 tests), `registro.spec.ts` (12),
-`palabra-historial.spec.ts` (13), `sin-entrada.spec.ts` (9) and seven more do not. That is **79
-tests** reaching `/api/word/photo` and `/api/word/text` for real, on every run.
+**Superseded 2026-10-08.** Measured 2026-09-11, when `/api/word/photo` still existed: 79 tests reached
+it and `/api/word/text` for real on every run. That route went with RL-36 (2026-09-14). The cost it
+named stays true for the routes that remain and is now guarded in `apps/voyager/e2e/fixtures.ts`:
 
-What each run therefore does:
-
-- **Writes rows to the shared Postgres**, which is the user's production database. Measured that
-  day: three separate purges of 5, 4 and 4 rows, plus their bucket objects, all left by suites.
-  `reading.word_photos` has no expiry, so nothing removes them on its own.
-- **Spends the model's daily cap.** `/api/word/text` calls `gpt-5-nano`. The only thing standing
-  between a suite run and a real bill is a human remembering `OPENAI_API_KEY=""` as a process
-  override — a convention, never a guard.
-- **Puts an unbounded network call inside timing-sensitive tests.** `log.spec.ts:377` races an 800 ms
-  settle window against a killed tab; Openverse's latency lands in the middle of it. That spec fails
-  in CI on branches that touch no part of the log, and passes on one that does, which is the shape
-  of a race and not of a regression.
-
-`url.spec.ts` is the warning written in the file itself: it **defines** `stubDecorationRoutes` and
-calls it in one of its five tests.
-
-**The stub belongs in the fixture, not in each spec.** A spec that wants the real route should opt
-in and say why, the way `foto.spec.ts` does — it drives the real route deliberately, with two
-headwords chosen so nothing is written: `dog` is already cached and `grudge` is refused by the
-guard before Postgres.
+- `test`/`expect` imported from `./fixtures` intercept `/api/word/text`, `/api/word/unlisted` and
+  `/api/phrase/notes` and answer them deterministically, tagging each stub with `x-e2e-word-stub`.
+  A watchdog fails a spec that reached a real one without `allowRealWordRoute(route, reason)`.
+- A spec that imports `@playwright/test` directly skips the guard: those three routes then write
+  rows to the shared Postgres and spend the model's daily cap.
+- An unbounded network call inside a timing-sensitive test is a race, not a regression; keep real
+  routes out of any spec that races a settle window.
 
 ### Every worktree shares one stash, so a lane can pop another lane's work
 
@@ -1790,7 +1778,7 @@ peticiones** en el proyecto, repartidas así.
 
 | modelo | peticiones | ¿lo llama este repo? |
 |---|---:|---|
-| `gpt-5-nano` | 368 | sí, es `apps/voyager/lib/word/model.ts:11` |
+| `gpt-5-nano` | 368 | sí; hoy `lib/word/model.ts` usa `gpt-5-mini` y `lib/phrase/notes-model.ts` `gpt-5-nano` (2026-10-08) |
 | `gpt-4o-mini-transcribe` | 36 | no |
 | `gpt-realtime-mini` | 12 | no |
 | `gpt-4.1-nano` / `gpt-4.1-mini` | 4 | no |
@@ -1800,8 +1788,9 @@ peticiones** en el proyecto, repartidas así.
 tiempo real: esas 53 peticiones son de otra parte, y el CSV no las distingue porque todo cae bajo un
 `project_id` y una `api_key_id`.
 
-Y el desajuste no se queda ahí. El repo tiene **un solo sitio** que llama al modelo —
-`apps/voyager/app/api/word/text/route.ts:102` — y pide cupo en `lib/word/spend.ts` **antes** de
+Y el desajuste no se queda ahí. Al medir (2026-09-11) el repo tenía **un solo sitio** que llamaba al
+modelo; a 2026-10-08 son **tres rutas** —`app/api/word/text`, `app/api/word/unlisted` y
+`app/api/phrase/notes`— y cada una pide cupo en `lib/word/spend.ts` (`claimDailyCall`) **antes** de
 llamar, así que ninguna llamada queda sin contar. El 2026-09-10 `reading.model_spend` marcó
 `calls=19` y el CSV marca **346 peticiones de `gpt-5-nano` ese día**. Las otras 327 no salieron de
 aquí.
@@ -2580,17 +2569,24 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
 
 ## `page.goto` returns with the loading fallback still standing
 
-Measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
-(`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a
-never-used lane. The failure's `error-context.md` showed `main` holding the `(app)/loading.tsx` skeleton
-beside the streamed page. The CI runner reaches the database slower, so `load` fires before the
-Suspense boundary swaps in the content; a box read straight after `goto` measures the skeleton or nothing.
-A fresh identity was not the cause.
+`load` fires with `(app)/loading.tsx` up; the real page sits in a hidden streamed `div` with no box. A box, a style or a
+count read straight after `goto`, `waitForURL` or `reload` measures the skeleton or nothing. `evaluate` waits for a node to
+attach, not to be visible.
 
-- Anchor every measuring spec on the settled page before its first box: a visible element of the
-  content and `await expect(page.locator("main")).toHaveCount(1)`.
-- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
-  from inside the repo) before guessing at a red the local suite does not show.
+- Footprint 1, measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
+  (`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a never-used lane. The
+  failure's `error-context.md` showed `main` holding the skeleton beside the streamed page. The runner reaches the database
+  slower, so the Suspense boundary swaps late. A fresh identity was not the cause.
+- Footprint 2, measured 2026-10-08 on CI run 37823517494, `[mobile] e2e/columnas-espacio.spec.ts:26`: `Expected: >= 4`,
+  `Received: 0` at `:33`; the 1024 twin passed 1.5 s earlier on the same shard. `siblingRects` ran `evaluate` right after
+  `goto` and the children were still zero-sized. Footprint: `private/ci-reds/425/columnas-espacio-footprint.txt` in the main
+  checkout. The same day: `metas-barrido:33`, `campo-chip:44-52`, `plan-ritmo:250` (`private/ci-reds/flakes-2026-10-08/`).
+- Do: call `settled(page)` from `e2e/fixtures.ts` before the first measure, or `visit(page, url)` for `goto` + `settled`.
+  `settled` is `expect(main).toHaveCount(1)`, then `toBeVisible()`, then `document.fonts.ready`. The count rule comes
+  first: a strict `main` locator throws on the two `main`s of the skeleton and the page.
+- Never retry, sleep or `waitForTimeout` to buy quiet. Save `private/playwright-results/` before rerunning.
+- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`, from inside the repo)
+  before guessing at a red the local suite does not show.
 
 ## A pulsar lane has no member identity, so `check:goal-actions` dies there
 
@@ -2881,3 +2877,16 @@ respondió 404 en `/metas/<id>/fases/nueva` y `/metas/<id>/compromisos/nuevo` pa
 
 - Reinicia el servidor tras aplicar cada mutación: `fuser -k <puerto>/tcp` y arrancarlo de nuevo.
 - Un mutante que sobrevive bajo `next dev` no cuenta hasta que sobrevive con el servidor recién arrancado.
+
+### `suelta-nota.spec.ts:179` once kept the sheet open after Escape on mobile
+
+Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, which touched no one-off or dialog code):
+`[mobile] e2e/suelta-nota.spec.ts:124` failed at `:179`, `expect(getByRole('dialog')).toBeHidden()` — the Radix sheet
+(`data-state="open"`) stayed after `Escape`, 14 resolutions over 5 s. The rerun of that shard alone, same commit, passed.
+`integracion` passed the same spec at 8cc4e341.
+
+- Treat a second occurrence as a defect, not a flake: the step before opens «¿Para cuándo?» inside the sheet, and one
+  `Escape` may close only the inner step.
+- Never add a retry or a second `Escape` to buy quiet. Save `private/playwright-results/` first; the CI log is kept at
+  `private/ci-431-e2e4.log` in the main checkout.
+

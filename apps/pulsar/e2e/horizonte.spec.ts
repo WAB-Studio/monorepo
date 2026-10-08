@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
 import { addWeeksToCivilDate, civilDateInZone, todayInZone, weekOf } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 
 // RP-11, RP-25: a goal's horizon moves in weeks from its own screen, and a new
 // goal's lands on a week's edge. Every goal is seeded under this spec's own
@@ -193,7 +193,7 @@ test("the horizon line and its sheet hold at 360 (RNP-07)", async ({ page, db, p
     weeks: 12,
   });
   try {
-    await page.goto(`/metas/${goalId}`);
+    await visit(page, `/metas/${goalId}`);
     const link = page.getByRole("button", { name: "mover el final" });
     const box = await link.boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
