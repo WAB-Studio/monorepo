@@ -134,12 +134,12 @@ test("a parent with sub-tasks is still refused", async () => {
   const goal = await as(() => plan.createGoal({ name: "padre", horizon: `${today.slice(0, 4)}-12-31` }));
   if (!goal.ok) throw new Error(`createGoal: ${goal.error}`);
   goalIds.push(goal.goalId);
-  // An estimate needs a measured goal; the parent's refusal below is declareFact's, not createOneOff's.
+  // The child's estimate needs a measured goal; the parent's refusal below is declareFact's, not createOneOff's.
   await admin`update goals.goals set measure_name = 'horas', measure_unit = 'minutos' where id = ${goal.goalId}`;
-  const parent = await as(() => oneOffs.createOneOff({ name: "padre", day: null, goalId: goal.goalId, estimate: 30, inPlan: true }));
+  const parent = await as(() => oneOffs.createOneOff({ name: "padre", day: null, goalId: goal.goalId, plannedMonth: today.slice(0, 7) }));
   if (!parent.ok) throw new Error(`createOneOff parent: ${parent.error}`);
   const child = await as(() =>
-    oneOffs.createOneOff({ name: "hija", day: null, goalId: goal.goalId, estimate: 10, inPlan: true, parentId: parent.oneOffId } as never),
+    oneOffs.createOneOff({ name: "hija", day: null, estimate: 10, parentId: parent.oneOffId }),
   );
   if (!child.ok) throw new Error(`createOneOff child: ${child.error}`);
   await assert.rejects(() => as(() => facts.declareFact({ oneOffId: parent.oneOffId })));
