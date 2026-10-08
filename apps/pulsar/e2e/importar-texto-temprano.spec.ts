@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { appAlerts, test, expect } from "./fixtures";
+import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 
 // The import box keeps what was typed before the page settled (RP-37, module 400).
 // The page's JS is held by `page.route` until the typing is done, then released,
@@ -18,7 +18,7 @@ const READ = "Leer el plan";
 
 async function settled(page: Page) {
   await expect(page.getByRole("button", { name: READ })).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
+  await pageSettled(page);
 }
 
 // A valid read, so the tab's storage holds `STORED` as the last read's source.

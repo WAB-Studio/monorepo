@@ -2580,17 +2580,24 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
 
 ## `page.goto` returns with the loading fallback still standing
 
-Measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
-(`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a
-never-used lane. The failure's `error-context.md` showed `main` holding the `(app)/loading.tsx` skeleton
-beside the streamed page. The CI runner reaches the database slower, so `load` fires before the
-Suspense boundary swaps in the content; a box read straight after `goto` measures the skeleton or nothing.
-A fresh identity was not the cause.
+`load` fires with `(app)/loading.tsx` up; the real page sits in a hidden streamed `div` with no box. A box, a style or a
+count read straight after `goto`, `waitForURL` or `reload` measures the skeleton or nothing. `evaluate` waits for a node to
+attach, not to be visible.
 
-- Anchor every measuring spec on the settled page before its first box: a visible element of the
-  content and `await expect(page.locator("main")).toHaveCount(1)`.
-- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
-  from inside the repo) before guessing at a red the local suite does not show.
+- Footprint 1, measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
+  (`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a never-used lane. The
+  failure's `error-context.md` showed `main` holding the skeleton beside the streamed page. The runner reaches the database
+  slower, so the Suspense boundary swaps late. A fresh identity was not the cause.
+- Footprint 2, measured 2026-10-08 on CI run 37823517494, `[mobile] e2e/columnas-espacio.spec.ts:26`: `Expected: >= 4`,
+  `Received: 0` at `:33`; the 1024 twin passed 1.5 s earlier on the same shard. `siblingRects` ran `evaluate` right after
+  `goto` and the children were still zero-sized. Footprint: `private/ci-reds/425/columnas-espacio-footprint.txt` in the main
+  checkout. The same day: `metas-barrido:33`, `campo-chip:44-52`, `plan-ritmo:250` (`private/ci-reds/flakes-2026-10-08/`).
+- Do: call `settled(page)` from `e2e/fixtures.ts` before the first measure, or `visit(page, url)` for `goto` + `settled`.
+  `settled` is `expect(main).toHaveCount(1)`, then `toBeVisible()`, then `document.fonts.ready`. The count rule comes
+  first: a strict `main` locator throws on the two `main`s of the skeleton and the page.
+- Never retry, sleep or `waitForTimeout` to buy quiet. Save `private/playwright-results/` before rerunning.
+- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`, from inside the repo)
+  before guessing at a red the local suite does not show.
 
 ## A pulsar lane has no member identity, so `check:goal-actions` dies there
 
@@ -2894,15 +2901,3 @@ Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, whic
 - Never add a retry or a second `Escape` to buy quiet. Save `private/playwright-results/` first; the CI log is kept at
   `private/ci-431-e2e4.log` in the main checkout.
 
-### `columnas-espacio.spec.ts:26` measured an empty Hoy before it was visible
-
-Measured 2026-10-08 on CI run 37823517494, `[mobile] e2e/columnas-espacio.spec.ts:26` («at 1440 an empty Hoy spaces its heading,
-paragraph and buttons»), failed at `:33`: `expect(rects.length).toBeGreaterThanOrEqual(4)` — `Expected: >= 4`, `Received: 0`. The
-1024 twin of the same spec passed 1.5 s earlier on the same shard.
-
-- Cause: `siblingRects` runs `locator.evaluate` right after `goto`. `evaluate` waits for the node to attach, not to be visible, so
-  it read the children's boxes while they were still zero-sized and the filter on `width > 0` dropped them all.
-- Fix: `await expect(getByText("Todavía no hay nada que anotar.")).toBeVisible()` before measuring; the two other specs of the file
-  that measure `main` right after `goto` wait on `main` being visible. No retry, no sleep, no `waitForTimeout`.
-- Footprint: `private/ci-reds/425/columnas-espacio-footprint.txt` in the main checkout.
-- Any spec that measures with `evaluate` after `goto` takes the same wait first.

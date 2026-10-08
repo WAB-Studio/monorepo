@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Split's columns and Panel space their children by a gap, never a margin
@@ -123,8 +123,7 @@ for (const width of widths) {
     try {
       const page = await context.newPage();
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/metas/${goal.id}`);
-      await expect(page.locator("main")).toBeVisible();
+      await visit(page, `/metas/${goal.id}`);
       const gap = await page.locator("main").evaluate((main) => {
         const part = (name: string) => main.querySelector(`[class*="split-module"][class$="__${name}"]`)!;
         return part("after").getBoundingClientRect().top - part("before").getBoundingClientRect().bottom;

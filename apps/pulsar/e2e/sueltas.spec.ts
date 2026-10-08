@@ -1,7 +1,7 @@
 
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // The one-offs with no day wait in `/sueltas` (`SueltasSinDia.dc.html`): each
@@ -221,7 +221,7 @@ for (const [width, gap] of [
 
     try {
       await page.setViewportSize({ width, height: 800 });
-      await page.goto("/sueltas");
+      await visit(page, "/sueltas");
 
       const sections = page.locator("main section");
       await expect.soft(sections).toHaveCount(2);

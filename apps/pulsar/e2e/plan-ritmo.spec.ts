@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 
 // RP-50, RP-53: `/metas/<id>/plan` asks a goal with tasks and no rhythm for
 // one, then names the plan's end. Every goal is seeded under this spec's own
@@ -212,7 +212,7 @@ for (const width of [390, 1440]) {
     test("the selected chip is a soft fill, not the solid of the primary button", async ({ page, db, personId }) => {
       const goalId = await seedGoal(db, personId, null);
       try {
-        await page.goto(`/metas/${goalId}/plan`);
+        await visit(page, `/metas/${goalId}/plan`);
         const paint = (selector: ReturnType<Page["locator"]>) =>
           selector.evaluate((el) => {
             const style = getComputedStyle(el);
@@ -246,7 +246,7 @@ for (const width of [390, 1440]) {
       test("the column is 640 wide at 1440", async ({ page, db, personId }) => {
         const goalId = await seedGoal(db, personId, 720);
         try {
-          await page.goto(`/metas/${goalId}/plan`);
+          await visit(page, `/metas/${goalId}/plan`);
           const box = await planned(page).boundingBox();
           expect(Math.abs(box!.width - 640)).toBeLessThanOrEqual(1);
         } finally {

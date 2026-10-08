@@ -1,7 +1,7 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 
 // The review's create bar says what the import leaves out, above «Crear N
@@ -243,7 +243,7 @@ test.describe("the create bar says what stays out (RP-37)", () => {
         },
       };
       await page.evaluate((value) => sessionStorage.setItem("pulsar.import-draft", JSON.stringify(value)), stored);
-      await page.goto("/metas/importar/revisar");
+      await visit(page, "/metas/importar/revisar");
       const bar = page.getByRole("button", { name: /^Crear \d+ metas?$/ }).locator("xpath=..");
       await expect(lineOf(bar)).toHaveText("Sin «Correr lejos»: no se puede crear.");
     } finally {

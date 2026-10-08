@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { appAlerts, test, expect } from "./fixtures";
+import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, todayInZone } from "../lib/zone";
 
@@ -48,7 +48,7 @@ async function toReview(page: Page, text: string) {
 // `load` fires with the loading fallback still standing.
 async function settled(page: Page) {
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
+  await pageSettled(page);
 }
 
 // The worker's own person drives each test, so what the database holds is theirs alone.

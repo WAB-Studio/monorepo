@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 
 // Module 302: content stops at 1200 from 1024, and a link shaped as a button
 // follows the same width rule as a `<button>` (`SistemaEspacio.dc.html`).
@@ -13,13 +13,13 @@ test("at 2000 a link-button and a button are sized to their text, never the colu
   });
   try {
     const page = await context.newPage();
-    await page.goto("/");
+    await visit(page, "/");
     for (const name of ["Abrir una meta", "Importar un plan"]) {
       const box = (await page.getByRole("link", { name }).boundingBox())!;
       expect(box.width).toBeGreaterThanOrEqual(160);
       expect(box.width).toBeLessThan(400);
     }
-    await page.goto("/metas/nueva");
+    await visit(page, "/metas/nueva");
     const save = (await page.getByRole("button", { name: "Abrirla" }).boundingBox())!;
     expect(save.width).toBeGreaterThanOrEqual(160);
     expect(save.width).toBeLessThan(400);
@@ -30,7 +30,7 @@ test("at 2000 a link-button and a button are sized to their text, never the colu
 
 test("at 2000 a full-width screen's content stops at 1200", async ({ page }) => {
   await page.setViewportSize({ width: 2000, height: 900 });
-  await page.goto("/semana");
+  await visit(page, "/semana");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const header = (await page.locator("main > header:visible").first().boundingBox())!;
   expect(header.width).toBeLessThanOrEqual(1200);
@@ -43,7 +43,7 @@ test("at 390 a block button still spans the column", async ({ person, browser })
   });
   try {
     const page = await context.newPage();
-    await page.goto("/");
+    await visit(page, "/");
     const box = (await page.getByRole("link", { name: "Abrir una meta" }).boundingBox())!;
     expect(box.width).toBeGreaterThanOrEqual(349);
   } finally {

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import plan from "../messages/es/plan.json";
 
 // UX 362: chips and paired fields are spaced by `ChipRow` and `FieldPair`,
@@ -26,7 +26,7 @@ for (const viewport of [
 
     test("chips sit 8 apart, weekday chips 4, the quantity is 88 wide beside its unit", async ({ page }) => {
       const goalId = await createGoal(page, `Meta fila ${Date.now()}`);
-      await page.goto(`/metas/${goalId}/compromisos/nuevo`);
+      await visit(page, `/metas/${goalId}/compromisos/nuevo`);
 
       const gap = async (a: string, b: string) => {
         const [x, y] = await Promise.all([
@@ -77,7 +77,7 @@ for (const viewport of [
 
     test("the cadence chips wrap inside the page at 360 and none leaves it", async ({ page }) => {
       const goalId = await createGoal(page, `Meta chips ${Date.now()}`);
-      await page.goto(`/metas/${goalId}/compromisos/nuevo`);
+      await visit(page, `/metas/${goalId}/compromisos/nuevo`);
       const first = (await page.getByRole("button", { name: "todos los días", exact: true }).boundingBox())!;
       const last = (await page.getByRole("button", { name: plan.commitmentForm.cadence.times_per_month, exact: true }).boundingBox())!;
       const view = page.viewportSize()!.width;
