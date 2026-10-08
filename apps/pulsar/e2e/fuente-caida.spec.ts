@@ -117,6 +117,13 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
 
       await expect(page.getByText(GOAL_NOTE, { exact: true })).toBeVisible();
       await expect(page.getByText(FAILURE)).toHaveCount(0);
+
+      // `MetaTotal` (399): the total's own line stays, and today's note sits under it.
+      const since = page.locator("p", { hasText: /^en total, desde el / }).locator("visible=true");
+      await expect(since).toHaveCount(1);
+      const sinceBox = (await since.boundingBox())!;
+      const noteBox = (await page.getByText(GOAL_NOTE, { exact: true }).boundingBox())!;
+      expect(noteBox.y).toBeGreaterThanOrEqual(sinceBox.y + sinceBox.height - 1);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
