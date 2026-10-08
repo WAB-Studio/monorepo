@@ -91,6 +91,7 @@ jobs:
         with:
           apps: voyager
       - run: npm run check:sync -w apps/voyager
+      - run: npm run check:grants -w apps/voyager
 
   # The pure modules, mirrors voyager's `unit` job. No database, no secret.
   pulsar-unit:
@@ -128,8 +129,9 @@ jobs:
   # Chromium for it. Every job runs on its own stack, so runs never contend.
   # Every path below addresses `apps/orbit`: the suite, its `.env.local`,
   # its route types and its results directory all live there since the monorepo.
-  # `apps/voyager` has no database, no identity and no harness, so nothing here
-  # touches it — its own browser suite runs without any of this.
+  # `apps/voyager` has its own database and local stack, but no harness lane:
+  # nothing here touches it — its checks run in the voyager jobs above and in
+  # `voyager-e2e`.
   # Which of the two apps a change can actually affect. Orbit's suite is 17
   # minutes and drives the one shared remote Postgres through a single-slot
   # group, so running it for a change it cannot reach costs the whole queue.
