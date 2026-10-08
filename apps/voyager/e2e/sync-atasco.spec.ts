@@ -144,9 +144,9 @@ test("RL-24: a stored row of 689 characters goes up cut to 500 and does not hold
   await openAndSeed(page, enabledState(), [lookup(long), lookup("short")]);
   const posted = await interceptSync(page, 200, EMPTY_PAGE);
 
-  const request = page.waitForRequest((r) => r.url().includes("/api/log/sync"));
+  const answered = page.waitForResponse((r) => r.url().includes("/api/log/sync"));
   await hideTab(page);
-  await request;
+  await answered;
 
   expect(posted).toHaveLength(1);
   expect(posted[0].rows.map((row) => row.text.length)).toEqual([500, 5]);
