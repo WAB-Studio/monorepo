@@ -1,12 +1,13 @@
 // providerFetch with a simulated `fetch`: no network, no key.
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
+import { afterEach, mock, test } from "node:test";
 
 import { providerFetch } from "./fetch";
 
 const realFetch = globalThis.fetch;
 const realError = console.error;
 afterEach(() => {
+  mock.restoreAll();
   globalThis.fetch = realFetch;
   console.error = realError;
 });
@@ -69,4 +70,28 @@ test("an OK response passes through as the same Response", async () => {
   const lines = captureLogs();
   assert.equal(await providerFetch("https://x.invalid", {}, { name: "openai-text" }), ok);
   assert.deepEqual(lines, []);
+});
+
+test("the request's method, headers and body reach fetch, with an abort signal added", async () => {
+  const seen: { url: unknown; init: RequestInit | undefined }[] = [];
+  globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
+    seen.push({ url, init });
+    return new Response("{}", { status: 200 });
+  }) as typeof fetch;
+  const headers = { authorization: "Bearer k", "content-type": "application/json" };
+  await providerFetch("https://x.invalid/a", { method: "POST", headers, body: '{"q":1}' }, { name: "openai-text" });
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].url, "https://x.invalid/a");
+  assert.equal(seen[0].init?.method, "POST");
+  assert.deepEqual(seen[0].init?.headers, headers);
+  assert.equal(seen[0].init?.body, '{"q":1}');
+  assert.ok(seen[0].init?.signal instanceof AbortSignal);
+});
+
+test("without timeoutMs the request is bounded at 20 seconds", async () => {
+  globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
+  const timeout = mock.method(AbortSignal, "timeout");
+  await providerFetch("https://x.invalid", {}, { name: "openai-text" });
+  assert.equal(timeout.mock.callCount(), 1);
+  assert.deepEqual(timeout.mock.calls[0].arguments, [20_000]);
 });

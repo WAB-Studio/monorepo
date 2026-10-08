@@ -89,3 +89,34 @@ test("the queries leave the export untouched", () => {
   wordHistory(EXPORT, "snuff");
   assert.equal(JSON.stringify(EXPORT), before);
 });
+
+test("missRate counts misses only: inflected and untranslated rows are not misses", () => {
+  const rows = [
+    row("run", NOW - 4 * DAY, { outcome: "inflected", headword: "run" }),
+    row("run", NOW - 3 * DAY, { outcome: "untranslated", headword: null }),
+    row("run", NOW - 2 * DAY, { outcome: "miss", headword: null }),
+    row("run", NOW - 1 * DAY),
+  ];
+  const [word] = topWords(rows, { limit: 1, now: NOW });
+  assert.equal(word.count, 4);
+  assert.equal(word.missRate, 1 / 4);
+});
+
+test("a row exactly sinceDays old stays inside the window", () => {
+  const rows = [row("edge", NOW - 7 * DAY), row("old", NOW - 7 * DAY - 1)];
+  const top = topWords(rows, { limit: 10, sinceDays: 7, now: NOW });
+  assert.deepEqual(
+    top.map((w) => w.normalised),
+    ["edge"],
+  );
+});
+
+// The plan leaves a same-instant tie unspecified; this pins the built
+// behaviour: the row met last wins.
+test("two headwords at the same instant: the later row in the log is reported", () => {
+  const rows = [
+    row("saw", NOW - DAY, { headword: "see", outcome: "inflected" }),
+    row("saw", NOW - DAY, { headword: "saw", outcome: "inflected" }),
+  ];
+  assert.equal(topWords(rows, { limit: 1, now: NOW })[0].headword, "saw");
+});
