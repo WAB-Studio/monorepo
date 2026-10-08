@@ -2450,8 +2450,8 @@ async function checkAuditoria0015(): Promise<void> {
         where schemaname = 'goals' and policyname in ('goals_delete_self', 'commitments_delete_self', 'phases_delete_self', 'phases_update_self')`;
       assert("P209", deletes.length === 0, `policies left without a grant = ${deletes.map((r) => r.policyname).join(", ") || "none"}`);
 
-      const fns = await tx<{ name: string; src: string; auth: boolean; anon: boolean; svc: boolean }[]>`
-        select p.proname as name, p.prosrc as src,
+      const fns = await tx<{ name: string; src: string; secdef: boolean; config: string[] | null; auth: boolean; anon: boolean; svc: boolean }[]>`
+        select p.proname as name, p.prosrc as src, p.prosecdef as secdef, p.proconfig as config,
           has_function_privilege('authenticated', p.oid, 'execute') as auth,
           has_function_privilege('anon', p.oid, 'execute') as anon,
           has_function_privilege('service_role', p.oid, 'execute') as svc
@@ -2459,10 +2459,11 @@ async function checkAuditoria0015(): Promise<void> {
         where p.pronamespace = 'goals'::regnamespace
           and p.proname in ('person_for_token', 'oauth_refresh_token', 'oauth_client_by_metadata_url')
         order by p.proname`;
-      const shape = fns.map((f) => `${f.name}:${f.auth || f.anon || f.svc ? "open" : "closed"}:${f.src.includes("90 days") ? "90" : "-"}`).join(" ");
+      const shape = fns.map((f) => `${f.name}:${f.secdef ? "definer" : "invoker"}:${(f.config ?? []).join("|")}:${f.auth || f.anon || f.svc ? "open" : "closed"}:${f.src.includes("90 days") ? "90" : "-"}`).join(" ");
       assert(
         "P210",
-        shape === "oauth_client_by_metadata_url:closed:- oauth_refresh_token:closed:90 person_for_token:closed:90",
+        shape ===
+          'oauth_client_by_metadata_url:definer:search_path="":closed:- oauth_refresh_token:definer:search_path="":closed:90 person_for_token:definer:search_path="":closed:90',
         shape || "no functions",
       );
 

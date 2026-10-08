@@ -1,20 +1,22 @@
 -- A one-off is done once (RP-19, RP-22). Production held no duplicate on 2026-10-08;
 -- the dedupe stays because a migration's dedupe is only as safe as the day it was measured.
--- It refuses to choose between two different notes: one run of this file aborts, the
+-- It refuses to drop a note the kept fact lacks: one run of this file aborts, the
 -- migrator rolls the whole transaction back and the database stays on 0014.
 DO $$
 DECLARE
   clashes integer;
 BEGIN
-  SELECT count(*) INTO clashes FROM (
-    SELECT f."one_off_id"
-    FROM "goals"."facts" f
-    WHERE f."one_off_id" IS NOT NULL
-    GROUP BY f."one_off_id"
-    HAVING count(*) > 1 AND count(DISTINCT f."note") FILTER (WHERE f."note" IS NOT NULL) > 1
-  ) g;
+  -- A fact the DELETE below would remove, whose note the kept fact does not carry.
+  SELECT count(DISTINCT r."one_off_id") INTO clashes FROM (
+    SELECT "one_off_id", "note",
+      row_number() OVER (PARTITION BY "one_off_id" ORDER BY "day", "written_at", "id") AS n,
+      first_value("note") OVER (PARTITION BY "one_off_id" ORDER BY "day", "written_at", "id") AS kept_note
+    FROM "goals"."facts"
+    WHERE "one_off_id" IS NOT NULL
+  ) r
+  WHERE r.n > 1 AND r."note" IS NOT NULL AND r."note" IS DISTINCT FROM r.kept_note;
   IF clashes > 0 THEN
-    RAISE EXCEPTION '0015: % one-off(s) hold facts with different notes; resolve them by hand before migrating', clashes;
+    RAISE EXCEPTION '0015: % one-off(s) hold a duplicate fact whose note would be lost; resolve them by hand before migrating', clashes;
   END IF;
 END
 $$;
