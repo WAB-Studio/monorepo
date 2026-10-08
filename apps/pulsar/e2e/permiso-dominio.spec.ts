@@ -228,7 +228,7 @@ for (const width of [390, 1280]) {
       try {
         await out.page.goto(consentPath(CLAUDE));
         await expect(out.page.getByText(oauth.signedOut.lead, { exact: true })).toBeVisible();
-        expect(await out.page.locator("body").innerText()).not.toContain("vuelves a");
+        expect(await out.page.locator("body").innerText()).not.toContain(LEAD);
       } finally {
         await out.context.close();
       }
@@ -236,7 +236,7 @@ for (const width of [390, 1280]) {
       try {
         await invalid.page.goto(consentPath(UNREGISTERED));
         await expect(invalid.page.getByRole("heading", { level: 1, name: oauth.invalid.title })).toBeVisible();
-        expect(await invalid.page.locator("body").innerText()).not.toContain("vuelves a");
+        expect(await invalid.page.locator("body").innerText()).not.toContain(LEAD);
       } finally {
         await invalid.context.close();
       }
