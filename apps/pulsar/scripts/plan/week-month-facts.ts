@@ -115,7 +115,7 @@ test("loadWeek: a «3 al mes» with two taps still asks every day of the third w
   assert.deepEqual(askedDays(week, openId), [1, 1, 1, 1, 1, 1, 1]);
 });
 
-test("loadWeek: a «1 al mes» met on a day of the prior month asks nothing later that week, and the new month asks again", async () => {
+test("loadWeek: a «1 al mes» met before the week, in the prior month, asks nothing in the six days of that month, and the new month asks again", async () => {
   const plan = await import("@/app/actions/plan");
   const made = await plan.addCommitment({
     goalId,
@@ -127,9 +127,9 @@ test("loadWeek: a «1 al mes» met on a day of the prior month asks nothing late
   if (!made.ok) throw new Error(`addCommitment: ${made.error}`);
   const [owner] = await sql<{ user_id: string }[]>`select user_id from goals.goals where id = ${goalId}`;
   await sql`update goals.commitments set created_at = '2026-01-01' where id = ${made.commitmentId}`;
-  // 2026-02-23 (Mon) to 2026-03-01 (Sun): six February days and the 1st of March.
+  // Week 2026-02-23 to 2026-03-01: six February days and the 1st of March; the fact sits before the Monday.
   await sql`insert into goals.facts (user_id, goal_id, commitment_id, day)
-            values (${owner.user_id}, ${goalId}, ${made.commitmentId}, '2026-02-24'::date)`;
+            values (${owner.user_id}, ${goalId}, ${made.commitmentId}, '2026-02-10'::date)`;
   const week = await loadWeek("2026-02-25");
-  assert.deepEqual(askedDays(week, made.commitmentId), [1, 1, 0, 0, 0, 0, 1]);
+  assert.deepEqual(askedDays(week, made.commitmentId), [0, 0, 0, 0, 0, 0, 1]);
 });
