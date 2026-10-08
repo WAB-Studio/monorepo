@@ -71,7 +71,7 @@ export function reachedByMonth(input: {
 
 // Under 60 % is `reached * 5 < planned * 3`: integers only, so 432 of 720
 // sits exactly on the line and is not under it. RP-29 and RP-48 share it.
-export function underSixty(reached: number, planned: number): boolean {
+function underSixty(reached: number, planned: number): boolean {
   return reached * 5 < planned * 3;
 }
 

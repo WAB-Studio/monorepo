@@ -26,10 +26,7 @@ type DeriveDayInput = {
 // the first one starts, or in a gap between two that do not touch.
 export function phaseOn(phases: Phase[], day: string): Phase | null {
   return (
-    phases.find(
-      (phase) =>
-        day >= phase.startsOn && (phase.endsOn === null || day <= phase.endsOn),
-    ) ?? null
+    phases.find((phase) => day >= phase.startsOn && day <= phase.endsOn) ?? null
   );
 }
 

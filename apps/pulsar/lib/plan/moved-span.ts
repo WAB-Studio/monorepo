@@ -1,4 +1,4 @@
-export const DAYS_IN_WEEK = 7;
+const DAYS_IN_WEEK = 7;
 
 /** A week or more reads in weeks, rounded to the nearest, never fewer than one; under a week reads in days. */
 export function movedSpan(days: number): { short: boolean; weeks: number } {

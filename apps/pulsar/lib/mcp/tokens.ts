@@ -28,13 +28,6 @@ export function mintKey(): { key: string; hash: Buffer; hint: string } {
   return { key, hash: fingerprint(key), hint: key.slice(-4) };
 }
 
-export function bearerOf(header: string | null): string | null {
-  if (!header) return null;
-  const match = /^bearer +(\S+)$/i.exec(header.trim());
-
-  return match ? match[1] : null;
-}
-
 /**
  * One statement, outside any transaction and never through Supabase Auth
  * (RNP-14): the function finds the live key, stamps its last use and returns

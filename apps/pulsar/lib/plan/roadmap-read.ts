@@ -1,7 +1,7 @@
 import { dayBefore, daysBetween } from "@/lib/day/weeks";
 import { monthOfTask } from "./carry";
 import { monthOf, nextMonth } from "./months";
-import { amountOf, fillPlan, type PlanInput, type PlanItem, type PlanTask } from "./roadmap";
+import { amountOf, doneDayOf, fillPlan, type PlanInput, type PlanItem, type PlanTask } from "./roadmap";
 
 export type PlanNotice = {
   closedMonth: string;
@@ -16,17 +16,6 @@ const monthBefore = (month: string) => monthOf(dayBefore(month));
 
 function childrenOf(tasks: PlanTask[], task: PlanTask): PlanTask[] {
   return tasks.filter((other) => other.parentId === task.id);
-}
-
-// The last day of a task's children, once all are done; a leaf's own.
-function doneDayOf(task: PlanTask, children: PlanTask[]): string | null {
-  if (children.length === 0) return task.doneOn;
-  let last: string | null = null;
-  for (const child of children) {
-    if (child.doneOn === null) return null;
-    if (last === null || child.doneOn > last) last = child.doneOn;
-  }
-  return last;
 }
 
 // What the task still owes counting only what is done by `day`.

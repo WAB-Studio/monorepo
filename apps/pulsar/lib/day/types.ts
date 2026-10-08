@@ -34,13 +34,12 @@ export type CommitmentPlan = {
   createdOn: string;
 };
 
-// A span of weeks with its own single aim (RP-15). `endsOn` is null for a
-// phase left open-ended — the last one a plan names, most often.
+// A span of weeks with its own single aim (RP-15).
 export type Phase = {
   id: string;
   name: string;
   startsOn: string;
-  endsOn: string | null;
+  endsOn: string;
 };
 
 // Something the person declared, in one tap (RP-02, RP-05). `day` is the day

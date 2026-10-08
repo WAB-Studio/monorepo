@@ -225,7 +225,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       phases: phases.map((phase) => ({
         aim: phase.name,
         startsOn: phase.startsOn,
-        endsOn: phase.endsOn ?? dayBefore(row.goal.horizon),
+        endsOn: phase.endsOn,
         current: current?.id === phase.id,
       })),
       tasks: monthItems.map(toReportTask),

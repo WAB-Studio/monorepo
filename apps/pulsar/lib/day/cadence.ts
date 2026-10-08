@@ -1,5 +1,6 @@
 import { civilDateInZone, civilDateToDate, weekOf } from "@/lib/zone";
 import type { CommitmentPlan, DeclaredFact } from "./types";
+import { daysBetween } from "./weeks";
 
 // `plan.retiredAt` is the raw ISO instant a `timestamptz` column renders as
 // (`retired_at`, read back through `to_jsonb`), never a civil day on its
@@ -17,13 +18,6 @@ function retiredCivilDay(retiredAt: string): string {
   const civilDay = civilDateInZone(new Date(retiredAt));
   retiredCivilDayCache.set(retiredAt, civilDay);
   return civilDay;
-}
-
-// Whole civil days between two `YYYY-MM-DD` strings, positive when `to` is
-// later. Both sides go through midday UTC, so no local offset moves it.
-function daysBetween(from: string, to: string): number {
-  const ms = civilDateToDate(to).getTime() - civilDateToDate(from).getTime();
-  return Math.round(ms / 86_400_000);
 }
 
 // ISO 8601: 1 = Monday .. 7 = Sunday, matching `goals.commitments

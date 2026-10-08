@@ -11,7 +11,7 @@ export type DayPhraseKey = MessageKey extends infer K ? (K extends `${infer Base
 
 // The parts a phrase names a day with: `far` says the month is in them, so the
 // caller reads the `…Far` catalogue key.
-export function farDayParts(day: string, today: string, names: DayNames) {
+function farDayParts(day: string, today: string, names: DayNames) {
   const words = dayWords(day, today);
   return {
     far: words.month !== null,
