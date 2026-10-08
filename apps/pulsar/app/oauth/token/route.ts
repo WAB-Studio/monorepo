@@ -1,17 +1,13 @@
 import { z } from "zod";
 
+import { cors } from "@/lib/http/cors";
 import { clientFromMetadataUrl } from "@/lib/oauth/client-metadata";
 import { exchangeCode, refreshToken, type IssuedTokens } from "@/lib/oauth/grants";
 import { callerAddress, claimCall, tooMany } from "@/lib/oauth/throttle";
 
 export const runtime = "nodejs";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Max-Age": "86400",
-};
+const CORS = cors("POST");
 
 function reply(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
