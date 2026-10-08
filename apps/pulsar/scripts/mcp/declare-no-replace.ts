@@ -5,6 +5,7 @@
 // message. Handlers are called in-process as `write-tools.ts` calls them, but
 // through the registered `inputSchema` first, the way the SDK parses a call.
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import Module from "node:module";
 import { after, before, test } from "node:test";
 
@@ -33,6 +34,7 @@ let session: typeof import("@/lib/session");
 let plan: typeof import("@/app/actions/plan");
 let subject: Person;
 let commitment: string;
+let goalId: string;
 
 const today = todayInZone();
 const asResolved = (person: { id: string; email: string }): ResolvedPerson => ({ id: person.id, email: person.email }) as ResolvedPerson;
@@ -76,8 +78,9 @@ before(async () => {
   await session.actAs(asResolved(subject), async () => {
     const goal = await plan.createGoal({ name: "sin replace", horizon: dayFrom(120) });
     if (!goal.ok) throw new Error(`createGoal: ${goal.error}`);
+    goalId = goal.goalId;
     const made = await plan.addCommitment({
-      goalId: goal.goalId,
+      goalId,
       name: "estudiar",
       cadenceKind: "daily",
       satisfaction: "quantity",
@@ -89,6 +92,7 @@ before(async () => {
   });
   // A past day is only open to a commitment that already existed that day.
   await admin`update goals.commitments set created_at = now() - interval '20 days' where id = ${commitment}`;
+  await admin`update goals.goals set created_at = now() - interval '20 days' where id = ${goalId}`;
 });
 
 after(async () => {
@@ -133,8 +137,8 @@ test("a tool that fails logs the error's name and SQLSTATE, never the driver's m
   console.error = (...args: unknown[]) => void logged.push(args);
   let result;
   try {
-    // An id that is no uuid fails inside Postgres; drizzle's message carries the query and the parameter.
-    result = await call("declare_fact", { commitment_id: "no-es-un-uuid-0000", quantity: 5, day: dayFrom(-6) }, {
+    // A person id that is no uuid fails inside Postgres; drizzle's message carries the query and the parameter.
+    result = await call("declare_fact", { commitment_id: randomUUID(), quantity: 5, day: dayFrom(-6) }, {
       id: "no-es-un-uuid-0000",
       email: "x@example.invalid",
     });
