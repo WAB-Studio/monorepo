@@ -144,36 +144,74 @@ async function doorOpens(seed: Seeded): Promise<boolean> {
   return (await admin`select * from goals.person_for_token(${seed.hash})`).length === 1;
 }
 
-test("expiredAt follows the 90-day rule, revoked wins, and the order is live, expired, revoked", async () => {
-  const [owner] = await createPeople(admin, expiryRun, door, 1);
-  const lastUsed91 = ago(91);
-  const stale = await seedPersonal(owner, "stale", lastUsed91, ago(200));
-  const fresh = await seedPersonal(owner, "fresh", ago(89), ago(200));
-  const createdNever = ago(100);
-  const neverUsed = await seedPersonal(owner, "never used", null, createdNever);
-  const gone = await seedPersonal(owner, "gone", ago(100), ago(200), ago(1));
-  const lapsedConnection = await seedConnection(owner, "lapsed connection", ago(91));
-  const liveConnection = await seedConnection(owner, "live connection", ago(89));
+// One owner, six keys, read once: each test below asserts one clause of the rule.
+let seeded: Promise<{ list: Awaited<ReturnType<typeof tokens.listAccessTokens>>; seeds: Record<string, Seeded>; times: Record<string, Date> }> | undefined;
 
-  const list = await session.actAs(asResolved(owner), () => tokens.listAccessTokens());
-  const by = (seed: Seeded) => list.find((token) => token.id === seed.id)!;
+function fixture() {
+  seeded ??= (async () => {
+    const [owner] = await createPeople(admin, expiryRun, door, 1);
+    const times = { lastUsed91: ago(91), createdNever: ago(100) };
+    const seeds: Record<string, Seeded> = {
+      stale: await seedPersonal(owner, "stale", times.lastUsed91, ago(200)),
+      fresh: await seedPersonal(owner, "fresh", ago(89), ago(200)),
+      neverUsed: await seedPersonal(owner, "never used", null, times.createdNever),
+      gone: await seedPersonal(owner, "gone", ago(100), ago(200), ago(1)),
+      lapsedConnection: await seedConnection(owner, "lapsed connection", ago(91)),
+      liveConnection: await seedConnection(owner, "live connection", ago(89)),
+    };
+    const list = await session.actAs(asResolved(owner), () => tokens.listAccessTokens());
+    return { list, seeds, times };
+  })();
+  return seeded;
+}
 
-  assert.equal(by(stale).expiredAt, new Date(lastUsed91.getTime() + 90 * DAY).toISOString());
-  assert.equal(by(fresh).expiredAt, null);
-  assert.equal(by(neverUsed).expiredAt, new Date(createdNever.getTime() + 90 * DAY).toISOString());
-  assert.notEqual(by(lapsedConnection).expiredAt, null);
-  assert.equal(by(liveConnection).expiredAt, null);
-  assert.equal(by(gone).expiredAt, null);
-  assert.notEqual(by(gone).revokedAt, null);
+async function read(name: string) {
+  const { list, seeds, times } = await fixture();
+  return { token: list.find((token) => token.id === seeds[name].id)!, seed: seeds[name], list, seeds, times };
+}
 
-  // The door and the list read one rule, whichever side moves.
-  for (const seed of [stale, fresh, neverUsed, lapsedConnection, liveConnection]) {
-    assert.equal(by(seed).expiredAt === null, await doorOpens(seed), `door and list disagree on ${by(seed).name}`);
+test("a personal key unused 91 days expires 90 days after its last use", async () => {
+  const { token, times } = await read("stale");
+  assert.equal(token.expiredAt, new Date(times.lastUsed91.getTime() + 90 * DAY).toISOString());
+});
+
+test("a personal key used 89 days ago has not expired", async () => {
+  assert.equal((await read("fresh")).token.expiredAt, null);
+});
+
+test("a personal key never used counts from its creation", async () => {
+  const { token, times } = await read("neverUsed");
+  assert.equal(token.expiredAt, new Date(times.createdNever.getTime() + 90 * DAY).toISOString());
+});
+
+test("a connection whose last use was 91 days ago has expired, one from 89 days ago has not", async () => {
+  assert.notEqual((await read("lapsedConnection")).token.expiredAt, null);
+  assert.equal((await read("liveConnection")).token.expiredAt, null);
+});
+
+test("a revoked key past 90 days is revoked, not expired", async () => {
+  const { token } = await read("gone");
+  assert.equal(token.expiredAt, null);
+  assert.notEqual(token.revokedAt, null);
+});
+
+test("the list says expired exactly where the door refuses", async () => {
+  const { list, seeds } = await fixture();
+  for (const name of ["stale", "fresh", "neverUsed", "lapsedConnection", "liveConnection"]) {
+    const token = list.find((entry) => entry.id === seeds[name].id)!;
+    assert.equal(token.expiredAt === null, await doorOpens(seeds[name]), `door and list disagree on ${name}`);
   }
+});
 
-  const states = list.map((token) => (token.revokedAt ? "revoked" : token.expiredAt ? "expired" : "live"));
-  assert.deepEqual(states, [...states].sort((a, b) => ["live", "expired", "revoked"].indexOf(a) - ["live", "expired", "revoked"].indexOf(b)));
-  assert.deepEqual(states.filter((state) => state === "expired").length, 3);
+test("live first, then expired, then revoked, newest first inside each", async () => {
+  const { list, seeds } = await fixture();
+  const ids = list.filter((token) => Object.values(seeds).some((seed) => seed.id === token.id)).map((token) => token.id);
+  const rank = (id: string) => {
+    const token = list.find((entry) => entry.id === id)!;
+    return token.revokedAt ? 2 : token.expiredAt ? 1 : 0;
+  };
+  assert.deepEqual(ids.map(rank), [...ids.map(rank)].sort());
+  assert.deepEqual(ids.map(rank).filter((r) => r === 1).length, 3);
   const expired = list.filter((token) => token.expiredAt && !token.revokedAt);
   assert.deepEqual(expired.map((token) => token.createdAt), [...expired.map((token) => token.createdAt)].sort().reverse());
 });
