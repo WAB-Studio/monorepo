@@ -8,32 +8,46 @@ test("writeSyncState: when the stored row cannot be read, nothing is put", async
   const database = {
     onclose: null,
     transaction: () => {
-      const transaction: { oncomplete: null | (() => void); onerror: null; onabort: null; objectStore: () => unknown } = {
+      const transaction: {
+        oncomplete: null | (() => void);
+        onerror: null;
+        onabort: null;
+        objectStore: () => unknown;
+      } = {
         oncomplete: null,
         onerror: null,
         onabort: null,
         objectStore: () => ({
-        get: () => {
-          const request: { onsuccess: null | (() => void); onerror: null | (() => void); error: Error; result?: unknown } = {
-            onsuccess: null,
-            onerror: null,
-            error: new Error("read failed"),
-          };
-          queueMicrotask(() => request.onerror?.());
-          return request;
-        },
-        put: () => {
-          puts += 1;
-          queueMicrotask(() => transaction.oncomplete?.());
-        },
-      }),
+          get: () => {
+            const request: {
+              onsuccess: null | (() => void);
+              onerror: null | (() => void);
+              error: Error;
+              result?: unknown;
+            } = {
+              onsuccess: null,
+              onerror: null,
+              error: new Error("read failed"),
+            };
+            queueMicrotask(() => request.onerror?.());
+            return request;
+          },
+          put: () => {
+            puts += 1;
+            queueMicrotask(() => transaction.oncomplete?.());
+          },
+        }),
       };
       return transaction;
     },
   };
   (globalThis as { indexedDB?: unknown }).indexedDB = {
     open: () => {
-      const request: { onsuccess: null | (() => void); onerror: null | (() => void); result: unknown } = {
+      const request: {
+        onsuccess: null | (() => void);
+        onerror: null | (() => void);
+        result: unknown;
+      } = {
         onsuccess: null,
         onerror: null,
         result: database,
