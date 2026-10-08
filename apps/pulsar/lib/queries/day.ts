@@ -322,7 +322,7 @@ async function queryGoalsRow(
                  'id', g.id,
                  'name', g.name,
                  'horizon', g.horizon
-               ) order by g.horizon desc, g.position, g.created_at, g.id), '[]'::json)
+               ) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where g.archived_at is null
            and g.horizon > ${weekStart}::date

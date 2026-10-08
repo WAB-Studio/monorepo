@@ -653,7 +653,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   «Dejar el azúcar terminó ayer · ver», then «terminó el lunes 28» later in the same week, gone once
   that week is over (a goal that ended on a Sunday is gone on the Monday). «ver» opens the goal.
   Board `HoyMetaTerminada.dc.html`, approved by the user 2026-09-29; the desktop face is the same line
-  under «Hoy». Several goals ended that week: one line each, most recent first. Only on today, never
+  under «Hoy». Several goals ended that week: one line each, in plan order (RP-47; «most recent first» superseded by the user's RP-47 of 2026-10-05, read 2026-10-07). Only on today, never
   on `/dia/<fecha>`, and never beside the all-ended card, which already names the last goal. Wording
   decided 2026-09-29 by the coordinator.
 - **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the

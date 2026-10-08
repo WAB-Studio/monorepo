@@ -2860,5 +2860,7 @@ branch could pass until it was restored.
 - Match a date's words with `\p{L}` and the `u` flag, never `\w`: `\w` is ASCII and skips «miércoles» and «sábado»,
   so on those days a header spec measured the «hechos 0 de 6» tally instead (75 px off, 2026-10-07). Drive the longest
   date by rewriting the eyebrow's text, so the check never waits for a Wednesday.
-- Order a list a spec reads «most recent first» by the date in the query. `ended_this_week` ordered by `position`
-  and passed only while creation order happened to agree with end order (2026-10-07).
+- Read `docs/pulsar/SPEC.md` before "fixing" an order a spec expects. On 2026-10-07 a red e2e asked «most recent
+  first» for `ended_this_week`; the query was changed to `horizon desc` and broke three `check:day`/`check:plan`
+  assertions that pin RP-47's plan order. The e2e followed a DESIGN line RP-47 had superseded; it was the spec that was wrong.
+  The e2e only failed from a Wednesday, the first weekday that draws two endings.
