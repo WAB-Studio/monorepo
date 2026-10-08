@@ -172,6 +172,52 @@ async function checkRetirement(): Promise<void> {
         where user_id = ${owner} and device_id = ${liveDevice}`;
       assert("G5", foreign.count === 0 && !untouched.retired, `rows affected = ${foreign.count}, retired = ${untouched.retired}`);
 
+      // A deleted row would take its retirement with it, and the next sync would seal the id afresh.
+      let deleteCode: string | undefined;
+      await tx
+        .savepoint((sp) => sp`delete from reading.devices where user_id = ${owner} and device_id = ${retiredDevice}`)
+        .catch((error: unknown) => {
+          deleteCode = pgCode(error);
+        });
+      const [kept] = await tx<{ retired: boolean }[]>`
+        select retired_at is not null as retired from reading.devices
+        where user_id = ${owner} and device_id = ${retiredDevice}`;
+      assert("G6", deleteCode === "42501" && kept?.retired === true, `sqlstate = ${deleteCode ?? "none"}, row kept retired = ${kept?.retired}`);
+
+      // `retireDevice`'s own path for a device that never synced: its row is born retired.
+      const bornRetired = randomUUID();
+      let bornCode: string | undefined;
+      await tx
+        .savepoint((sp) => sp`insert into reading.devices (user_id, device_id, label, retired_at)
+          values (${owner}, ${bornRetired}, 'unknown:unknown', now())`)
+        .catch((error: unknown) => {
+          bornCode = pgCode(error);
+        });
+      let bornLookupCode: string | undefined;
+      await tx.savepoint((sp) => insertLookup(sp, bornRetired, 1)).catch((error: unknown) => {
+        bornLookupCode = pgCode(error);
+      });
+      assert(
+        "G7",
+        bornCode === undefined && bornLookupCode === "42501",
+        `device insert sqlstate = ${bornCode ?? "none"}, lookup insert sqlstate = ${bornLookupCode ?? "none"}`,
+      );
+
+      // No `where`, no `returning`: only the UPDATE policy's own `using` picks the rows this
+      // statement reaches. A column reference would bring the SELECT policy in and hide the gap.
+      await enterUserContext(tx, stranger);
+      let sweepCode: string | undefined;
+      await tx
+        .savepoint((sp) => sp`update reading.devices set last_seen_at = '2001-01-01T00:00:00Z'`)
+        .catch((error: unknown) => {
+          sweepCode = pgCode(error);
+        });
+      await enterUserContext(tx, owner);
+      const [swept] = await tx<{ year: number }[]>`
+        select extract(year from last_seen_at)::int as year from reading.devices
+        where user_id = ${owner} and device_id = ${liveDevice}`;
+      assert("G8", sweepCode === undefined && swept.year !== 2001, `sqlstate = ${sweepCode ?? "none"}, owner's last_seen year = ${swept.year}`);
+
       throw forcedRollback;
     })
     .catch((error: unknown) => {

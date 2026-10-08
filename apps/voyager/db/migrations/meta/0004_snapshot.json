@@ -300,15 +300,6 @@
           ],
           "using": "(select auth.uid()) = \"reading\".\"devices\".\"user_id\"",
           "withCheck": "(select auth.uid()) = \"reading\".\"devices\".\"user_id\""
-        },
-        "devices_delete_self": {
-          "name": "devices_delete_self",
-          "as": "PERMISSIVE",
-          "for": "DELETE",
-          "to": [
-            "authenticated"
-          ],
-          "using": "(select auth.uid()) = \"reading\".\"devices\".\"user_id\""
         }
       },
       "checkConstraints": {

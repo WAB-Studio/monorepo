@@ -1,7 +1,8 @@
 /**
- * Drives the seven policies on `reading.lookups` and `reading.devices`
- * against the real database — DELETE included — instead of asserting them
- * from the migration (AGENTS.md, "Verification").
+ * Drives the policies on `reading.lookups` and `reading.devices` against the
+ * real database — DELETE included — instead of asserting them from the
+ * migration (AGENTS.md, "Verification"), and the real statements of
+ * `lib/sync/upload.ts` and `lib/sync/devices.ts` through them.
  *
  * A single `sql.begin` holds every statement below and always throws at the
  * end to force a ROLLBACK. The two subjects are `randomUUID()`, their
@@ -11,15 +12,28 @@
  */
 import { randomUUID } from "node:crypto";
 
+import Module from "node:module";
+
 import { assertSuiteDatabase } from "@repo/harness-registry";
 import { settleSessionSql } from "@repo/supabase-auth/settle";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+import type { Transaction } from "../lib/session";
 import { deviceLabel } from "../lib/sync/device-label";
-import { decodeCursor, syncRequestSchema } from "../lib/sync/protocol";
+import { decodeCursor, syncRequestSchema, type SyncRow } from "../lib/sync/protocol";
 
 assertSuiteDatabase();
+
+// `server-only` throws outside Next; `lib/sync/upload.ts` and `devices.ts`
+// import it, and are loaded with `await import` in `main` once this is in place.
+const untypedModule = Module as unknown as {
+  _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+};
+const originalLoad = untypedModule._load;
+untypedModule._load = (request, parent, isMain) =>
+  request === "server-only" ? {} : originalLoad(request, parent, isMain);
 
 const sql = postgres(process.env.DATABASE_URL!, {
   prepare: false,
@@ -80,96 +94,32 @@ async function countDevice(tx: postgres.TransactionSql, userId: string, deviceId
   return row.count;
 }
 
-// The statements below mirror `app/api/log/sync/route.ts`'s `writeUpload` and
-// `downloadRows` and `lib/sync/devices.ts`'s `listDevices` and `retireDevice`
-// (both import `server-only`, which throws under plain Node), with the daily
-// cap as a parameter so a probe needs two rows, not twenty thousand.
-type ProbeRow = { deviceId: string; localId: number };
-
-async function probeUpload(
-  tx: postgres.TransactionSql,
-  userId: string,
-  deviceId: string,
-  label: string,
-  rows: ProbeRow[],
-  cap: number,
-): Promise<"ok" | "retired" | "quota"> {
-  const payload = JSON.stringify(
-    rows.map((row) => ({
-      device_id: row.deviceId,
-      local_id: row.localId,
-      at: new Date().toISOString(),
-      text: "x",
-      normalised: "x",
-      kind: "word",
-      outcome: "exact",
-      headword: null,
-      rule: null,
-      senses: 0,
-      translation: null,
-      dictionary_ready: true,
-      origin: null,
-      record_schema: 1,
-    })),
-  );
-  const [state] = await tx<{ retired: boolean; allowed: boolean }[]>`
-    with state as (
-      select
-        exists (
-          select 1 from reading.devices
-          where user_id = ${userId} and device_id = ${deviceId} and retired_at is not null
-        ) as retired,
-        (
-          select count(*) from reading.lookups
-          where user_id = ${userId}
-            and received_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc')
-        ) as today
-    ),
-    gate as (
-      select retired, (not retired and today + ${rows.length}::int <= ${cap}::int) as allowed from state
-    ),
-    sealed as (
-      insert into reading.devices (user_id, device_id, label)
-      select ${userId}::uuid, ${deviceId}::uuid, ${label}::text from gate where allowed
-      on conflict (user_id, device_id)
-        do update set last_seen_at = now(), label = excluded.label where devices.retired_at is null
-      returning 1
-    ),
-    written as (
-      insert into reading.lookups
-        (user_id, device_id, local_id, at, text, normalised, kind, outcome, headword, rule, senses,
-         translation, dictionary_ready, origin, record_schema)
-      select ${userId}::uuid, r.device_id, r.local_id, r."at", r."text", r.normalised, r.kind, r.outcome,
-             r.headword, r."rule", r.senses, r.translation, r.dictionary_ready, r.origin, r.record_schema
-      from jsonb_to_recordset(${payload}::text::jsonb) as r(
-        device_id uuid, local_id integer, "at" timestamptz, "text" text, normalised text, kind text,
-        outcome text, headword text, "rule" text, senses integer, translation text,
-        dictionary_ready boolean, origin text, record_schema smallint
-      )
-      where (select allowed from gate)
-      on conflict (user_id, device_id, local_id) do nothing
-      returning 1
-    )
-    select gate.retired, gate.allowed from gate`;
-  return state.retired ? "retired" : state.allowed ? "ok" : "quota";
+// The real `writeUpload`, `downloadRows`, `listDevices` and `retireDevice`
+// take a drizzle transaction; this wraps the probe's own postgres.js one, so
+// they run inside the forced-rollback block under the probe's settled role.
+// Only `execute` is ever called, which reaches `unsafe` and nothing else.
+function readerTx(tx: postgres.TransactionSql): Transaction {
+  const client = { options: { parsers: {}, serializers: {} }, unsafe: tx.unsafe.bind(tx) };
+  return drizzle({ client: client as unknown as postgres.Sql, casing: "snake_case" }) as unknown as Transaction;
 }
 
-async function probeRetire(tx: postgres.TransactionSql, userId: string, deviceId: string): Promise<number> {
-  const [row] = await tx<{ lookups: string }[]>`
-    with gone as (
-      delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId} returning 1
-    )
-    insert into reading.devices (user_id, device_id, label, retired_at)
-    values (${userId}, ${deviceId}, 'unknown:unknown', now())
-    on conflict (user_id, device_id) do update set retired_at = coalesce(devices.retired_at, now())
-    returning (select count(*) from gone) as lookups`;
-  return Number(row.lookups);
-}
-
-async function probeList(tx: postgres.TransactionSql, userId: string): Promise<string[]> {
-  const rows = await tx<{ device_id: string }[]>`
-    select d.device_id from reading.devices d where d.user_id = ${userId} and d.retired_at is null`;
-  return rows.map((row) => row.device_id);
+function rowsOf(deviceId: string, localIds: number[]): SyncRow[] {
+  return localIds.map((localId) => ({
+    deviceId,
+    localId,
+    at: Date.now(),
+    text: "x",
+    normalised: "x",
+    kind: "word",
+    outcome: "exact",
+    headword: null,
+    rule: null,
+    senses: 0,
+    translation: null,
+    dictionaryReady: true,
+    origin: null,
+    recordSchema: 1,
+  }));
 }
 
 async function deviceState(
@@ -184,6 +134,9 @@ async function deviceState(
 }
 
 async function main() {
+  const { downloadRows, writeUpload } = await import("../lib/sync/upload");
+  const { listDevices, retireDevice } = await import("../lib/sync/devices");
+
   const subject = randomUUID();
   const intruder = randomUUID();
   const deviceSubject = randomUUID();
@@ -294,20 +247,13 @@ async function main() {
       await tx`insert into reading.devices (user_id, device_id, label) values (${subject}, ${deviceSubject}, 'reader A device')`;
 
       const lookupsBeforeOwn = await countLookups(tx, subject, deviceSubject);
-      const deviceBeforeOwn = await countDevice(tx, subject, deviceSubject);
-      // The retire statement itself, unchanged from module 20's `retireDevice`.
-      await tx`
-        with gone as (
-          delete from reading.lookups where user_id = ${subject} and device_id = ${deviceSubject} returning 1
-        )
-        delete from reading.devices where user_id = ${subject} and device_id = ${deviceSubject}
-        returning (select count(*) from gone) as lookups`;
+      const ownRetired = await retireDevice(readerTx(tx), subject, deviceSubject);
       const lookupsAfterOwn = await countLookups(tx, subject, deviceSubject);
-      const deviceAfterOwn = await countDevice(tx, subject, deviceSubject);
+      const ownAfter = await deviceState(tx, subject, deviceSubject);
       assert(
         "S10",
-        lookupsBeforeOwn === "3" && lookupsAfterOwn === "0" && deviceBeforeOwn === "1" && deviceAfterOwn === "0",
-        `lookups ${lookupsBeforeOwn} -> ${lookupsAfterOwn}, device row ${deviceBeforeOwn} -> ${deviceAfterOwn}`,
+        lookupsBeforeOwn === "3" && ownRetired.lookups === 3 && lookupsAfterOwn === "0" && ownAfter?.retired === true,
+        `lookups ${lookupsBeforeOwn} -> ${lookupsAfterOwn} (reported ${ownRetired.lookups}), device row kept retired = ${ownAfter?.retired}`,
       );
 
       await enterUserContext(tx, intruder);
@@ -325,33 +271,28 @@ async function main() {
         with gone as (
           delete from reading.lookups where device_id = ${deviceIntruderMain} returning 1
         )
-        delete from reading.devices where device_id = ${deviceIntruderMain}
+        update reading.devices set retired_at = now() where device_id = ${deviceIntruderMain}
         returning (select count(*) from gone) as lookups`;
 
       await enterUserContext(tx, intruder);
       const mainLookupsAfterAttack = await countLookups(tx, intruder, deviceIntruderMain);
-      const mainDeviceAfterAttack = await countDevice(tx, intruder, deviceIntruderMain);
+      const mainDeviceAfterAttack = await deviceState(tx, intruder, deviceIntruderMain);
       assert(
         "S11",
-        attack.length === 0 && mainLookupsAfterAttack === "2" && mainDeviceAfterAttack === "1",
-        `outer delete rows = ${attack.length}, B's rows survive = ${mainLookupsAfterAttack} lookups / ${mainDeviceAfterAttack} device`,
+        attack.length === 0 && mainLookupsAfterAttack === "2" && mainDeviceAfterAttack?.retired === false,
+        `outer update rows = ${attack.length}, B's rows survive = ${mainLookupsAfterAttack} lookups, device retired = ${mainDeviceAfterAttack?.retired}`,
       );
 
       const otherLookupsBefore = await countLookups(tx, intruder, deviceIntruderOther);
       const otherDeviceBefore = await countDevice(tx, intruder, deviceIntruderOther);
-      // The legitimate retirement: same statement, run by its owner.
-      const [retiredMain] = await tx<{ lookups: string }[]>`
-        with gone as (
-          delete from reading.lookups where user_id = ${intruder} and device_id = ${deviceIntruderMain} returning 1
-        )
-        delete from reading.devices where user_id = ${intruder} and device_id = ${deviceIntruderMain}
-        returning (select count(*) from gone) as lookups`;
+      // The legitimate retirement: the real `retireDevice`, run by its owner.
+      const retiredMain = await retireDevice(readerTx(tx), intruder, deviceIntruderMain);
       const otherLookupsAfter = await countLookups(tx, intruder, deviceIntruderOther);
       const otherDeviceAfter = await countDevice(tx, intruder, deviceIntruderOther);
       assert(
         "S12",
-        retiredMain?.lookups === "2" && otherLookupsBefore === otherLookupsAfter && otherDeviceBefore === otherDeviceAfter,
-        `main device retired ${retiredMain?.lookups} lookups; other device untouched: lookups ${otherLookupsBefore} -> ${otherLookupsAfter}, device ${otherDeviceBefore} -> ${otherDeviceAfter}`,
+        retiredMain.lookups === 2 && otherLookupsBefore === otherLookupsAfter && otherDeviceBefore === otherDeviceAfter,
+        `main device retired ${retiredMain.lookups} lookups; other device untouched: lookups ${otherLookupsBefore} -> ${otherLookupsAfter}, device ${otherDeviceBefore} -> ${otherDeviceAfter}`,
       );
 
       throw forcedRollback;
@@ -419,27 +360,26 @@ async function main() {
       assert("S16", touched.count === 0, `rows updated = ${touched.count}`);
 
       await enterUserContext(tx, owner);
+      const reader = readerTx(tx);
       const garbled = decodeCursor("x|y|1");
       const legible = decodeCursor(`2026-10-08T12:00:00.123456Z|${deviceA}|7`);
       const impossible = decodeCursor(`2026-02-31T12:00:00Z|${deviceA}|7`);
-      await probeUpload(tx, owner, deviceB, "chrome:android", [1, 2, 3].map((localId) => ({ deviceId: deviceB, localId })), 100);
-      const everything = await tx<{ local_id: number }[]>`
-        select local_id from reading.lookups where user_id = ${owner}
-          and ${garbled ? tx`false` : tx`true`} and device_id <> ${deviceA}`;
+      await writeUpload(reader, owner, deviceB, "chrome:android", rowsOf(deviceB, [1, 2, 3]));
+      let everything = "not run" as number | string;
+      await tx
+        .savepoint(async (sp) => {
+          everything = (await downloadRows(readerTx(sp), garbled, deviceA)).length;
+        })
+        .catch((error: unknown) => {
+          everything = `sqlstate ${pgCode(error) ?? String(error)}`;
+        });
       assert(
         "S17",
-        garbled === null && impossible === null && legible?.localId === 7 && everything.length === 3,
-        `x|y|1 -> ${garbled}, 31 February -> ${impossible}, legible kept = ${legible !== null}, full download = ${everything.length} rows`,
+        garbled === null && impossible === null && legible?.localId === 7 && everything === 3,
+        `x|y|1 -> ${garbled === null ? "null" : "a cursor"}, 31 February -> ${impossible}, legible kept = ${legible !== null}, full download = ${everything}`,
       );
 
-      const wire = (at: number) => ({
-        deviceId: deviceA,
-        rows: [{
-          deviceId: deviceA, localId: 1, at, text: "x", normalised: "x", kind: "word", outcome: "exact",
-          headword: null, rule: null, senses: 0, translation: null, dictionaryReady: true, origin: null, recordSchema: 1,
-        }],
-        since: null,
-      });
+      const wire = (at: number) => ({ deviceId: deviceA, rows: [{ ...rowsOf(deviceA, [1])[0], at }], since: null });
       assert(
         "S18",
         !syncRequestSchema.safeParse(wire(9e15)).success && syncRequestSchema.safeParse(wire(1_700_000_000_000)).success,
@@ -450,53 +390,63 @@ async function main() {
       // refreshed `last_seen_at` is only visible against an older one.
       const age = (device: string) =>
         tx`update reading.devices set last_seen_at = '2000-01-01T00:00:00Z' where user_id = ${owner} and device_id = ${device}`;
+      const countOwner = async () =>
+        Number((await tx<{ count: string }[]>`select count(*)::text as count from reading.lookups where user_id = ${owner}`)[0].count);
 
       await age(deviceA);
-      const [{ count: before }] = await tx<{ count: string }[]>`select count(*)::text as count from reading.lookups where user_id = ${owner}`;
-      const overQuota = await probeUpload(tx, owner, deviceA, "chrome:android", [{ deviceId: deviceA, localId: 1 }], Number(before));
-      const [{ count: afterQuota }] = await tx<{ count: string }[]>`select count(*)::text as count from reading.lookups where user_id = ${owner}`;
+      const before = await countOwner();
+      const overQuota = await writeUpload(reader, owner, deviceA, "chrome:android", rowsOf(deviceA, [1]), before);
+      const afterQuota = await countOwner();
       const sealQuota = await deviceState(tx, owner, deviceA);
-      const underQuota = await probeUpload(tx, owner, deviceA, "chrome:android", [{ deviceId: deviceA, localId: 1 }], Number(before) + 1);
+      const underQuota = await writeUpload(reader, owner, deviceA, "chrome:android", rowsOf(deviceA, [1]), before + 1);
       assert(
         "S19",
-        overQuota === "quota" && afterQuota === before && sealQuota?.seenYear === 2000 && underQuota === "ok",
-        `over cap -> ${overQuota}, rows ${before} -> ${afterQuota}, seal year ${sealQuota?.seenYear}, at cap -> ${underQuota}`,
+        overQuota.status === "quota" && afterQuota === before && sealQuota?.seenYear === 2000 && underQuota.status === "ok",
+        `over cap -> ${overQuota.status}, rows ${before} -> ${afterQuota}, seal year ${sealQuota?.seenYear}, at cap -> ${underQuota.status}`,
       );
 
       await tx`update reading.devices set retired_at = now() where user_id = ${owner} and device_id = ${deviceA}`;
       await age(deviceA);
-      const [{ count: beforeRetired }] = await tx<{ count: string }[]>`select count(*)::text as count from reading.lookups where user_id = ${owner}`;
-      const toRetired = await probeUpload(tx, owner, deviceA, "chrome:android", [{ deviceId: deviceA, localId: 2 }], 100);
-      const [{ count: afterRetired }] = await tx<{ count: string }[]>`select count(*)::text as count from reading.lookups where user_id = ${owner}`;
+      const beforeRetired = await countOwner();
+      const toRetired = await writeUpload(reader, owner, deviceA, "chrome:android", rowsOf(deviceA, [2]));
+      const afterRetired = await countOwner();
       const sealRetired = await deviceState(tx, owner, deviceA);
       assert(
         "S20",
-        toRetired === "retired" && beforeRetired === afterRetired && sealRetired?.seenYear === 2000,
-        `upload -> ${toRetired}, rows ${beforeRetired} -> ${afterRetired}, seal year ${sealRetired?.seenYear}`,
+        toRetired.status === "retired" && beforeRetired === afterRetired && sealRetired?.seenYear === 2000,
+        `upload -> ${toRetired.status}, rows ${beforeRetired} -> ${afterRetired}, seal year ${sealRetired?.seenYear}`,
       );
 
       await tx`insert into reading.devices (user_id, device_id, label) values (${owner}, ${deviceC}, 'Chrome on Android')`;
-      await probeUpload(tx, owner, deviceC, deviceLabel("Mozilla/5.0 (Linux; Android 14) Chrome/126.0.0.0 Mobile Safari/537.36"), [], 100);
+      await writeUpload(reader, owner, deviceC, deviceLabel("Mozilla/5.0 (Linux; Android 14) Chrome/126.0.0.0 Mobile Safari/537.36"), []);
       const relabelled = await deviceState(tx, owner, deviceC);
       assert("S20b", relabelled?.label === "chrome:android", `label after a round = ${relabelled?.label}`);
 
       await tx`insert into reading.devices (user_id, device_id, label) values (${owner}, ${deviceD}, 'chrome:android')`;
-      await probeUpload(tx, owner, deviceD, "chrome:android", [{ deviceId: deviceD, localId: 1 }, { deviceId: deviceD, localId: 2 }], 100);
+      await writeUpload(reader, owner, deviceD, "chrome:android", rowsOf(deviceD, [1, 2]));
       const siblingBefore = (await tx`select 1 from reading.lookups where user_id = ${owner} and device_id = ${deviceB}`).length;
-      const gone = await probeRetire(tx, owner, deviceD);
+      const gone = await retireDevice(reader, owner, deviceD);
       const retiredRow = await deviceState(tx, owner, deviceD);
       const [{ count: leftOnD }] = await tx<{ count: string }[]>`select count(*)::text as count from reading.lookups where user_id = ${owner} and device_id = ${deviceD}`;
       const siblingAfter = (await tx`select 1 from reading.lookups where user_id = ${owner} and device_id = ${deviceB}`).length;
-      const listed = await probeList(tx, owner);
-      const second = await probeRetire(tx, owner, deviceD);
+      const listed = (await listDevices(reader, owner)).map((device) => device.deviceId);
+      let second = "not run" as number | string;
+      await tx
+        .savepoint(async (sp) => {
+          second = (await retireDevice(readerTx(sp), owner, deviceD)).lookups;
+        })
+        .catch((error: unknown) => {
+          second = `sqlstate ${pgCode(error) ?? String(error)}`;
+        });
       const neverSealed = randomUUID();
-      const ghost = await probeRetire(tx, owner, neverSealed);
-      const ghostUpload = await probeUpload(tx, owner, neverSealed, "chrome:android", [{ deviceId: neverSealed, localId: 1 }], 100);
+      const ghost = await retireDevice(reader, owner, neverSealed);
+      const ghostUpload = await writeUpload(reader, owner, neverSealed, "chrome:android", rowsOf(neverSealed, [1]));
       assert(
         "S21",
-        gone === 2 && retiredRow?.retired === true && leftOnD === "0" && siblingBefore === siblingAfter &&
-          !listed.includes(deviceD) && listed.includes(deviceC) && second === 0 && ghost === 0 && ghostUpload === "retired",
-        `retired ${gone} rows, row kept retired = ${retiredRow?.retired}, left = ${leftOnD}, sibling ${siblingBefore} -> ${siblingAfter}, listed = ${listed.length}, second call = ${second}, never-sealed = ${ghost}/${ghostUpload}`,
+        gone.lookups === 2 && retiredRow?.retired === true && leftOnD === "0" && siblingBefore === siblingAfter &&
+          !listed.includes(deviceD) && listed.includes(deviceC) && second === 0 && ghost.lookups === 0 &&
+          ghostUpload.status === "retired",
+        `retired ${gone.lookups} rows, row kept retired = ${retiredRow?.retired}, left = ${leftOnD}, sibling ${siblingBefore} -> ${siblingAfter}, listed = ${listed.length}, second call = ${second}, never-sealed = ${ghost.lookups}/${ghostUpload.status}`,
       );
 
       throw forcedRollback;
@@ -504,6 +454,69 @@ async function main() {
     .catch((error: unknown) => {
       if (error !== forcedRollback) throw error;
     });
+
+  // S22: two uploads at once, each alone within the cap and together past it.
+  // The first holds its transaction open while the second waits on the quota
+  // lock, so the second counts only after the first commits. It needs real
+  // commits, so its reader is a committed row this block deletes at the end
+  // (the cascade takes the devices and lookups with it).
+  const racer = randomUUID();
+  const raceCap = 2;
+  const race = postgres(process.env.DATABASE_URL!, { prepare: false, max: 3, connection: { search_path: "reading, public" } });
+  try {
+    await race`insert into auth.users (id) values (${racer})`;
+    const firstDevice = randomUUID();
+    const secondDevice = randomUUID();
+
+    let firstHolds!: (status: string) => void;
+    const firstWrote = new Promise<string>((resolve) => (firstHolds = resolve));
+    let releaseFirst!: () => void;
+    const firstReleased = new Promise<void>((resolve) => (releaseFirst = resolve));
+
+    const first = race.begin(async (tx) => {
+      await enterUserContext(tx, racer);
+      const upload = await writeUpload(readerTx(tx), racer, firstDevice, "chrome:android", rowsOf(firstDevice, [1, 2]), raceCap);
+      firstHolds(upload.status);
+      await firstReleased;
+    });
+    // A first upload that throws must not leave this block waiting on a signal nobody sends.
+    first.catch((error: unknown) => firstHolds(`threw ${pgCode(error) ?? String(error)}`));
+    const firstStatus = await firstWrote;
+
+    let secondDone = false;
+    const second = race
+      .begin(async (tx) => {
+        await enterUserContext(tx, racer);
+        return writeUpload(readerTx(tx), racer, secondDevice, "chrome:android", rowsOf(secondDevice, [1, 2]), raceCap);
+      })
+      .finally(() => {
+        secondDone = true;
+      });
+
+    // Until the second statement is queued on an advisory lock, or has already
+    // finished because nothing made it wait. Bounded: never a retry.
+    let waited = false;
+    for (let attempt = 0; attempt < 100 && !waited && !secondDone; attempt += 1) {
+      const [{ count }] = await race<{ count: string }[]>`
+        select count(*)::text as count from pg_locks where locktype = 'advisory' and not granted`;
+      waited = count !== "0";
+      if (!waited) await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    releaseFirst();
+    await first;
+    const secondUpload = await second;
+
+    const [{ count: raced }] = await race<{ count: string }[]>`
+      select count(*)::text as count from reading.lookups where user_id = ${racer}`;
+    assert(
+      "S22",
+      firstStatus === "ok" && waited && secondUpload.status === "quota" && raced === String(raceCap),
+      `first -> ${firstStatus}, second waited on the lock = ${waited}, second -> ${secondUpload.status}, rows ${raced} for a cap of ${raceCap}`,
+    );
+  } finally {
+    await race`delete from auth.users where id = ${racer}`;
+    await race.end();
+  }
 
   await sql.end();
   if (failed) process.exit(1);

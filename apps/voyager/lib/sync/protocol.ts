@@ -59,9 +59,16 @@ export const syncRowSchema = z.object({
 // (module 31, RL-25). Always present, never conditional on `rows` being
 // empty: one shape for every round keeps the route's own read one line, not
 // two paths that can drift apart.
+//
+// Every row of one batch is one device's: the route checks retirement, seals and
+// excludes by `rows[0]`'s device, so a row of another device would ride past all
+// three (a retired one's row then fails the insert policy, a 500).
 export const syncRequestSchema = z.object({
   deviceId: z.uuid(),
-  rows: z.array(syncRowSchema).max(SYNC_BATCH),
+  rows: z
+    .array(syncRowSchema)
+    .max(SYNC_BATCH)
+    .refine((rows) => rows.every((row) => row.deviceId === rows[0].deviceId), { message: "one device per batch" }),
   since: z.string().min(1).nullable(),
 });
 

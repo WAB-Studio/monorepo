@@ -44,11 +44,7 @@ export const devices = reading.table(
       using: sql`${authUid} = ${t.userId}`,
       withCheck: sql`${authUid} = ${t.userId}`,
     }),
-    pgPolicy("devices_delete_self", {
-      for: "delete",
-      to: authenticatedRole,
-      using: sql`${authUid} = ${t.userId}`,
-    }),
+    // No delete policy and no DELETE grant (migration 0004): a retired row is what keeps its id refused.
   ],
 );
 
