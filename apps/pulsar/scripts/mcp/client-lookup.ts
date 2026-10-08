@@ -48,6 +48,29 @@ test("an unknown URL reads nothing", async () => {
   });
 });
 
+test("with two clients registered, a lookup returns exactly the one whose URL it names", async () => {
+  await rolledBack(async (tx) => {
+    const urlA = `https://${randomUUID()}.example.invalid/meta`;
+    const urlB = `https://${randomUUID()}.example.invalid/meta`;
+    const [{ id: idA }] = await tx<{ id: string }[]>`
+      select goals.oauth_register_client('Asistente A', array['https://a.example.invalid/cb'], ${urlA}) as id`;
+    const [{ id: idB }] = await tx<{ id: string }[]>`
+      select goals.oauth_register_client('Asistente B', array['https://b.example.invalid/cb'], ${urlB}) as id`;
+    const rowsA = await tx<{ id: string; client_name: string }[]>`select * from goals.oauth_client_by_metadata_url(${urlA})`;
+    assert.deepEqual(rowsA.map((r) => [r.id, r.client_name]), [[idA, "Asistente A"]]);
+    const rowsB = await tx<{ id: string; client_name: string }[]>`select * from goals.oauth_client_by_metadata_url(${urlB})`;
+    assert.deepEqual(rowsB.map((r) => [r.id, r.client_name]), [[idB, "Asistente B"]]);
+  });
+});
+
+test("with a client registered, an unknown URL still reads nothing", async () => {
+  await rolledBack(async (tx) => {
+    await tx`select goals.oauth_register_client('Asistente', array['https://a.example.invalid/cb'], ${`https://${randomUUID()}.example.invalid/meta`})`;
+    const rows = await tx`select * from goals.oauth_client_by_metadata_url(${`https://${randomUUID()}.example.invalid/none`})`;
+    assert.equal(rows.length, 0);
+  });
+});
+
 test("authenticated and anon cannot execute it", async () => {
   for (const role of ["authenticated", "anon"]) {
     await rolledBack(async (tx) => {
