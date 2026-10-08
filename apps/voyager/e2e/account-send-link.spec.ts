@@ -38,20 +38,12 @@ const RULE_MESSAGE =
   "sendSignInLink POST left the browser with no simulated answer: account-send-link.spec.ts never runs the real action";
 
 let unsimulatedPosts: string[] = [];
-let realActionEmail: string | null = null;
 
 test.beforeEach(async ({ page }) => {
   unsimulatedPosts = [];
-  realActionEmail = null;
   await page.route("**/cuenta", async (route) => {
     const request = route.request();
     if (request.method() !== "POST" || !request.headers()["next-action"]) {
-      await route.continue();
-      return;
-    }
-    // The one exception: an address that zod rejects before any DNS or
-    // Supabase call, named by the test through `allowRealActionFor`.
-    if (realActionEmail !== null && (request.postData() ?? "").includes(realActionEmail)) {
       await route.continue();
       return;
     }
@@ -64,29 +56,45 @@ test.afterEach(() => {
   expect(unsimulatedPosts, RULE_MESSAGE).toEqual([]);
 });
 
-// For a value `sendSignInLink`'s zod schema refuses outright: the action
-// answers `emailInvalid` before it resolves DNS or calls Supabase.
-function allowRealActionFor(invalidEmail: string): void {
-  expect(invalidEmail.includes("@"), "only an address zod rejects may reach the real action").toBe(false);
-  realActionEmail = invalidEmail;
-}
-
 async function submit(page: Page, email: string): Promise<void> {
   await page.goto("/cuenta");
   await page.getByRole("textbox", { name: messages.account.emailLabel }).fill(email);
   await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
 }
 
-// Fails by design (`test.fail`): it submits with no simulated answer and the
-// guard must abort the POST and fail the test. If the guard stops biting this
-// test goes green-by-failure red. The address carries no `@`, so even without
-// the guard the real action refuses it before DNS or Supabase.
-test("the guard fails a test that lets the action POST out unsimulated", async ({ page }) => {
-  test.fail();
+// Waits for the browser to report the action POST as failed. A POST that
+// reached a server would answer instead, so only an abort lands here.
+function nextActionPostFailure(page: Page): Promise<{ hasResponse: boolean }> {
+  return new Promise((resolve) => {
+    page.on("requestfailed", (request) => {
+      if (request.method() === "POST" && request.headers()["next-action"]) {
+        void request.response().then((response) => resolve({ hasResponse: response !== null }));
+      }
+    });
+  });
+}
+
+// The abort itself, observed from the browser and apart from the guard's
+// bookkeeping. The address has no `@`, so even with the abort removed the
+// real action would refuse it before any DNS or Supabase call, no request
+// would fail, and this test would time out red.
+test("the guard aborts an action POST that has no simulated answer", async ({ page }) => {
+  const failure = nextActionPostFailure(page);
   await submit(page, "sentinel-no-at-sign");
 
-  await expect.poll(() => unsimulatedPosts.length).toBeGreaterThan(0);
-  expect(unsimulatedPosts, RULE_MESSAGE).toEqual([]);
+  expect(await failure).toEqual({ hasResponse: false });
+  expect(unsimulatedPosts).toHaveLength(1);
+  // Consumed: `afterEach` would otherwise fail this test for the very POST it asserts.
+  unsimulatedPosts = [];
+});
+
+// Fails by design (`test.fail`): nothing in the body asserts, so only
+// `afterEach` can fail it. If that check goes, this test turns red.
+test("a test that lets the action POST out unsimulated fails", async ({ page }) => {
+  test.fail();
+  const failure = nextActionPostFailure(page);
+  await submit(page, "sentinel-no-at-sign");
+  await failure;
 });
 
 test("a 429 asking for the link says to wait, not the generic failure", async ({ page }) => {
@@ -105,10 +113,8 @@ test("a non-429 failure still says the generic 'could not send', not the rate-li
   await expect(page.getByText(messages.account.errors.rateLimited)).toHaveCount(0);
 });
 
-test("an invalid email keeps its own copy, no mock involved", async ({ page }) => {
-  // `sendSignInLink`'s zod check rejects before any DNS or Supabase call, so
-  // this is the one test that exercises the real action.
-  allowRealActionFor("not-an-email");
+test("an invalid-email answer keeps its own copy", async ({ page }) => {
+  await mockSendSignInLinkResult(page, { ok: false, error: "emailInvalid" });
   await submit(page, "not-an-email");
 
   await expect(page.getByText(messages.account.errors.emailInvalid)).toBeVisible();
