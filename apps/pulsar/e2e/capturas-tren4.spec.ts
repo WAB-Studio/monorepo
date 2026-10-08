@@ -306,6 +306,8 @@ test.describe("F. a closed month that carried nothing reads «cerrado» alone", 
   test("the goal's Meses list", async ({ mine: page }) => {
     await page.goto(`/metas/${goalId}/meses`);
     await expect(page.getByRole("main").getByText(`Meta cerrada ${stamp}`).first()).toBeVisible();
+    // The list's closed month row, which no other page of the goal draws.
+    await expect(page.getByText(monthMessages.list.closed, { exact: true }).first()).toBeVisible();
     expect(await body(page)).not.toMatch(zero);
   });
 
