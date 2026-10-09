@@ -65,6 +65,17 @@ test("blank lines before the header, CRLF and trailing spaces still match", () =
   assert.ok(result.matched && "draft" in result);
 });
 
+// `expected` is a catalogue key, optionally prefixed with the file's namespace; the sentence is what the person reads.
+function sentenceOf(key: string): string {
+  let node: unknown = catalogue;
+  for (const part of key.replace(/^import\./, "").split(".")) {
+    node = (node as Record<string, unknown> | undefined)?.[part];
+  }
+  assert.equal(typeof node, "string", `«${key}» is not a string in messages/es/import.json`);
+  assert.notEqual((node as string).trim(), "", key);
+  return node as string;
+}
+
 function errorOf(text: string) {
   const result = parseTemplate(text);
   assert.ok(result.matched && "error" in result, JSON.stringify(result));
@@ -90,7 +101,7 @@ test("every cadence the commitment form words is read", () => {
 });
 
 test("an unreadable cadence stops at its line, saying the form", () => {
-  assert.deepEqual(errorOf(`${HEAD}## Compromisos\n- x · cuando pueda · toque\n`), { line: 7, expected: "- nombre · cadencia · toque o monto" });
+  assert.equal(errorOf(`${HEAD}## Compromisos\n- x · cuando pueda · toque\n`).line, 7);
 });
 
 test("a cadence the form refuses stops at its line", () => {
@@ -127,9 +138,9 @@ test("a sub-task with no task above it, or in another section, is refused", () =
 });
 
 test("a goal with no horizon, and a line outside a goal, name their line", () => {
-  assert.deepEqual(errorOf("pulsar · plantilla 1\n# A\nmedida: a · b\n"), { line: 2, expected: "horizonte: AAAA-MM-DD" });
-  assert.deepEqual(errorOf("pulsar · plantilla 1\n\nhola\n"), { line: 3, expected: "# nombre" });
-  assert.deepEqual(errorOf("pulsar · plantilla 1\n"), { line: 2, expected: "# nombre" });
+  assert.equal(errorOf("pulsar · plantilla 1\n# A\nmedida: a · b\n").line, 2);
+  assert.equal(errorOf("pulsar · plantilla 1\n\nhola\n").line, 3);
+  assert.equal(errorOf("pulsar · plantilla 1\n").line, 2);
 });
 
 test("an unknown section stops at its line", () => {
@@ -137,7 +148,7 @@ test("an unknown section stops at its line", () => {
 });
 
 test("a schema refusal lands on the line that wrote it", () => {
-  assert.deepEqual(errorOf("pulsar · plantilla 1\n# A\nhorizonte: 2027-02-31\n"), { line: 3, expected: "horizonte: AAAA-MM-DD" });
+  assert.equal(errorOf("pulsar · plantilla 1\n# A\nhorizonte: 2027-02-31\n").line, 3);
   assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 1 h\n- 2026-13 · 1 h\n`).line, 8);
   assert.equal(errorOf(`${HEAD}## Fases\n- 2026-12-31 a 2026-10-01 · x\n`).line, 7);
 });
@@ -162,7 +173,6 @@ function draftOf(text: string) {
 test("a sub-task whose amount is not an amount stops at its line", () => {
   const error = errorOf(`${HEAD}## Tareas\n- 2026-10 · Tutor\n  - abc · Nombre\n`);
   assert.equal(error.line, 8);
-  assert.equal(error.expected, "  - nombre, o   - monto · nombre");
 });
 
 test("a leading BOM still matches", () => {
@@ -197,7 +207,7 @@ test("a name keeps its « · », in a task and in a sub-task", () => {
 
 test("with a non-time unit, «2 h» fails with the whole-number form", () => {
   const text = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\nmedida: páginas · páginas\n## Tareas\n- 2026-10 · 2 h · Leer\n";
-  assert.deepEqual(errorOf(text), { line: 6, expected: "- AAAA-MM · nombre, o - AAAA-MM · monto · nombre" });
+  assert.equal(errorOf(text).line, 6);
 });
 
 test("a sub-task cannot follow a task across a section switch back to tasks", () => {
@@ -236,7 +246,7 @@ test("a note repeats its line; a bare nota: is a blank line; the whole is trimme
 test("a note of 2001 characters stops the read at its first nota: line; 2000 passes", () => {
   // The two lines join with one line break: x repeated, a break, "más".
   const tasks = (x: number) => `${HEAD}## Tareas\n- 2026-10 · Tutor\n  nota: ${"x".repeat(x)}\n  nota: más\n`;
-  assert.deepEqual(errorOf(tasks(1997)), { line: 8, expected: "  nota: texto, o     nota: texto" });
+  assert.equal(errorOf(tasks(1997)).line, 8);
   const ok = parseTemplate(tasks(1996));
   assert.ok(ok.matched && "draft" in ok);
   assert.equal(ok.draft.goals[0].tasks[0].note?.length, 2000);
@@ -281,8 +291,7 @@ test("a template without ritmo: reads as before, rhythm null", () => {
 });
 
 test("ritmo: stops with its line and form when not under a time measure, not placed after medida:, or not an amount", () => {
-  const form = "ritmo: 12 h, justo después de medida:, solo con una medida en minutos";
-  const stops = (text: string, line: number) => assert.deepEqual(errorOf(`${RHYTHM_HEAD}${text}`), { line, expected: form }, text);
+  const stops = (text: string, line: number) => assert.equal(errorOf(`${RHYTHM_HEAD}${text}`).line, line, text);
   stops("medida: carrera · km\nritmo: 10\n", 5);
   stops("medida: carrera · km\nritmo: 10 h\n", 5);
   stops("ritmo: 12 h\n", 4);
@@ -303,4 +312,47 @@ test("PLANTILLA.md's example, read from the file, carries ritmo: 12 h", () => {
   const result = parseTemplate(fenced[1]);
   assert.ok(result.matched && "draft" in result);
   assert.equal(result.draft.goals[0].rhythm, 720);
+});
+
+test("a line out of form names its cause by a catalogue key, never by Spanish typed in lib/", () => {
+  const key = (text: string) => {
+    const { expected } = errorOf(text);
+    sentenceOf(expected);
+    return expected;
+  };
+  assert.match(key(`${HEAD}## Meses\n- 2026-13 · 20 h\n`), /^[A-Za-z0-9_.]+$/);
+  // Different causes, different keys.
+  assert.notEqual(key(`${HEAD}## Meses\n- 2026-13 · 20 h\n`), key(`${HEAD}## Compromisos\n- x · cuando pueda · toque\n`));
+  assert.notEqual(key("pulsar · plantilla 1\n\nhola\n"), key("pulsar · plantilla 1\n# A\nmedida: a · b\n"));
+});
+
+test("ritmo: in the wrong place or with the wrong measure says which cause, in the board's words", () => {
+  const misplaced = errorOf(`${RHYTHM_HEAD}medida: horas de estudio · minutos\n\n## Meses\n- 2026-10 · 12 h\nritmo: 10 h\n`);
+  assert.equal(sentenceOf(misplaced.expected), "El ritmo va justo después de «medida:», una sola vez por meta.");
+  const notTime = errorOf(`${RHYTHM_HEAD}medida: carrera · km\nritmo: 10 h\n`);
+  assert.notEqual(notTime.expected, misplaced.expected);
+  assert.match(sentenceOf(notTime.expected), /tiempo/);
+  assert.doesNotMatch(sentenceOf(notTime.expected), /justo después/);
+});
+
+test("no sentence repeats the line the person wrote", () => {
+  const written: [string, string][] = [
+    [`${RHYTHM_HEAD}medida: horas · minutos\n## Meses\nritmo: 12 h\n`, "ritmo: 12 h"],
+    [`${RHYTHM_HEAD}medida: carrera · km\nritmo: 12 h\n`, "ritmo: 12 h"],
+    [`${RHYTHM_HEAD}medida: horas · minutos\nritmo: 12 h\nritmo: 12 h\n`, "ritmo: 12 h"],
+    [`${HEAD}## Meses\n- 2026-13 · 20 h\n`, "- 2026-13 · 20 h"],
+    [`${HEAD}## Tareas\n- 2026-10 · Tutor\n  - abc · Nombre\n`, "- abc · Nombre"],
+    ["pulsar · plantilla 1\n\n# X\nmedida: a · b\n", "# X"],
+    ["pulsar · plantilla 1\n# A\nhorizonte: 2027-02-31\n", "horizonte: 2027-02-31"],
+  ];
+  for (const [text, line] of written) {
+    const sentence = sentenceOf(errorOf(text).expected);
+    assert.equal(sentence.includes(line), false, `«${sentence}» repeats «${line}»`);
+  }
+});
+
+test("lib/import/template.ts carries no accented letter or ¿: its words live in the catalogue", () => {
+  const source = readFileSync(new URL("./template.ts", import.meta.url), "utf8");
+  const hits = source.split("\n").flatMap((text, i) => (/[áéíóúñ¿]/.test(text) ? [`${i + 1}: ${text.trim()}`] : []));
+  assert.deepEqual(hits, []);
 });

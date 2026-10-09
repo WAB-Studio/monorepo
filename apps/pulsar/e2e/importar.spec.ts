@@ -22,6 +22,19 @@ async function settled(page: Page) {
   await pageSettled(page);
 }
 
+// «Línea N: «<line as written>». <what is missing or misplaced>.» The second sentence
+// names the cause and never says the written line a second time.
+async function expectLineError(page: Page, line: number, written: string) {
+  const alert = appAlerts(page).filter({ hasText: /\S/ });
+  const escaped = written.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await expect(alert).toHaveText(new RegExp(`^Línea ${line}: «${escaped}»\\. \\S[\\s\\S]*\\.$`));
+  const whole = (await alert.textContent()) ?? "";
+  const sentence = whole.slice(`Línea ${line}: «${written}». `.length);
+  expect(sentence, "the cause").not.toContain(written);
+  expect(sentence.startsWith(`Esperaba ${written}`)).toBe(false);
+  expect(whole.split(written)).toHaveLength(2);
+}
+
 async function boxOf(locator: ReturnType<Page["locator"]>) {
   const box = await locator.boundingBox();
   if (!box) throw new Error("no box");
@@ -162,9 +175,7 @@ test.describe("the import screen (RP-37)", () => {
       await area.fill(broken);
       await page.getByRole("button", { name: "Leer el plan" }).click();
 
-      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
-        new RegExp(`^Línea ${BROKEN_LINE}: «- 2026-13 · 20 h»\\. Esperaba - AAAA-MM · monto\\.$`),
-      );
+      await expectLineError(page, BROKEN_LINE, "- 2026-13 · 20 h");
       await expect(area).toHaveValue(broken);
       await expect(page).toHaveURL(/\/metas\/importar$/);
 
@@ -189,9 +200,7 @@ test.describe("the import screen (RP-37)", () => {
         mimeType: "text/plain",
         buffer: Buffer.from(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h")),
       });
-      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
-        new RegExp(`^Línea ${BROKEN_LINE}: «- 2026-13 · 20 h»\\. Esperaba`),
-      );
+      await expectLineError(page, BROKEN_LINE, "- 2026-13 · 20 h");
     } finally {
       await context.close();
     }
@@ -384,3 +393,96 @@ test.describe("the import screen (RP-37)", () => {
     });
   }
 });
+
+// Board `ImportarErrorLinea`: a `ritmo:` line anywhere but right after `medida:`.
+const BOARD_TEXT = [
+  "pulsar · plantilla 1",
+  "",
+  "# IA aplicada",
+  "horizonte: 2027-10-01",
+  // The board draws «· horas»; «horas» does not count as time yet, so the unit the reader accepts today stands in.
+  "medida: horas de estudio · minutos",
+  "ritmo: 12 h",
+  "",
+  "## Meses",
+  "- 2026-10 · 12 h",
+  "ritmo: 10 h",
+  "",
+  "## Tareas",
+  "- 2026-10 · 4 h · Leer AI Engineering",
+].join("\n");
+const BOARD_SENTENCE = "Línea 10: «ritmo: 10 h». El ritmo va justo después de «medida:», una sola vez por meta.";
+
+for (const width of [390, 1440]) {
+  test.describe(`the error of one line, at ${width} wide (RP-37, board ImportarErrorLinea)`, () => {
+    test("a ritmo: out of place reads the board's sentence, under the text and above «Leer el plan»", async ({ person, browser, baseURL }) => {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/metas/importar");
+        await settled(page);
+        const area = page.getByLabel(messages.textLabel);
+        await area.fill(BOARD_TEXT);
+        await page.getByRole("button", { name: "Leer el plan" }).click();
+
+        const alert = appAlerts(page).filter({ hasText: /\S/ });
+        await expect(alert).toHaveText(BOARD_SENTENCE);
+        await expect(alert).toHaveCount(1);
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText("Importar un plan");
+        await expect(area).toHaveValue(BOARD_TEXT);
+        await expect(page).toHaveURL(/\/metas\/importar$/);
+
+        const areaBox = await boxOf(area);
+        const alertBox = await boxOf(alert);
+        await expect(page.getByRole("button", { name: "ver la plantilla" }).or(page.getByRole("link", { name: "ver la plantilla" }))).toBeVisible();
+        const read = await boxOf(page.getByRole("button", { name: "Leer el plan" }));
+        expect(alertBox.y).toBeGreaterThanOrEqual(areaBox.y + areaBox.height - 1);
+        expect(read.y).toBeGreaterThanOrEqual(alertBox.y + alertBox.height - 1);
+        expect(alertBox.x + alertBox.width).toBeLessThanOrEqual(width);
+
+        // Bordered, in the ink: no red.
+        const look = await alert.evaluate((node) => {
+          const style = getComputedStyle(node);
+          return { border: style.borderTopWidth, style: style.borderTopStyle, color: style.color };
+        });
+        expect(look.style).toBe("solid");
+        expect(parseFloat(look.border)).toBeGreaterThan(0);
+        const [r, g, b] = look.color.match(/\d+(\.\d+)?/g)!.map(Number);
+        expect(r - Math.max(g, b), `colour ${look.color}`).toBeLessThan(40);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("the written ritmo: appears once in the error, whatever its amount", async ({ person, browser, baseURL }) => {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/metas/importar");
+        await settled(page);
+        await page.getByLabel(messages.textLabel).fill(BOARD_TEXT.replace("ritmo: 10 h", "ritmo: 12 h"));
+        await page.getByRole("button", { name: "Leer el plan" }).click();
+        await expectLineError(page, 10, "ritmo: 12 h");
+        await expect(appAlerts(page).filter({ hasText: /\S/ })).toContainText("justo después de");
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("a ritmo: on a measure that is not time says so, not where it goes", async ({ person, browser, baseURL }) => {
+      const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! , viewport: { width, height: 900 } });
+      try {
+        const page = await context.newPage();
+        await page.goto("/metas/importar");
+        await settled(page);
+        await page.getByLabel(messages.textLabel).fill(BOARD_TEXT.replace("horas de estudio · minutos", "distancia · km"));
+        await page.getByRole("button", { name: "Leer el plan" }).click();
+        await expectLineError(page, 6, "ritmo: 12 h");
+        await expect(appAlerts(page).filter({ hasText: /\S/ })).toContainText("tiempo");
+        await expect(appAlerts(page).filter({ hasText: /\S/ })).not.toContainText("justo después");
+      } finally {
+        await context.close();
+      }
+    });
+  });
+}
