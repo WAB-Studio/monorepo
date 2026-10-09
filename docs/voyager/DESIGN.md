@@ -120,6 +120,9 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   2026-09-07. Checked 2026-09-08: the published canvas contains the string `Noche` zero times.
   Nothing on it contradicts this file any more.
 - When a board and this file disagree, **this file wins**.
+- **The canvas is 149 boards**, counted 2026-10-08 from **version 39**'s own `appifact-doc` block (150 `.dc.html`
+  files plus `canvas.json`). The five added are module 525's, in one row of the `cuenta` page under one annotation,
+  primary face only. **The canvas has no index page yet**, which `AGENTS.md` asks of every canvas: a gap, written here.
 - **The canvas is 144 boards**, counted 2026-09-13 from **version 34**'s own `appifact-doc` block
   (145 `.dc.html` files plus `canvas.json`). The two added are RL-49's, `CuentaEnlaceNoVerificado`
   and `CuentaEnlaceInvalido`, side by side on the `cuenta` page so the pair reads as the comparison
@@ -828,10 +831,26 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   credit and Wikimedia's per-image credit join the dictionary's in `CuentaInformacion`; the reading
   screen carries no credit line and no per-block affix. The tab reads with no session, which is what
   keeps the credit reachable to whoever uses the work.
-- **The account screen shows a state, never a control.** Decided by the user 2026-09-09, approving
-  `CuentaCopia`. With a session it reads «Copiando a tu cuenta» and when the last copy was; there is
-  no button and neither of the two figures RL-23 used to name. Copying now, never copied, failed
-  with its retry, and signed-out are each drawn. The only way out stays signing out, per RL-30.
+- **With a session, nothing leaves the device until the reader confirms.** Decided by the user 2026-10-08,
+  approving the boards `CuentaCopiaConfirmar`, `CuentaCopiaConfirmarEnCurso`, `CuentaCopiaConfirmarFallida`,
+  `CuentaDispositivoRetirado` and `DispositivosRetirarPropio` (canvas version 39, page Cuenta). It replaces «the account
+  screen shows a state, never a control» (2026-09-09): the «Copia» section now carries one control, and only before the
+  first copy.
+  - Not confirmed on this device: «Copiar tu registro a {email}», «Hasta que lo confirmes, nada sale de este
+    dispositivo.» and the button «Empezar a copiar». A second reader on a device that holds another's log sees the same
+    board with their own address.
+  - Tapped: the button goes and `copy.syncingNow` stays; when the round ends, «Copiando a tu cuenta» as `CuentaCopia`.
+  - The first copy fails: «La copia no salió», «Tus palabras siguen en este dispositivo.» and «Reintentar». It has no
+    «hace {time}»: there is no copy before it.
+  - This device retired: «Este dispositivo ya no copia», «Lo retiraste de tu cuenta y tu registro se quedó completo aquí.
+    Para copiarlo de nuevo, cierra sesión y vuelve a entrar.», no button. The way back is signing out and in.
+  - Retiring this device: «Además, este dispositivo deja de copiar: tu registro se queda completo aquí. Para copiarlo de
+    nuevo, cierra sesión y vuelve a entrar.»; when it is the only one: «Es tu único dispositivo copiando: la copia de tu
+    cuenta queda vacía. Tu registro se queda entero aquí.» No sentence mentions a switch: there is none.
+  - Device labels read «{browser} en {platform}»; a code it cannot read, or an old English label, reads «Dispositivo
+    desconocido».
+  - **Not drawn, on purpose:** the light and desktop faces of these five. Desktop is the same column wider and light is
+    the token table.
 
 - **The AI is parked, and no provider is chosen.** Decided by the user 2026-09-08, after the numbers
   came in. RL-28 and RL-29 stay open and unbuilt; nothing in the app calls a model, so picking a

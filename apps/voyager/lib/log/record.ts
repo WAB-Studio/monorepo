@@ -1,5 +1,5 @@
 import { clampForRecord } from "./record-text";
-import { normaliseSyncState, syncStateForReader } from "./sync-state";
+import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
 import { LOOKUP_SCHEMA, type LookupOutcome, type LookupRecord, type SyncState } from "./types";
 
 // A separate database from `reading-dictionary`: an IndexedDB transaction is
@@ -497,6 +497,12 @@ export async function startCopyFor(readerId: string): Promise<SyncState> {
   const next = syncStateForReader(current, readerId, () => crypto.randomUUID());
   await writeSyncState(next);
   return next;
+}
+
+/** Turns the copy off for a sign-out; a retired device also forgets its identity. */
+export async function signOutSync(): Promise<void> {
+  const current = await readSyncState();
+  await writeSyncState(signOutSyncState(current, () => crypto.randomUUID()));
 }
 
 /** The server retired this device: the copy stops until a new sign-in mints another. */

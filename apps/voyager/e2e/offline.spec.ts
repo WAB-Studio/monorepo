@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 
-import { expect, test } from "./fixtures";
+import { confirmCopy, expect, test } from "./fixtures";
 import postgres from "postgres";
 
 import messages from "../messages/es.json";
@@ -208,6 +208,11 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     await page.waitForTimeout(300);
 
     await signInAs(page, reader.hash);
+
+    // A reader whose copy is running (RL-52): the confirm is the only way it starts.
+    await page.goto("/cuenta");
+    await confirmCopy(page);
+    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
 
     // Online, signed in: this is the render that must never overwrite the
     // cache — wait for the worker to settle the navigation before reading it.

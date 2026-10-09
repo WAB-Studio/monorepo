@@ -17,6 +17,20 @@ test("Chrome on Android is chrome:android", () => {
   assert.equal(deviceLabel(CHROME_ANDROID), "chrome:android");
 });
 
+const SAMSUNG_ANDROID =
+  "Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36";
+const SAFARI_IPAD =
+  "Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
+test("Samsung Internet is samsung even though it also says Chrome", () => {
+  assert.equal(deviceLabel(SAMSUNG_ANDROID), "samsung:android");
+});
+
+test("an iPad is ipados, not ios", () => {
+  assert.equal(deviceLabel(SAFARI_IPAD), "safari:ipados");
+  assert.equal(deviceLabel(SAFARI_IPHONE), "safari:ios");
+});
+
 test("a missing header is unknown:unknown", () => {
   assert.equal(deviceLabel(null), "unknown:unknown");
   assert.equal(deviceLabel(""), "unknown:unknown");
@@ -34,7 +48,7 @@ test("an unrecognised agent is other:other", () => {
 });
 
 test("a label is only codes: lowercase letters and one colon, no space", () => {
-  for (const ua of [CHROME_ANDROID, SAFARI_IPHONE, EDGE_WINDOWS, FIREFOX_LINUX, OPERA_MAC, "curl/8.0", null]) {
-    assert.match(deviceLabel(ua), /^(edge|opera|firefox|chrome|safari|other|unknown):(android|ios|windows|macos|linux|other|unknown)$/);
+  for (const ua of [CHROME_ANDROID, SAMSUNG_ANDROID, SAFARI_IPAD, SAFARI_IPHONE, EDGE_WINDOWS, FIREFOX_LINUX, OPERA_MAC, "curl/8.0", null]) {
+    assert.match(deviceLabel(ua), /^(edge|opera|firefox|samsung|chrome|safari|other|unknown):(android|ios|ipados|windows|macos|linux|other|unknown)$/);
   }
 });

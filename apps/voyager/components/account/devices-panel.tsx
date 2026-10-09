@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { z } from "zod";
 
-import { readSyncState, writeSyncState } from "@/lib/log/record";
+import { markRetired, readSyncState } from "@/lib/log/record";
 import { Button, Flex, Grid, Heading, MetaLabel, Separator, Spinner, Text } from "@/components/ui";
 
 // A client-side reparse of `lib/sync/devices.ts`'s `DeviceRow`, not an import
@@ -19,27 +19,32 @@ const deviceRowSchema = z.object({
 });
 const deviceListSchema = z.array(deviceRowSchema);
 type DeviceRow = z.infer<typeof deviceRowSchema>;
-// Module 15 widens the route to `{ devices, pending }` so the account
-// screen's enable button can read the second figure RL-23 asks for; `pending`
-// is that call's own concern, dropped here on arrival.
-const devicesGetResponseSchema = z.object({ devices: deviceListSchema, pending: z.number() });
+const devicesGetResponseSchema = z.object({ devices: deviceListSchema });
 
 const DEVICES_ENDPOINT = "/api/devices";
 
-type PanelState =
-  | { kind: "loading" }
-  | { kind: "failed" }
-  | { kind: "empty" }
-  | { kind: "ready"; rows: DeviceRow[] };
+// The codes `lib/sync/device-label.ts` emits (plus the two the catalog names
+// ahead of it); any other shape reads as unknown.
+const BROWSER_CODES = ["chrome", "safari", "firefox", "edge", "opera", "samsung"] as const;
+const PLATFORM_CODES = ["android", "ios", "ipados", "windows", "macos", "linux"] as const;
+
+function parseLabel(label: string): {
+  browser: (typeof BROWSER_CODES)[number];
+  platform: (typeof PLATFORM_CODES)[number];
+} | null {
+  const [browser, platform, ...rest] = label.split(":");
+  const knownBrowser = BROWSER_CODES.find((code) => code === browser);
+  const knownPlatform = PLATFORM_CODES.find((code) => code === platform);
+  if (rest.length > 0 || !knownBrowser || !knownPlatform) return null;
+  return { browser: knownBrowser, platform: knownPlatform };
+}
+
+type PanelState = { kind: "loading" } | { kind: "failed" } | { kind: "empty" } | { kind: "ready"; rows: DeviceRow[] };
 
 // One device's own row is either doing nothing, asking the reader to say the
 // two halves back, mid-retire, or stuck — never the panel's own state, so
 // one row's failure never hides the other's list.
-type RowStatus =
-  | { kind: "idle" }
-  | { kind: "confirming" }
-  | { kind: "retiring" }
-  | { kind: "failed" };
+type RowStatus = { kind: "idle" } | { kind: "confirming" } | { kind: "retiring" } | { kind: "failed" };
 
 function DeviceRowItem({
   row,
@@ -64,6 +69,7 @@ function DeviceRowItem({
   const format = useFormatter();
   const seenDate = new Date(row.lastSeenAt);
   const seenValid = !Number.isNaN(seenDate.getTime());
+  const parsed = parseLabel(row.label);
 
   return (
     <Flex direction="column" gap="2">
@@ -71,7 +77,12 @@ function DeviceRowItem({
           what has to clamp (docs/voyager/DESIGN.md "What the data forces"). */}
       <Grid columns="1fr auto" gap="3" align="center">
         <Text weight="medium" truncate>
-          {row.label}
+          {parsed
+            ? t("label", {
+                browser: t(`browser.${parsed.browser}`),
+                platform: t(`platform.${parsed.platform}`),
+              })
+            : t("labelUnknown")}
         </Text>
         {isThisDevice && <MetaLabel>{t("thisDevice")}</MetaLabel>}
       </Grid>
@@ -148,7 +159,13 @@ function DeviceRowItem({
  * `title` is drawn here, not by the caller: `account-panel.tsx` (module 15)
  * mounts this alongside other sections that carry their own headings too.
  */
-export function DevicesPanel({ refreshSignal }: { refreshSignal: number }) {
+export function DevicesPanel({
+  refreshSignal,
+  onOwnDeviceRetired,
+}: {
+  refreshSignal: number;
+  onOwnDeviceRetired: () => void;
+}) {
   const t = useTranslations("account.devices");
   const [state, setState] = useState<PanelState>({ kind: "loading" });
   // Bumped by the panel-level retry, since the fetch runs in an effect and a
@@ -195,10 +212,8 @@ export function DevicesPanel({ refreshSignal }: { refreshSignal: number }) {
     });
   }
 
-  // Retiring the device in hand turns its own copy off and rewinds its push
-  // cursor to 0 in the same call: without that reset, turning the copy back
-  // on would push nothing and the screen would claim a copy that is not
-  // there (RL-24).
+  // Retiring the device in hand marks it retired locally: the copy stays off
+  // until a new sign-in mints another identity (RL-24, RL-52).
   async function retire(deviceId: string): Promise<void> {
     updateRowStatus(deviceId, { kind: "retiring" });
     try {
@@ -209,7 +224,8 @@ export function DevicesPanel({ refreshSignal }: { refreshSignal: number }) {
       });
       if (!response.ok) throw new Error(`devices route answered ${response.status}`);
       if (deviceId === localDeviceId) {
-        await writeSyncState({ enabled: false, pushedThroughLocalId: 0 });
+        await markRetired();
+        onOwnDeviceRetired();
       }
       removeRow(deviceId);
     } catch {
