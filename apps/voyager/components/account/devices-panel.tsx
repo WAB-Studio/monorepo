@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { z } from "zod";
 
+import { elapsed } from "@/lib/format/elapsed";
 import { markRetired, readSyncState } from "@/lib/log/record";
 import { Button, Flex, Grid, Heading, MetaLabel, Separator, Spinner, Text } from "@/components/ui";
 
@@ -14,6 +15,7 @@ import { Button, Flex, Grid, Heading, MetaLabel, Separator, Spinner, Text } from
 const deviceRowSchema = z.object({
   deviceId: z.uuid(),
   label: z.string(),
+  createdAt: z.string(),
   lastSeenAt: z.string(),
   lookups: z.number(),
 });
@@ -29,17 +31,18 @@ const BROWSER_CODES = ["chrome", "safari", "firefox", "edge", "opera", "samsung"
 const PLATFORM_CODES = ["android", "ios", "ipados", "windows", "macos", "linux"] as const;
 
 function parseLabel(label: string): {
-  browser: (typeof BROWSER_CODES)[number];
-  platform: (typeof PLATFORM_CODES)[number];
-} | null {
+  browser: (typeof BROWSER_CODES)[number] | null;
+  platform: (typeof PLATFORM_CODES)[number] | null;
+} {
   const [browser, platform, ...rest] = label.split(":");
-  const knownBrowser = BROWSER_CODES.find((code) => code === browser);
-  const knownPlatform = PLATFORM_CODES.find((code) => code === platform);
-  if (rest.length > 0 || !knownBrowser || !knownPlatform) return null;
-  return { browser: knownBrowser, platform: knownPlatform };
+  if (rest.length > 0) return { browser: null, platform: null };
+  return {
+    browser: BROWSER_CODES.find((code) => code === browser) ?? null,
+    platform: PLATFORM_CODES.find((code) => code === platform) ?? null,
+  };
 }
 
-type PanelState = { kind: "loading" } | { kind: "failed" } | { kind: "empty" } | { kind: "ready"; rows: DeviceRow[] };
+type PanelState = { kind: "loading" } | { kind: "failed" } | { kind: "empty" } | { kind: "ready"; rows: DeviceRow[]; now: number };
 
 // One device's own row is either doing nothing, asking the reader to say the
 // two halves back, mid-retire, or stuck — never the panel's own state, so
@@ -48,6 +51,7 @@ type RowStatus = { kind: "idle" } | { kind: "confirming" } | { kind: "retiring" 
 
 function DeviceRowItem({
   row,
+  now,
   isThisDevice,
   isOnlyDevice,
   status,
@@ -57,6 +61,7 @@ function DeviceRowItem({
   onRetry,
 }: {
   row: DeviceRow;
+  now: number;
   isThisDevice: boolean;
   isOnlyDevice: boolean;
   status: RowStatus;
@@ -67,9 +72,18 @@ function DeviceRowItem({
 }) {
   const t = useTranslations("account.devices");
   const format = useFormatter();
-  const seenDate = new Date(row.lastSeenAt);
-  const seenValid = !Number.isNaN(seenDate.getTime());
-  const parsed = parseLabel(row.label);
+  const seenAt = new Date(row.lastSeenAt).getTime();
+  const gone = elapsed(seenAt, now);
+  const since = new Date(row.createdAt);
+  const { browser, platform } = parseLabel(row.label);
+  const name =
+    browser && platform
+      ? t("label", { browser: t(`browser.${browser}`), platform: t(`platform.${platform}`) })
+      : browser
+        ? t("labelBrowserOnly", { browser: t(`browser.${browser}`) })
+        : platform
+          ? t("labelPlatformOnly", { platform: t(`platform.${platform}`) })
+          : t("labelUnknown");
 
   return (
     <Flex direction="column" gap="2">
@@ -77,31 +91,35 @@ function DeviceRowItem({
           what has to clamp (docs/voyager/DESIGN.md "What the data forces"). */}
       <Grid columns="1fr auto" gap="3" align="center">
         <Text weight="medium" truncate>
-          {parsed
-            ? t("label", {
-                browser: t(`browser.${parsed.browser}`),
-                platform: t(`platform.${parsed.platform}`),
-              })
-            : t("labelUnknown")}
+          {name}
         </Text>
         {isThisDevice && <MetaLabel>{t("thisDevice")}</MetaLabel>}
       </Grid>
 
       <Text size="2" muted>
-        {seenValid
-          ? // A `now` passed explicitly: the provider sets none globally, and
-            // without one `relativeTime` warns on every render (next-intl's
-            // `ENVIRONMENT_FALLBACK`) even though the fallback is this same value.
-            t("lastSeen", { date: format.relativeTime(seenDate, new Date()) })
-          : t("neverSeen")}
+        {Number.isNaN(seenAt)
+          ? t("neverSeen")
+          : gone.unit === "moment"
+            ? t("lastSeenMoment")
+            : t("lastSeen", { date: format.relativeTime(seenAt, { now, unit: gone.unit }) })}
       </Text>
+      {!Number.isNaN(since.getTime()) && (
+        <Text size="2" muted>
+          {t("since", {
+            date: t("sinceDate", {
+              day: format.dateTime(since, { day: "numeric" }),
+              month: format.dateTime(since, { month: "short" }),
+            }),
+          })}
+        </Text>
+      )}
       <Text size="2" muted>
         {t("lookups", { count: row.lookups })}
       </Text>
 
       {status.kind === "idle" && (
         <Flex>
-          <Button size="2" tap onClick={onRetireClick}>
+          <Button size="2" tap variant="soft" color="gray" onClick={onRetireClick}>
             {t("retire")}
           </Button>
         </Flex>
@@ -185,7 +203,7 @@ export function DevicesPanel({
         const { devices: rows } = devicesGetResponseSchema.parse(await response.json());
         if (cancelled) return;
         setLocalDeviceId(syncState.deviceId);
-        setState(rows.length === 0 ? { kind: "empty" } : { kind: "ready", rows });
+        setState(rows.length === 0 ? { kind: "empty" } : { kind: "ready", rows, now: Date.now() });
       } catch {
         if (!cancelled) setState({ kind: "failed" });
       }
@@ -203,7 +221,7 @@ export function DevicesPanel({
     setState((current) => {
       if (current.kind !== "ready") return current;
       const rows = current.rows.filter((row) => row.deviceId !== deviceId);
-      return rows.length === 0 ? { kind: "empty" } : { kind: "ready", rows };
+      return rows.length === 0 ? { kind: "empty" } : { kind: "ready", rows, now: current.now };
     });
     setRowStatus((current) => {
       const next = { ...current };
@@ -254,7 +272,7 @@ export function DevicesPanel({
         <Flex direction="column" gap="3" align="start">
           <Separator size="4" />
           <Text size="2" weight="bold">
-            {t("retireFailed")}
+            {t("loadFailed")}
           </Text>
           <Button
             size="2"
@@ -291,6 +309,7 @@ export function DevicesPanel({
             {index > 0 && <Separator size="4" />}
             <DeviceRowItem
               row={row}
+              now={state.now}
               isThisDevice={row.deviceId === localDeviceId}
               isOnlyDevice={state.rows.length === 1}
               status={rowStatus[row.deviceId] ?? { kind: "idle" }}
