@@ -346,3 +346,49 @@ test("a row whose only searched form is its key names it once", async ({ page })
   const text = await rowText(page, "/registro/lukewarm");
   expect(text.match(/lukewarm/g)).toHaveLength(1);
 });
+
+// RL-56: a row's title is the lemma when the search reached one, the text as
+// typed when it reached none (a phrase, a miss).
+async function titleOf(page: Page, href: string): Promise<string> {
+  const text = await rowText(page, href);
+  return text.split("\n")[0]!.trim();
+}
+
+test("a row reached through an inflected search is titled with the lemma, not the text typed", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 2000, text: "Lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 1000, text: "Lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+  ]);
+  await page.reload();
+
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
+  expect(await titleOf(page, "/registro/linger")).toBe("linger");
+});
+
+test("a miss keeps the text as typed for its title", async ({ page }) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: Date.now(), text: "Blorpt", normalised: "blorpt", headword: null, outcome: "unlisted", translation: null },
+  ]);
+  await page.reload();
+
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
+  expect(await titleOf(page, "/registro/blorpt")).toBe("Blorpt");
+});
+
+test("a lemma reached by one inflected form alone still names that form in its row", async ({ page }) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: Date.now(), text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+  ]);
+  await page.reload();
+
+  const lines = (await rowText(page, "/registro/linger")).split("\n");
+  expect(lines[0]!.trim()).toBe("linger");
+  expect(lines.slice(1).some((l) => l.includes("lingered"))).toBe(true);
+});
