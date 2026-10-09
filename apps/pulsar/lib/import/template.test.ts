@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { draftRefusals } from "./draft";
+import { draftRefusals, importDraftJsonSchema } from "./draft";
 import { parseTemplate } from "./template";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
@@ -24,6 +24,7 @@ test("the example reads into the draft it describes, minutes and all", () => {
         name: "IA aplicada",
         horizon: "2027-10-01",
         measure: { name: "horas de estudio", unit: "minutos" },
+        rhythm: 720,
         phases: [{ aim: "Evals y harness", startsOn: "2026-10-01", endsOn: "2026-12-31" }],
         months: [
           { month: "2026-10", amount: 720 },
@@ -257,4 +258,49 @@ test("a template with no nota: reads with no note key anywhere", () => {
   const result = parseTemplate(`${HEAD}## Tareas\n- 2026-10 · T\n  - 1 h · c\n`);
   assert.ok(result.matched && "draft" in result);
   assert.equal(JSON.stringify(result.draft).includes("note"), false);
+});
+
+const RHYTHM_HEAD = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n";
+
+function rhythmOf(unit: string, amount: string) {
+  const result = parseTemplate(`${RHYTHM_HEAD}medida: horas · ${unit}\nritmo: ${amount}\n`);
+  assert.ok(result.matched && "draft" in result, JSON.stringify(result));
+  return result.draft.goals[0].rhythm;
+}
+
+test("ritmo: reads a time amount into minutes, in every format", () => {
+  assert.equal(rhythmOf("minutos", "12 h"), 720);
+  assert.equal(rhythmOf("minutos", "12 h 30 min"), 750);
+  assert.equal(rhythmOf("min", "90 min"), 90);
+});
+
+test("a template without ritmo: reads as before, rhythm null", () => {
+  const result = parseTemplate(`${RHYTHM_HEAD}medida: horas · minutos\n`);
+  assert.ok(result.matched && "draft" in result);
+  assert.equal(result.draft.goals[0].rhythm, null);
+});
+
+test("ritmo: stops with its line and form when not under a time measure, not placed after medida:, or not an amount", () => {
+  const form = "ritmo: 12 h, justo después de medida:, solo con una medida en minutos";
+  const stops = (text: string, line: number) => assert.deepEqual(errorOf(`${RHYTHM_HEAD}${text}`), { line, expected: form }, text);
+  stops("medida: carrera · km\nritmo: 10\n", 5);
+  stops("medida: carrera · km\nritmo: 10 h\n", 5);
+  stops("ritmo: 12 h\n", 4);
+  stops("ritmo: 12 h\nmedida: horas · minutos\n", 4);
+  stops("medida: horas · minutos\nritmo: 12\n", 5);
+  stops("medida: horas · minutos\nritmo: 12 h\nritmo: 1 h\n", 6);
+  stops("medida: horas · minutos\n## Meses\nritmo: 12 h\n", 6);
+  stops("medida: horas · minutos\nritmo: 0 min\n", 5);
+});
+
+test("the draft the model is sent carries no rhythm", () => {
+  assert.equal(JSON.stringify(importDraftJsonSchema).includes("rhythm"), false);
+});
+
+test("PLANTILLA.md's example, read from the file, carries ritmo: 12 h", () => {
+  const fenced = /```\n([\s\S]*?)\n```/.exec(DOC);
+  assert.ok(fenced && fenced[1].includes("\nritmo: 12 h\n"));
+  const result = parseTemplate(fenced[1]);
+  assert.ok(result.matched && "draft" in result);
+  assert.equal(result.draft.goals[0].rhythm, 720);
 });
