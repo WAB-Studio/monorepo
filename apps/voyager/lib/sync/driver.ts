@@ -2,6 +2,8 @@ import type { ForeignRow } from "@/lib/log/merge";
 import { readSince, mergeForeign } from "@/lib/log/merge";
 import { markRetired, readSyncState, writeSyncState } from "@/lib/log/record";
 import { SYNC_BATCH, syncRequestSchema, syncResponseSchema, type SyncResponse, type SyncRow } from "./protocol";
+import { failureCause, type SyncFailure } from "./failure";
+import { shareInFlight } from "./in-flight";
 import { planUploadRound } from "./upload-page";
 
 const SYNC_ENDPOINT = "/api/log/sync";
@@ -10,11 +12,19 @@ const SYNC_ENDPOINT = "/api/log/sync";
 // trips per call, then the rest waits for the next hide.
 const MAX_BATCHES = 40;
 
+export const SYNC_LANDED_EVENT = "voyager:sync-landed";
+
+class SyncFailureError extends Error {
+  constructor(readonly cause: SyncFailure) {
+    super(`sync failed: ${cause}`);
+  }
+}
+
 export type SyncOutcome =
   | { kind: "off" } // enabled === false: no request was ever issued
   | { kind: "done"; pushed: number; pulled: number }
   | { kind: "retired" } // the server retired this device: the copy is off for good
-  | { kind: "failed" };
+  | { kind: "failed"; cause: SyncFailure };
 
 // The row's own device, not this one's: it already crossed the wire once.
 function toForeignRow(row: SyncResponse["rows"][number]): ForeignRow {
@@ -49,11 +59,11 @@ async function postBatch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(syncRequestSchema.parse({ deviceId, rows, since })),
   });
-  if (response.status === 409) {
+  if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    if (body?.error === "retired") return "retired";
+    if (response.status === 409 && body?.error === "retired") return "retired";
+    throw new SyncFailureError(failureCause({ status: response.status, body }));
   }
-  if (!response.ok) throw new Error(`sync route answered ${response.status}`);
   return syncResponseSchema.parse(await response.json());
 }
 
@@ -65,7 +75,7 @@ async function postBatch(
  * what the account already holds. Never throws: a failed round trip leaves
  * the cursors where they were, so the next call resumes it.
  */
-export async function syncNow(): Promise<SyncOutcome> {
+async function runSync(): Promise<SyncOutcome> {
   const state = await readSyncState();
   if (!state.enabled) return { kind: "off" };
 
@@ -100,8 +110,15 @@ export async function syncNow(): Promise<SyncOutcome> {
       // never finish downloading behind a thin local log.
       if (scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH) break;
     }
+    if (pulled > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
     return { kind: "done", pushed, pulled };
-  } catch {
-    return { kind: "failed" };
+  } catch (error) {
+    const cause =
+      error instanceof SyncFailureError
+        ? error.cause
+        : failureCause({ error, online: typeof navigator === "undefined" || navigator.onLine });
+    return { kind: "failed", cause };
   }
 }
+
+export const syncNow = shareInFlight(runSync);
