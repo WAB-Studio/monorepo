@@ -88,8 +88,8 @@ for (const width of [390, 1440]) {
         await expect(sheet.getByRole("button", { name: label(later), exact: true })).toHaveAttribute("aria-pressed", "true");
         await sheet.getByRole("button", { name: "Guardar" }).click();
         await expect(sheet).toBeHidden();
-        const [saved] = await db<{ planned_month: string | null; in_plan: boolean }[]>`
-          select to_char(planned_month, 'YYYY-MM-DD') as planned_month, in_plan from goals.one_offs where id = ${taskId}
+        const [saved] = await db<{ planned_month: string | null }[]>`
+          select to_char(planned_month, 'YYYY-MM-DD') as planned_month from goals.one_offs where id = ${taskId}
         `;
         expect(saved.planned_month).toBe(later);
         await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(0);
