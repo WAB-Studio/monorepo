@@ -9,6 +9,7 @@ import { closeRun, openRun } from "@repo/harness-registry";
 import messages from "../messages/es.json";
 import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
+import manifest from "../public/dictionary/manifest.json";
 import { COPY_CONFIRM_LABEL, confirmCopy, expect, test } from "./fixtures";
 
 // Module 526, RL-52: with a session open, nothing leaves the device until the
@@ -226,6 +227,62 @@ async function readSync(page: Page): Promise<SyncState | undefined> {
   );
 }
 
+
+const copy = messages.account.copy;
+// «Copiando a tu cuenta» / «Al día…» left the done state (module 547); the
+// literals stand because the catalog keys go with them.
+const GONE_TITLE = "Copiando a tu cuenta";
+const GONE_BODY = /Al día/;
+
+function fillTemplate(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key]));
+}
+
+// The ICU plural of `syncingSearches`, read off the catalog's own three forms.
+function searchesLine(count: number): string {
+  const forms = Object.fromEntries(
+    [...copy.syncingSearches.matchAll(/(=0|one|other) \{([^}]*)\}/g)].map((m) => [m[1], m[2]]),
+  );
+  const form = count === 0 ? forms["=0"]! : count === 1 ? forms["one"]! : forms["other"]!;
+  return form.replace("#", String(count));
+}
+
+async function expectDone(page: Page): Promise<void> {
+  await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
+  await expect(page.getByText(GONE_TITLE)).toHaveCount(0);
+  await expect(page.getByText(GONE_BODY)).toHaveCount(0);
+}
+
+// A copy this reader already confirmed, five minutes old, nothing pushed yet.
+function confirmedFor(reader: Reader, extra: Partial<SyncState> = {}): SyncState {
+  return {
+    deviceId: randomUUID(),
+    pushedThroughLocalId: null,
+    pulledThroughCursor: null,
+    lastSyncedAt: Date.now() - 5 * 60_000,
+    enabled: true,
+    readerId: reader.id,
+    retired: false,
+    ...extra,
+  };
+}
+
+async function countLookups(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const count = db.transaction("lookups", "readonly").objectStore("lookups").count();
+          count.onsuccess = () => resolve(count.result);
+          count.onerror = () => reject(count.error);
+        };
+      }),
+  );
+}
+
 const confirmButton = (page: Page) => page.getByRole("button", { name: COPY_CONFIRM_LABEL });
 
 // The copy done and this device sealed in the list, ready to be retired.
@@ -263,8 +320,14 @@ test("RL-52: a session with no confirmation shows the address and the button, an
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
     await expect(page.getByText(CONFIRM_BODY)).toBeVisible();
     await expect(confirmButton(page)).toBeVisible();
+    // The address shows once: the title carries it, `signedInAs` is not painted here.
+    const shown = (await page.locator("body").innerText()).split(reader.email).length - 1;
+    expect(shown, `the address appears ${shown} times`).toBe(1);
+    await expect(page.getByText(messages.account.signedInAs.split("{email}")[0]!.trim())).toHaveCount(0);
+    // A first reader on a clean device has no «other reader» to be told about.
+    await expect(page.getByText(copy.otherReader, { exact: true })).toHaveCount(0);
     // The «done» state is not drawn before anyone confirmed.
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toHaveCount(0);
+    await expect(page.getByText(GONE_TITLE)).toHaveCount(0);
 
     await page.waitForTimeout(3000);
     expect(posts, `POSTs while waiting: ${JSON.stringify(posts)}`).toHaveLength(0);
@@ -315,13 +378,13 @@ test("RL-52: tapping the button sends exactly one POST and the button is gone wh
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
 
     await confirmButton(page).dblclick();
-    await expect(page.getByText("Copiando 3 palabras…")).toBeVisible();
+    await expect(page.getByText(searchesLine(3), { exact: true })).toBeVisible();
     await expect(confirmButton(page)).toHaveCount(0);
     // The same title stays while it copies (board CuentaCopiaConfirmarEnCurso).
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
 
     release();
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
+    await expectDone(page);
     await page.waitForTimeout(500);
     expect(posts, `POSTs for one tap: ${JSON.stringify(posts)}`).toHaveLength(1);
   });
@@ -336,8 +399,7 @@ test("RL-52, RNL-09: after the copy, the done state shows and the next POST leav
     await expect(confirmButton(page)).toBeVisible();
 
     await confirmCopy(page);
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
-    await expect(page.getByText(/^Al día\. La última copia fue hace /)).toBeVisible();
+    await expectDone(page);
     await expect(confirmButton(page)).toHaveCount(0);
     expect(posts).toHaveLength(1);
 
@@ -353,9 +415,7 @@ test("RL-52, RNL-09: after the copy, the done state shows and the next POST leav
   });
 });
 
-test("RL-52: a copy that fails shows the failed state with its own first-copy words, and retrying sends one POST", async ({
-  page,
-}) => {
+test("RL-52: a server error names our side, keeps the retry, and retrying sends one POST", async ({ page }) => {
   test.setTimeout(45_000);
   await withReader(page, async ({ reader, signIn }) => {
     await signIn();
@@ -371,18 +431,102 @@ test("RL-52: a copy that fails shows the failed state with its own first-copy wo
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
     await confirmCopy(page);
 
-    await expect(page.getByText(messages.account.copy.failedTitle)).toBeVisible();
-    // Exact: the old `failedBody` also contains this sentence, behind «hace {time}».
-    await expect(page.getByText(FAILED_BODY_FIRST, { exact: true })).toBeVisible();
-    await expect(page.getByText(/Sin conexión desde hace/)).toHaveCount(0);
+    await expect(page.getByText(copy.failedServer, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Sin conexión/)).toHaveCount(0);
+    await expect(page.getByText(copy.failedQuotaTitle)).toHaveCount(0);
     await expect(confirmButton(page)).toHaveCount(0);
     expect(posts).toHaveLength(1);
 
     failing = false;
-    await page.getByRole("button", { name: messages.account.copy.failedAction }).click();
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
+    await page.getByRole("button", { name: copy.failedAction }).click();
+    await expectDone(page);
     await page.waitForTimeout(500);
     expect(posts, `POSTs after one retry: ${JSON.stringify(posts)}`).toHaveLength(2);
+  });
+});
+
+test("RL-52: the first copy that cannot reach the server says the words stay here, with no «hace»", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await signIn();
+    await page.route("**/api/log/sync", (route) => route.abort("connectionfailed"));
+    await page.goto("/cuenta");
+    await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
+    await confirmCopy(page);
+
+    await expect(page.getByText(copy.failedOfflineTitle, { exact: true })).toBeVisible();
+    // Exact: `failedOffline` and `failedServer` both contain this sentence.
+    await expect(page.getByText(FAILED_BODY_FIRST, { exact: true })).toBeVisible();
+    await expect(page.getByText(/desde hace/)).toHaveCount(0);
+    await expect(page.getByText(copy.failedServer, { exact: true })).toHaveCount(0);
+  });
+});
+
+test("RL-52: a copy cut by the network says since when", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: Date.now() - 3 * 60_000 }) });
+    await signIn();
+    let failing = true;
+    await page.route("**/api/log/sync", (route) =>
+      failing
+        ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "boom" }) })
+        : route.continue(),
+    );
+    await page.goto("/cuenta");
+    // The opening pull fails on our side; then the line drops for the retry.
+    await expect(page.getByText(copy.failedServer, { exact: true })).toBeVisible();
+    failing = false;
+    await page.context().setOffline(true);
+    try {
+      await page.getByRole("button", { name: copy.failedAction }).click();
+      await expect(
+        page.getByText(fillTemplate(copy.failedOffline, { time: "3 minutos" }), { exact: true }),
+      ).toBeVisible();
+      await expect(page.getByText(copy.failedOfflineTitle, { exact: true })).toBeVisible();
+      await expect(page.getByText(copy.failedServer, { exact: true })).toHaveCount(0);
+    } finally {
+      await page.context().setOffline(false);
+    }
+  });
+});
+
+test("RL-52, RNL-02: a 30-second-old copy reads «hace un momento» or its own words, never «1 minuto»", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: Date.now() - 30_000 }) });
+    await signIn();
+    await page.route("**/api/log/sync", (route) => route.abort("connectionfailed"));
+    await page.goto("/cuenta");
+    await expect(page.getByText(copy.failedOfflineTitle, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Sin conexión desde hace/)).toBeVisible();
+    await expect(page.getByText(/1 minuto/)).toHaveCount(0);
+  });
+});
+
+test("RL-22: the daily cap names the cause, says it resumes tomorrow, never blames the connection, and offers no retry", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await seedLocal(page, { sync: confirmedFor(reader) });
+    await signIn();
+    await page.route("**/api/log/sync", (route) =>
+      route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "quota" }) }),
+    );
+    await page.goto("/cuenta");
+
+    await expect(page.getByText(copy.failedQuotaTitle, { exact: true })).toBeVisible();
+    await expect(page.getByText(copy.failedQuotaBody, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Sin conexión/)).toHaveCount(0);
+    await expect(page.getByText(copy.failedOfflineTitle, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: copy.failedAction })).toHaveCount(0);
   });
 });
 
@@ -406,7 +550,7 @@ test("RL-52, RL-24: retiring this very device shows the retired state, no copy b
     await expect(page.getByText(RETIRED_TITLE)).toBeVisible();
     await expect(page.getByText(RETIRED_BODY)).toBeVisible();
     await expect(confirmButton(page)).toHaveCount(0);
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toHaveCount(0);
+    await expect(page.getByText(GONE_TITLE)).toHaveCount(0);
 
     const before = posts.length;
     await hideTab(page);
@@ -469,7 +613,7 @@ test("RL-52, RL-24: after a retirement, signing out and in again offers the copy
 
     const count = posts.length;
     await confirmCopy(page);
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
+    await expectDone(page);
     expect(posts.length).toBe(count + 1);
     expect(posts[count]!.deviceId).not.toBe(retiredDevice);
     expect(posts[count]!.since).toBeNull();
@@ -502,11 +646,12 @@ test("RL-52: another reader on this device confirms under a new deviceId and upl
     // A copy running for A is not B's: B is asked.
     await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
     await expect(confirmButton(page)).toBeVisible();
+    await expect(page.getByText(copy.otherReader, { exact: true })).toBeVisible();
     await page.waitForTimeout(1000);
     expect(posts, "POSTs before B confirmed").toHaveLength(0);
 
     await confirmCopy(page);
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
+    await expectDone(page);
 
     const first = posts[0]!;
     expect(first.deviceId).not.toBe(deviceOfA);
@@ -518,6 +663,23 @@ test("RL-52: another reader on this device confirms under a new deviceId and upl
     expect(row?.readerId).toBe(reader.id);
     expect(row?.deviceId).toBe(first.deviceId);
     expect(row?.pushedThroughLocalId).toBe(2);
+
+    // B searches `apple`: the next round carries that one row and neither of A's.
+    const asset = page.waitForResponse((r) => r.url().includes(manifest.asset.path) && r.ok());
+    await page.goto("/");
+    await asset;
+    await page.getByRole("textbox", { name: messages.search.label }).fill("apple");
+    await expect.poll(() => countLookups(page), { message: "apple recorded" }).toBe(3);
+    const next = page.waitForRequest((r) => r.url().includes("/api/log/sync"));
+    await hideTab(page);
+    await next;
+    await page.waitForTimeout(500);
+    const second = posts[1]!;
+    expect(second.deviceId).toBe(first.deviceId);
+    expect(
+      second.rows.map((r) => (r as { text: string }).text),
+      `second POST: ${JSON.stringify(second)}`,
+    ).toEqual(["apple"]);
   });
 });
 
@@ -542,11 +704,12 @@ test("RL-52: the same reader coming back confirms and keeps their deviceId and c
     await page.goto("/cuenta");
 
     await expect(confirmButton(page)).toBeVisible();
+    await expect(page.getByText(copy.otherReader, { exact: true })).toHaveCount(0);
     await page.waitForTimeout(1000);
     expect(posts, "POSTs before confirming").toHaveLength(0);
 
     await confirmCopy(page);
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
+    await expectDone(page);
 
     expect(posts[0]!.deviceId).toBe(device);
     // The two rows were already pushed: the cursor survived.
@@ -604,4 +767,176 @@ test("RNL-09: with no session, /cuenta offers the account and sends nothing, on 
   await hideTab(page);
   await page.waitForTimeout(1500);
   expect(posts, `POSTs with no session: ${JSON.stringify(posts)}`).toHaveLength(0);
+});
+
+test("RL-52: the first reader on this device uploads every row they have searched", async ({ page }) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await seedLocal(page, { lookups: [localRow("alpha"), localRow("beta"), localRow("gamma")] });
+    await signIn();
+    const posts = trackSync(page);
+    await page.goto("/cuenta");
+    await expect(page.getByText(confirmTitle(reader.email))).toBeVisible();
+    await confirmCopy(page);
+    await expectDone(page);
+
+    expect(posts).toHaveLength(1);
+    expect(
+      posts[0]!.rows.map((r) => (r as { text: string }).text).sort(),
+      `first POST: ${JSON.stringify(posts[0])}`,
+    ).toEqual(["alpha", "beta", "gamma"]);
+  });
+});
+
+test("RL-52: the count while copying is what is left to send, not every row on the device", async ({ page }) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    const foreignDevice = randomUUID();
+    await seedLocal(page, {
+      sync: confirmedFor(reader),
+      lookups: [
+        localRow("mine-1"),
+        localRow("mine-2"),
+        localRow("mine-3"),
+        localRow("theirs-1", { device: foreignDevice, deviceSeq: 1 }),
+        localRow("theirs-2", { device: foreignDevice, deviceSeq: 2 }),
+      ],
+    });
+    await signIn();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/api/log/sync", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.goto("/cuenta");
+
+    await expect(page.getByText(searchesLine(3), { exact: true })).toBeVisible();
+    await expect(page.getByText(searchesLine(5), { exact: true })).toHaveCount(0);
+    release();
+    await expectDone(page);
+  });
+});
+
+test("RL-52: with nothing to send, the copy only brings and says so in the zero form", async ({ page }) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await seedLocal(page, { sync: confirmedFor(reader) });
+    await signIn();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/api/log/sync", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.goto("/cuenta");
+
+    await expect(page.getByText(searchesLine(0), { exact: true })).toBeVisible();
+    release();
+    await expectDone(page);
+  });
+});
+
+test("RL-52, RNL-09: opening /cuenta with the copy on pulls once, then the device list is asked again", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    const seededAt = Date.now() - 5 * 60_000;
+    await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: seededAt }) });
+    await signIn();
+    const posts = trackSync(page);
+    const deviceLists: number[] = [];
+    const postLandedAt: number[] = [];
+    page.on("request", (r) => {
+      if (r.url().includes("/api/devices") && r.method() === "GET") deviceLists.push(Date.now());
+    });
+    page.on("response", (r) => {
+      if (r.url().includes("/api/log/sync")) postLandedAt.push(Date.now());
+    });
+
+    await page.goto("/cuenta");
+    await expectDone(page);
+    await expect.poll(() => deviceLists.length, { message: "device list asked again" }).toBeGreaterThanOrEqual(2);
+    await page.waitForTimeout(1500);
+
+    expect(posts, `POSTs on open: ${JSON.stringify(posts)}`).toHaveLength(1);
+    expect(posts[0]!.deviceId).toBe((await readSync(page))!.deviceId);
+    expect(deviceLists.at(-1)!, "the last list request follows the pull").toBeGreaterThanOrEqual(postLandedAt[0]!);
+    const row = await readSync(page);
+    expect(row!.lastSyncedAt!, "the pull stamped the copy").toBeGreaterThan(seededAt + 4 * 60_000);
+  });
+});
+
+test("RL-52: a retired device that still has the copy flag opens /cuenta without a single request", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await seedLocal(page, { sync: confirmedFor(reader, { retired: true }) });
+    await signIn();
+    const posts = trackSync(page);
+    await page.goto("/cuenta");
+    await expect(page.getByText(RETIRED_TITLE)).toBeVisible();
+    await page.waitForTimeout(1500);
+    expect(posts, `POSTs on a retired device: ${JSON.stringify(posts)}`).toHaveLength(0);
+  });
+});
+
+test("RNL-09: a copy left on with no session is turned off on /cuenta, and a hidden tab sends nothing", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await seedLocal(page, {
+    sync: {
+      deviceId: randomUUID(),
+      pushedThroughLocalId: null,
+      pulledThroughCursor: null,
+      lastSyncedAt: null,
+      enabled: true,
+      readerId: randomUUID(),
+      retired: false,
+    },
+    lookups: [localRow("left-behind")],
+  });
+  const posts = trackSync(page);
+  await page.goto("/cuenta");
+  await expect(page.getByText(copy.noSessionTitle)).toBeVisible();
+  await expect.poll(async () => (await readSync(page))?.enabled, { message: "enabled in IndexedDB" }).toBe(false);
+
+  await hideTab(page);
+  await page.waitForTimeout(1500);
+  expect(posts, `POSTs after hide with no session: ${JSON.stringify(posts)}`).toHaveLength(0);
+});
+
+// The board's field width: the email field and its button share 400 px at 1280.
+const BOARD_FIELD_MAX = 400;
+
+test.describe("signed out, wide screen", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test("RNL-03: the email field and its button stop at the board's 400 px", async ({ page }) => {
+    await page.goto("/cuenta");
+    const field = page.getByRole("textbox", { name: messages.account.emailLabel });
+    await expect(field).toBeVisible();
+    const fieldBox = (await field.boundingBox())!;
+    const buttonBox = (await page.getByRole("button", { name: copy.noSessionAction }).boundingBox())!;
+    expect(fieldBox.width, `field ${fieldBox.width}px`).toBeLessThanOrEqual(BOARD_FIELD_MAX + 1);
+    expect(fieldBox.width, `field ${fieldBox.width}px`).toBeGreaterThan(200);
+    expect(buttonBox.width, `button ${buttonBox.width}px`).toBeLessThanOrEqual(BOARD_FIELD_MAX + 1);
+  });
+});
+
+test.describe("signed out, phone", () => {
+  test.use({ viewport: { width: 360, height: 740 } });
+
+  test("RNL-03: at 360 the email field is the width of the column", async ({ page }) => {
+    await page.goto("/cuenta");
+    const field = page.getByRole("textbox", { name: messages.account.emailLabel });
+    await expect(field).toBeVisible();
+    const column = (await page.getByText(copy.noSessionBody).boundingBox())!;
+    // The input sits inside its bordered root; the root is what spans the column.
+    const fieldBox = (await field.locator("xpath=..").boundingBox())!;
+    expect(Math.abs(fieldBox.width - column.width), `field ${fieldBox.width}px, column ${column.width}px`).toBeLessThanOrEqual(1);
+  });
 });

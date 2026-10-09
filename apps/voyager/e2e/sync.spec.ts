@@ -457,10 +457,17 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
     expect(recordsAfter).toBe(recordsBefore);
 
     // The retired device does not come back: not on the next list, and not
-    // through a round of its own either.
+    // through a round of its own either. This device never confirmed a copy
+    // for this reader (`readerId: null`), so opening /cuenta pulls nothing.
+    const openRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/log/sync")) openRequests.push(request.url());
+    });
     await page.reload();
     await expect(page.getByText(ownLabel)).toBeVisible();
     await expect(page.getByText(foreignLabel)).toHaveCount(0);
+    await page.waitForTimeout(1500);
+    expect(openRequests, `pulls on opening an unconfirmed /cuenta: ${JSON.stringify(openRequests)}`).toHaveLength(0);
     const syncAttempt = await page.request.post("/api/log/sync", { data: oneRowRound(foreignDeviceId) });
     expect(syncAttempt.status()).toBe(409);
     const [{ foreignRows }] = await sql<{ foreignRows: number }[]>`
@@ -647,6 +654,17 @@ test("RL-52, RNL-09: signing out disables the copy, drops the box's stored query
     await confirmCopy(page);
     await firstSync;
     await page.waitForTimeout(500);
+
+    // Opening /cuenta again with the copy confirmed pulls exactly once.
+    const reopenRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/log/sync")) reopenRequests.push(request.url());
+    });
+    const reopened = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
+    await page.reload();
+    await reopened;
+    await page.waitForTimeout(1500);
+    expect(reopenRequests, `pulls on reopening: ${JSON.stringify(reopenRequests)}`).toHaveLength(1);
 
     // The leak the module 8 validator drove: a word looked up before
     // signing out must not pre-fill `Buscar` for whoever opens this tab

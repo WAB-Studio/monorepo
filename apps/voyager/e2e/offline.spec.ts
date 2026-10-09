@@ -212,7 +212,7 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     // A reader whose copy is running (RL-52): the confirm is the only way it starts.
     await page.goto("/cuenta");
     await confirmCopy(page);
-    await expect(page.getByText(messages.account.copy.upToDateTitle)).toBeVisible();
+    await expect(page.getByText(messages.account.copy.lastCopyMoment, { exact: true })).toBeVisible();
 
     // Online, signed in: this is the render that must never overwrite the
     // cache — wait for the worker to settle the navigation before reading it.
