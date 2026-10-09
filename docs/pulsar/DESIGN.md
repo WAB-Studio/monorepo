@@ -1133,3 +1133,18 @@ module; until it lands, the screen and its approved board stay as built.
 - **«Darle otro día» offers no «sin día»** (orchestrator, 2026-10-09, module 654). `HoySueltaMoverArrastrada` draws four
   chips ending in «sin día»; RP-61 moves a one-off «to any day from today on», so the chip stays out and the step offers
   «hoy», «mañana», «otro día». A one-off on today opens on «mañana»; a carried one opens on «hoy».
+
+## Decisions of 2026-10-09, the boards of Part 2
+
+Taken by the user the same evening («1. si 2. b 3. a 4. a 5. a 6. a»), on canvas version 94.
+
+- **The eleven boards of Part 2 are approved as drawn:** `HojaTareaSinCifra`, `MesTareaNuevaSinCifra` (663),
+  `ImportarRitmoPlan` (669), `SemanaHoyTinte` (670), `SemanaPasoAtras` (671), `ConexionesSeccionConexiones`,
+  `ConexionesDesktopConector` (672), `PermisoPalabrasActos` (673), `FuenteCaidaQuePide` (674), `ReporteTareaPendiente`
+  (675), `MetaRitmoTareas` (676). `PermisoPalabras`, `FuenteCaidaPalabras`, `ImportarRevisarRitmo` and
+  `ConexionesCreadaDesktop` go to «Archivo» the day their successor's module lands.
+- **`--pulsar-today`** is `#e3e8ee` light and `#1e252c` dark, as `SemanaHoyTinte` measures it (670).
+- **With `ritmo:`, the review's task rows say «va al plan · desde octubre»**, not the month alone (669).
+- **The connector address shows on the main `/conexiones` screen only**, not again after a key is created (672).
+- **The report's month state moves under the month's name** («cerrado · 25 % pasó a octubre», «en curso»), since the third
+  column now carries the plan (675).
