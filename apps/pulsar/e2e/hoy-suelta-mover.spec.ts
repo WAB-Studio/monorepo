@@ -285,9 +285,13 @@ test("Hoy: while the move is in flight «Moverla» is disabled and the step stay
     const move = step.getByRole("button", { name: oneOffs.schedule.move, exact: true });
     await move.click();
     await expect.poll(() => held).toBe(true);
+    // Let any exit animation of an early close finish before judging.
+    await settled(step).catch(() => {});
     await expect(move).toBeDisabled();
     await expect(step).toBeVisible();
-    await expect(nameButton(page, name)).toBeVisible();
+    await expect(step).toContainText("¿Para cuándo?");
+    // The modal hides the page behind it from the role tree.
+    await expect(page.getByRole("button", { name: new RegExp(`^${name}`), includeHidden: true })).toHaveCount(1);
 
     release();
     await expect(page.getByRole("dialog")).toHaveCount(0);
