@@ -795,7 +795,7 @@ test("RL-52: the count while copying is what is left to send, not every row on t
   await withReader(page, async ({ reader, signIn }) => {
     const foreignDevice = randomUUID();
     await seedLocal(page, {
-      sync: confirmedFor(reader),
+      sync: confirmedFor(reader, { enabled: false, lastSyncedAt: null }),
       lookups: [
         localRow("mine-1"),
         localRow("mine-2"),
@@ -812,6 +812,8 @@ test("RL-52: the count while copying is what is left to send, not every row on t
       await route.continue();
     });
     await page.goto("/cuenta");
+    await expect(confirmButton(page)).toBeVisible();
+    await confirmCopy(page);
 
     await expect(page.getByText(searchesLine(3), { exact: true })).toBeVisible();
     await expect(page.getByText(searchesLine(5), { exact: true })).toHaveCount(0);
@@ -823,7 +825,30 @@ test("RL-52: the count while copying is what is left to send, not every row on t
 test("RL-52: with nothing to send, the copy only brings and says so in the zero form", async ({ page }) => {
   test.setTimeout(45_000);
   await withReader(page, async ({ reader, signIn }) => {
-    await seedLocal(page, { sync: confirmedFor(reader) });
+    await seedLocal(page, { sync: confirmedFor(reader, { enabled: false, lastSyncedAt: null }) });
+    await signIn();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/api/log/sync", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.goto("/cuenta");
+    await expect(confirmButton(page)).toBeVisible();
+    await confirmCopy(page);
+
+    await expect(page.getByText(searchesLine(0), { exact: true })).toBeVisible();
+    release();
+    await expectDone(page);
+  });
+});
+
+test("RL-52, RNL-02: opening /cuenta with the copy on keeps the last-copy line while it pulls, then updates it", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ reader, signIn }) => {
+    await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: Date.now() - 3 * 60_000 }) });
     await signIn();
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
@@ -833,9 +858,12 @@ test("RL-52: with nothing to send, the copy only brings and says so in the zero 
     });
     await page.goto("/cuenta");
 
-    await expect(page.getByText(searchesLine(0), { exact: true })).toBeVisible();
+    await expect(page.getByText(fillTemplate(copy.lastCopy, { time: "3 minutos" }), { exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.getByText(/Copiando/)).toHaveCount(0);
     release();
-    await expectDone(page);
+    await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Copiando/)).toHaveCount(0);
   });
 });
 

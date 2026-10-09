@@ -365,9 +365,13 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
   // The clock the last-copy line reads; a render never calls `Date.now()` itself.
   const [now, setNow] = useState(0);
 
-  async function runSync(): Promise<void> {
-    setSyncStatus({ kind: "syncing" });
-    setSyncCount(await countPendingUpload());
+  // `silent` is the pull on open: the last-copy line stays as it is while it
+  // runs (`CuentaCopiaAlAbrir`), and only a failure draws anything.
+  async function runSync(silent = false): Promise<void> {
+    if (!silent) {
+      setSyncStatus({ kind: "syncing" });
+      setSyncCount(await countPendingUpload());
+    }
     const outcome = await syncNow();
     setSyncState(await readSyncState());
     setNow(Date.now());
@@ -392,7 +396,7 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
       setSyncState(current);
       setNow(Date.now());
       // The pull on open: only a copy this reader confirmed and that is not retired.
-      if (current.enabled && current.readerId === reader.id && !current.retired) await runSync();
+      if (current.enabled && current.readerId === reader.id && !current.retired) await runSync(true);
     })();
     return () => {
       cancelled = true;
