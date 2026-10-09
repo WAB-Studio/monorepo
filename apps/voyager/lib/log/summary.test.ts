@@ -308,6 +308,26 @@ test("lema de una forma: the headword of the form's most recent row, the form it
   assert.equal(await readLemmaKey("never"), "never");
 });
 
+test("lema de una forma: two rows of the form at the same instant, the higher id's headword wins", async () => {
+  currentRows = [
+    row(4, "lingered", { headword: "linger", at: 5000 }),
+    row(9, "lingered", { headword: "lingerer", at: 5000 }),
+  ];
+  const { readLemmaKey } = await getSummary();
+  assert.equal(await readLemmaKey("lingered"), "lingerer");
+});
+
+test("historia del lema: searches at the same millisecond come newest id first", async () => {
+  currentRows = [
+    row(1, "linger", { at: 7000, text: "first" }),
+    row(2, "lingered", { at: 7000, text: "second", headword: "linger" }),
+    row(3, "linger", { at: 7000, text: "third" }),
+  ];
+  const { readLemmaHistory } = await getSummary();
+  const { rows } = await readLemmaHistory("linger");
+  assert.deepEqual(rows.map((r) => r.text), ["third", "second", "first"]);
+});
+
 test("acotada: readLemmaKey opens one cursor, ranged to the form", async () => {
   currentRows = [row(1, "linger"), row(2, "lingered", { headword: "linger" }), row(3, "dog")];
   const { readLemmaKey } = await getSummary();
@@ -323,7 +343,7 @@ test("subida de versión: a v2 base opens at v3 with the same rows and the headw
   // cannot be lifted inside this one.
   const script = `
     const stores = new Map([
-      ["lookups", { indexes: new Set(["at", "normalised", "foreign"]), rows: [{ id: 1, normalised: "cat" }] }],
+      ["lookups", { indexes: new Set(["at", "normalised", "foreign"]), rows: [{ id: 1, normalised: "cat" }, { id: 2, normalised: "dog" }, { id: 3, normalised: "eel" }] }],
       ["sync", { indexes: new Set(), rows: [] }],
     ]);
     let version = 2;
@@ -334,7 +354,19 @@ test("subida de versión: a v2 base opens at v3 with the same rows and the headw
           const database = {
             get version() { return version; },
             createObjectStore: (name) => stores.set(name, { indexes: new Set(), rows: [] }),
-            objectStore: (name) => ({ createIndex: (index) => stores.get(name).indexes.add(index) }),
+            objectStore: (name) => {
+              const store = stores.get(name);
+              return {
+                createIndex: (index) => store.indexes.add(index),
+                put: (row) => {
+                  const at = store.rows.findIndex((r) => r.id === row.id);
+                  if (at >= 0) store.rows[at] = row; else store.rows.push(row);
+                },
+                delete: (id) => { store.rows = store.rows.filter((r) => r.id !== id); },
+                clear: () => { store.rows = []; },
+                openCursor: () => { throw new Error("not needed"); },
+              };
+            },
           };
           request.result = database;
           request.transaction = database;
@@ -370,7 +402,11 @@ test("subida de versión: a v2 base opens at v3 with the same rows and the headw
   };
   assert.equal(seen.constant, 3);
   assert.equal(seen.version, 3);
-  assert.deepEqual(seen.rows, [{ id: 1, normalised: "cat" }]);
+  assert.deepEqual(seen.rows, [
+    { id: 1, normalised: "cat" },
+    { id: 2, normalised: "dog" },
+    { id: 3, normalised: "eel" },
+  ]);
   assert.ok(seen.indexes.includes("headword"));
   assert.ok(seen.indexes.includes("normalised"));
 });
