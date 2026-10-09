@@ -255,8 +255,9 @@ test("at 390 the footer counts today's partial and not a partial day still to co
   db,
   person,
 }) => {
-  const goalId = await seedDailyQuantity(db, person, [today, shift(today, 1), shift(today, 2)]);
   const elapsed = ((civilDateToDate(today).getUTCDay() + 6) % 7) + 1;
+  test.skip(elapsed === 7, "domingo: no hay día por venir en la semana; m72 no se alcanza");
+  const goalId = await seedDailyQuantity(db, person, [today, shift(today, 1), shift(today, 2)]);
   try {
     await withPage(browser, baseURL, person, 390, async (page) => {
       await page.goto(`/semana?semana=${thisMonday}`);
