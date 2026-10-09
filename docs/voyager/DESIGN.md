@@ -1583,3 +1583,9 @@ Taken by the user on the critic's questions. Each opens its module with a board 
   successor that counts it as found; the copy schema accepts the new outcome.
 - **Opening the record pulls.** With the copy on, opening `/registro` or `/cuenta` pulls once and the list refreshes when
   it lands; the box itself stays off the network (RNL-09 reworded). «Al día» goes: the line reads «Última copia hace X».
+- **The other-reader rule rewrites RL-52, unticked.** Its words change; no successor.
+- **«Retirar» goes grey.** The retire button takes the soft weight «Cerrar sesión» has; the one-tap confirm stays.
+- **Two devices are told apart.** A label keeps its known half («Chrome en otro sistema» rather than «Dispositivo
+  desconocido» when only the platform is unknown) and each row adds «Desde el {fecha}» from `created_at`.
+- **Function words in the per-word fallback (RL-37) come from a hand table.** About a hundred words with their common
+  translation, read before the dictionary's order in that fallback only.
