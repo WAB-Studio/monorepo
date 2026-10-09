@@ -2,7 +2,7 @@ import { isRecordedOutcome } from "./outcome";
 import { countPending } from "./pending";
 import { pendingRowFrom } from "./record-text";
 import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
-import { LOOKUP_SCHEMA, type LookupOutcome, type LookupRecord, type SyncState } from "./types";
+import type { LookupRecord, SyncState } from "./types";
 
 // A separate database from `reading-dictionary`: an IndexedDB transaction is
 // scoped to one database, so a write here never queues behind a read of the
@@ -253,7 +253,7 @@ function notifyFlushed(): void {
 // settled candidate — hit or miss — ends up, never at the call that reports
 // it: `recordLookup` still has to run for a miss, so it can displace
 // whatever prefix was pending and let the chain keep extending past it.
-
+//
 // Relays to `localStorage` before either IndexedDB path is even tried: a
 // killed tab still lets its transaction commit (measured), but a reload, a
 // URL navigation or a history traversal tears the document down before its
