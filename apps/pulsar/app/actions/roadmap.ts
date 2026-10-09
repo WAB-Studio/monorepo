@@ -13,6 +13,7 @@ import {
   type DismissPlanNoticeInput,
   type DismissPlanNoticesInput,
 } from "@/lib/validation/rhythm";
+import { TIME_UNITS } from "@/lib/units/time";
 import { TIME_ZONE, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
@@ -42,9 +43,13 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   if (!person) return { ok: false, error: "month.errors.signedOut" };
 
   const today = todayInZone();
+  const timeUnits = sql`array[${sql.join(
+    TIME_UNITS.map((unit) => sql`${unit}`),
+    sql`, `,
+  )}]::text[]`;
 
   const rows = await withGoalsDb((tx) =>
-    tx.execute<{ measured: boolean; open: boolean }>(sql`
+    tx.execute<{ measured: boolean; timed: boolean; open: boolean }>(sql`
       with g as (
         select id, rhythm, measure_unit, horizon, archived_at,
                (created_at at time zone ${TIME_ZONE})::date as opened
@@ -52,7 +57,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
       ),
       ok as (
         select * from g
-        where measure_unit is not null and archived_at is null and horizon > ${today}::date
+        where lower(trim(measure_unit)) = any(${timeUnits}) and archived_at is null and horizon > ${today}::date
       ),
       upd as (
         update goals set rhythm = ${amount},
@@ -86,6 +91,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
         returning 1
       )
       select measure_unit is not null as measured,
+             coalesce(lower(trim(measure_unit)) = any(${timeUnits}), false) as timed,
              archived_at is null and horizon > ${today}::date as open
       from g
     `),
@@ -95,6 +101,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
   if (!goal) return { ok: false, error: "month.errors.notFound" };
   if (!goal.open) return { ok: false, error: "month.errors.closed" };
   if (!goal.measured) return { ok: false, error: "roadmap.errors.rhythmNoMeasure" };
+  if (!goal.timed) return { ok: false, error: "roadmap.errors.rhythmNotTime" };
 
   revalidatePath(`/metas/${goalId}`, "layout");
   revalidatePath("/");

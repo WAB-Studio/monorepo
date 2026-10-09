@@ -54,7 +54,7 @@ function monthFrom(day: string, delta: number): string {
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
 }
 
-async function goal(person: Person, name: string, measured: boolean): Promise<string> {
+async function goal(person: Person, name: string, measured: boolean, unit = "minutos"): Promise<string> {
   const horizon = `${monthFrom(today, 3)}-01`;
   const created = await as(person, () => plan.createGoal({ name, horizon }));
   if (!created.ok) throw new Error(`createGoal: ${created.error}`);
@@ -66,7 +66,7 @@ async function goal(person: Person, name: string, measured: boolean): Promise<st
         cadenceKind: "daily",
         satisfaction: "quantity",
         targetQuantity: 10,
-        unit: "minutos",
+        unit,
       }),
     );
     if (!commitment.ok) throw new Error(`addCommitment: ${commitment.error}`);
@@ -183,6 +183,19 @@ test("setRhythm: a goal with no measure, an archived one and an ended one are re
     });
     assert.equal(await rhythmOf(goalId), null);
   }
+});
+
+test("setRhythm: a goal measured in km is refused and keeps no rhythm; minutes and «Minutos » land", async () => {
+  const km = await goal(owner, "kilometros", true, "km");
+  const upper = await goal(owner, "mayusculas", true, "Minutos ");
+  goalIds.push(km, upper);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: km, amount: 60 })), {
+    ok: false,
+    error: "roadmap.errors.rhythmNotTime",
+  });
+  assert.equal(await rhythmOf(km), null);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId: upper, amount: 60 })), { ok: true });
+  assert.equal(await rhythmOf(upper), 60);
 });
 
 test("setRhythm: 0 and 1 000 001 are refused, 1 and 1 000 000 land", async () => {

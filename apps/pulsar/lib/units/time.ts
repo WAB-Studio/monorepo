@@ -1,6 +1,8 @@
 // The words for a minute. A unit named any other way is not time and prints
 // as it always has.
-const TIME_UNITS = new Set(["minutos", "minuto", "min", "mins"]);
+// An array too: the rhythm action hands the same list to the SQL.
+export const TIME_UNITS = ["minutos", "minuto", "min", "mins"] as const;
+const TIME_UNIT_SET: ReadonlySet<string> = new Set(TIME_UNITS);
 
 // `useGrouping: "always"`: "es" leaves four digits bare by default, and a
 // total of 1.234 h has to read as grouped as the figures beside it.
@@ -16,7 +18,7 @@ export type TimeWords = {
 };
 
 export function isTimeUnit(unit: string | null): boolean {
-  return unit !== null && TIME_UNITS.has(unit.trim().toLowerCase());
+  return unit !== null && TIME_UNIT_SET.has(unit.trim().toLowerCase());
 }
 
 export function splitMinutes(n: number): { h: number; min: number } {

@@ -75,6 +75,7 @@
   },
   "errors": {
     "rhythmRange": "El ritmo va de 1 a 1 000 000 de minutos al mes.",
+    "rhythmNotTime": "El plan es para metas que miden tiempo.",
     "rhythmNoMeasure": "Esta meta no tiene medida, así que no tiene ritmo.",
     "monthOutsideSpan": "Ese mes queda fuera de la meta.",
     "monthEnded": "Ese mes ya terminó.",
