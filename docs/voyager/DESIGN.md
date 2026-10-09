@@ -1611,6 +1611,9 @@ Taken by the user on the critic's questions. Each opens its module with a board 
 
 ### Decisions of 2026-10-09
 
+- **The forms line of a `/registro` row lists every searched form, most searched first, a tie to the most recent**
+  (orchestrator, 2026-10-09, module 562): it reconciles «linger · lingered, lingering» and «left · leave» on
+  `RegistroEstudioPorLema`. A row whose only searched form is its key draws no line.
 - **The function-word table is approved** (user, 2026-10-09, `private/reportes/558-tabla.md`), with two glosses changed:
   will reads «-ré, -rá (futuro)» and would «-ría (condicional)».
 - **`/cuenta` keeps the lines its boards did not write** (user, 2026-10-09): «Copiando tus búsquedas…», «Visto por última

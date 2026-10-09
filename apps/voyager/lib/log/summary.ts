@@ -33,20 +33,31 @@ export type StudyRow = {
   lastOutcome: LookupOutcome;
 };
 
-type Group = StudyRow;
+// Forms carry the time they were last searched while grouping, so the
+// finished row can order them; `StudyRow` hands callers the order alone.
+type Group = Omit<StudyRow, "forms"> & { forms: { text: string; count: number; at: number }[] };
 
-function addForm(forms: Group["forms"], text: string): Group["forms"] {
+function addForm(forms: Group["forms"], text: string, at: number): Group["forms"] {
   const seen = forms.find((form) => form.text === text);
   return seen
-    ? forms.map((form) => (form === seen ? { text, count: form.count + 1 } : form))
-    : [...forms, { text, count: 1 }];
+    ? forms.map((form) =>
+        form === seen ? { text, count: form.count + 1, at: Math.max(form.at, at) } : form,
+      )
+    : [...forms, { text, count: 1, at }];
+}
+
+function finishGroup(group: Group): StudyRow {
+  const forms = [...group.forms]
+    .sort((a, b) => b.count - a.count || b.at - a.at)
+    .map(({ text, count }) => ({ text, count }));
+  return { ...group, forms };
 }
 
 function foldRow(group: Group | undefined, record: LookupRecord): Group {
   if (!group) {
     return {
       key: record.headword ?? record.normalised,
-      forms: [{ text: record.normalised, count: 1 }],
+      forms: [{ text: record.normalised, count: 1, at: record.at }],
       normalised: record.normalised,
       display: record.text,
       count: 1,
@@ -58,7 +69,7 @@ function foldRow(group: Group | undefined, record: LookupRecord): Group {
   const newer = record.at > group.lastAt;
   return {
     key: group.key,
-    forms: addForm(group.forms, record.normalised),
+    forms: addForm(group.forms, record.normalised, record.at),
     normalised: group.normalised,
     display: newer ? record.text : group.display,
     count: group.count + 1,
@@ -93,7 +104,7 @@ export async function readWordStudy(limit?: number): Promise<{ rows: StudyRow[];
     };
     request.onerror = () => reject(request.error);
   });
-  const rows = [...groups.values()].sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
+  const rows = [...groups.values()].map(finishGroup).sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
   return { rows: limit === undefined ? rows : rows.slice(0, limit), total: groups.size };
 }
 

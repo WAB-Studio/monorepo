@@ -21,9 +21,20 @@ type ListState =
   | { kind: "failed" };
 
 function StudyRowItem({ row }: { row: StudyRow }) {
+  const t = useTranslations("log");
+  const [lead, ...rest] = row.forms;
+  // A phrase or a miss reached no lemma: it keeps the text as typed.
+  const lemmaless = row.lastOutcome === "translated" || row.lastOutcome === "unlisted";
+  // A lone form that is the key says nothing the title does not.
+  const formsLine =
+    lead === undefined || (rest.length === 0 && lead.text === row.key)
+      ? null
+      : rest.length === 0
+        ? lead.text
+        : t("study.forms", { lemma: lead.text, forms: rest.map((form) => form.text).join(", ") });
   return (
     <Link asChild underline="none">
-      <NextLink href={`/registro/${encodeURIComponent(row.normalised)}`}>
+      <NextLink href={`/registro/${encodeURIComponent(row.key)}`}>
         <TapTarget size={44} direction="column" align="stretch" width="100%">
           {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
               the word; the desktop's third track puts word, translation and
@@ -51,21 +62,31 @@ function StudyRowItem({ row }: { row: StudyRow }) {
           >
             <Flex gridColumn="1" gridRow="1" minWidth="0" overflow="hidden">
               <Text serif truncate>
-                {row.display}
+                {lemmaless ? row.display : row.key}
               </Text>
             </Flex>
-            {row.lastTranslation !== null && (
-              <Flex
-                gridColumn={{ initial: "1", md: "2" }}
-                gridRow={{ initial: "2", md: "1" }}
-                minWidth="0"
-                overflow="hidden"
-              >
+            <Flex
+              gridColumn={{ initial: "1", md: "2" }}
+              gridRow={{ initial: "2", md: "1" }}
+              minWidth="0"
+              overflow="hidden"
+              direction="column"
+            >
+              {row.lastTranslation !== null ? (
                 <Text variant="translation" muted truncate>
                   {row.lastTranslation}
                 </Text>
-              </Flex>
-            )}
+              ) : row.lastOutcome === "unlisted" ? (
+                <Text variant="translation" muted truncate>
+                  {t("study.noResult")}
+                </Text>
+              ) : null}
+              {formsLine !== null && (
+                <Text size="1" muted truncate>
+                  {formsLine}
+                </Text>
+              )}
+            </Flex>
             <Box gridColumn={{ initial: "2", md: "3" }} gridRow="1" justifySelf="end">
               <MetaLabel>{row.count}</MetaLabel>
             </Box>
@@ -228,7 +249,7 @@ export function HistoryList() {
 
       <Flex direction="column" gap="3">
         {state.rows.map((row, index) => (
-          <Flex direction="column" gap="3" key={row.normalised}>
+          <Flex direction="column" gap="3" key={row.key}>
             {index > 0 && <Separator size="4" />}
             <StudyRowItem row={row} />
           </Flex>

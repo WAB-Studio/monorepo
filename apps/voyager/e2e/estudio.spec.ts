@@ -200,7 +200,7 @@ test("a form searched under another lemma shows in that lemma's row: «left» an
   const text = await rowText(page, "/registro/leave");
   expect(text).toMatch(/\b3\b/);
   const line = text.split("\n").find((l) => l.includes("left")) ?? "";
-  expect(formsOf(line).sort()).toEqual(["left", "leave"]);
+  expect(formsOf(line).sort()).toEqual(["leave", "left"]);
 });
 
 test("a lemma searched under one spelling only draws no forms line", async ({ page }) => {
@@ -283,7 +283,7 @@ test("rows order by the count of the whole lemma, ties broken by the most recent
     // zeta: 2 searches of one spelling — more than any single walk form.
     { at: now - 7000, text: "zeta", normalised: "zeta", translation: "zeta" },
     { at: now - 6000, text: "zeta", normalised: "zeta", translation: "zeta" },
-    // alpha and beta tie at 2; beta was searched last.
+    // zeta, alpha and beta tie at 2; the most recent search leads: beta, alpha, zeta.
     { at: now - 5000, text: "alpha", normalised: "alpha", translation: "alfa" },
     { at: now - 4000, text: "alpha", normalised: "alpha", translation: "alfa" },
     { at: now - 3000, text: "beta", normalised: "beta", translation: "beta" },
@@ -293,7 +293,7 @@ test("rows order by the count of the whole lemma, ties broken by the most recent
 
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(4);
   const hrefs = await page.locator('a[href^="/registro/"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
-  expect(hrefs).toEqual(["/registro/walk", "/registro/beta", "/registro/zeta", "/registro/alpha"]);
+  expect(hrefs).toEqual(["/registro/walk", "/registro/beta", "/registro/alpha", "/registro/zeta"]);
 });
 
 test("the header counts every search and one word per lemma", async ({ page }) => {
@@ -309,4 +309,40 @@ test("the header counts every search and one word per lemma", async ({ page }) =
   await page.reload();
 
   await expect(page.getByText("4 búsquedas · 2 palabras.")).toBeVisible();
+});
+
+test("the forms line lists the most searched form first, a tie to the most recent", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 9000, text: "linger", normalised: "linger", translation: "demorar" },
+    { at: now - 8000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 7000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 6000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    // walk: three forms, each once; the most recent leads, the oldest trails.
+    { at: now - 5000, text: "walked", normalised: "walked", headword: "walk", outcome: "inflected", translation: "caminar" },
+    { at: now - 3000, text: "walking", normalised: "walking", headword: "walk", outcome: "inflected", translation: "caminar" },
+    { at: now - 4000, text: "walks", normalised: "walks", headword: "walk", outcome: "inflected", translation: "caminar" },
+  ]);
+  await page.reload();
+
+  const linger = await rowText(page, "/registro/linger");
+  expect(linger).toContain("lingered · linger");
+  const walk = await rowText(page, "/registro/walk");
+  expect(walk).toContain("walking · walks, walked");
+});
+
+test("a row whose only searched form is its key names it once", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 2000, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
+    { at: now - 1000, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
+  ]);
+  await page.reload();
+
+  const text = await rowText(page, "/registro/lukewarm");
+  expect(text.match(/lukewarm/g)).toHaveLength(1);
 });
