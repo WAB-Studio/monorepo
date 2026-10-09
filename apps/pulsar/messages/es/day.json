@@ -53,7 +53,6 @@
   },
   "oneOffs": {
     "title": "Sueltas",
-    "markLabel": "Marcar como hecho",
     "delete": {
       "title": "¿Borrarla?",
       "description": "No llegó a pasar nada, así que no queda nada de ella. Si ya la hiciste, márcala hecha en vez de borrarla: eso sí deja constancia.",
@@ -131,6 +130,7 @@
     "tasksAfterFigure": "· {done} de {total, plural, one {# tarea} other {# tareas}}",
     "parent": "de {name}",
     "next": "Siguiente del plan",
+    "nextMonth": "Siguiente del mes",
     "nextPart": "Siguiente del plan · <fig>{hours}</fig> este mes",
     "pace": "día {day} ·",
     "paceUnder": ", bajo el {threshold} %"

@@ -9,7 +9,7 @@ import { NoteSheet } from "@/components/one-offs/note-sheet";
 import { Button, Figure, Flex, IconButton, Mark, Text } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import type { MessageKey } from "@/i18n/translator";
-import { formatQuantity } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 
 /**
  * `HoyTareaMes.dc.html`: the goal's next task of the month under its figures,
@@ -100,7 +100,9 @@ export function MonthTaskLine({
                   hours: splitPart,
                   fig: () => <Figure variant="meta" value={Number(splitPart)} unit={unit || undefined} />,
                 })
-              : t("day.monthLine.next")}
+              : unit !== "" && !isTimeUnit(unit)
+                ? t("day.monthLine.nextMonth")
+                : t("day.monthLine.next")}
           </Text>
         </Flex>
         {estimate !== null || unit !== "" ? (
