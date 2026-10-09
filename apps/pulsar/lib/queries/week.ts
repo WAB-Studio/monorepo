@@ -3,8 +3,9 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveWeek } from "@/lib/day/derive";
-import type { Cadence, CommitmentPlan, EvidenceDay, WeekView } from "@/lib/day/types";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import type { Cadence, CommitmentPlan, WeekView } from "@/lib/day/types";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
   toDeclaredFact,
@@ -71,11 +72,6 @@ type WeekQueryRow = {
   period_facts: { commitment_id: string; day: string }[];
 };
 
-type EvidenceOutcome = {
-  status: "read" | "unreadable";
-  bySourceKey: Record<string, EvidenceDay[]>;
-};
-
 /**
  * One statement, four subqueries: every open goal, every commitment not
  * retired before the week's own first day (a commitment retired mid-week
@@ -135,7 +131,7 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
          from "goals"."phases" p
          where p.starts_on <= ${weekEnd}::date
-           and (p.ends_on is null or p.ends_on >= ${weekStart}::date)) as phases,
+           and p.ends_on >= ${weekStart}::date) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit,
                  'one_off_name', o.name,
@@ -154,32 +150,6 @@ async function queryGoalsRow(
   `);
 
   return row;
-}
-
-// One query per known source (today, exactly one), independent of which
-// commitments actually reference it — the mapping step below narrows the
-// result back down to the commitments that asked for it.
-async function queryEvidenceBySource(
-  tx: Transaction,
-  personId: string,
-  weekStart: string,
-  weekEnd: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({
-      personId,
-      from: weekStart,
-      to: weekEnd,
-      zone: TIME_ZONE,
-      tx,
-    });
-  }
-
-  return bySourceKey;
 }
 
 function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {

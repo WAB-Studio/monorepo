@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { phaseOn } from "@/lib/day/derive";
 import type { EvidenceDay } from "@/lib/day/types";
 import { dayBefore } from "@/lib/day/weeks";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { monthOf, toDate } from "@/lib/plan/months";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
@@ -71,23 +71,8 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
 
 // Bounded in SQL from the earliest open goal's opening, as `goalSpan` does
 // for one goal: the reading statement opens blind, beside the goals one.
-async function queryReportEvidence(
-  tx: Transaction,
-  personId: string,
-  today: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-  const from = sql`(select min((g.created_at at time zone ${TIME_ZONE})::date)
+const reportEvidenceFrom = sql`(select min((g.created_at at time zone ${TIME_ZONE})::date)
                       from "goals"."goals" g where g.archived_at is null)`;
-
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from, to: today, zone: TIME_ZONE, tx });
-  }
-
-  return bySourceKey;
-}
 
 // The goal's plan, read the way `planMonthList` and `planShare` ask (RP-49).
 function planInputOf(row: ReportRow, today: string): PlanInput {
@@ -183,7 +168,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
 
   const [rows, evidenceOutcome] = await Promise.all([
     withGoalsDb(queryReportRows),
-    withReadingDb((tx) => queryReportEvidence(tx, person.id, today)).then(
+    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, reportEvidenceFrom, today)).then(
       (bySourceKey) => ({ status: "read" as const, bySourceKey }),
       () => ({ status: "unreadable" as const, bySourceKey: {} }),
     ),

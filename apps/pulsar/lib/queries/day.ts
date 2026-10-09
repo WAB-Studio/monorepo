@@ -12,7 +12,6 @@ import type {
   CommitmentPlan,
   DayView,
   DeclaredFact,
-  EvidenceDay,
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
@@ -21,7 +20,9 @@ import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { phasePositions } from "@/lib/day/row-phrases";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import { dayBefore } from "@/lib/day/weeks";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
   toDeclaredFact,
@@ -32,7 +33,7 @@ import {
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -178,18 +179,6 @@ function openGoal(alias: string, day: string) {
 
 export type EndedGoal = { id: string; name: string; lastDay: string };
 
-// A horizon is the first day after the goal; its last day is the one before.
-function dayBefore(day: string): string {
-  const date = civilDateToDate(day);
-  date.setUTCDate(date.getUTCDate() - 1);
-  return dateToCivilDate(date);
-}
-
-export type EvidenceOutcome = {
-  status: "read" | "unreadable";
-  bySourceKey: Record<string, EvidenceDay[]>;
-};
-
 /**
  * One statement, five subqueries: everything the day's derivation needs,
  * scoped to the caller's own rows by RLS alone — no `user_id` filter is
@@ -327,26 +316,6 @@ async function queryGoalsRow(
   `);
 
   return row;
-}
-
-// One query per known source (today, exactly one), independent of which
-// commitments actually reference it: the mapping step below is what narrows
-// the result back down to the commitments that asked for it.
-async function queryEvidenceBySource(
-  tx: Transaction,
-  personId: string,
-  from: string,
-  day: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from, to: day, zone: TIME_ZONE, tx });
-  }
-
-  return bySourceKey;
 }
 
 // A source that cannot be read degrades to an empty outcome, never a throw
@@ -756,7 +725,7 @@ export async function loadDay(day: string): Promise<{
   // The statement returns every phase so a goal's phase can say its place
   // among them; what the day derives from stays the ones in effect on `day`.
   const inEffect = row.phases.filter(
-    (phase) => phase.starts_on <= day && (phase.ends_on === null || phase.ends_on >= day),
+    (phase) => phase.starts_on <= day && phase.ends_on >= day,
   );
   const phases = inEffect.map(toPhase);
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
