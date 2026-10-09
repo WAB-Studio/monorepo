@@ -310,7 +310,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       // RL-37: a phrase in range that cannot be translated falls to the same
       // per-word breakdown RL-31 draws for one that was never tried — the
       // trigger is this `failed` state, never a `done` with empty text.
-      // RL-39 still logs the call: `commit` in record.ts is what drops an
+      // RL-55 still logs the call: `commit` in record.ts is what drops an
       // "untranslated" outcome, so the chain keeps advancing past it instead
       // of leaving an earlier, answered prefix stranded in `pending`.
       setPhraseState({ kind: "failed" });
@@ -345,7 +345,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // reaches it. Above the ceiling, nothing is asked at all. Both branches
   // still log the call, as a "miss": `commit` in record.ts is what drops it,
   // so an abandoned phrase can't leave an earlier, answered prefix behind
-  // (the same reasoning as RL-39's word path).
+  // (the same reasoning as RL-55's word path).
   function scheduleNoEntry(phraseText: string, tokens: number, dictionaryReady: boolean): void {
     if (tokens > PHRASE_MAX_TOKENS) {
       setNoEntryState({ kind: "tooLong", query: phraseText, tokens });
@@ -418,7 +418,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       if (latestTextRef.current !== queryText || !answer) return;
       setWordAnswer(answer);
       setSuggestions(items);
-      // RL-39/RL-55: a miss leaves no row here, but the call still happens — `commit`
+      // RL-55: a miss leaves no row here, but the call still happens — `commit`
       // in record.ts is what drops a "miss" outcome, not this call site. A
       // guard here would leave the last *answered* prefix stuck in
       // `pending` forever, to be written once the reader had moved on to
