@@ -611,3 +611,21 @@ test("declare_fact refuses a day before the goal opened with the goal's own sent
   const rows = await door`select 1 from goals.facts where commitment_id = ${made.commitmentId}`;
   assert.equal(rows.length, 0);
 });
+
+test("create_task in a goal measured in km with no month pins the task to the current month (RP-62)", async () => {
+  const opened = await freshGoal();
+  const made = await as(subject, () =>
+    acts.plan.addCommitment({
+      goalId: opened,
+      name: "correr",
+      cadenceKind: "daily",
+      satisfaction: "quantity",
+      targetQuantity: 5,
+      unit: "km",
+    } as never),
+  );
+  if (!made.ok) throw new Error(`addCommitment: ${made.error}`);
+  const task = await succeeds("create_task", { name: "carrera larga", goal_id: opened });
+  const [row] = await door`select planned_month::text as planned_month from goals.one_offs where id = ${task.oneOffId as string}`;
+  assert.equal(row.planned_month, `${currentMonth}-01`);
+});

@@ -8,6 +8,7 @@ import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
+import { isTimeUnit } from "@/lib/units/time";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import {
   createOneOffSchema,
@@ -55,7 +56,8 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { name, day, estimate, plannedMonth, parentId, note, inPlan } = parsed.data;
+  const { name, day, estimate, parentId, note, inPlan } = parsed.data;
+  let plannedMonth = parsed.data.plannedMonth;
   // A plain one-off of a goal keeps RP-20's rules; a month's task obeys the goal's plan.
   const isTask = plannedMonth != null || estimate != null || parentId != null || inPlan === true;
 
@@ -121,9 +123,15 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
           .where(eq(goals.id, goalId));
         if (!own) throw new NamedError("plan.errors.goalNotFound");
         goal = own;
+        // RP-62: a goal measured in anything but time has no plan to place
+        // the task, so it is fixed to its month, the current one when none is named.
+        if (day == null && own.measureUnit !== null && !isTimeUnit(own.measureUnit)) {
+          plannedMonth ??= todayInZone().slice(0, 7);
+          month = plannedMonth;
+        }
       }
 
-      if (isTask && goal !== null) {
+      if ((isTask || plannedMonth != null) && goal !== null) {
         // DESIGN: a month of an ended or archived goal takes no task.
         if (isClosed(goal)) throw new NamedError("month.errors.closed");
         if (estimate != null && goal.measureUnit === null) {
