@@ -109,6 +109,7 @@ let foreignGoalId: string;
 let sharesGoalId: string;
 let rhythmGoalId: string;
 let partialGoalId: string;
+let mismatchGoalId: string;
 let loadReport: typeof import("@/lib/queries/report").loadReport;
 let loadGoal: typeof import("@/lib/queries/goal").loadGoal;
 
@@ -248,6 +249,18 @@ before(async () => {
       values (${owner.user_id}, ${partialGoalId}, ${`${name} con monto`}, ${parent.id}, 5),
              (${owner.user_id}, ${partialGoalId}, ${`${name} sin monto`}, ${parent.id}, null)`;
   }
+
+  // Minutes, fed by a source that counts searches: the units differ (RP-14).
+  mismatchGoalId = (await goal("RP-49 fixture: unidad distinta", "minutos")).goalId;
+  const mismatch = await plan.addCommitment({
+    goalId: mismatchGoalId,
+    name: "RP-49 fixture: evidencia en otra unidad",
+    cadenceKind: "daily",
+    satisfaction: "evidence",
+    sourceKey: "reading_lookups",
+    threshold: 1,
+  });
+  if (!mismatch.ok) throw new Error(`addCommitment(mismatch): ${mismatch.error}`);
 
   const archivedResult = await plan.archiveGoal({ goalId: archivedGoalId });
   if (!archivedResult.ok) throw new Error(`archiveGoal: ${archivedResult.error}`);
@@ -446,4 +459,29 @@ test("loadReport: a parent with any estimated child has an amount, carried or of
     ],
   );
   assert.deepEqual(entry.carried.map((item) => [item.name, item.hasAmount]), [["RP-49 parcial: arrastrada", true]]);
+});
+
+test("loadReport: measureFed is true only for a goal whose evidence commitment is in its own unit (RP-14)", async () => {
+  for (const evidence of [false, true]) {
+    evidenceRejects = !evidence;
+    const report = await loadReport(today);
+    const fed = (id: string) => report.goals.find((goal) => goal.id === id)!.measureFed;
+    assert.equal(fed(searchesGoalId), true);
+    assert.equal(fed(minutesGoalId), false);
+    assert.equal(fed(mismatchGoalId), false);
+  }
+  evidenceRejects = false;
+});
+
+test("loadReport: a task cut at the month's edge reads its part here and the month it goes on in; a whole one reads none", async () => {
+  const report = await loadReport(today);
+  const entry = report.goals.find((goal) => goal.id === rhythmGoalId)!;
+  const byName = new Map(entry.tasks.map((item) => [item.name, item]));
+  const third = byName.get("RP-49 ritmo: tercera")!;
+  assert.equal(third.estimate, 8);
+  assert.equal(third.part, 4);
+  assert.equal(third.continuesIn, `${monthFrom(today, 1)}-01`);
+  assert.equal(third.cameFrom, null);
+  const first = byName.get("RP-49 ritmo: primera")!;
+  assert.deepEqual([first.part, first.continuesIn, first.cameFrom], [null, null, null]);
 });

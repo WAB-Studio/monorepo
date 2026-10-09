@@ -16,6 +16,11 @@ export type ReportTask = {
   done: boolean;
   doneOn: string | null;
   estimate: number | null;
+  // The share of the estimate that falls in this month; null when the task
+  // does not split across months or carries no amount.
+  part: number | null;
+  continuesIn: string | null;
+  cameFrom: string | null;
   owes: number;
   hasAmount: boolean;
   note: string | null;
@@ -30,6 +35,8 @@ export type GoalReport = {
   horizon: string;
   endedOn: string | null;
   unit: string | null;
+  // A source feeds the measure (RP-14): an evidence commitment in the goal's unit.
+  measureFed: boolean;
   thisMonth: { planned: number | null; reached: number; underPace: boolean };
   toDate: { planned: number; reached: number };
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
