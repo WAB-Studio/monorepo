@@ -656,8 +656,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   under «Hoy». Several goals ended that week: one line each, in plan order (RP-47; «most recent first» superseded by the user's RP-47 of 2026-10-05, read 2026-10-07). Only on today, never
   on `/dia/<fecha>`, and never beside the all-ended card, which already names the last goal. Wording
   decided 2026-09-29 by the coordinator.
-- **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the
-  daily «hechos» and their row says the cadence and the count: «3 veces por semana · 1 de 3 esta
+- **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» say their
+  period and no longer leave the daily «hechos» (corrected 2026-10-09: they count; see «hechos N de M» below), and their row says the cadence and the count: «3 veces por semana · 1 de 3 esta
   semana», «4 al mes · 3 de 4 este mes». On the table the days not done read the quiet «·»; on the
   phone they sit in a group «{meta} · por semana y por mes» under the day rows. Boards
   `SemanaFlexible.dc.html` and `SemanaEscritorioFlexible.dc.html`, approved by the user 2026-09-29.
@@ -668,7 +668,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `CompromisoNuevoMes.dc.html`. Decided 2026-09-29 by the user.
 - **Hoy builds what `HoyEscritorio.dc.html` draws**: each row's cadence, a flexible
   commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.
-- **Hoy says «hechos N de M» over the same rows as the Semana's «hechos»**; a flexible row with
+- **Hoy says «hechos N de M» over the same rows as the Semana's «hechos»**, flexible rows counted since 2026-10-09; a flexible row with
   progress says only its progress; a flexible met in its period stays as a quiet row «cumplida esta
   semana», and can be marked again. Board `HoyCuenta.dc.html`. Decided 2026-09-29 by the coordinator,
   on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
@@ -848,7 +848,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   never read as two headings. Reverses the 2026-09-22 rule above.
 - **Tapping a task's or a suelta's name opens an edit sheet**: name, estimate and month, with «Borrar» at its foot.
   The mark still marks done. Tapping a name never offers deletion first.
-- **«hechos N de M» on Hoy counts commitments only**, the dots the week shows. Sueltas are not in it.
+- **«hechos N de M» on Hoy counts every commitment row that asks that day**, flexible (weekly, monthly) and evidence rows included; the Semana's «hechos» counts the same. Sueltas are not in it. A past day's «ese día pedía N» counts the same rows. Corrects the 2026-09-29 rule that left flexible rows out. Decided 2026-10-09 by the user (answers Q1 (a) and Q4 (a) of 2026-10-08). Boards `HoyCuenta`, `HoyDia`, `HoyAyerPrimerDia`.
 - **The plan's words are plain.** «arrastró», «correr un mes», «debe», «umbral», «toque» give way to plain Spanish
   («quedó pendiente», «aplazar un mes», «falta»). The exact words are drawn on the boards first. Behaviour is
   unchanged, so no code is retired.
@@ -955,7 +955,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - Figures use a plain zero, never the slashed one (W3-Q3).
   - An imported phase that ends before its goal opens is dropped and listed in the import's review (W3-Q4).
 - **Wave 3 of the UX review, decided by the orchestrator 2026-10-06** (module 365):
-  - A past day's heading counts what «hechos» counts (:671, :846): «ese día pedía cinco» never adds a weekly row.
+  - A past day's heading counts what «hechos» counts (:671, :846): «ese día pedía cinco» counts the weekly rows too (corrected 2026-10-09).
   - The phone week draws a goal only when it has rows, and says «hechos» once, in its footer.
   - An empty section draws no label: no «cero compromisos», «cero fases», «abiertas» over nothing.
   - An archived goal with no task this month draws no month block.

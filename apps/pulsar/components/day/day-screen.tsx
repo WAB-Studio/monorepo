@@ -6,7 +6,7 @@ import { Button, Face, Figure, Flex, Page, Panel, Section, SectionLabel, Split, 
 import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
-import { isFlexible, tallyDay } from "@/lib/day/tally";
+import { tallyDay } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
@@ -265,8 +265,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         const goalPhases = phases.filter((phase) => phase.goalId === goal.id);
         const goalPhase = phaseOn(goalPhases, day);
 
-        // What «hechos» counts: a weekly or monthly row is not asked of that day.
-        const asked = rows.filter(({ commitment }) => !(commitment.cadence && isFlexible(commitment.cadence))).length;
+        // What «hechos» counts: every row that asks that day.
+        const asked = rows.length;
 
         const section = (
           <Panel as="div" key={goal.id}>
@@ -580,7 +580,11 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <DayHeader
           date={dateLabel(day, t)}
           title={t("day.title")}
-          back={{ href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }}
+          back={
+            loaded.firstGoalDay !== null && shiftCivilDay(day, -1) >= loaded.firstGoalDay
+              ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }
+              : undefined
+          }
           theme={{ toLightLabel: t("day.theme.toLight"), toDarkLabel: t("day.theme.toDark") }}
           tally={tally}
           ended={endedLines}
