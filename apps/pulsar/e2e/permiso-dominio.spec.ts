@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
+import { assertSuiteDatabase } from "@repo/harness-registry";
+import postgres from "postgres";
 
 import oauth from "../messages/es/oauth.json";
 import { test, expect, appAlerts, type Person } from "./fixtures";
@@ -15,6 +17,20 @@ const LONG = `https://${LONG_HOST}/cb`;
 const UNREGISTERED = "https://claude.ai/otro";
 const STATE = "estado-de-prueba-123";
 const LEAD = "al permitir, vuelves a";
+
+// HARNESS_RUN_ID reaches this process, not the server, and `runId()` reads only a run
+// this process opened: the spec stamps its own client with the suite's run, as `entrar.spec.ts`.
+async function note(clientId: string): Promise<void> {
+  assertSuiteDatabase();
+  const run = process.env.HARNESS_RUN_ID?.trim();
+  if (!run) throw new Error("HARNESS_RUN_ID is unset: this spec runs under check:e2e's own run");
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    await sql`insert into harness.oauth_clients (client_id, run_id) values (${clientId}, ${run})`;
+  } finally {
+    await sql.end();
+  }
+}
 
 const from = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::2`;
 const asRun = { "x-forwarded-for": from };
@@ -40,6 +56,7 @@ test.beforeAll(async ({ baseURL }) => {
   });
   expect(response.status).toBe(201);
   clientId = ((await response.json()) as { client_id: string }).client_id;
+  await note(clientId);
 });
 
 function consentPath(redirect: string): string {

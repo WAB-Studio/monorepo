@@ -6,10 +6,10 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
-import { assertSuiteDatabase } from "@repo/harness-registry";
+import { assertSuiteDatabase, closeRun, registerOAuthClient } from "@repo/harness-registry";
 import postgres from "postgres";
 
-import { adminSql, stubServerOnly } from "./lib/people";
+import { adminSql, openCheckRun, stubServerOnly } from "./lib/people";
 
 assertSuiteDatabase();
 
@@ -38,12 +38,16 @@ function remember(address: string): void {
   sources.push(fingerprint(callerAddress({ headers: new Headers({ "x-forwarded-for": address }) })));
 }
 
-const register = (address: string, name: string) =>
-  fetch(`${base}/oauth/registro`, {
+const register = async (address: string, name: string) => {
+  const response = await fetch(`${base}/oauth/registro`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-forwarded-for": address },
     body: JSON.stringify({ client_name: name, redirect_uris: [REDIRECT] }),
   });
+  if (response.status === 201) await registerOAuthClient(admin, (await response.clone().json()).client_id);
+
+  return response;
+};
 
 const garbageToken = (address: string) =>
   fetch(`${base}/oauth/token`, { method: "POST", headers: { "x-forwarded-for": address }, body: "" });
@@ -74,6 +78,7 @@ function assertRefused(response: Response, ceiling: number): void {
 
 before(async () => {
   stubServerOnly();
+  await openCheckRun(admin);
   ({ fingerprint } = await import("@/lib/mcp/tokens"));
   ({ callerAddress } = await import("@/lib/oauth/throttle"));
 });
@@ -82,6 +87,7 @@ after(async () => {
   try {
     await admin`delete from goals.oauth_clients where client_name like ${`limits-${run}-%`}`;
     for (const source of sources) await admin`delete from goals.oauth_calls where source = ${source}`;
+    await closeRun(admin);
   } finally {
     await door.end();
     await admin.end();

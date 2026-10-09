@@ -7,6 +7,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { after, before, test } from "node:test";
 
+import { registerOAuthClient } from "@repo/harness-registry";
 import postgres from "postgres";
 
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "./lib/people";
@@ -103,6 +104,7 @@ before(async () => {
     [subject] = await createPeople(admin, runId, door, 1);
     const grants = await import("@/lib/oauth/grants");
     clientId = await grants.registerClient({ name: "consent check client", redirectUris: [REDIRECT] });
+    await registerOAuthClient(admin, clientId);
   } catch (error) {
     await cleanup();
     throw error;

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
+import { registerOAuthClient } from "@repo/harness-registry";
 import postgres from "postgres";
 
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "./lib/people";
@@ -62,6 +63,8 @@ before(async () => {
     [subject] = await createPeople(admin, runId, door, 1);
     clientId = await grants.registerClient({ name: "check client", redirectUris: [REDIRECT] });
     otherClientId = await grants.registerClient({ name: "other check client", redirectUris: [REDIRECT] });
+    await registerOAuthClient(admin, clientId);
+    await registerOAuthClient(admin, otherClientId);
   } catch (error) {
     await after_();
     throw error;
