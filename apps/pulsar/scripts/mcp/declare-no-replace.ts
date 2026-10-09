@@ -5,7 +5,6 @@
 // message. Handlers are called in-process as `write-tools.ts` calls them, but
 // through the registered `inputSchema` first, the way the SDK parses a call.
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import Module from "node:module";
 import { after, before, test } from "node:test";
 
@@ -137,8 +136,8 @@ test("a tool that fails logs the error's name and SQLSTATE, never the driver's m
   console.error = (...args: unknown[]) => void logged.push(args);
   let result;
   try {
-    // A person id that is no uuid fails inside Postgres; drizzle's message carries the query and the parameter.
-    result = await call("declare_fact", { commitment_id: randomUUID(), quantity: 5, day: dayFrom(-6) }, {
+    // A person id that is no uuid fails inside Postgres once a real row makes the policy run; drizzle's message carries the query and the parameter.
+    result = await call("declare_fact", { commitment_id: commitment, quantity: 5, day: dayFrom(-6) }, {
       id: "no-es-un-uuid-0000",
       email: "x@example.invalid",
     });
