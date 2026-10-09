@@ -1090,3 +1090,5 @@ Taken by the user on the critic's questions. No board drawn yet; each one opens 
   `ImportarRevisarRitmo` (586). Each board's own note carries its words and what it takes for granted.
 - **`ReporteTareaParte` says only «sigue en».** The plan always starts in the current month, so a month's report never
   receives a part carried from before; there is no «viene de».
+- **A goal with no measure keeps «El plan»** (user, 2026-10-09, module 583). Only a goal measured in a unit other than time
+  loses it: its `/metas/<id>/plan` redirects to the goal. A goal with no measure estimates its tasks in hours, as before.

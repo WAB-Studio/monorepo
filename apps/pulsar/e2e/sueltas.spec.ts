@@ -253,7 +253,7 @@ for (const [width, gap] of [
 async function seedGoal(db: postgres.Sql, personId: string, name: string, rhythm: number | null = null): Promise<string> {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${name}, ${plusDays(90)}, ${rhythm === null ? null : "horas"}, ${rhythm === null ? null : "hours"}, ${rhythm})
+    values (${personId}, ${name}, ${plusDays(90)}, ${rhythm === null ? null : "minutos"}, ${rhythm === null ? null : "minutos"}, ${rhythm})
     returning id
   `;
   return goal.id;

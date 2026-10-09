@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { AddTask, PlanEnd } from "@/components/plan/plan-end";
@@ -51,6 +51,8 @@ const SHOWN = 3;
 export async function PlanScreen({ goalId, all = false }: { goalId: string; all?: boolean }) {
   const goal = await loadGoal(goalId);
   if (!goal) notFound();
+  // A goal measured in something other than time has no plan (RP-62).
+  if (goal.measureUnit !== null && !isTimeUnit(goal.measureUnit)) redirect(`/metas/${goal.id}`);
 
   const t = await getTranslations();
   const units = await getTranslations("units");
