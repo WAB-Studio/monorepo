@@ -6,8 +6,12 @@ import styles from "./box.module.css";
 // board's own offer block — a 2px border-inline-start and an indent, 16px on
 // desktop and 12px on mobile — the shape that says "this is offered beneath
 // the entry above it," never a card or a border box.
-export function Box({ className, rail, ...props }: BoxProps & { rail?: boolean }) {
-  const base = rail ? styles.rail : undefined;
+//
+// `muted` takes the muted role for every line inside it but links, which keep
+// their door's colour: the dictionary block under a function word's table
+// translation (`SinEntradaFraseFuncion`).
+export function Box({ className, rail, muted, ...props }: BoxProps & { rail?: boolean; muted?: boolean }) {
+  const base = [rail ? styles.rail : undefined, muted ? styles.muted : undefined].filter(Boolean).join(" ") || undefined;
   const merged = [base, className].filter(Boolean).join(" ") || undefined;
   return <ThemesBox {...props} className={merged} />;
 }
