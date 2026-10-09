@@ -192,8 +192,15 @@ test("a template with a broken line: 422 templateLine with its line and form, no
   assert.equal(response.status, 422);
   const body = await answer(response);
   assert.equal(body.error, "import.errors.templateLine");
-  assert.equal(typeof body.line, "number");
-  assert.equal(typeof body.expected, "string");
+  assert.equal(body.line, broken.split("\n").indexOf("- octubre · 12 h") + 1);
+  // `expected` is a key into the catalogue; the sentence it names is what the person reads, and never the line they wrote.
+  const catalogue = JSON.parse(readFileSync(resolve(process.cwd(), "messages/es/import.json"), "utf8"));
+  let sentence: unknown = catalogue;
+  for (const part of String(body.expected).replace(/^import\./, "").split(".")) {
+    sentence = (sentence as Record<string, unknown> | undefined)?.[part];
+  }
+  assert.equal(typeof sentence, "string", `«${body.expected}» is not in messages/es/import.json`);
+  assert.equal((sentence as string).includes("- octubre · 12 h"), false);
   assert.equal((await rows()).length, 0);
   assert.equal(modelCalls.length, 0);
 });

@@ -116,7 +116,7 @@ test.describe("the import box keeps what was typed before the page settled (RP-3
       await hydrated(page);
       await page.getByRole("button", { name: READ }).click();
       const alert = appAlerts(page).filter({ hasText: /\S/ });
-      await expect(alert).toHaveText(/^Línea 3: «# X»\. Esperaba /);
+      await expect(alert).toHaveText(/^Línea 3: «# X»\. (?![\s\S]*# X)\S/);
     });
   });
 

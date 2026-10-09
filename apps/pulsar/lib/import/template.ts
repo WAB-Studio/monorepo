@@ -16,17 +16,19 @@ type Task = Goal["tasks"][number];
 
 // The form of a line, shown as `expected`: syntax, not prose.
 const FORMS = {
-  goal: "# nombre",
-  horizon: "horizonte: AAAA-MM-DD",
-  measure: "medida: nombre · unidad",
-  rhythm: "ritmo: 12 h, justo después de medida:, solo con una medida en minutos",
-  section: "## Fases, ## Meses, ## Compromisos o ## Tareas",
-  phase: "- AAAA-MM-DD a AAAA-MM-DD · objetivo",
-  month: "- AAAA-MM · monto",
-  commitment: "- nombre · cadencia · toque o monto",
-  task: "- AAAA-MM · nombre, o - AAAA-MM · monto · nombre",
-  child: "  - nombre, o   - monto · nombre",
-  note: "  nota: texto, o     nota: texto",
+  goal: "import.errors.form.goal",
+  horizon: "import.errors.form.horizon",
+  measure: "import.errors.form.measure",
+  rhythmPlace: "import.errors.form.rhythmPlace",
+  rhythmUnit: "import.errors.form.rhythmUnit",
+  rhythmAmount: "import.errors.form.rhythmAmount",
+  section: "import.errors.form.section",
+  phase: "import.errors.form.phase",
+  month: "import.errors.form.month",
+  commitment: "import.errors.form.commitment",
+  task: "import.errors.form.task",
+  child: "import.errors.form.child",
+  note: "import.errors.form.note",
 } as const;
 
 const SECTIONS = { "## Fases": "phases", "## Meses": "months", "## Compromisos": "commitments", "## Tareas": "tasks" } as const;
@@ -112,9 +114,12 @@ export function parseTemplate(text: string): TemplateResult {
     if (line.startsWith("ritmo:")) {
       const minutes = goal.measure !== null && isTimeUnit(goal.measure.unit) ? /^ritmo: (.+)$/.exec(line) : null;
       const amount = followsMeasure && section === null && minutes ? parseTime(minutes[1]) : null;
-      if (amount === null) return fail(n, FORMS.rhythm);
+      if (amount === null) {
+        if (goal.measure === null || !isTimeUnit(goal.measure.unit)) return fail(n, FORMS.rhythmUnit);
+        return fail(n, followsMeasure && section === null ? FORMS.rhythmAmount : FORMS.rhythmPlace);
+      }
       goal.rhythm = amount;
-      spots.set(`${at}.rhythm`, { line: n, expected: FORMS.rhythm });
+      spots.set(`${at}.rhythm`, { line: n, expected: FORMS.rhythmPlace });
       continue;
     }
 
