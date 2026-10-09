@@ -143,7 +143,7 @@ for (const width of [390, 1280]) {
           };
         });
         // `/mono/` also matches the fallback `monospace`; DM Mono is the resolved `--font-mono`.
-        expect(style.mono).toMatch(/dm_?mono/i);
+        expect(style.mono).toMatch(/^"?dm[ _]mono/i);
         expect(style.family).toBe(style.mono);
         expect(style.hostFamily).toBe(style.mono);
         expect(style.size).toBe("13px");
