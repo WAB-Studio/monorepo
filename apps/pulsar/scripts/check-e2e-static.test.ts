@@ -74,7 +74,7 @@ test("an allowlist entry that matches nothing is stale", () => {
 const GOTO = "  await page.goto(\"/hoy\");";
 
 test("a measure inside the arguments of an expect on the armed line still fails", () => {
-  const out = run([GOTO, "  expect((await el.boundingBox())!.width).toBe(6);"]);
+  const out = run([GOTO, "  await expect((await el.boundingBox())!.width).toBe(6);"]);
   assert.equal(out.violations.length, 1);
   assert.equal(out.violations[0].line, 3);
 });
