@@ -126,7 +126,10 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
         // RP-62: a goal measured in anything but time has no plan to place
         // the task, so it is fixed to its month, the current one when none is named.
         if (day == null && own.measureUnit !== null && !isTimeUnit(own.measureUnit)) {
-          plannedMonth ??= todayInZone().slice(0, 7);
+          // Before the goal opened, the first month of its span.
+          const opened = civilDateInZone(own.createdAt).slice(0, 7);
+          const current = todayInZone().slice(0, 7);
+          plannedMonth ??= current < opened ? opened : current;
           month = plannedMonth;
         }
       }

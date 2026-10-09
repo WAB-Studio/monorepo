@@ -502,3 +502,15 @@ test("RP-62: a sub-task of a km task keeps no month of its own", async () => {
   assert.equal(row.planned_month, null);
   assert.equal(row.parent_id, parentId);
 });
+
+test("RP-62: a km goal not opened yet pins a task with no month to the first month of its span", async () => {
+  const future = monthFrom(today, 1);
+  await sql`update goals.goals set created_at = ${`${future}-05T12:00:00Z`} where id = ${kmGoalId}`;
+  try {
+    const id = await created({ name: "RP-62 km aún sin abrir", day: null, goalId: kmGoalId });
+    const row = (await rowsOf(kmGoalId)).find((r) => r.id === id)!;
+    assert.equal(row.planned_month, `${future}-01`);
+  } finally {
+    await sql`update goals.goals set created_at = now() where id = ${kmGoalId}`;
+  }
+});
