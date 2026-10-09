@@ -4,9 +4,10 @@
  *
  * `client-budget.ts` starts with `import "server-only"`, which throws under
  * plain Node (no such package outside a Next build), so `claimClientCall`
- * below is reimplemented directly — the same reason `check-decoration.ts`
- * and `check-sync.ts` open their own `postgres` client instead of importing
- * `db/client.ts`. `clientKey` carries no such import (it lives in
+ * below is reimplemented directly, conditional bump included — the same
+ * reason `check-decoration.ts` and `check-sync.ts` open their own `postgres`
+ * client instead of importing `db/client.ts`. `check-budget.ts` drives the
+ * real one. `clientKey` carries no such import (it lives in
  * `lib/word/client-key.ts`, the pure half `client-budget.ts` wraps) and is
  * imported for real below, same as `admit.ts`.
  */
@@ -94,19 +95,30 @@ async function main() {
   const sql = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
   const PROBE_CLIENT = "check-admission-probe";
 
-  async function claimClientCall(client: string): Promise<number> {
-    const [row] = await sql<{ calls: number }[]>`
+  async function claimClientCall(client: string, cap: number): Promise<boolean> {
+    const rows = await sql<{ calls: number }[]>`
       insert into reading.client_spend as cs (day, client, calls)
       values (current_date, ${client}, 1)
       on conflict (day, client) do update set calls = cs.calls + 1
+      where cs.calls < ${cap}
       returning cs.calls
     `;
-    return row.calls;
+    return rows.length > 0;
   }
 
-  const first = await claimClientCall(PROBE_CLIENT);
-  const second = await claimClientCall(PROBE_CLIENT);
-  assert(next("claimClientCall bumps 1 then 2 against the real database"), first === 1 && second === 2, `first=${first} second=${second}`);
+  const claims = [
+    await claimClientCall(PROBE_CLIENT, 2),
+    await claimClientCall(PROBE_CLIENT, 2),
+    await claimClientCall(PROBE_CLIENT, 2),
+  ];
+  const [{ calls }] = await sql<{ calls: number }[]>`
+    select calls from reading.client_spend where day = current_date and client = ${PROBE_CLIENT}
+  `;
+  assert(
+    next("claimClientCall at cap 2 admits two and refuses the third without counting it"),
+    claims.join() === "true,true,false" && calls === 2,
+    `claims=${claims.join()} calls=${calls}`,
+  );
 
   const deleted = await sql`
     delete from reading.client_spend where day = current_date and client = ${PROBE_CLIENT}

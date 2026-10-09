@@ -35,9 +35,18 @@ export const env = createEnv({
     // ceilings. Optional: unset means 204 for every caller, the same switch
     // WORD_UNLISTED_DAILY_CLIENT_CAP already is.
     PHRASE_NOTES_DAILY_CLIENT_CAP: z.coerce.number().int().positive().optional(),
-    // Salts the per-caller hash WORD_UNLISTED_DAILY_CLIENT_CAP and
-    // PHRASE_NOTES_DAILY_CLIENT_CAP both count against, so the IP itself is
-    // never stored.
+    // RL-41/RL-42/RL-45's own per-caller ceiling, so one caller cannot spend
+    // the whole WORD_TEXT_DAILY_CALL_CAP. The four caps below default rather
+    // than switch off: unset, the routes they guard stay lit at these values.
+    WORD_TEXT_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(150),
+    // RL-09's per-caller ceiling on `/api/translate`, against MyMemory's
+    // shared quota.
+    TRANSLATE_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(300),
+    // RL-22's ceilings on sign-in links: per caller, then per address.
+    SIGN_IN_LINK_DAILY_CLIENT_CAP: z.coerce.number().int().positive().default(5),
+    SIGN_IN_LINK_DAILY_ADDRESS_CAP: z.coerce.number().int().positive().default(3),
+    // Salts the per-caller hash every client cap above counts against, so
+    // the IP (or the address, for sign-in links) itself is never stored.
     CLIENT_KEY_SALT: z.string().min(16).optional(),
   },
   client: {
