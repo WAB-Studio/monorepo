@@ -182,6 +182,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         key={oneOff.id}
         oneOffId={oneOff.id}
         name={oneOff.name}
+        day={oneOff.day ?? day}
         note={oneOff.note}
         noteEyebrow={noteEyebrow(oneOff.goalId)}
         goalName={goalNameOf(oneOff.goalId)}

@@ -61,6 +61,8 @@ export type TaskSheetProps = {
   onOpenChange: (open: boolean) => void;
   // `/sueltas`: the way to the one-off's day, a row inside the sheet.
   onGiveDay?: () => void;
+  // Names that row; «Darle un día» when absent (`/sueltas`).
+  giveDayLabel?: MessageKey;
 };
 
 /**
@@ -87,6 +89,7 @@ export function TaskSheet({
   open,
   onOpenChange,
   onGiveDay,
+  giveDayLabel = "oneOffs.sheet.giveDay",
 }: TaskSheetProps) {
   const t = useTranslations();
   const router = useRouter();
@@ -335,7 +338,7 @@ export function TaskSheet({
         {onGiveDay && !done ? (
           <Row
             card
-            name={t("oneOffs.sheet.giveDay")}
+            name={t(giveDayLabel)}
             trailing={<ChevronRight size={16} aria-hidden />}
             rule={false}
             onClick={() => {
