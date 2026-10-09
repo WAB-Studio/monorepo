@@ -54,6 +54,9 @@
      item's own shrink-to-fit width often enough to wrap "REGISTRO" onto a
      second line; the label is two words at most and never needs to. */
   white-space: nowrap;
+  /* Hinted advances round to whole pixels at 11px and widen the last glyph
+     by ~1.6px; unhinted advances keep the designed 0.12em rhythm. */
+  text-rendering: geometricPrecision;
 }
 
 /* The sidebar-only heading and the sidebar-only foot reserve: both collapse
