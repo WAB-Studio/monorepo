@@ -839,7 +839,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   - Not confirmed on this device: «Copiar tu registro a {email}», «Hasta que lo confirmes, nada sale de este
     dispositivo.» and the button «Empezar a copiar». A second reader on a device that holds another's log sees the same
     board with their own address.
-  - Tapped: the button goes and `copy.syncingNow` stays; when the round ends, «Copiando a tu cuenta» as `CuentaCopia`.
+  - Tapped: the button goes and `copy.syncingSearches` stays (the title keeps the address); when the round ends, `copy.lastCopy` / `copy.lastCopyMoment` as `CuentaCopia`.
   - The first copy fails: «La copia no salió», «Tus palabras siguen en este dispositivo.» and «Reintentar». It has no
     «hace {time}»: there is no copy before it.
   - This device retired: «Este dispositivo ya no copia», «Lo retiraste de tu cuenta y tu registro se quedó completo aquí.

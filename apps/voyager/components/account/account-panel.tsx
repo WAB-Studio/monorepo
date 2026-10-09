@@ -5,44 +5,25 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { sendSignInLink, signOut } from "@/app/actions/account";
 import type { SendSignInLinkResult } from "@/app/actions/account";
-import { countRecords, readSyncState, signOutSync, startCopyFor, writeSyncState } from "@/lib/log/record";
+import { countPendingUpload, readSyncState, signOutSync, startCopyFor, writeSyncState } from "@/lib/log/record";
 import { clearNavQuery } from "@/lib/nav/query-storage";
+import { elapsed, type Elapsed } from "@/lib/format/elapsed";
+import { isOtherReader } from "@/lib/log/sync-state";
 import { syncNow } from "@/lib/sync/driver";
+import type { SyncFailure } from "@/lib/sync/failure";
 import type { SyncState } from "@/lib/log/types";
 import { Button, Flex, MetaLabel, Separator, Text, TextField } from "@/components/ui";
 import { DevicesPanel } from "./devices-panel";
 
-// `account.copy.upToDateBody` and `.failedBody` both already open on "hace"
-// (`docs/voyager/DESIGN.md` "Settled"), so the span they take has to carry
-// no direction word of its own or the sentence doubles it — Node's own
-// `Intl.RelativeTimeFormat` proved `format.relativeTime` always says "hace
-// 2 horas", never "2 horas" alone. This picks the unit `relativeTime` would
-// and asks `format.number`'s unit style for it bare.
-function bareDuration(from: number | null, format: ReturnType<typeof useFormatter>): string {
-  // `null` only reaches here on a first sync that fails before ever
-  // landing one: there is no earlier moment to measure from, so this
-  // reads as "just now" rather than reaching for `Date.now()` inline in a
-  // component body, which the purity lint (react-hooks/purity) forbids.
-  const reference = from ?? Date.now();
-  const minutes = Math.max(1, Math.round((Date.now() - reference) / 60_000));
-  if (minutes < 60)
-    return format.number(minutes, {
-      style: "unit",
-      unit: "minute",
-      unitDisplay: "long",
-    });
-  const hours = Math.round(minutes / 60);
-  if (hours < 24)
-    return format.number(hours, {
-      style: "unit",
-      unit: "hour",
-      unitDisplay: "long",
-    });
-  return format.number(Math.round(hours / 24), {
-    style: "unit",
-    unit: "day",
-    unitDisplay: "long",
-  });
+// `lastCopy` and `failedOffline` open on "hace", so the span they take carries
+// no direction word of its own; `format.relativeTime` always adds one.
+function bareSpan(
+  gone: Elapsed,
+  format: ReturnType<typeof useFormatter>,
+  moment: string,
+): string {
+  if (gone.unit === "moment") return moment;
+  return format.number(gone.value, { style: "unit", unit: gone.unit, unitDisplay: "long" });
 }
 
 type EmailFormState =
@@ -144,7 +125,7 @@ function SignedOutForm() {
       {state.kind === "sent" ? (
         <Text size="2">{t("sent")}</Text>
       ) : (
-        <Flex direction="column" gap="3">
+        <Flex direction="column" gap="3" maxWidth="400px">
           <TextField.Root
             type="email"
             size="3"
@@ -192,7 +173,7 @@ function SignedOutForm() {
   );
 }
 
-type SyncStatus = { kind: "idle" } | { kind: "syncing" } | { kind: "failed" };
+type SyncStatus = { kind: "idle" } | { kind: "syncing" } | { kind: "failed"; cause: SyncFailure };
 
 // The signed-in screen. The copy has four faces: waiting for the reader's tap
 // (nothing leaves the device until then, RL-52), copying, retired (the server
@@ -207,6 +188,7 @@ function SyncedSection({
   syncStatus,
   syncCount,
   syncVersion,
+  now,
   confirmedHere,
   onConfirm,
   onSyncNow,
@@ -218,6 +200,7 @@ function SyncedSection({
   syncStatus: SyncStatus;
   syncCount: number;
   syncVersion: number;
+  now: number;
   confirmedHere: boolean;
   onConfirm: () => void;
   onSyncNow: () => void;
@@ -256,6 +239,11 @@ function SyncedSection({
             <Text size="2" muted>
               {t("copy.confirmBody")}
             </Text>
+            {isOtherReader(syncState, readerId) && (
+              <Text size="2" muted>
+                {t("copy.otherReader")}
+              </Text>
+            )}
           </Flex>
           <Button size="2" tap onClick={onConfirm}>
             {t("copy.confirmAction")}
@@ -269,34 +257,47 @@ function SyncedSection({
         <Flex direction="column" gap="1">
           <Text variant="translation">{t("copy.confirmTitle", { email })}</Text>
           <Text size="2" muted>
-            {t("copy.syncingNow", { count: syncCount })}
+            {t("copy.syncingSearches", { count: syncCount })}
           </Text>
         </Flex>
       ) : (
-        <Text size="2">{t("copy.syncingNow", { count: syncCount })}</Text>
+        <Text size="2">{t("copy.syncingSearches", { count: syncCount })}</Text>
       );
     }
 
     if (syncStatus.kind === "failed") {
+      const { cause } = syncStatus;
+      const offlineBody = syncState.lastSyncedAt
+        ? t("copy.failedOffline", {
+            time: bareSpan(elapsed(syncState.lastSyncedAt, now), format, t("copy.momentSpan")),
+          })
+        : t("copy.failedBodyFirst");
       return (
         // No red in this palette (docs/voyager/DESIGN.md "Failure"): a
         // hairline sets the break off, full-weight ink says it, and the
-        // retry rides the ordinary accent button.
+        // retry rides the ordinary accent button. A quota refusal has no
+        // retry: another attempt gets the same answer until the UTC day turns.
         <Flex direction="column" gap="3" align="start">
           <Separator size="4" />
           <Text size="2" weight="bold">
-            {t("copy.failedTitle")}
+            {cause === "quota"
+              ? t("copy.failedQuotaTitle")
+              : cause === "offline"
+                ? t("copy.failedOfflineTitle")
+                : t("copy.failedTitle")}
           </Text>
           <Text size="2" muted>
-            {syncState.lastSyncedAt
-              ? t("copy.failedBody", {
-                  time: bareDuration(syncState.lastSyncedAt, format),
-                })
-              : t("copy.failedBodyFirst")}
+            {cause === "quota"
+              ? t("copy.failedQuotaBody")
+              : cause === "offline"
+                ? offlineBody
+                : t("copy.failedServer")}
           </Text>
-          <Button size="2" tap onClick={onSyncNow}>
-            {t("copy.failedAction")}
-          </Button>
+          {cause !== "quota" && (
+            <Button size="2" tap onClick={onSyncNow}>
+              {t("copy.failedAction")}
+            </Button>
+          )}
         </Flex>
       );
     }
@@ -305,21 +306,23 @@ function SyncedSection({
       return <Text size="2">{t("copy.neverSynced")}</Text>;
     }
 
+    const gone = elapsed(syncState.lastSyncedAt, now);
     return (
-      <Flex direction="column" gap="1">
-        <Text size="2">{t("copy.upToDateTitle")}</Text>
-        <Text size="2" muted>
-          {t("copy.upToDateBody", {
-            time: bareDuration(syncState.lastSyncedAt, format),
-          })}
-        </Text>
-      </Flex>
+      <Text size="2">
+        {gone.unit === "moment"
+          ? t("copy.lastCopyMoment")
+          : t("copy.lastCopy", { time: bareSpan(gone, format, "") })}
+      </Text>
     );
   }
 
+  // The confirm title already carries the address; saying it twice is noise.
+  const titleShown =
+    !syncState.retired && ((!confirmed && !confirmedHere) || (confirmedHere && syncStatus.kind === "syncing"));
+
   return (
     <Flex direction="column" gap="4">
-      <Text size="2">{t("signedInAs", { email })}</Text>
+      {!titleShown && <Text size="2">{t("signedInAs", { email })}</Text>}
 
       <Flex direction="column" gap="1">
         <MetaLabel>{t("copy.label")}</MetaLabel>
@@ -353,26 +356,35 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
   // True once the reader tapped the button in this mount: the confirm title
   // stays above the copying and failed states the board draws under it.
   const [confirmedHere, setConfirmedHere] = useState(false);
-  // The `{count}` `copy.syncingNow` reads while a round is in flight: the
+  // The `{count}` `copy.syncingSearches` reads while a round is in flight: the
   // local log's own size at the moment the round starts.
   const [syncCount, setSyncCount] = useState(0);
-  // Bumped once `syncNow()` resolves, success or failure alike: the device
+  // Bumped once `syncNow()` resolves without failing: the device
   // list's own refetch keys off this, never off a timer (module 35).
   const [syncVersion, setSyncVersion] = useState(0);
+  // The clock the last-copy line reads; a render never calls `Date.now()` itself.
+  const [now, setNow] = useState(0);
 
-  async function runSync(): Promise<void> {
-    setSyncStatus({ kind: "syncing" });
-    setSyncCount(await countRecords());
+  // `silent` is the pull on open: the last-copy line stays as it is while it
+  // runs (`CuentaCopiaAlAbrir`), and only a failure draws anything.
+  async function runSync(silent = false): Promise<void> {
+    if (!silent) {
+      setSyncStatus({ kind: "syncing" });
+      setSyncCount(await countPendingUpload());
+    }
     const outcome = await syncNow();
     setSyncState(await readSyncState());
-    setSyncStatus(outcome.kind === "failed" ? { kind: "failed" } : { kind: "idle" });
-    setSyncVersion((current) => current + 1);
+    setNow(Date.now());
+    setSyncStatus(outcome.kind === "failed" ? { kind: "failed", cause: outcome.cause } : { kind: "idle" });
+    // A failed round changed nothing the list shows, and refetching on a dead line draws its own failure.
+    if (outcome.kind !== "failed") setSyncVersion((current) => current + 1);
   }
 
   async function confirm(): Promise<void> {
     setConfirmedHere(true);
     setSyncStatus({ kind: "syncing" });
     setSyncState(await startCopyFor(reader.id));
+    setNow(Date.now());
     await runSync();
   }
 
@@ -380,12 +392,16 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
     let cancelled = false;
     (async () => {
       const current = await readSyncState();
-      if (!cancelled) setSyncState(current);
+      if (cancelled) return;
+      setSyncState(current);
+      setNow(Date.now());
+      // The pull on open: only a copy this reader confirmed and that is not retired.
+      if (current.enabled && current.readerId === reader.id && !current.retired) await runSync(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reader.id]);
 
   // The IndexedDB read settles in a beat; nothing is drawn while it does,
   // same as the near-instant reads `record.ts` backs elsewhere.
@@ -399,6 +415,7 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
       syncStatus={syncStatus}
       syncCount={syncCount}
       syncVersion={syncVersion}
+      now={now}
       confirmedHere={confirmedHere}
       onConfirm={() => void confirm()}
       onSyncNow={() => void runSync()}
