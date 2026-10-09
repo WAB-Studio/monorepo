@@ -45,6 +45,9 @@ async function seedLocalDatabase(page: Page, sync: SyncState, lookups: SeedLooku
               .objectStore("lookups")
               .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
           }
+          if (event.oldVersion < 3) {
+            request.transaction!.objectStore("lookups").createIndex("headword", "headword");
+          }
         };
         request.onsuccess = () => {
           const db = request.result;

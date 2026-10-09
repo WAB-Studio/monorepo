@@ -39,7 +39,7 @@ async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
               normalised: row.normalised,
               kind: "word",
               outcome: "exact",
-              headword: row.text,
+              headword: row.normalised,
               rule: null,
               senses: 1,
               translation: row.translation,

@@ -7,6 +7,7 @@ import type { LookupOutcome, LookupRecord } from "./types";
 
 const STORE_NAME = "lookups";
 const NORMALISED_INDEX = "normalised";
+const HEADWORD_INDEX = "headword";
 
 // A row minted under schema 1 has no `translation` key at all — the field
 // landed at schema 2 (`types.ts`'s own history) — so IndexedDB hands the
@@ -19,7 +20,12 @@ function readRecord(value: unknown): LookupRecord {
 }
 
 export type StudyRow = {
+  // The lemma reached, or `normalised` for a row with none (a phrase, an
+  // unlisted word).
+  key: string;
+  // The group's first form in index order; always a key with rows of its own.
   normalised: string;
+  forms: { text: string; count: number }[];
   display: string;
   count: number;
   lastAt: number;
@@ -29,9 +35,18 @@ export type StudyRow = {
 
 type Group = StudyRow;
 
+function addForm(forms: Group["forms"], text: string): Group["forms"] {
+  const seen = forms.find((form) => form.text === text);
+  return seen
+    ? forms.map((form) => (form === seen ? { text, count: form.count + 1 } : form))
+    : [...forms, { text, count: 1 }];
+}
+
 function foldRow(group: Group | undefined, record: LookupRecord): Group {
   if (!group) {
     return {
+      key: record.headword ?? record.normalised,
+      forms: [{ text: record.normalised, count: 1 }],
       normalised: record.normalised,
       display: record.text,
       count: 1,
@@ -42,6 +57,8 @@ function foldRow(group: Group | undefined, record: LookupRecord): Group {
   }
   const newer = record.at > group.lastAt;
   return {
+    key: group.key,
+    forms: addForm(group.forms, record.normalised),
     normalised: group.normalised,
     display: newer ? record.text : group.display,
     count: group.count + 1,
@@ -52,8 +69,8 @@ function foldRow(group: Group | undefined, record: LookupRecord): Group {
 }
 
 /**
- * Groups every row in `lookups` by `normalised`, case folded already by the
- * writer, in one read transaction. `rows` sorts by how often a word was
+ * Groups every row in `lookups` by the lemma it reached (`headword`, or
+ * `normalised` when it reached none), each group listing its forms, in one read transaction. `rows` sorts by how often a word was
  * searched, then by how recently, at most `limit` of them; `total` counts
  * every group, not every row, so a caller can show "3 of 412" honestly.
  */
@@ -70,7 +87,8 @@ export async function readWordStudy(limit?: number): Promise<{ rows: StudyRow[];
         return;
       }
       const record = readRecord(cursor.value);
-      found.set(record.normalised, foldRow(found.get(record.normalised), record));
+      const key = record.headword ?? record.normalised;
+      found.set(key, foldRow(found.get(key), record));
       cursor.continue();
     };
     request.onerror = () => reject(request.error);
@@ -100,33 +118,59 @@ export async function readWordHistory(
   normalised: string,
   limit?: number,
 ): Promise<{ rows: WordHistoryRow[]; total: number }> {
+  return readHistory([NORMALISED_INDEX], normalised, limit);
+}
+
+/**
+ * Every search for a lemma and all its forms: the union by `id` of the rows
+ * whose `headword` is the key and those whose `normalised` is, each read with
+ * its own cursor bounded to that key.
+ */
+export async function readLemmaHistory(
+  key: string,
+  limit?: number,
+): Promise<{ rows: WordHistoryRow[]; total: number }> {
+  return readHistory([HEADWORD_INDEX, NORMALISED_INDEX], key, limit);
+}
+
+async function readHistory(
+  indexes: string[],
+  key: string,
+  limit: number | undefined,
+): Promise<{ rows: WordHistoryRow[]; total: number }> {
   const database = await openLogDatabase();
-  const found = await new Promise<FoundRow[]>((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readonly");
-    const request = transaction
-      .objectStore(STORE_NAME)
-      .index(NORMALISED_INDEX)
-      .openCursor(IDBKeyRange.only(normalised));
-    const rows: FoundRow[] = [];
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor) {
-        resolve(rows);
-        return;
-      }
-      const record = readRecord(cursor.value);
-      rows.push({
-        id: record.id as number,
-        at: record.at,
-        text: record.text,
-        outcome: record.outcome,
-        translation: record.translation,
-        kind: record.kind,
-      });
-      cursor.continue();
-    };
-    request.onerror = () => reject(request.error);
-  });
+  const transaction = database.transaction(STORE_NAME, "readonly");
+  const store = transaction.objectStore(STORE_NAME);
+  const passes = await Promise.all(
+    indexes.map(
+      (index) =>
+        new Promise<FoundRow[]>((resolve, reject) => {
+          const request = store.index(index).openCursor(IDBKeyRange.only(key));
+          const rows: FoundRow[] = [];
+          request.onsuccess = () => {
+            const cursor = request.result;
+            if (!cursor) {
+              resolve(rows);
+              return;
+            }
+            const record = readRecord(cursor.value);
+            rows.push({
+              id: record.id as number,
+              at: record.at,
+              text: record.text,
+              outcome: record.outcome,
+              translation: record.translation,
+              kind: record.kind,
+            });
+            cursor.continue();
+          };
+          request.onerror = () => reject(request.error);
+        }),
+    ),
+  );
+  const byId = new Map<number, FoundRow>();
+  for (const row of passes.flat()) byId.set(row.id, row);
+  const found = [...byId.values()];
   // Same tiebreak as `foldRow` above: the autoincrement `id` orders two
   // searches that landed in the same millisecond.
   found.sort((a, b) => b.at - a.at || b.id - a.id);
