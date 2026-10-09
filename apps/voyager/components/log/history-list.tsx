@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
 import { Box, Button, Flex, Grid, Link, MetaLabel, Separator, Skeleton, TapTarget, Text } from "@/components/ui";
 
 // Reachable through `useEffect` alone (module 25's own store, IndexedDB),
@@ -162,10 +163,13 @@ export function HistoryList() {
     // landed row does to drop back to the empty state.
     window.addEventListener(LOG_FLUSHED_EVENT, onChange);
     window.addEventListener(LOG_CLEARED_EVENT, onChange);
+    // A pull that landed rows from another device changes the store the same way.
+    window.addEventListener(SYNC_LANDED_EVENT, onChange);
     return () => {
       cancelled = true;
       window.removeEventListener(LOG_FLUSHED_EVENT, onChange);
       window.removeEventListener(LOG_CLEARED_EVENT, onChange);
+      window.removeEventListener(SYNC_LANDED_EVENT, onChange);
     };
   }, [attempt]);
 
