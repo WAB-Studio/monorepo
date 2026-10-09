@@ -159,6 +159,7 @@ test("at 1440 both buttons are sized to their text, 160 px at least, never the c
   try {
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}/plan`);
+    await expect(page.getByRole("button", { name: "Añadir una tarea", exact: true })).toBeVisible();
     expect((await paint(page, "Añadir una tarea")).fill).toBe(TRANSPARENT);
     for (const name of ["Armar el plan", "Añadir una tarea"]) {
       const box = (await page.getByRole("button", { name, exact: true }).boundingBox())!;

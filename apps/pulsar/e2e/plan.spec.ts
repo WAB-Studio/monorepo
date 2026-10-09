@@ -117,6 +117,7 @@ for (const width of [390, 1440]) {
       try {
         await page.goto(`/metas/${goalId}/plan`);
         const bar = section(page, `${name(m0)} · en curso`).locator("span[aria-hidden]").first();
+        await expect(bar).toBeVisible();
         expect((await bar.boundingBox())!.height).toBe(6);
       } finally {
         await drop(db, personId, goalId);
