@@ -1054,3 +1054,19 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   `redirect_uri`'s host, with its port when it has one (`localhost:33418` for Claude Code), never the path. It sits
   between the h1 and the lead, before the «may / never» lists and the buttons. Signed out nothing changes:
   `PermisoSinSesion` names neither client nor domain, since nothing is validated before sign-in.
+
+## Decisions of 2026-10-08, after the product critic of the audit slice
+
+Taken by the user on the critic's questions. No board drawn yet; each one opens its module with a board first.
+
+- **Each connection row names where it sends you back.** «Claude · vuelve a claude.ai»: the grant's `redirect_uri`
+  host, as the consent shows it. Two rows named «Claude» are told apart by host. Not trusting the registered name in
+  the consent's h1 when the host is not claude.ai is a later step, not taken.
+- **Keys that no longer enter fold away.** A lapsed or revoked key older than 30 days folds under «N llaves que ya no
+  entran»; nothing is deleted (RP-38). A lapsed key says «crea otra».
+- **A loose task on today moves from Hoy.** The Hoy sheet of a suelta gains «Darle otro día», the same step `/sueltas`
+  already has. A code succeeding RP-57.
+- **The plan is for goals measured in time.** «El plan» (rhythm and roadmap) is offered only to a goal whose unit is
+  time; a goal in km or pages keeps its month amounts and no roadmap. A code narrowing RP-50.
+- **The template carries a rhythm.** `ritmo: 12 h` in `PLANTILLA.md`; the import writes the goal's rhythm, so an
+  imported plan arrives armed. A code next to RP-37.

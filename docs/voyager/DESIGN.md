@@ -1572,3 +1572,14 @@ lines without spending it.
 **When a board and the code disagree, this is the direction the fix runs.** The canvas is the
 artifact; a screen that drifted from it drifted by accident, not by decision. Read the boards before
 assuming the shipped screen is the intended one.
+
+### Decisions of 2026-10-08, after the product critic of the audit slice
+
+Taken by the user on the critic's questions. Each opens its module with a board first where a person sees it.
+
+- **A second reader copies only what they searched.** When the reader on a device changes, the first copy sends only the
+  searches made after the new reader confirms; older rows stay on the device and never reach the new account.
+- **An unlisted word answered over the network is recorded.** Only when the answer arrived. RL-39 is retired for a
+  successor that counts it as found; the copy schema accepts the new outcome.
+- **Opening the record pulls.** With the copy on, opening `/registro` or `/cuenta` pulls once and the list refreshes when
+  it lands; the box itself stays off the network (RNL-09 reworded). «Al día» goes: the line reads «Última copia hace X».
