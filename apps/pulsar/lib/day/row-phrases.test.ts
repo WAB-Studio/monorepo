@@ -143,6 +143,24 @@ test("an evidence row says neither, done or not", () => {
   assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki" })), "Anki");
 });
 
+const evidenceRow = { ...base, kind: "evidence" as const, cadenceText: "3 veces por semana", amount: "Anki" };
+
+test("an unmet evidence row says what it asks, before", () => {
+  const meta = line(rowMeta(rowTranslate, { ...evidenceRow, evidence: { asks: "1 búsqueda", got: null, source: "diccionario" } }));
+  assert.equal(meta, "1 búsqueda");
+});
+
+test("a met evidence row says what it got, then its source", () => {
+  const meta = line(rowMeta(rowTranslate, { ...evidenceRow, done: true, evidence: { asks: "1 búsqueda", got: "3 búsquedas", source: "diccionario" } }));
+  assert.equal(meta, "3 búsquedas · diccionario");
+  assert.equal(line(rowMeta(rowTranslate, { ...evidenceRow, done: true, evidence: { asks: "1 búsqueda", got: "3 búsquedas", source: null } })), "3 búsquedas");
+});
+
+test("an evidence row never shows its source before it is met", () => {
+  const meta = line(rowMeta(rowTranslate, { ...evidenceRow, evidence: { asks: "1 búsqueda", got: null, source: "diccionario" } }));
+  assert.ok(!meta?.includes("diccionario"));
+});
+
 test("a quiet row says neither", () => {
   assert.equal(line(rowMeta(rowTranslate, { ...base, quiet: true, done: true, status: "cumplida esta semana · 1 de 1" })), "10 min · cumplida esta semana · 1 de 1");
   assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true })), "10 min");
