@@ -10,7 +10,7 @@ import { cutTranslation, formatSenseTranslations } from "./translation-line";
 const LIMIT = 120;
 
 function sense(...translations: string[]): Sense {
-  return { pos: "noun", ipa: null, translations, definition: null } as Sense;
+  return { pos: "n", ipa: null, translations, definition: null } as Sense;
 }
 
 test("formatSenseTranslations: a translation said twice by one word is recorded once", () => {
