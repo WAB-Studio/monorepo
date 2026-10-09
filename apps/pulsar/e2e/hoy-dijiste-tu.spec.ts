@@ -3,12 +3,12 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // What a row says about who wrote it (`HoyEscritorio.dc.html`, module 100):
 // a marked one says «lo dijiste tú» after its hour, an unmarked quantity one
-// says «pide el número» after its target, one logged under its target says
+// says only its target (never «pide el número», `HoyDia`), one logged under its target says
 // what it holds, an unmarked tap row and a quiet met row say neither.
 // Paths by day: the flexible row is quiet every day but a Monday the 1st, when
 // nothing earlier in its week or month met it and it reads its own progress.
 
-test("Hoy says «lo dijiste tú» on a marked row and «pide el número» on an unmarked quantity row", async ({
+test("Hoy says «lo dijiste tú» on a marked row and nothing more on an unmarked quantity row", async ({
   person,
   browser,
   db,
@@ -74,11 +74,11 @@ test("Hoy says «lo dijiste tú» on a marked row and «pide el número» on an 
 
     await expect(page.getByText("07:40 · lo dijiste tú", { exact: true })).toBeVisible();
     await expect(page.getByText("10 min · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
-    await expect(page.getByText("3 min · pide el número", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Sin número/ }).getByText("3 min", { exact: true })).toBeVisible();
     // Logged under its target: what it holds, never a second ask.
     await expect(page.getByText("1 de 3 min · 09:22 · lo dijiste tú", { exact: true })).toBeVisible();
-    // Only the quantity row with nothing logged asks for a number.
-    await expect(page.getByText("pide el número")).toHaveCount(1);
+    // No row says «pide el número» any more (`HoyDia`).
+    await expect(page.getByText("pide el número")).toHaveCount(0);
     await expect(page.getByText("lo dijiste tú")).toHaveCount(3);
     // A flexible row met earlier in its period stays quiet.
     const metPhrase = period === "week" ? "cumplida esta semana · 1 de 1" : "cumplida este mes · 1 de 1";
