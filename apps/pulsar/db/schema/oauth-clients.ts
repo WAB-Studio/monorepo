@@ -4,7 +4,7 @@ import { authenticatedRole } from "drizzle-orm/supabase";
 
 import { goalsSchema } from "./_schema";
 
-// A client that asked to connect (RP-41). Hangs off no person; its metadata is
+// A client that asked to connect (RP-60). Hangs off no person; its metadata is
 // public, so the consent screen reads it. Written only by `goals.oauth_register_client`.
 export const oauthClients = goalsSchema.table(
   "oauth_clients",

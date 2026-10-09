@@ -6,7 +6,7 @@ import account from "../messages/es/account.json";
 import oauth from "../messages/es/oauth.json";
 import { test, expect, type Person } from "./fixtures";
 
-// Module 381, RP-18 and RP-41: `/entrar` and the consent signed out are one
+// Module 381, RP-18 and RP-60: `/entrar` and the consent signed out are one
 // form, and the consent signed in is centred where `/entrar` is. Nothing here
 // types an address or submits: a send reaches a real inbox (RNP-09).
 const REDIRECT = "http://localhost:6274/oauth/callback";
@@ -93,7 +93,7 @@ for (const size of WIDTHS) {
     }
   });
 
-  test(`the consent signed out at ${size.width} is the same form under the client's title (RP-41)`, async ({
+  test(`the consent signed out at ${size.width} is the same form under the client's title (RP-60)`, async ({
     browser,
     baseURL,
   }) => {
@@ -110,7 +110,7 @@ for (const size of WIDTHS) {
     }
   });
 
-  test(`the consent signed in at ${size.width} keeps its two buttons stacked${size.width >= 1024 ? " and centred like /entrar" : ""} (RP-41)`, async ({
+  test(`the consent signed in at ${size.width} keeps its two buttons stacked${size.width >= 1024 ? " and centred like /entrar" : ""} (RP-60)`, async ({
     person,
     browser,
     baseURL,

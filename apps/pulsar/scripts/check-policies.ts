@@ -913,7 +913,7 @@ function dayAfter(day: string, n: number): string {
   return civilDateInZone(new Date(civilDateToDate(day).getTime() + n * 86_400_000));
 }
 
-// Module 63 (RP-21, RP-25): `0005` grants `UPDATE (day)` on `one_offs` and
+// Module 63 (RP-59, RP-25): `0005` grants `UPDATE (day)` on `one_offs` and
 // `UPDATE (horizon)` on `goals`, and bounds the one-off's with
 // `one_offs_update_self`. Driven bare under a settled session, own
 // transaction, forced rollback.
@@ -1044,7 +1044,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
   await sql.end();
 }
 
-// Module 73 (RP-21): `one_offs_update_self` lets a one-off dated after the
+// Module 73 (RP-59): `one_offs_update_self` lets a one-off dated after the
 // person's Bogota today move, and refuses today, the past, a fact and a
 // stranger. Driven bare under a settled session, forced rollback.
 async function checkScheduledOneOffMoveByZone(): Promise<void> {
@@ -1230,7 +1230,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   );
 }
 
-// Module 124 (RP-28, RP-30, RP-31, RP-34, RNP-13): every rule 0007 writes,
+// Module 124 (RP-28, RP-30, RP-31, RNP-13): every rule 0007 writes,
 // driven bare under a settled session, own transaction, forced rollback. The
 // row-to-row rules on `one_offs` and `facts` live in policies alone, so each
 // refusal below isolates one clause: the parent differs from a good one in
@@ -1557,7 +1557,7 @@ async function checkPlanByMonth(): Promise<void> {
   await sql.end();
 }
 
-// Module 181 (RP-38, RP-41, RNP-14, RNP-15): the key and the connection the
+// Module 181 (RP-38, RP-60, RNP-14, RNP-15): the key and the connection the
 // AI door opens with — 0009's grants, policies and four functions, driven as
 // the roles that would break them. Own transaction, forced rollback.
 // `AI_DOOR_MUTANT_SQL`, when set, runs inside that same transaction before
@@ -1913,7 +1913,7 @@ async function checkAiDoor(): Promise<void> {
 }
 
 // Module 237 (RP-45): `0011` adds `note`, loosens `one_offs_update_self` to the
-// own row and moves RP-21's day/month rule into the `one_offs_guard_day`
+// own row and moves RP-59's day/month rule into the `one_offs_guard_day`
 // trigger, which skips the row. Driven bare under a settled session.
 async function checkTaskNote(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
@@ -2427,7 +2427,7 @@ async function checkRoadmapSchema(): Promise<void> {
   await sql.end();
 }
 
-// Module 410 (RP-19, RP-22, RP-38, RP-41, RNP-19): what 0015 leaves, read from
+// Module 410 (RP-19, RP-22, RP-38, RP-60, RNP-19): what 0015 leaves, read from
 // the catalogue and driven as `authenticated`. Own transaction, forced rollback.
 async function checkAuditoria0015(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });

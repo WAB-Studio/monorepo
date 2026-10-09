@@ -74,7 +74,7 @@ function dayPhrase(key: DayPhraseKey, day: string, t: Translator, extra: Record<
  * Every open goal draws as its own group, in one scroll, with no selector
  * (§0.3, 5): `loadDay`'s `commitments` names which goal each slot belongs
  * to, and `phases` — narrowed to that goal — decides the phase in effect
- * through `phaseOn`, module 4's own function, called once per goal rather
+ * through `phaseOn`, called once per goal rather
  * than reading `view.phase`, which picks a single span across every goal at
  * once and is only ever right for one of them.
  *

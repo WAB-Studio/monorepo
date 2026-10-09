@@ -124,7 +124,7 @@ export type GoalCommitment = {
   // `satisfiedBy.kind === "evidence"` — the goal's screen reads the source's
   // name from `sources.json` under this key, never a sentence stored here.
   sourceLabelKey: SourceKey | null;
-  // Distinct days this commitment has a declared fact on (module 18's retire
+  // Distinct days this commitment has a declared fact on (the retire
   // sheet: "los N días en que lo hiciste" — RP-13 says the days already done
   // stay done). Counted here, off `row.facts` the goal statement already
   // carries whole, never a second round trip and never a subselect: an
@@ -336,8 +336,7 @@ function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<st
 }
 
 /**
- * The evidence half of `measureTotal` and `weeks` alike (RP-14, decided
- * 2026-09-22 — `docs/pulsar/SPEC.md`; RP-17): a quantity in the goal's own
+ * The evidence half of `measureTotal` and `weeks` alike (RP-14, RP-17): a quantity in the goal's own
  * measure unit feeds it whether a fact declared it or a source recorded it,
  * and evidence never writes a fact (RP-05), so this is the only place that
  * quantity is ever read. Only a commitment that is both evidence-satisfied
@@ -397,7 +396,7 @@ export function goalFigures(input: {
   // The same civil-day conversion `goalSpan`'s own SQL runs
   // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
   // one row this statement already carries: week 1 opens the day the goal
-  // was created (decided by the user 2026-09-28), never a second query.
+  // was created, never a second query.
   const openedOn = civilDateInZone(new Date(goal.created_at));
   const tasks = input.tasks.map((task) => toPlanTask(task, openedOn));
   const rhythm = goal.rhythm ?? null;

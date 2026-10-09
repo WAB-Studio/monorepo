@@ -1,4 +1,4 @@
-// Proves RP-41 at the consent's acts: an approval writes one code for the
+// Proves RP-60 at the consent's acts: an approval writes one code for the
 // signed-in person, a refusal of any kind writes none, and no redirect ever
 // leaves for an address the client did not register. Stubs as `token-actions.ts`.
 import assert from "node:assert/strict";

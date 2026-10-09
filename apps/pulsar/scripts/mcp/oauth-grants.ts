@@ -1,4 +1,4 @@
-// Proves RP-41's statements end to end: register, issue a code as the person,
+// Proves RP-60's statements end to end: register, issue a code as the person,
 // exchange it, refresh it, and the revocations a replay brings. A secret is
 // never printed; a failure names the step.
 import assert from "node:assert/strict";

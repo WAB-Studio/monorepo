@@ -239,9 +239,8 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
     // missed for any reason still meets `integer`'s ceiling as a message,
     // never a 500. `pgCode`, not a bare `error.code`: drizzle-orm wraps the
     // driver's error in `DrizzleQueryError` and hangs the real one off
-    // `.cause`, so the bare check this used to be never fired (module 38's
-    // own bug in `declareFact`, measured again here by module 37's validator —
-    // `lib/db-error.test.ts` proves the difference).
+    // `.cause`, so a bare check never fires
+    // (`lib/db-error.test.ts` proves the difference).
     if (pgCode(error) === "22003") return { ok: false, error: "plan.errors.valueOutOfRange" };
     throw error;
   }

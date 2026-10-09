@@ -1,12 +1,12 @@
 import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
-// RP-35, RP-46, RNP-07: a figure keeps its line («27 h 55 min» never breaks) and
+// RP-35, RP-49, RNP-07: a figure keeps its line («27 h 55 min» never breaks) and
 // the wide table's label never touches the figure beside it. Measured on the
 // report page, which draws both.
 const stamp = Date.now();
 
-test.describe("figures keep their line (RP-35, RP-46)", () => {
+test.describe("figures keep their line (RP-35, RP-49)", () => {
   test("at 1440 every figure is one line high and each label ends 12px before its figure; at 360 nothing scrolls sideways", async ({
     person,
     browser,

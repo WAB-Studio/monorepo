@@ -17,7 +17,7 @@ import { messageKey, type MessageKey } from "@/i18n/translator";
 // number costs less than typing one from nothing.
 const DEFAULT_WEEKS = "12";
 
-// A weeks count is this screen's own field — `createGoalSchema` (module 11)
+// A weeks count is this screen's own field — `createGoalSchema`
 // only ever sees the civil date it becomes, never the number the person
 // typed — so it is bounded here alone, before that conversion runs.
 const weeksSchema = z.coerce.number().int().positive().max(520);

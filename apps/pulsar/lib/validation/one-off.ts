@@ -27,7 +27,7 @@ export const createOneOffSchema = z.object({
     .trim()
     .min(1, { error: "day.errors.oneOffNameEmpty" })
     .max(120, { error: "day.errors.oneOffNameTooLong" }),
-  // Null is a one-off with no day yet (RP-21), dated later by `scheduleOneOff`.
+  // Null is a one-off with no day yet (RP-59), dated later by `scheduleOneOff`.
   day: oneOffDay().nullable(),
   // Absent, a one-off belongs to nothing (RP-20) and its week is still shown.
   goalId: z.uuid({ error: "plan.errors.goalInvalid" }).nullish(),

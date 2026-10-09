@@ -16,8 +16,8 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   leading?: ReactNode;
   // The row's own display name — never the native `<button name>` form
   // attribute, which this type deliberately excludes above: nothing in this
-  // app submits a row as a form control, and a `ReactNode` here (module 17's
-  // own dot grid, not just a string) would otherwise collide with it.
+  // app submits a row as a form control, and a `ReactNode` here (the week's
+  // dot grid, not just a string) would otherwise collide with it.
   name: ReactNode;
   // The line under the name: mono, muted, a date or a count.
   meta?: ReactNode;

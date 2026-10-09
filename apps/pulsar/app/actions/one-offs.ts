@@ -170,7 +170,7 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
 }
 
 /**
- * Gives a one-off a day, or moves one dated after today (RP-21). The row is
+ * Gives a one-off a day, or moves one dated after today (RP-59). The row is
  * read first only to name the refusal; the enforcement is
  * `day is null or day > today` in the UPDATE and `one_offs_update_self`, so a fact landing between the two statements still
  * writes nothing — 0 rows is reported as `oneOffHasFact`.
@@ -260,12 +260,12 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
 
 /**
  * Deletes a one-off written by mistake (RP-22): it never happened, so there
- * is no fact to keep. This check is a courtesy, not the enforcement — round
- * 2, 2026-09-28: driven bare, under a settled session with no server action
+ * is no fact to keep. This check is a courtesy, not the enforcement: driven
+ * bare, under a settled session with no server action
  * in the way, the old policy let an own one-off with a fact go and the fact
  * cascaded away with it (`facts.one_off_id`'s own FK is `ON DELETE cascade`,
  * `db/schema/facts.ts`, not `restrict` — changing that risks a person's own
- * cascade elsewhere and is out of this module's own migration). The real
+ * cascade elsewhere and is out of scope for a migration). The real
  * guard is `one_offs_delete_self` (`db/schema/one-offs.ts`, migration 0002):
  * its own `USING` now refuses a row that carries a fact, so even a write
  * that skips this function entirely — or a fact landing between this check

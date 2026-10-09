@@ -6,7 +6,7 @@ export { daysBetween };
 // The 1-based Monday-to-Sunday goal week `day` falls in —
 // what `Meta.dc.html` calls "semanas 1–4" for a phase's own span. The one
 // convention every screen that counts a goal's weeks reuses; never a second
-// one (module 36's own instruction not to invent one). `lib/day/weeks.ts`'s
+// one. `lib/day/weeks.ts`'s
 // own `weekIndexOf`, under the name every caller here already uses.
 export const weekIndex = weekIndexOf;
 

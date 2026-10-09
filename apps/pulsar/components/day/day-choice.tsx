@@ -11,7 +11,7 @@ import type { MessageKey } from "@/i18n/translator";
 export type DayChoiceProps = {
   value: DayChoiceValue;
   onChange: (value: DayChoiceValue) => void;
-  // A one-off may wait with no day (RP-21); a caller that needs a day drops it.
+  // A one-off may wait with no day (RP-59); a caller that needs a day drops it.
   allowNone: boolean;
   // Earliest date the picker offers: the day already gone is never one.
   min: string;

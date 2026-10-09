@@ -26,7 +26,7 @@ export type ScheduleSheetProps = {
 };
 
 /**
- * `SueltaDarDia.dc.html` (RP-21): «para cuándo» without «sin día» and the way
+ * `SueltaDarDia.dc.html` (RP-59): «para cuándo» without «sin día» and the way
  * to give the one-off that day; deleting lives in its own sheet. With
  * `current` it is `SueltaMover.dc.html`: the day it has now, «Moverla».
  */

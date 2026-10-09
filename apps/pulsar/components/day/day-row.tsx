@@ -21,7 +21,7 @@ export type DayRowProps = {
   // What satisfies the commitment (RP-02, RP-03, RP-07): a `tap` row calls
   // `declareFact` outright, an `evidence` row never calls it at all — RP-07
   // says evidence takes no act from the person — and a `quantity` row opens
-  // module 14's sheet.
+  // the quantity sheet.
   kind: DayRowKind;
   markState: MarkState;
   // The evidence catalogue's own name for the source, shown only once this
@@ -64,7 +64,7 @@ export type DayRowProps = {
  * One commitment's row (RP-01, RP-02, RP-05, RP-08). A `tap` commitment is
  * satisfied outright, and a second tap on a done one undoes it through
  * `undoFact` — the same gesture that made it unmakes it, no confirm sheet
- * (RP-05, decided 2026-09-27). A `quantity` row's tap always opens
+ * (RP-05). A `quantity` row's tap always opens
  * `QuantitySheet`, done or not: calling `declareFact` bare would only ever
  * come back `day.errors.quantityRequired`, and a done row needs the sheet
  * anyway to show what it logged and offer `Deshacer`. An `evidence` row is
@@ -100,7 +100,7 @@ export function DayRow({
   // A quiet row has no slot, so what it holds today is the fact itself.
   const done = quiet ? factId !== undefined : markState === "declared";
   // A done row's second line is what the person actually logged, never the
-  // plan's target (decided 2026-09-27, `docs/pulsar/DESIGN.md`). A time unit prints as «1 h 30 min» (RP-35); any other keeps the
+  // plan's target. A time unit prints as «1 h 30 min» (RP-35); any other keeps the
   // commitment's own word.
   const amount =
     kind === "quantity"
@@ -149,7 +149,7 @@ export function DayRow({
 
     startTransition(() => {
       // Done already: this tap undoes it, never declares a second fact
-      // beside it (the bug the critic measured 2026-09-27).
+      // beside it.
       const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId, day });
       void action.then((result) => {
         if (!result.ok) setError(result.error);

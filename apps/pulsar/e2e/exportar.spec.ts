@@ -15,7 +15,7 @@ import exportMessages from "../messages/es/export.json";
 
 // `Reporte.dc.html`, `ReporteImpreso.dc.html`, `ReporteSinEvidencia.dc.html`,
 // `ReporteVacio.dc.html`, `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
-// `ReporteImpresoTareas.dc.html` (module 131, 265, RP-46, RP-35): `/exportar` is a page the
+// `ReporteImpresoTareas.dc.html` (module 131, 265, RP-49, RP-35): `/exportar` is a page the
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
 // Pages the two-goal seeded report takes on A4 with the carried notes
@@ -128,8 +128,8 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
   };
 }
 
-test.describe("the report page (RP-46, RP-35)", () => {
-  test("RP-46: draws the goal, its month in hours and minutes, the month's tasks and a carried one; signed out lands on /entrar", async ({
+test.describe("the report page (RP-49, RP-35)", () => {
+  test("RP-49: draws the goal, its month in hours and minutes, the month's tasks and a carried one; signed out lands on /entrar", async ({
     person,
     browser,
     baseURL,
@@ -173,7 +173,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
       await expect(seen("Tu plan")).toHaveCount(1);
       await expect(seen("1 meta")).toHaveCount(1);
       await expect(seen("hasta hoy")).toHaveCount(1);
-      // RP-46: the first figure is named, the month's tasks listed done and not.
+      // RP-49: the first figure is named, the month's tasks listed done and not.
       const monthName = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" }).format(
         civilDateToDate(todayInZone()),
       );
@@ -181,7 +181,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
       await expect(seen(`tareas de ${monthName}`)).toHaveCount(1);
       await expect(seen(seeded.monthTask)).toHaveCount(1);
       await expect(seen(seeded.doneTask)).toHaveCount(1);
-      // RP-46: a note sits under its own task, whether the task is carried, this month's or done.
+      // RP-49: a note sits under its own task, whether the task is carried, this month's or done.
       for (const [task, note] of [
         [seeded.monthTask, seeded.monthNote],
         [seeded.doneTask, seeded.doneNote],
@@ -454,9 +454,9 @@ test.describe("the report page (RP-46, RP-35)", () => {
   });
 });
 
-// `Exportar.dc.html` (module 137, RP-46, RP-37): `/metas` offers the export
+// `Exportar.dc.html` (module 137, RP-49, RP-37): `/metas` offers the export
 // beside the import under «el plan».
-test.describe("the way in from /metas (RP-46, RP-37)", () => {
+test.describe("the way in from /metas (RP-49, RP-37)", () => {
   test("«Exportar» opens the report; «Importar un plan» points at its page", async ({
     person,
     browser,
@@ -534,9 +534,9 @@ test.describe("the way in from /metas (RP-46, RP-37)", () => {
   });
 });
 
-// Module 171 (RP-31, RP-32, RP-46, RP-35): what is owed, the goal's last day,
+// Module 171 (RP-31, RP-32, RP-49, RP-35): what is owed, the goal's last day,
 // the months whole, a head that says pulsar, and page 1 used.
-test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)", () => {
+test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)", () => {
   async function seedExtras(db: postgres.Sql, person: Person, seeded: Seed) {
     const stamp = Date.now();
     const today = todayInZone();
@@ -689,7 +689,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
     }
   });
 
-  test("RP-46 on paper: the head says pulsar with the year, the tasks sit under their goal, no week prints, every date has its year, page 1 is used", async ({
+  test("RP-49 on paper: the head says pulsar with the year, the tasks sit under their goal, no week prints, every date has its year, page 1 is used", async ({
     person,
     browser,
     baseURL,
@@ -776,7 +776,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
     }
   });
 
-  test("RP-46 on paper loses nothing: every goal and every month row the screen shows is in the PDF, in its goal", async ({
+  test("RP-49 on paper loses nothing: every goal and every month row the screen shows is in the PDF, in its goal", async ({
     person,
     browser,
     baseURL,
@@ -836,9 +836,9 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
   });
 });
 
-// Module 265 (RP-46): the head counts the goals that ended, an ended goal is
+// Module 265 (RP-49): the head counts the goals that ended, an ended goal is
 // named with its last day and goes last, and the page never overflows.
-test.describe("the report's head, its ended goals and its width (RP-46)", () => {
+test.describe("the report's head, its ended goals and its width (RP-49)", () => {
   async function seedEnded(db: postgres.Sql, person: Person) {
     const name = `Meta terminada ${Date.now()}`;
     const [goal] = await db<{ id: string }[]>`

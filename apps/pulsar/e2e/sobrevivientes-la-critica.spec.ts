@@ -243,7 +243,7 @@ test("the goal screen reads its last day, the Sunday before the horizon (RP-11)"
   }
 });
 
-test("dating a dayless one-off offers no «sin día» and no date before today (RP-21, RP-19)", async ({
+test("dating a dayless one-off offers no «sin día» and no date before today (RP-59, RP-19)", async ({
   page,
   db,
   personId,

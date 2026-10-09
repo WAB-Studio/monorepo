@@ -84,9 +84,9 @@ export const oneOffs = goalsSchema.table(
     }),
     // RP-22: a one-off that already carries a fact is never deleted, by
     // whatever door reaches this row — the policy is the enforcement, not
-    // `deleteOneOff`'s own check alone (round 2, 2026-09-28: driven bare,
-    // under a settled session, with no server action in the way, the old
-    // policy let the row go and the fact cascaded with it). The subquery
+    // `deleteOneOff`'s own check alone (driven bare, under a settled
+    // session with no server action in the way, a weaker policy let the row
+    // go and the fact cascaded with it). The subquery
     // runs under the caller's own RLS on `goals.facts`
     // (`facts_select_self`): a person's own fact is always visible to them
     // there, so this never passes vacuously for the row it is meant to
@@ -105,7 +105,7 @@ export const oneOffs = goalsSchema.table(
       )`,
     }),
     // `using` is the own row alone: a note reaches a done or past-dated row.
-    // RP-21's rule (a day after the person's today, no fact) moved to the
+    // RP-59's rule (a day after the person's today, no fact) moved to the
     // `goals.one_offs_guard_day` trigger, which skips the row when `day` or
     // `planned_month` changes on a row the rule refuses — 0 rows, as before.
     pgPolicy("one_offs_update_self", {

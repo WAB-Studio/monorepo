@@ -1,4 +1,4 @@
-// Proves RP-56, RP-42, RNP-05 and RNP-14 for the write tools: each handler,
+// Proves RP-56, RP-51, RNP-05 and RNP-14 for the write tools: each handler,
 // called in-process with a stub `ctx` that carries a person the way
 // `withMcpAuth` will, runs the act the app runs, writes under the subject,
 // writes nothing for the intruder's target, and issues exactly the

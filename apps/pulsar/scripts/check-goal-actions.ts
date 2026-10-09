@@ -348,7 +348,7 @@ async function oneOffDay(id: string): Promise<string | null> {
 test("createOneOff: no day lands a null day; yesterday is refused and writes no row; tomorrow lands tomorrow", async () => {
   const ids: string[] = [];
   try {
-    const dayless = await createOneOff({ name: "RP-21 sin día", day: null });
+    const dayless = await createOneOff({ name: "RP-59 sin día", day: null });
     assert.equal(dayless.ok, true);
     if (!dayless.ok) return;
     ids.push(dayless.oneOffId);
@@ -379,7 +379,7 @@ test("createOneOff: no day lands a null day; yesterday is refused and writes no 
 test("scheduleOneOff: a dayless one gets today; a second call is refused and the day holds; one with a fact is refused", async () => {
   const ids: string[] = [];
   try {
-    const made = await createOneOff({ name: "RP-21 por fechar", day: null });
+    const made = await createOneOff({ name: "RP-59 por fechar", day: null });
     if (!made.ok) throw new Error(made.error);
     ids.push(made.oneOffId);
 
@@ -403,7 +403,7 @@ test("scheduleOneOff: a dayless one gets today; a second call is refused and the
     // A dayless one that already carries a fact: seeded through the pooler,
     // since `completeOneOff` never sees a dayless one.
     const [withFact] = await sql<{ id: string }[]>`
-      insert into goals.one_offs (user_id, name) values (${personId}, 'RP-21 con hecho') returning id`;
+      insert into goals.one_offs (user_id, name) values (${personId}, 'RP-59 con hecho') returning id`;
     ids.push(withFact.id);
     await sql`insert into goals.facts (user_id, one_off_id, day) values (${personId}, ${withFact.id}, ${today})`;
     const refused = await scheduleOneOff({ oneOffId: withFact.id, day: today });
@@ -477,7 +477,7 @@ test("scheduleOneOff: a one-off dated after today moves; one dated today is refu
     select id from auth.users where email = ${memberEmail}`;
   if (!member) throw new Error("no member identity — run harness:token for this lane");
   try {
-    const made = await createOneOff({ name: "RP-21 mover", day: shiftDay(today, 1) });
+    const made = await createOneOff({ name: "RP-59 mover", day: shiftDay(today, 1) });
     if (!made.ok) throw new Error(made.error);
     ids.push(made.oneOffId);
 
@@ -501,7 +501,7 @@ test("scheduleOneOff: a one-off dated after today moves; one dated today is refu
 
     const [withFact] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, name, day)
-      values (${personId}, 'RP-21 futura con hecho', ${shiftDay(today, 1)}) returning id`;
+      values (${personId}, 'RP-59 futura con hecho', ${shiftDay(today, 1)}) returning id`;
     ids.push(withFact.id);
     await sql`insert into goals.facts (user_id, one_off_id, day) values (${personId}, ${withFact.id}, ${today})`;
     const refused = await scheduleOneOff({ oneOffId: withFact.id, day: shiftDay(today, 2) });
@@ -511,7 +511,7 @@ test("scheduleOneOff: a one-off dated after today moves; one dated today is refu
 
     const [foreign] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, name, day)
-      values (${member.id}, 'RP-21 ajena', ${shiftDay(today, 1)}) returning id`;
+      values (${member.id}, 'RP-59 ajena', ${shiftDay(today, 1)}) returning id`;
     ids.push(foreign.id);
     const other = await scheduleOneOff({ oneOffId: foreign.id, day: shiftDay(today, 2) });
     assert.equal(other.ok, false);

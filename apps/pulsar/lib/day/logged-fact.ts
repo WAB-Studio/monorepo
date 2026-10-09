@@ -3,7 +3,7 @@ import { civilDateInZone } from "@/lib/zone";
 // The one fact `day-row.tsx` and `quantity-sheet.tsx` show and undo for a
 // done commitment — the most recently written one, when more than one
 // landed the same day (an old accumulation from before "Cambiar" replaced
-// instead of adding). Neither `DaySlot` nor `deriveDay` (module 4) carries an
+// instead of adding). Neither `DaySlot` nor `deriveDay` carries an
 // id or a note: they answer "is this satisfied", not "which row do I undo",
 // so this rides beside `DayView` rather than inside it.
 //

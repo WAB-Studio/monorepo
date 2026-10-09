@@ -7,7 +7,7 @@ import connections from "../messages/es/connections.json";
 import oauth from "../messages/es/oauth.json";
 import { test, expect, type Person } from "./fixtures";
 
-// RP-41, RNP-01, RNP-07: the consent screen. The person is signed in through
+// RP-60, RNP-01, RNP-07: the consent screen. The person is signed in through
 // the fixture's session, never the form; a client registers itself through
 // `/oauth/registro` as claude.ai does. The client's own redirect is a route
 // the spec answers itself, so nothing leaves the machine. The sign-in form is
@@ -84,7 +84,7 @@ async function expectNoOverflow(page: Page) {
   expect(scroll).toBeLessThanOrEqual(inner);
 }
 
-test.describe("the consent screen (RP-41)", () => {
+test.describe("the consent screen (RP-60)", () => {
   test("signed in it names the client, lists what it may and never may, and fits 360", async ({
     person,
     browser,

@@ -4,7 +4,7 @@ import goal from "../messages/es/goal.json";
 
 import { test, expect } from "./fixtures";
 
-// `/sueltas` is a 640px column and `/metas` names no empty group (RP-21,
+// `/sueltas` is a 640px column and `/metas` names no empty group (RP-59,
 // RP-11, RNP-17; DESIGN «An empty section draws no label»).
 
 function plusDays(days: number): string {

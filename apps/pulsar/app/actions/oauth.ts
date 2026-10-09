@@ -60,7 +60,7 @@ function backTo(request: AuthorizationRequest, params: Record<string, string>): 
 }
 
 /**
- * Issues a code for the signed-in person and returns where to send them (RP-41).
+ * Issues a code for the signed-in person and returns where to send them (RP-60).
  * The connection's name is the client's, set where the code is exchanged. Not a tool.
  */
 export async function approveAuthorization(input: unknown): Promise<ConsentResult> {

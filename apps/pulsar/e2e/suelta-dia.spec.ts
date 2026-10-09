@@ -4,7 +4,7 @@ import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // The field's day (`HoySueltaDia.dc.html`): Enter alone writes today; the
-// chips write tomorrow, another day, or none (RP-19, RP-21).
+// chips write tomorrow, another day, or none (RP-19, RP-59).
 
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
@@ -67,7 +67,7 @@ test("«mañana» writes tomorrow's day, does not draw, and says where it went (
   }
 });
 
-test("«sin día» writes a null day, does not draw, and the way into the list shows (RP-21)", async ({
+test("«sin día» writes a null day, does not draw, and the way into the list shows (RP-59)", async ({
   page,
   db,
   personId,

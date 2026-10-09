@@ -46,7 +46,7 @@ import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 //
 // This is also why `withReadingDb` runs one query *per known key*, not one
 // per commitment that actually needs it: today, with one key, that is four
-// statements total, the number module 8's done criterion measured. **Four is
+// statements total. **Four is
 // a fact of today's registry, not a law of this file.** The day a second key
 // lands, a person with no commitment pointing at it still pays its query —
 // RNP-03's "bounded" still holds (bounded by the catalogue's own size, which
@@ -66,8 +66,8 @@ type GoalRow = {
 // `source_key` and `source_unit` ride in from the join to `evidence_sources`;
 // neither column exists on `commitments` itself (RNP-10 keeps the source a
 // row of configuration, not a commitment column). `goal_id` widens
-// `rows.ts`'s own `CommitmentRow` — nothing module 4's `CommitmentPlan`
-// reads, so `toCommitmentPlan` still ignores it; module 13's screen is what
+// `rows.ts`'s own `CommitmentRow` — nothing `CommitmentPlan`
+// reads, so `toCommitmentPlan` still ignores it; `DayScreen` is what
 // groups a slot by goal and names its row.
 type CommitmentRow = BaseCommitmentRow & { goal_id: string };
 
@@ -77,8 +77,8 @@ type PhaseRow = BasePhaseRow & { goal_id: string };
 // bare quantity, never its own unit (`db/schema/commitments.ts`'s own
 // comment — "the unit belongs here, never to the fact that repeats it").
 // `id` rides in from `to_jsonb(f)` like every other bare column here — it was
-// read out from the start, only never named on this type before module 34
-// needed a row's own fact to undo (RP-05).
+// read out from the start, only never named on this type before a row's own fact
+// had to be undone (RP-05).
 type FactRow = {
   id: string;
   commitment_id: string | null;
@@ -108,7 +108,7 @@ type OneOffRow = {
 // The one statement's whole shape. `goals` and `one_offs` are fetched here
 // and, beside `view`, returned from `loadDay` below as `GoalSummary[]` and
 // `OneOffSummary[]` — `deriveDay` takes no goals array and `DayView` has no
-// place for a one-off, so module 13's screen is what groups a slot under the
+// place for a one-off, so `DayScreen` is what groups a slot under the
 // goal it belongs to and draws a one-off beneath the last one.
 type DoneOneOffRow = {
   id: string;
@@ -180,7 +180,7 @@ function openGoal(alias: string, day: string) {
 export type EndedGoal = { id: string; name: string; lastDay: string };
 
 /**
- * One statement, five subqueries: everything the day's derivation needs,
+ * One statement, one subquery per thing the day reads: everything the day's derivation needs,
  * scoped to the caller's own rows by RLS alone — no `user_id` filter is
  * written here, the same choice `lib/evidence/reading-lookups.ts` took, so
  * the policy is the reason the rows are safe, not a second copy of it.
@@ -195,13 +195,14 @@ export type EndedGoal = { id: string; name: string; lastDay: string };
  * `times_per_month` asks by its month and counts what the week alone never
  * reads. What is week-bound (the goal's measure) narrows back in TS.
  *
- * `goals` is the one subquery RP-24 filters: an archived goal is never in
- * this list, and `DayScreen` (module 13) only ever groups a row under a goal
- * it finds here — a commitment or a one-off belonging to an archived goal
- * still rides along unfiltered in its own subquery below, but nothing loops
- * over either outside the per-goal grouping, so it never draws. `goals.length
- * === 0` is also what decides the day's own empty state (`empty-day.tsx`), so
- * an all-archived person needs no second check.
+ * `goals` is the list RP-24 filters: an archived goal is never in it, and
+ * `DayScreen` only ever groups a row under a goal it finds here. `commitments`
+ * and `one_offs` do not join to the goal, so a row of an archived goal still
+ * rides along, but nothing loops over either outside the per-goal grouping and
+ * it never draws. `month_budgets`, `goal_tasks` and `scheduled_count` join
+ * only open goals (`openGoal`). `goals.length === 0` is also what decides the
+ * day's own empty state (`empty-day.tsx`), so an all-archived person needs no
+ * second check.
  */
 async function queryGoalsRow(
   tx: Transaction,
@@ -342,12 +343,11 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
   };
 }
 
-// `Phase` (module 4) names no goal: `deriveDay`'s own `phaseOn` picks the
+// `Phase` names no goal: `deriveDay`'s own `phaseOn` picks the
 // first span that holds `day` out of every phase across every goal, which is
-// only ever right for one goal at a time. Module 13's screen calls that same
+// only ever right for one goal at a time. `DayScreen` calls that same
 // `phaseOn` itself, once per goal, against phases narrowed to that goal by
-// this `goalId` — `deriveDay` and `DayView.phase` stay exactly as module 4
-// left them.
+// this `goalId` — `deriveDay` and `DayView.phase` stay as they are.
 export type PhaseInfo = Phase & { goalId: string };
 
 function toPhaseInfo(row: PhaseRow): PhaseInfo {
@@ -381,7 +381,7 @@ function toGoalSummary(row: GoalRow): GoalSummary {
 // to none, and the screen draws it in its own group below the rest. `day` is
 // the one-off's own, not the day drawn — a screen reading `day < view.day`
 // is reading a carried one-off, undone since a day before today's; RP-19
-// widened 2026-09-28 says it rides every day after its own until it is done
+// says it rides every day after its own until it is done
 // or deleted, never just the one it was written for.
 export type OneOffSummary = {
   id: string;
@@ -409,7 +409,7 @@ function toOneOffSummary(row: OneOffRow): OneOffSummary {
 
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
 // commitment belongs to, its own name, and the mechanism that satisfies it —
-// module 13's screen groups by the first, names a row with the second, and
+// `DayScreen` groups by the first, names a row with the second, and
 // decides a tap's target with the third (a `quantity` row opens the
 // quantity sheet instead of calling `declareFact` bare). `target` and `unit`
 // ride the same `commitments` row `toSatisfiedBy` already reads (RP-03); null
@@ -663,12 +663,12 @@ function weekMeasureOf(
  * `goals`, `oneOffs` and `commitments` ride out of the same `withGoalsDb`
  * statement `view` is derived from — no third query, still four statements
  * total (`withGoalsDb`'s settle + select, `withReadingDb`'s settle + select).
- * Module 13's screen is what groups a slot under its goal and draws a
- * one-off beneath the last one; `DayView` and `deriveDay` (module 4) are
+ * `DayScreen` is what groups a slot under its goal and draws a
+ * one-off beneath the last one; `DayView` and `deriveDay` are
  * unchanged.
  *
  * `oneOffs` carries every one-off dated on or before `day` that no fact yet
- * names, whatever day that fact was written on (RP-19 widened 2026-09-28):
+ * names, whatever day that fact was written on (RP-19):
  * an undone one-off from three days back rides every `loadDay` after its
  * own until it is done or deleted, read here through `o.day <= day` beside
  * the row-level `not exists` the SQL above already runs. `OneOffSummary`
@@ -731,7 +731,7 @@ export async function loadDay(day: string): Promise<{
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
   // that always does, so a one-off's own fact plays no part in deriving a
   // commitment's slot (RP-19's list is this file's own `oneOffs`, read by
-  // module 13's screen).
+  // `DayScreen`).
   const dayFacts = row.facts.filter((fact) => fact.day === day);
   // Every fact of the period, not the day's alone: `asksOn` counts a quota
   // over the week or the month, and `deriveSlot` reads the day's own by day.
@@ -756,7 +756,7 @@ export async function loadDay(day: string): Promise<{
     if (done !== null) periodDone[plan.id] = done;
   }
 
-  // `completeOneOff` (module 12) never deletes the one-off's own row — it
+  // `completeOneOff` never deletes the one-off's own row — it
   // only writes the fact that explains it — so the `one_offs` subquery
   // itself carries the `not exists (... facts ...)` check now (RP-19's
   // "done, it leaves the list", true on any day the fact was written, not
