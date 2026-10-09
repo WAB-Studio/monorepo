@@ -2884,6 +2884,26 @@ branch could pass until it was restored.
 - `workflow_dispatch` reads the `ci.yml` of the ref it runs on: a throwaway mutation branch may cut it to the one job it
   needs. Never merge such a branch.
 
+## A route a client file imports cannot import the database
+
+- A client component that imports a schema from `app/api/**/route.ts` pulls the whole route into the browser bundle. Once
+  that route imports `db/client.ts`, `next build` fails on `postgres` in the client graph; `next dev` serves it.
+- Keep a schema shared by client and server in a `lib/**/types.ts` with no server import. Measured 2026-10-08: voyager
+  513, `search-screen.tsx` → `network.ts` → `translate/route.ts` → `client-budget.ts` → `db/client.ts`.
+
+## Patching `Module._load` does not intercept `await import()`
+
+- A check that doubles a module by patching `Module._load` misses every dynamic `import()`: the real module loads. In
+  voyager's `check-sign-in-budget.ts` the real Supabase client loaded that way.
+- Double through `module.registerHooks` (Node 22+), which sees both `require` and `import`. Prove the double is the one
+  reached: make it throw when called.
+
+## A mutant that changes a key's hash leaves rows the cleanup cannot find
+
+- A check that deletes its rows by the key it computes cannot find rows a mutant wrote under another key. Measured
+  2026-10-08: voyager 514's mutation M4 left one `client_spend` row on the local stack.
+- After a mutation run, read the table for rows of the day, not for the check's own keys, and delete what is left.
+
 ## Un carril que cambia de rama sirve 404 en rutas que existen
 
 Un carril reutilizado guarda el `.next` del servidor que corrió la rama anterior. Con la rama nueva, `next dev`
