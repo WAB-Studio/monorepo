@@ -39,8 +39,8 @@
     "toGoals": "Ver las metas",
     "newGoal": "Abrir otra meta"
   },
-  "unreadableEvidence": "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.",
-  "unreadableEvidencePast": "No pudimos leer una fuente. Lo que declaraste ese día sigue aquí.",
+  "unreadableTitle": "No pudimos leer una fuente.",
+  "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
   "theme": {
     "toLight": "Cambiar a modo claro",
     "toDark": "Cambiar a modo oscuro"
@@ -120,7 +120,8 @@
   "row": {
     "saidByYou": "lo dijiste tú",
     "partialAmount": "{logged} de {target}",
-    "evidenceAmount": "{count} {unit}"
+    "evidenceAmount": "{count} {unit}",
+    "unreadSource": "sin leer la fuente"
   },
   "monthLine": {
     "title": "este mes",

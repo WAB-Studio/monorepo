@@ -23,7 +23,8 @@
     "weekProgressPast": "{done} de {total} esa semana",
     "monthProgressPast": "{done} de {total} ese mes"
   },
-  "unreadableEvidence": "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.",
+  "unreadableTitle": "No pudimos leer una fuente.",
+  "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
   "weekdayShort": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
   "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
   "openDay": "Abrir el {weekday} {day}",

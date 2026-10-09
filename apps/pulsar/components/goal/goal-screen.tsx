@@ -333,7 +333,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Section>
 
           {goal.measureUnit && goal.evidence === "unreadable" ? (
-            <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
+            <EvidenceNote title={t("goal.detail.unreadableTitle")} body={t("goal.detail.unreadableBody")} />
           ) : null}
         </Panel>
       ) : (

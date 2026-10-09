@@ -306,7 +306,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                       evidence={
                         commitment.evidence
                           ? {
-                              asks: evidenceAmount(commitment.evidence, commitment.evidence.threshold),
+                              asks:
+                                evidence === "unreadable"
+                                  ? t("day.row.unreadSource")
+                                  : evidenceAmount(commitment.evidence, commitment.evidence.threshold),
                               got:
                                 slot.satisfiedBy === "evidence"
                                   ? evidenceAmount(commitment.evidence, slot.quantity ?? 0)
@@ -315,6 +318,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                             }
                           : undefined
                       }
+                      quiet={evidence === "unreadable" && Boolean(commitment.evidence)}
                       target={commitment.target}
                       unit={commitment.unit}
                       cadence={commitment.cadence}
@@ -592,7 +596,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       )}
 
       {evidence === "unreadable" ? (
-        <EvidenceNote text={past ? t("day.unreadableEvidencePast") : t("day.unreadableEvidence")} />
+        <EvidenceNote title={t("day.unreadableTitle")} body={t("day.unreadableBody")} />
       ) : null}
 
       <Split main={<>{notices}{goalsMain}</>} after={goalless} even={past} />
