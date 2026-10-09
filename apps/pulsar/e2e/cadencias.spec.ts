@@ -8,7 +8,7 @@ import plan from "../messages/es/plan.json";
 // "weekdays" through the screen; this file drives the two RP-12 gave the
 // form's board a chip for and this suite had not yet touched — "N veces a la
 // semana" and "cada N días" — plus the one cadence the board never offers a
-// chip for at all, "N veces al mes" (decided by the user 2026-09-27), proved
+// chip for at all, "N veces al mes", proved
 // by a row seeded under the spec's own identity rather than typed on screen.
 
 type CommitmentRow = {

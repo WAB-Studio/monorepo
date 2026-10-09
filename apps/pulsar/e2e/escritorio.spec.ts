@@ -336,7 +336,7 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
   });
 }
 
-// Module 88: what the critic measured at 1024 and 1280. A person of the
+// At 1024 and 1280, a person of the
 // spec's own for each: `layout` is a wide open plan, `closed` holds no open
 // goal at all, so neither depends on a sibling's rows.
 const LAYOUT_GOAL = `Meta de medición amplia con un nombre largo ${stamp}`;
@@ -413,7 +413,7 @@ function cardWidth(locator: Locator): Promise<number> {
   });
 }
 
-deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and the side cards stack with no hole (module 88)", async ({ browser, baseURL, desk }) => {
+deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and the side cards stack with no hole", async ({ browser, baseURL, desk }) => {
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1024, 800);
   try {
     await page.goto("/");
@@ -453,7 +453,7 @@ deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and t
   }
 });
 
-deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on the goal (module 88)", async ({ browser, baseURL, desk }) => {
+deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on the goal", async ({ browser, baseURL, desk }) => {
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1280, 800);
   try {
     await page.goto("/");
@@ -467,7 +467,7 @@ deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on 
   }
 });
 
-deskTest("Semana's day header stays in view and opaque once the rows scroll, at 1280 (module 88)", async ({ browser, baseURL, desk }) => {
+deskTest("Semana's day header stays in view and opaque once the rows scroll, at 1280", async ({ browser, baseURL, desk }) => {
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1280, 800);
   try {
     await page.goto("/semana");
@@ -507,7 +507,7 @@ deskTest("Semana's day header stays in view and opaque once the rows scroll, at 
   }
 });
 
-deskTest("at 1024 no day header and no tally on Semana wraps (module 88)", async ({ browser, baseURL, desk }) => {
+deskTest("at 1024 no day header and no tally on Semana wraps", async ({ browser, baseURL, desk }) => {
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.layoutSession } as World, 1024, 800);
   try {
     await page.goto("/semana");
@@ -537,7 +537,7 @@ deskTest("at 1024 no day header and no tally on Semana wraps (module 88)", async
   }
 });
 
-deskTest("Hoy with every goal ended drops «Hoy no pide nada.» while a one-off waits, and says it as body text at 1280 (module 88)", async ({ browser, baseURL, desk }) => {
+deskTest("Hoy with every goal ended drops «Hoy no pide nada.» while a one-off waits, and says it as body text at 1280", async ({ browser, baseURL, desk }) => {
   const admin = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   const sentence = "Hoy no pide nada.";
   const wide = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 1280, 800);
@@ -567,7 +567,7 @@ deskTest("Hoy with every goal ended drops «Hoy no pide nada.» while a one-off 
   }
 });
 
-deskTest("an ended or archived goal is «no existe» on «fases/nueva» and on «compromisos/nuevo» (module 88)", async ({ browser, baseURL, desk }) => {
+deskTest("an ended or archived goal is «no existe» on «fases/nueva» and on «compromisos/nuevo»", async ({ browser, baseURL, desk }) => {
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 1280, 800);
   try {
     for (const id of [desk.endedId, desk.archivedId]) {
@@ -582,7 +582,7 @@ deskTest("an ended or archived goal is «no existe» on «fases/nueva» and on �
   }
 });
 
-deskTest("an archived goal's overline says it is archived, and an open one still says it was opened (module 88)", async ({ browser, baseURL, desk }) => {
+deskTest("an archived goal's overline says it is archived, and an open one still says it was opened", async ({ browser, baseURL, desk }) => {
   const { context, page } = await signedIn(browser, baseURL, { sessionFile: desk.closedSession } as World, 1280, 800);
   const on = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "long", timeZone: "America/Bogota" }).format(new Date());
   try {

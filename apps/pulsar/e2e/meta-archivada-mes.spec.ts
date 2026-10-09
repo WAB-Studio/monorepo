@@ -3,7 +3,7 @@ import { civilDateInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// Module 369: an archived goal that holds no task this month draws no month
+// An archived goal that holds no task this month draws no month
 // block, and still offers «Ver por mes».
 
 test("an archived measureless goal with no task this month draws no «0 tareas» line and offers «Ver por mes»", async ({

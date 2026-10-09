@@ -47,7 +47,7 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1280);
 });
 
-// Four tabs fixed at the foot (module 203): the nav 57 px (56 of tab and its
+// Four tabs fixed at the foot: the nav 57 px (56 of tab and its
 // rule), four equal links, the page column 640 wide and centred from 700 up.
 for (const [width, pageBox] of [
   [360, { x: 0, width: 360 }],

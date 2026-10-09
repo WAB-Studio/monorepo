@@ -16,12 +16,12 @@ import exportMessages from "../messages/es/export.json";
 
 // `Reporte.dc.html`, `ReporteImpreso.dc.html`, `ReporteSinEvidencia.dc.html`,
 // `ReporteVacio.dc.html`, `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
-// `ReporteImpresoTareas.dc.html` (module 131, 265, RP-49, RP-35): `/exportar` is a page the
+// `ReporteImpresoTareas.dc.html` (RP-49, RP-35): `/exportar` is a page the
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
 // Pages the two-goal seeded report takes on A4 with the carried notes
-// printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265; 317 spaced the sections: 11 to 10;
-// 379 printed the months alone and let a section run across pages: 10 to 6).
+// printed and the month's tasks, measured by `pdfinfo`
+// (spaced sections and the months printed alone keep a section from running across pages).
 const A4_PAGES = 4;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
@@ -417,7 +417,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
     });
   }
 
-  // `ReporteFuenteCaida` (module 578, RNP-04): the notice is the report's own
+  // `ReporteFuenteCaida` (RNP-04): the notice is the report's own
   // sentence, every goal still says what it measures and until when, and only
   // the goal a down source feeds adds that its figure is what was declared.
   async function seedDown(db: postgres.Sql, person: Person) {
@@ -543,7 +543,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
   }
 });
 
-// `Exportar.dc.html` (module 137, RP-49, RP-37): `/metas` offers the export
+// `Exportar.dc.html` (RP-49, RP-37): `/metas` offers the export
 // beside the import under «el plan».
 test.describe("the way in from /metas (RP-49, RP-37)", () => {
   test("«Exportar» opens the report; «Importar un plan» points at its page", async ({
@@ -623,7 +623,7 @@ test.describe("the way in from /metas (RP-49, RP-37)", () => {
   });
 });
 
-// Module 171 (RP-31, RP-32, RP-49, RP-35): what is owed, the goal's last day,
+// RP-31, RP-32, RP-49, RP-35: what is owed, the goal's last day,
 // the months whole, a head that says pulsar, and page 1 used.
 test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)", () => {
   async function seedExtras(db: postgres.Sql, person: Person, seeded: Seed) {
@@ -925,7 +925,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
   });
 });
 
-// Module 265 (RP-49): the head counts the goals that ended, an ended goal is
+// RP-49: the head counts the goals that ended, an ended goal is
 // named with its last day and goes last, and the page never overflows.
 test.describe("the report's head, its ended goals and its width (RP-49)", () => {
   async function seedEnded(db: postgres.Sql, person: Person) {
@@ -1193,7 +1193,7 @@ test.describe("the report's head, its ended goals and its width (RP-49)", () => 
   });
 });
 
-test.describe("the report's type and space (module 317)", () => {
+test.describe("the report's type and space", () => {
   for (const width of [360, 1280] as const) {
     test(`at ${width} sentences are Archivo, figures stay mono and sections keep the space system`, async ({
       person,
@@ -1267,9 +1267,9 @@ test.describe("the report's type and space (module 317)", () => {
 
 const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-// `ReporteFuenteCaida` with the source readable (module 578): the line is the
+// `ReporteFuenteCaida` with the source readable: the line is the
 // same for every goal and carries nothing about a source.
-test.describe("a readable source (module 578)", () => {
+test.describe("a readable source", () => {
   test("every goal reads «mide … · hasta el …», fed or not, with no word about a source", async ({
     person,
     browser,
@@ -1317,10 +1317,10 @@ test.describe("a readable source (module 578)", () => {
   });
 });
 
-// `ReporteTareaParte` (module 578, RP-54, user decision 2026-10-09): a task the
+// `ReporteTareaParte` (RP-54): a task the
 // plan splits shows the part that falls in this month and «sigue en <mes> ·
 // <total> en total» under its name. There is no «viene de».
-test.describe("a task split across months (module 578)", () => {
+test.describe("a task split across months", () => {
   const today = todayInZone();
   const next = (() => {
     const d = civilDateToDate(`${today.slice(0, 7)}-01`);
@@ -1473,9 +1473,9 @@ test.describe("a task split across months (module 578)", () => {
   });
 });
 
-// Module 579 (RP-49, RP-17), `ReporteImpresoCompacto.dc.html`: on A4 the report spends the whole printable width,
+// (RP-49, RP-17), `ReporteImpresoCompacto.dc.html`: on A4 the report spends the whole printable width,
 // keeps a heading with what follows it, and three goals with no activity fit two pages.
-test.describe("the report on A4, compact (module 579)", () => {
+test.describe("the report on A4, compact", () => {
   const MONTH_NAMES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",

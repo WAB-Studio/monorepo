@@ -5,7 +5,7 @@ import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
 // `TareaNota`, `TareaNotaEscribiendo`, `TareaNotaGuardada`, `TareaNotaHecha`,
-// `TareaNotaFallo`, `TareaNotaLarga`, `TareaNotaVaciar` (module 245, RP-45):
+// `TareaNotaFallo`, `TareaNotaLarga`, `TareaNotaVaciar` (RP-45):
 // the note of a task, on a goal's month and on «Mes», at 360px.
 
 const today = todayInZone();

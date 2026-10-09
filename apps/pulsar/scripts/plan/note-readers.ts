@@ -1,4 +1,4 @@
-// Drives the four plan readers (RP-45, module 239): each hands back the note
+// Drives the four plan readers (RP-45): each hands back the note
 // of a task, a sub-task and a carried item. Notes are planted by direct SQL;
 // the session `harness:mint-session` left standing, `server-only`,
 // `next/headers` and `next/cache` stubbed before the first `@/` import.

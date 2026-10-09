@@ -1,7 +1,7 @@
 import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// Module 368: a commitment row's second line is a sentence in Archivo whose
+// A commitment row's second line is a sentence in Archivo whose
 // figures and hours are DM Mono, and a pair in one unit says the unit once.
 
 function plusDays(days: number): string {

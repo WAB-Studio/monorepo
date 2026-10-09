@@ -6,7 +6,7 @@ import type postgres from "postgres";
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 
-// `SemanaHoyEvidencia` and its dark face (approved 2026-10-09): inside today's
+// `SemanaHoyEvidencia` and its dark face: inside today's
 // column the evidence mark (soft fill, accent ring) must stand out from the
 // column's own fill. It was lost: both were `--pulsar-accent-soft`. Written
 // from the board and `docs/pulsar/DESIGN.md`'s token table, not from the CSS.

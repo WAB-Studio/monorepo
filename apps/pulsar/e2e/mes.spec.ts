@@ -9,7 +9,7 @@ import monthMessages from "../messages/es/month.json";
 const owesLine = (month: string, owes: string) =>
   monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
 
-// `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado` (module 139, RP-30,
+// `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado` (RP-30,
 // RP-31, RP-32): one month of a goal, its carried tasks first. Calendar-bound
 // as 135: the seeded «last month» is always the month before today.
 

@@ -6,7 +6,7 @@ import roadmap from "../messages/es/roadmap.json";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 
 // `MetaMes.dc.html`, `MetaMesSinPlan.dc.html`, `MetaMesBajo.dc.html`
-// (module 136): the goal says this month's amount in hours and minutes, the
+//: the goal says this month's amount in hours and minutes, the
 // pace line from the 20th, and the way to its months. The pace branch follows
 // the clock the app reads, so both are written and the one true today is
 // asserted. `MetaMesSinEvidencia.dc.html` needs a source that cannot be read:

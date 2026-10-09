@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
-// `HoyMes.dc.html`, `HoyMesBajo.dc.html` (module 135): Hoy says each goal's
+// `HoyMes.dc.html`, `HoyMesBajo.dc.html`: Hoy says each goal's
 // month amount in hours and minutes, and from the 20th a goal under 60 % says
 // its pace. The pace branch follows the clock the app reads, so both branches
 // are written and the one true today is asserted.
@@ -128,7 +128,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
   }
 });
 
-// `HoyTareaMes.dc.html` (module 177, RP-31): under «este mes» each goal's line
+// `HoyTareaMes.dc.html` (RP-31): under «este mes» each goal's line
 // is followed by its next task of the month, its estimate and a mark that
 // completes it; the next one takes its place.
 test("Hoy draws the goal's next task of the month under its line, completes it, and draws none on a past day", async ({

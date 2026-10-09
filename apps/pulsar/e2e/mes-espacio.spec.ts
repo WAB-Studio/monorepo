@@ -7,7 +7,7 @@ import monthMessages from "../messages/es/month.json";
 const owesLine = (month: string, owes: string) =>
   monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
 
-// Module 314 (`SistemaEspacio.dc.html`, `SistemaTipo.dc.html`): «Mes» and the
+// `SistemaEspacio.dc.html`, `SistemaTipo.dc.html`: «Mes» and the
 // month's forms on the space and type system. The goals of «Mes» stand on one
 // edge, sections 32 apart, a mixed line sets its sentence in Archivo and its
 // figures in mono, and a refusal reads under its own field.
@@ -32,7 +32,7 @@ async function seedGoal(db: Db, personId: string, name: string) {
   return goal.id;
 }
 
-test("«Mes» sets a mixed line's sentence in Archivo and its figure in mono; its sections stand 32 apart (module 314)", async ({
+test("«Mes» sets a mixed line's sentence in Archivo and its figure in mono; its sections stand 32 apart", async ({
   person,
   browser,
   baseURL,
@@ -70,7 +70,7 @@ test("«Mes» sets a mixed line's sentence in Archivo and its figure in mono; it
 });
 
 for (const width of [1024, 1440] as const) {
-  test(`at ${width} the goal blocks of «Mes» share a left edge with the title and stand 16 apart (module 314)`, async ({
+  test(`at ${width} the goal blocks of «Mes» share a left edge with the title and stand 16 apart`, async ({
     person,
     browser,
     baseURL,
@@ -112,7 +112,7 @@ for (const width of [1024, 1440] as const) {
   });
 }
 
-test("a task's empty name is refused under its own field, with the ring, one hint-gap below the control (module 314)", async ({
+test("a task's empty name is refused under its own field, with the ring, one hint-gap below the control", async ({
   person,
   browser,
   baseURL,

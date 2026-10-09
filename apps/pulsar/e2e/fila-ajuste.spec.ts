@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
-// A row wraps by word (module 305, RNP-07): a name never breaks inside a word,
+// A row wraps by word (RNP-07): a name never breaks inside a word,
 // a phrase in `trailing` keeps its longest word whole on one line, and no row
 // overflows at 360px. Meta's commitment rows carry the case: «conversaciones».
 // The 26-character unit exists because the old 45 % cap on `trailing` bites only

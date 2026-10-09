@@ -6,7 +6,7 @@ import { civilDateInZone } from "@/lib/zone";
 import { test, expect } from "./fixtures";
 import goalMessages from "../messages/es/goal.json";
 
-// Module 369: from 1024 the goal's phases stand under the two columns at the
+// From 1024 the goal's phases stand under the two columns at the
 // content's full width; a phase stored before its goal opened reads from week
 // 1; the lines under the title and beside a name are Archivo with mono figures;
 // «Renombrar» on the phone spans the column.

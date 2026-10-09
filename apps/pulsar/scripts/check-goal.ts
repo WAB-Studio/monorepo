@@ -1,4 +1,4 @@
-// Proves module 28's `loadGoal` fan-out the same way `scripts/check-day.ts`
+// Proves `loadGoal`'s fan-out the same way `scripts/check-day.ts`
 // proves `loadDay`'s: by counting statements off the driver's own wire, not
 // off `goal.ts`'s source text, and by redeeming this lane's own
 // `private/session-<lane>.json` cookie rather than typing anything into
@@ -7,15 +7,12 @@
 // `postgres`'s own type-fetch text, capped at one per connection and zero
 // warm) is copied from it verbatim, not reinvented.
 //
-// This closes the holes module 28's own validator and this module's own
-// first round each found. First (module 28's gitignored probe, a copy sits
-// at `private/reportes/check-goal.modulo28.ts`): its SQL-text assertion only
-// tested that `"goals"."goals"` appears *somewhere* in the reading
-// statement, so a `from` bound rewritten as a hardcoded
-// `sql`'0001-01-01'::date`` still passed — the `to` bound's own reference
+// A SQL-text assertion that only checks `"goals"."goals"` appears *somewhere* in the reading
+// statement is too weak: a `from` bound rewritten as a hardcoded
+// `sql`'0001-01-01'::date`` still passes — the `to` bound's own reference
 // carried the whole assertion. `assertReadingBounds` below extracts the
 // `between <from> and <to>` clause `goalSpan`'s own two subqueries land in
-// (`lib/queries/goal.ts`) and checks each side on its own. Second: that same
+// (`lib/queries/goal.ts`) and checks each side on its own. And that
 // text-only check also passes a bound that names `"goals"."goals"` but reads
 // the wrong row or the wrong column — both bounds on `horizon`, say. Text
 // alone cannot tell; `assertBoundsResolveToGoalRow` below replays the exact
@@ -343,7 +340,7 @@ function findReadingAppCall(calls: DebugCall[]): DebugCall | undefined {
 }
 
 /**
- * The assertion module 28's own probe did not make: `"goals"."goals"` named
+ * `"goals"."goals"` named
  * once in the `from` bound and once in the `to` bound, checked independently
  * rather than counted across the whole statement. A count of two across the
  * whole statement would still pass if one bound carried both references and
@@ -809,7 +806,7 @@ async function runMeasureRenameCheck(): Promise<void> {
 }
 
 /**
- * A goal that measures owns its commitments' unit (module 361): a quantity
+ * A goal that measures owns its commitments' unit: a quantity
  * commitment sent with another unit is stored with the goal's.
  */
 async function runCommitmentUnitCheck(): Promise<void> {
@@ -852,7 +849,7 @@ async function runCommitmentUnitCheck(): Promise<void> {
 }
 
 /**
- * RP-15's own race, driven live 2026-09-27: two tabs submitting overlapping
+ * RP-15's own race: two tabs submitting overlapping
  * spans (1–4 and 2–5) on the same goal both landed under `READ COMMITTED`,
  * each reading "no overlap yet" before either had committed. `addPhase`'s own
  * `pg_advisory_xact_lock`, keyed on the goal's id and taken as the first
@@ -920,8 +917,7 @@ const OPENED_WEEKDAY_OFFSET = 2;
  * `declareFact`'s own `PAST_DAY_LIMIT` (7) can reach, so seeded through the
  * granted INSERT columns directly, the same technique `declareFact` itself
  * uses (`day`, `quantity` — never `written_at`), never through the action.
- * `loadGoal` still issues four statements against this goal (module 28's own
- * "no new statement" promise), and the reading transaction forced to throw
+ * `loadGoal` still issues four statements against this goal (the "no new statement" promise), and the reading transaction forced to throw
  * still returns three weeks whose own totals still match the declared seed
  * — the declared half alone, RNP-04 carried from `measureTotal` into the
  * review, never a length that happens to be three while every total reads
@@ -1211,7 +1207,7 @@ async function runEndedCheck(): Promise<void> {
 }
 
 /**
- * Module 129: `loadGoal` reads the plan by month. A goal opened 2010-09-15
+ * `loadGoal` reads the plan by month. A goal opened 2010-09-15
  * with a horizon of 2011-08-15, budgets for 2010-10 (720) and 2010-11 (0), one
  * declared fact of 300 in October, a parent with two sub-tasks, all seeded through the session pooler (the one door onto the
  * backdated `created_at` and onto rows the policies would refuse), read with
@@ -1364,7 +1360,7 @@ async function runMetasOverlapCheck(): Promise<void> {
 }
 
 /**
- * Module 340: `loadGoal` and `/metas` read the plan. Goal A (rhythm 600, two
+ * `loadGoal` and `/metas` read the plan. Goal A (rhythm 600, two
  * plan tasks of 300 and 600, no budget) is the filled case; goal B (no
  * rhythm, tasks fixed in months) is a migrated one; goal C measures nothing.
  * Task rows are backdated through the session pooler: `createdOn` must not
@@ -1622,9 +1618,8 @@ async function runMain(): Promise<void> {
     `measureUnit = ${cold.measureUnit}`,
   );
 
-  // The registry's reader replaced in a child process (module 28's own
-  // dispatch): proves the sum against known rows, since no harness identity
-  // on this database carries a real `reading.lookups` row to sum instead.
+  // The registry's reader replaced in a child process (dispatched there):
+  // proves the sum against known rows, since no harness identity on this database carries a real `reading.lookups` row to sum instead.
   const stubExpected = DECLARED_QUANTITY + STUB_TOTAL;
   const stub = runChildProcess("stub", goalId);
   console.log(`\nstub run — evidence = ${stub.evidence}, measureTotal = ${stub.measureTotal}`);

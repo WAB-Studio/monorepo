@@ -1,4 +1,4 @@
-// Drives the report's `tasks` (RP-49, RP-47, module 256): this month's list as
+// Drives the report's `tasks` (RP-49, RP-47): this month's list as
 // «Mes» reads it, done and not, in plan order. Rows are planted by direct SQL
 // with explicit positions that run against creation order;
 // the session `harness:mint-session` left standing, `server-only`,

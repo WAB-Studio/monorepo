@@ -32,7 +32,7 @@ type ReportTask = {
   children: { name: string; done: boolean; doneOn: string | null; estimate: Amount | null; note: string | null }[];
 };
 
-// Twenty tools at module 266; this module adds none.
+// Twenty tools here; this file adds none.
 const TOOL_COUNT = 20;
 let subject: Person;
 let goal: string;

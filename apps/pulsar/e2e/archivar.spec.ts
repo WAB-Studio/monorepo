@@ -37,7 +37,7 @@ async function findOrCreateGoal(
 
 async function askToday(db: postgres.Sql, personId: string, goalId: string): Promise<string> {
   // Below 1024px Hoy draws a goal's section only when it asks something
-  // today (module 263): a daily tap commitment, born days ago, asks.
+  // today: a daily tap commitment, born days ago, asks.
   const [row] = await db<{ id: string }[]>`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
     values (${personId}, ${goalId}, 'Tocar la meta de archivar', 'daily', 'tap', now() - interval '3 days')
@@ -231,7 +231,7 @@ test("an archived goal offers no way to add a commitment, direct visit included 
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveCount(0);
 
     // `listGoals` (`lib/queries/goal.ts`) is this route's own lookup
-    // (`app/metas/[goalId]/compromisos/nuevo/page.tsx`): open-only, an
+    // `app/metas/[goalId]/compromisos/nuevo/page.tsx`: open-only, an
     // archived goal is absent from it and `notFound()` fires — read off the
     // body, never the status (see the phase test above).
     await page.goto(`/metas/${goalId}/compromisos/nuevo`);

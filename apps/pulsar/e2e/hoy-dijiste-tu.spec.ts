@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// What a row says about who wrote it (`HoyEscritorio.dc.html`, module 100):
+// What a row says about who wrote it (`HoyEscritorio.dc.html`):
 // a marked one says «lo dijiste tú» after its hour, an unmarked quantity one
 // says only its target (never «pide el número», `HoyDia`), one logged under its target says
 // what it holds, an unmarked tap row and a quiet met row say neither.

@@ -1,4 +1,4 @@
-// Proves RNP-03 and RNP-04 against the seeded person of module 20, the way
+// Proves RNP-03 and RNP-04 against the seeded person, the way
 // `scripts/harness/seed-goal.ts` reaches a server action: by stubbing the
 // three modules that only exist inside Next (`server-only`, `next/headers`,
 // `next/cache`) before the first `@/`-rooted import, and by redeeming the
@@ -9,7 +9,7 @@
 // The statement count comes from the driver, not from reading `day.ts`:
 // `postgres`'s own `debug` option fires once for every statement it puts on
 // the wire, `begin` and `commit` included (`apps/orbit/scripts/harness/
-// instrument.ts`'s own technique). Module 8's done criterion names "four
+// instrument.ts`'s own technique). The done criterion names "four
 // statements... two settles and two queries", so `begin`/`commit` are
 // counted off the wire and then excluded before the assertion — they are a
 // round trip each, but never a statement `day.ts` chose to send. Excluding
@@ -607,7 +607,7 @@ const CADENCE_ZONE_WEDNESDAY = "2019-11-06";
  * Proves `lib/day/cadence.ts`'s own `asksOn`, never `lib/queries/week.ts`'s
  * SQL filter: retired mid-week, this commitment is `>= weekStart` regardless
  * of which zone `retired_at::date` renders in, so it always rides into
- * `deriveWeek`'s raw commitments set — round 1's fix does not touch this
+ * `deriveWeek`'s raw commitments set — the SQL filter does not touch this
  * case at all. What used to decide Thursday–Sunday was `asksOn`'s own bare
  * `day > plan.retiredAt` — a civil-date string compared lexically against a
  * full ISO instant, which a Thursday date string reads as "not yet retired"
@@ -672,7 +672,7 @@ async function runCadenceZoneCheck(): Promise<void> {
 
 /**
  * Proves `lib/queries/week.ts`'s own `loadWeek(...).commitments` — the raw
- * `CommitmentGoal[]` module 17's screen groups a week's dots under, built
+ * `CommitmentGoal[]` the screen groups a week's dots under, built
  * straight off `row.commitments` and never passed through `asksOn` — carries
  * the same zone fix `runZoneCheck` proved on `view.days` alone. A commitment
  * retired at 23:30 Bogotá on `ZONE_TEST_DAY` (a Sunday) must be gone from
@@ -910,7 +910,7 @@ async function runEvidenceRefusalCheck(): Promise<void> {
 }
 
 /**
- * Proves module 38's own contract: a `tap` commitment holds at most one fact
+ * Proves that: a `tap` commitment holds at most one fact
  * a day, whatever the device. Two concurrent `declareFact` calls race on the
  * pool (`max: 8`, `db/client.ts`), so `Promise.all` genuinely opens two
  * connections rather than one queued behind the other — the shape the
@@ -980,7 +980,7 @@ async function runFactUniqueCheck(): Promise<void> {
       `),
     );
   } catch (error) {
-    // `pgCode` (`@/lib/db-error`, round 2): `PgPreparedQuery#queryWithCache`
+    // `pgCode` (`@/lib/db-error`): `PgPreparedQuery#queryWithCache`
     // (`pg-core/session.ts`) wraps the raw `postgres` error in a
     // `DrizzleQueryError`, whose own `.code` is undefined — the code that
     // matters is on `.cause`, the real driver error.
@@ -994,7 +994,7 @@ async function runFactUniqueCheck(): Promise<void> {
 }
 
 /**
- * Proves module 38's round 2 fix: `declareFact`'s own advisory lock
+ * Proves that `declareFact`'s own advisory lock
  * (`app/actions/facts.ts`) serialises "Cambiar" (`replace: true`) racing a
  * plain tap on the same commitment and day. Before the lock, an independent
  * validator drove this live and found 11 of 20 trials where the loser's own
@@ -1149,7 +1149,7 @@ async function runReplaceRaceCheck(): Promise<void> {
 }
 
 /**
- * Proves RP-19 widened 2026-09-28: `loadDay(today).oneOffs` carries a
+ * Proves RP-19 widened: `loadDay(today).oneOffs` carries a
  * one-off dated three days back, still undone, with its own `day`; drops one
  * dated three days back whose fact was written on a day other than today —
  * "done leaves the list for good", true on any day the fact was written, not
@@ -1405,7 +1405,7 @@ async function runDaylessCountAndOrderCheck(): Promise<void> {
 }
 
 /**
- * Proves module 64's reads: a commitment asks nothing before the civil day it
+ * Proves that a commitment asks nothing before the civil day it
  * was written (`loadDay` and `loadWeek` alike), `loadDay(today).goals` carries
  * `openedOn`, a one-off done on the day drawn is in `doneOneOffs` with its
  * fact and out of `oneOffs`, one done yesterday is in neither, and a dayless
@@ -1608,7 +1608,7 @@ function applicationStatements(calls: DebugCall[]): number {
   );
 }
 
-// Module 74: an ended goal leaves the day, the week keeps the days it lived,
+// An ended goal leaves the day, the week keeps the days it lived,
 // a done one-off carries its time, scheduled one-offs are counted and
 // listed, the week's measure equals the goal's own current week. Every row
 // is seeded under this run's identity and deleted by id. Run alone with
@@ -2004,7 +2004,7 @@ async function runDesktopSurvivorsCheck(): Promise<void> {
   }
 }
 
-// Semana counts a flexible cadence by its own period (module 91). The week
+// Semana counts a flexible cadence by its own period. The week
 // 2010-05-31..06-06 crosses a month, so «al mes» reaches facts the week's own
 // rows never read, and «por semana» must not read the week before.
 async function runFlexiblePeriodCheck(): Promise<void> {
@@ -2086,7 +2086,7 @@ async function runFlexiblePeriodCheck(): Promise<void> {
   }
 }
 
-// Module 92: `loadDay` returns every phase of a goal so Hoy can say «fase 2 de
+// `loadDay` returns every phase of a goal so Hoy can say «fase 2 de
 // 3»; the phases the day derives from stay the ones in effect, and the
 // statement count stays four.
 async function runPhasePositionCheck(): Promise<void> {
@@ -2137,7 +2137,7 @@ async function runPhasePositionCheck(): Promise<void> {
 }
 
 /**
- * Module 94: Hoy asks a flexible commitment by its own period. `loadDay`
+ * Hoy asks a flexible commitment by its own period. `loadDay`
  * once selected the week's facts only, so a monthly commitment met in an
  * earlier week was asked again, and a weekly one met on Monday and Tuesday
  * was asked on Thursday. Fixed days: 2010-09-03 (Friday), the week of
@@ -2465,8 +2465,7 @@ async function runEndedThisWeekCheck(): Promise<void> {
   }
 }
 
-// Module 99: what the mutator found nobody pinning on `loadDay`. Fixed 2012
-// days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
+// `loadDay` on fixed 2012 days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
 // before it.
 async function runSurvivorsOf92To94Check(): Promise<void> {
   const { loadDay } = await import("@/lib/queries/day");
@@ -2543,7 +2542,7 @@ async function runSurvivorsOf92To94Check(): Promise<void> {
   }
 }
 
-// Module 128: Hoy's month line (RP-28, RP-29), the month task leaving the
+// Hoy's month line (RP-28, RP-29), the month task leaving the
 // dayless list (RP-31) and a done estimate joining the measure (RP-36).
 // Fixed October 2010: Wed 2010-10-20 is the pace day, Tue 10-19 is not.
 async function runMonthLineCheck(): Promise<void> {
@@ -2714,7 +2713,7 @@ async function runMonthLineCheck(): Promise<void> {
   }
 }
 
-// Module 174: each open goal's next undone leaf of the month, read inside the
+// Each open goal's next undone leaf of the month, read inside the
 // goals statement (RP-31, RNP-03). Seeded on today's own month, since only
 // today reads it; creation stamps are fixed so only the order decides.
 async function runMonthTaskCheck(): Promise<void> {
@@ -2822,7 +2821,7 @@ async function runMonthTaskCheck(): Promise<void> {
   }
 }
 
-// Module 206 (RP-44, RP-24): a past week keeps the goals that governed it, an
+// RP-44, RP-24: a past week keeps the goals that governed it, an
 // archive since included, and drops one opened after it; `firstMonday` is the
 // oldest goal's Monday, archived included, read in the same statement. Rows
 // are relative to today and deleted by id.
@@ -2898,7 +2897,7 @@ async function runPastWeekCheck(): Promise<void> {
   }
 }
 
-// Module 341 (RP-50, RP-52, RP-53, RNP-03): Hoy reads the plan. A 30-hour task
+// RP-50, RP-52, RP-53, RNP-03: Hoy reads the plan. A 30-hour task
 // at a rhythm of 10 is split across three months and gives its first part;
 // last month closed with 5 done of its 10, so the end moved and the notice
 // says so, once, today alone, until `plan_seen` reaches the closed month.
@@ -2996,7 +2995,7 @@ async function runPlanReadCheck(): Promise<void> {
   }
 }
 
-// Module 407 (RP-59): `/sueltas` and «N sin día» hold one-offs with no goal.
+// RP-59: `/sueltas` and «N sin día» hold one-offs with no goal.
 // A goal's task with no day is a task of its plan (0014), so it is in neither
 // the list nor the count; a goal's task with a later day stays in
 // `listScheduledOneOffs`. Counts are deltas on a baseline read first.

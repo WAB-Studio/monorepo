@@ -1,6 +1,6 @@
 import { test, expect, visit } from "./fixtures";
 
-// Module 302: content stops at 1200 from 1024, and a link shaped as a button
+// Content stops at 1200 from 1024, and a link shaped as a button
 // follows the same width rule as a `<button>` (`SistemaEspacio.dc.html`).
 
 test("at 2000 a link-button and a button are sized to their text, never the column", async ({

@@ -3,7 +3,7 @@ import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 import plan from "../messages/es/plan.json";
 
-// `ScreenHeader` (module 204, RNP-16, RNP-07): the four plan forms that had no
+// `ScreenHeader` (RNP-16, RNP-07): the four plan forms that had no
 // way out carry the page's one `h1` and a 48px way back that names its place.
 
 const thisMonth = monthOf(todayInZone());

@@ -5,7 +5,7 @@ import { civilDateInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// Module 360: the page's column spaces its children 32 apart (40 from 1024) by
+// The page's column spaces its children 32 apart (40 from 1024) by
 // its own gap, and the header's controls sit on the eyebrow's line.
 
 async function gapAfterHeader(page: Page) {

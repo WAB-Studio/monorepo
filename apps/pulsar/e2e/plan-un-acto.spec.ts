@@ -5,7 +5,7 @@ import { todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// Module 397 (RP-50, RNP-07): a plan with no rhythm draws one solid act,
+// RP-50, RNP-07: a plan with no rhythm draws one solid act,
 // «Armar el plan»; «Añadir una tarea» stands outlined beneath it. With a
 // rhythm, or with no measure at all, no rhythm form is drawn and «Añadir una
 // tarea» is the screen's only button, solid (DESIGN: «the act the screen is

@@ -1,4 +1,4 @@
-// Drives the day's and the loose lists' order (RP-47, module 255):
+// Drives the day's and the loose lists' order (RP-47):
 // actions imported as plain async functions, `server-only`, `next/headers` and `next/cache` stubbed before the
 // first `@/` import, and the cookie `harness:mint-session` left standing is
 // the session `getPerson()` reads. Rows are written by direct SQL, with the ids and positions the case needs.

@@ -3,7 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 
-// `HoySiguienteCifra` (module 394; RP-28, RP-30, RP-54): Hoy's «este mes» row
+// `HoySiguienteCifra` (RP-28, RP-30, RP-54): Hoy's «este mes» row
 // for the next task of the plan says one hour figure and never a 0. A whole
 // task trails its estimate and the line carries no figure; a task with none
 // trails «sin estimar»; a sub-task never shows its parent's share; only a task

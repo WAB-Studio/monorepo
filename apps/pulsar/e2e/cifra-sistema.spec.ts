@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
-// Module 304 (`SistemaPiezas.dc.html`): a figure's unit stays glued to its
+// `SistemaPiezas.dc.html`: a figure's unit stays glued to its
 // number, in mono, and both stay on one line. Measured on Hoy's quantity row at
 // 1280 and on the goal's page at the phone.
 const stamp = Date.now();
@@ -10,7 +10,7 @@ for (const [width, height] of [
   [360, 740],
   [1280, 800],
 ] as const) {
-  test(`at ${width}px a figure's unit sits within 6px of its number and the figure is mono on one line (module 304)`, async ({
+  test(`at ${width}px a figure's unit sits within 6px of its number and the figure is mono on one line`, async ({
     person,
     browser,
     baseURL,

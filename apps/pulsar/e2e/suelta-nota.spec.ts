@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 import { monthOf } from "@/lib/plan/months";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// `HoyNota` and `SueltasNota` (module 246, RP-45): Hoy draws only the note's
+// `HoyNota` and `SueltasNota` (RP-45): Hoy draws only the note's
 // button on a one-off, `/sueltas` draws two lines of the text and the button;
 // both open 245's sheet, and the mark still lands in one tap (RNP-02).
 

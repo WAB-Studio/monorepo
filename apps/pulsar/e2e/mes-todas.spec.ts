@@ -7,7 +7,7 @@ import monthMessages from "../messages/es/month.json";
 const owesLine = (month: string, owes: string) =>
   monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
 
-// `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio` (module 209, RP-43, RP-31):
+// `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio` (RP-43, RP-31):
 // this month of every open goal. Calendar-bound as `mes.spec.ts`: «last
 // month» is always the month before today, so the carried task is always there.
 

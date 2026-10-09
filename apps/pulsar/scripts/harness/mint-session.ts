@@ -136,7 +136,7 @@ type MintedCookie = {
 
 // One `Set-Cookie` line, parsed into the shape Playwright's own storage state
 // wants — attributes and all, not just the name/value pair `seed-goal.ts`
-// alone would need. This is what lets module 23's browser suite load the same
+// alone would need. This is what lets the browser suite load the same
 // file later and skip `/entrar` entirely.
 function parseSetCookie(line: string, requestHost: string): MintedCookie {
   const parts = line.split(";").map((part) => part.trim());

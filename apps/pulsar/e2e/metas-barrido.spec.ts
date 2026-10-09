@@ -2,7 +2,7 @@ import type postgres from "postgres";
 
 import { test, expect, visit } from "./fixtures";
 
-// Module 312: the sweep of `/metas` and the goal screen (RNP-07, RNP-17).
+// The sweep of `/metas` and the goal screen (RNP-07, RNP-17).
 async function seedGoal(db: postgres.Sql, personId: string, name: string) {
   const [row] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
