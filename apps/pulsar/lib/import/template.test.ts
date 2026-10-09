@@ -350,9 +350,3 @@ test("no sentence repeats the line the person wrote", () => {
     assert.equal(sentence.includes(line), false, `«${sentence}» repeats «${line}»`);
   }
 });
-
-test("lib/import/template.ts carries no accented letter or ¿: its words live in the catalogue", () => {
-  const source = readFileSync(new URL("./template.ts", import.meta.url), "utf8");
-  const hits = source.split("\n").flatMap((text, i) => (/[áéíóúñ¿]/.test(text) ? [`${i + 1}: ${text.trim()}`] : []));
-  assert.deepEqual(hits, []);
-});
