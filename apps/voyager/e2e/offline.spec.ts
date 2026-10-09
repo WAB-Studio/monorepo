@@ -204,6 +204,8 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     // has something to show once the confirm panel opens.
     const searchBox = page.getByRole("textbox", { name: messages.search.label });
     await searchBox.fill("apple");
+    // The row is recorded once the answer paints; clearing first records nothing.
+    await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
     await searchBox.fill("");
     await page.waitForTimeout(300);
 
@@ -231,6 +233,153 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     await expect(page.getByRole("button", { name: messages.log.clear.accountAction })).toHaveCount(0);
   } finally {
     await context.setOffline(false);
+    await dropReaderIdentity(sql, reader.id);
+    await closeRun(sql);
+    await sql.end();
+  }
+});
+
+// Every `/_next/static/` URL held by any cache this origin owns.
+async function cachedChunks(page: import("@playwright/test").Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const urls: string[] = [];
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) {
+        const { pathname } = new URL(request.url);
+        if (pathname.startsWith("/_next/static/")) urls.push(pathname);
+      }
+    }
+    return urls;
+  });
+}
+
+// RL-16: a reader whose first online visit was Registro or Cuenta, never `/`,
+// must still open `/` offline. The chunks of `/` were never requested while
+// the worker controlled the page, so only an install-time precache holds them.
+for (const [first, second] of [
+  ["/registro", "/cuenta"],
+  ["/cuenta", "/registro"],
+] as const) {
+  test(`offline, / opens with its box when the only online visits were ${first} then ${second}`, async ({
+    page,
+    context,
+  }) => {
+    await page.addInitScript(() => {
+      delete (window as unknown as { Translator?: unknown }).Translator;
+    });
+    // The chunks only `/` names. A prefetch from a nav link can race the
+    // test and fetch them while the worker controls the page, which is not
+    // the reader this test models; abort that race at the page. `page.route`
+    // leaves the worker's own requests alone; `context.route` aborts them too.
+    const named = async (route: string) =>
+      new Set((await (await context.request.get(route)).text()).match(/\/_next\/static\/[^"'\\ ]+?\.(?:js|css)/g) ?? []);
+    const [home, registro, cuenta] = await Promise.all([named("/"), named("/registro"), named("/cuenta")]);
+    const homeOnly = [...home].filter((chunk) => !registro.has(chunk) && !cuenta.has(chunk));
+    // A build whose `/` shares every chunk with the others has nothing to precache: not this test's reader.
+    expect(homeOnly.length).toBeGreaterThan(0);
+    await page.route(
+      (url) => homeOnly.includes(url.pathname),
+      (route) => route.abort(),
+    );
+
+    const problems: string[] = [];
+    page.on("pageerror", (error) => problems.push(`${error.name}: ${error.message}`));
+    page.on("console", (message) => {
+      if (message.type() === "error") problems.push(message.text());
+    });
+
+    await page.goto(first);
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await page.goto(second);
+    // The worker precaches `/` at install; wait for it, never a timer.
+    await expect.poll(() => isCached(page, "/")).toBe(true);
+
+    problems.length = 0;
+    await page.unroute((url) => homeOnly.includes(url.pathname));
+    await context.setOffline(true);
+    // The page can hide a missing chunk behind server HTML, so count the
+    // chunk requests that nobody answered, not only what is drawn.
+    const unanswered: string[] = [];
+    page.on("requestfailed", (request) => {
+      const { pathname } = new URL(request.url());
+      if (pathname.startsWith("/_next/static/")) unanswered.push(pathname);
+    });
+    await page.goto("/");
+    await page.waitForLoadState("load");
+    expect(unanswered).toEqual([]);
+
+    const searchBox = page.getByRole("textbox", { name: messages.search.label });
+    await expect(searchBox).toBeVisible();
+    await expect(searchBox).toBeEditable();
+    // The box can render from the server HTML alone; typing proves the
+    // client bundle of `/` really loaded and hydrated.
+    await searchBox.fill("apple");
+    await expect(searchBox).toHaveValue("apple");
+    await expect(page.getByText(messages.error.title, { exact: true })).toHaveCount(0);
+    expect(problems.filter((line) => /ChunkLoadError|Loading chunk|Failed to load chunk/i.test(line))).toEqual([]);
+  });
+}
+
+// One build at a time: a chunk of a build the shell no longer names must go
+// the next time `/` answers online.
+test("the cache keeps the chunks of one build after two earlier builds are simulated", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as unknown as { Translator?: unknown }).Translator;
+  });
+  await page.goto("/");
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  await expect.poll(() => isCached(page, "/")).toBe(true);
+
+  const stale = ["/_next/static/chunks/zz-build-one.js", "/_next/static/chunks/zz-build-two.js"];
+  await page.evaluate(async (paths) => {
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      if (!(await cache.match(new URL("/", location.origin).toString()))) continue;
+      // A build name no real shell carries, so the next `/` reads as a new build.
+      await cache.put("/__shell-build", new Response("zz-old-build"));
+      for (const p of paths) await cache.put(p, new Response("old", { headers: { "content-type": "text/javascript" } }));
+    }
+  }, stale);
+  expect((await cachedChunks(page)).filter((p) => stale.includes(p)).length).toBeGreaterThan(0);
+
+  await page.goto("/");
+  await expect.poll(async () => (await cachedChunks(page)).filter((p) => stale.includes(p))).toEqual([]);
+});
+
+// `/cuenta` bakes the signed-in email into its markup; the one copy the
+// worker precaches must be the signed-out render even when the tab that
+// installs the worker holds a session.
+test("the precached /cuenta never carries the email of the session that installed the worker", async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  await page.addInitScript(() => {
+    delete (window as unknown as { Translator?: unknown }).Translator;
+  });
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const runId = await openRun("e2e", sql);
+  const reader = await mintReaderIdentity(sql, runId);
+  try {
+    // Signed in before the worker exists, so its install-time fetch could carry the cookie.
+    await signInAs(page, reader.hash);
+    await page.goto("/");
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await expect.poll(() => isCached(page, "/cuenta")).toBe(true);
+
+    const cached = await page.evaluate(async () => {
+      for (const name of await caches.keys()) {
+        const hit = await (await caches.open(name)).match(new URL("/cuenta", location.origin).toString());
+        if (hit) return hit.text();
+      }
+      return null;
+    });
+    expect(cached).not.toBeNull();
+    expect(cached).not.toContain(reader.email);
+  } finally {
     await dropReaderIdentity(sql, reader.id);
     await closeRun(sql);
     await sql.end();

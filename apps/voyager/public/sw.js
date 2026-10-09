@@ -10,7 +10,7 @@
 // — the field `sense-list.tsx` has read since RL-28 (#157). Bumping the name
 // is what drops that pool; `SHELL_BUILD` below is what keeps a later deploy
 // from rebuilding it.
-const CACHE_NAME = "reading-shell-v8";
+const CACHE_NAME = "reading-shell-v9";
 
 // The shell the cache is allowed to hold, read off the current `/` every time
 // the network answers one. A deploy changes the hashed script names in that
@@ -48,20 +48,47 @@ self.addEventListener("install", (event) => {
   // `cache.add` rejects on anything but a 2xx; a `fetch` + `put` takes whatever
   // status each route answers with, so an install never fails on one of them.
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(
-        SHELL_ROUTES.map((route) => {
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const pages = await Promise.all(
+        SHELL_ROUTES.map(async (route) => {
           // Omitting credentials for "/cuenta" forces the signed-out render
           // even when the tab installing the worker happens to hold a
           // session — the one copy this cache ever takes of it must be safe
           // to hand to a stranger.
           const init = NO_OVERWRITE_ROUTES.has(route) ? { credentials: "omit" } : undefined;
-          return fetch(route, init).then((response) => cache.put(route, response));
+          const response = await fetch(route, init);
+          return { route, response, html: await response.clone().text() };
         }),
-      ),
-    ),
+      );
+      // The sweep runs before any chunk lands, or it would delete the ones
+      // another page's precache had just stored.
+      const home = pages.find((page) => page.route === "/");
+      if (home) await retireOtherBuilds(cache, home.response.clone());
+      await Promise.all(pages.map((page) => cache.put(page.route, page.response)));
+      // A page names chunks the others do not; a reader whose first online
+      // visits were "/registro" and "/cuenta" would otherwise open "/" offline
+      // with its HTML and none of its scripts.
+      await precacheChunks(cache, pages.map((page) => page.html).join("\n"));
+    })(),
   );
 });
+
+// Every hashed asset a page's HTML names. Content-hashed, so storing one is
+// never stale; `retireOtherBuilds` sweeps them when "/" names another build.
+async function precacheChunks(cache, html) {
+  const urls = new Set(html.match(/\/_next\/static\/[^"'\\\s)<>]+?\.(?:js|css|woff2?)/g) ?? []);
+  await Promise.all(
+    Array.from(urls).map(async (url) => {
+      if (await cache.match(url)) return;
+      // One chunk that will not load must not keep the worker from installing.
+      try {
+        const response = await fetch(url);
+        if (response.ok) await cache.put(url, response);
+      } catch {}
+    }),
+  );
+}
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
