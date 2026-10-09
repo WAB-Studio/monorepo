@@ -170,9 +170,11 @@ function localRow(text: string, extra: Partial<SeedLookup> = {}): SeedLookup {
 
 // `/registro` never reads `sync`, so seeding from it cannot race /cuenta's own
 // mount. Mirrors `sync.spec.ts`'s `seedLocalDatabase`.
+// Seeded from `/`: `/registro` fires a round on open that would race this
+// write and put a fresh copy over the seeded one.
 async function seedLocal(page: Page, rows: { sync?: SyncState; lookups?: SeedLookup[] }): Promise<void> {
-  await page.goto("/registro");
-  await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
