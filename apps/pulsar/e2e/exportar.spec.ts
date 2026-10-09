@@ -416,42 +416,130 @@ test.describe("the report page (RP-49, RP-35)", () => {
     });
   }
 
-  test("an unreadable dictionary says so once and every figure is only what was declared", async ({
-    person,
-    browser,
-    db,
-  }) => {
-    test.skip(
-      !FAULT,
-      "needs PULSAR_FAULT_BASE_URL, a next start with PULSAR_FAULT_SEAM set",
-    );
-    const seeded = await seed(db, person);
+  // `ReporteFuenteCaida` (module 578, RNP-04): the notice is the report's own
+  // sentence, every goal still says what it measures and until when, and only
+  // the goal a down source feeds adds that its figure is what was declared.
+  async function seedDown(db: postgres.Sql, person: Person) {
+      const stamp = Date.now();
+      const today = todayInZone();
+      const monthStart = `${today.slice(0, 7)}-01`;
+      const fedName = `Leer en inglés ${stamp}`;
+      const plainName = `Correr 10K ${stamp}`;
+      const [fed] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+        values (${person.id}, ${fedName}, ${plusDays(50)}, 'búsquedas', 'searches', now() - interval '20 days')
+        returning id
+      `;
+      const [evidence] = await db<{ id: string }[]>`
+        insert into goals.commitments
+          (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+        values (
+          ${person.id}, ${fed.id}, ${`Buscar ${stamp}`}, 'daily', 'evidence',
+          (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
+          now() - interval '20 days'
+        ) returning id
+      `;
+      void evidence;
+      const [declared] = await db<{ id: string }[]>`
+        insert into goals.commitments
+          (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+        values (${person.id}, ${fed.id}, ${`Dicho ${stamp}`}, 'daily', 'quantity', 1, 'searches', now() - interval '20 days')
+        returning id
+      `;
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${person.id}, ${fed.id}, ${declared.id}, ${today}::date, 4)
+      `;
+      const [plain] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+        values (${person.id}, ${plainName}, ${plusDays(70)}, 'km', 'km', now() - interval '20 days')
+        returning id
+      `;
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${plain.id}, ${monthStart}::date, 40)
+      `;
+      return { fed, plain, fedName, plainName };
+  }
+
+  async function openDown(
+    browser: import("@playwright/test").Browser,
+    person: Person,
+    width: number,
+  ) {
     const context = await browser.newContext({
       storageState: person.sessionFile,
       baseURL: FAULT!,
+      viewport: { width, height: 900 },
     });
-    try {
-      const page = await context.newPage();
-      await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
-      await expect(
-        page.getByText(
-          "No pudimos leer el diccionario de lectura. Las cifras que salen de él son solo lo que dijiste tú.",
-        ),
-      ).toHaveCount(1);
-      await expect(
-        page.getByText("solo lo que dijiste tú", { exact: true }).first(),
-      ).toBeVisible();
-      await expect(page.getByText("solo lo dicho").first()).toBeVisible();
-      await expect(
-        page.getByText("alimentada por el diccionario"),
-      ).toBeVisible();
-      await expect(page.getByText("1 h 30 min").first()).toBeVisible();
-    } finally {
-      await context.close();
-      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
-    }
-  });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    return { context, page };
+  }
+
+  const DATE = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
+  const panelOf = (page: import("@playwright/test").Page, name: string) =>
+    page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
+  const needFault = () =>
+    test.skip(!FAULT, "needs PULSAR_FAULT_BASE_URL, a next start with PULSAR_FAULT_SEAM set");
+
+  for (const width of [390, 1440]) {
+    test(`at ${width} the page says «No pudimos leer una fuente» once, the board's sentence, and never «diccionario»; no overflow`, async ({ person, browser, db }) => {
+      needFault();
+      const seeded = await seedDown(db, person);
+      const { context, page } = await openDown(browser, person, width);
+      try {
+        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
+        await expect(
+          page.getByText(
+            "No pudimos leer una fuente. Las cifras que salen de ella son solo lo que dijiste tú.",
+            { exact: true },
+          ),
+        ).toHaveCount(1);
+        expect(await page.locator("main").textContent()).not.toMatch(/diccionario/i);
+        const sizes = await page.evaluate(() => [
+          document.documentElement.scrollWidth,
+          document.documentElement.clientWidth,
+        ]);
+        expect(sizes[0]).toBeLessThanOrEqual(sizes[1]);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id in (${seeded.fed.id}, ${seeded.plain.id}) and user_id = ${person.id}`;
+      }
+    });
+
+    test(`at ${width} a goal no source feeds still reads «mide km · hasta el …» and adds nothing`, async ({ person, browser, db }) => {
+      needFault();
+      const seeded = await seedDown(db, person);
+      const { context, page } = await openDown(browser, person, width);
+      try {
+        await expect(page.getByRole("main").getByText(seeded.plainName, { exact: true })).toBeVisible();
+        const panel = panelOf(page, seeded.plainName);
+        await expect(panel.getByText(new RegExp(`^mide km · hasta el ${DATE}$`))).toBeVisible();
+        await expect(panel.getByText("solo lo que dijiste tú")).toHaveCount(0);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id in (${seeded.fed.id}, ${seeded.plain.id}) and user_id = ${person.id}`;
+      }
+    });
+
+    test(`at ${width} the goal a down source feeds reads «mide … · hasta el … · solo lo que dijiste tú» and says it under its figure`, async ({ person, browser, db }) => {
+      needFault();
+      const seeded = await seedDown(db, person);
+      const { context, page } = await openDown(browser, person, width);
+      try {
+        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
+        const panel = panelOf(page, seeded.fedName);
+        await expect(
+          panel.getByText(new RegExp(`^mide searches · hasta el ${DATE} · solo lo que dijiste tú$`)),
+        ).toBeVisible();
+        await expect(panel.getByText("solo lo que dijiste tú", { exact: true })).toHaveCount(1);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id in (${seeded.fed.id}, ${seeded.plain.id}) and user_id = ${person.id}`;
+      }
+    });
+  }
 });
 
 // `Exportar.dc.html` (module 137, RP-49, RP-37): `/metas` offers the export
@@ -1166,4 +1254,212 @@ test.describe("the report's type and space (module 317)", () => {
       }
     });
   }
+});
+
+const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// `ReporteFuenteCaida` with the source readable (module 578): the line is the
+// same for every goal and carries nothing about a source.
+test.describe("a readable source (module 578)", () => {
+  test("every goal reads «mide … · hasta el …», fed or not, with no word about a source", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goals: string[] = [];
+    for (const [name, unit] of [
+      [`Leída ${stamp}`, "searches"],
+      [`Corrida ${stamp}`, "km"],
+    ]) {
+      const [goal] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+        values (${person.id}, ${name}, ${plusDays(60)}, ${unit}, ${unit}, now() - interval '10 days')
+        returning id
+      `;
+      goals.push(goal.id);
+    }
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (
+        ${person.id}, ${goals[0]}, ${`Buscar ${stamp}`}, 'daily', 'evidence',
+        (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
+        now() - interval '10 days'
+      )
+    `;
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(`Leída ${stamp}`, { exact: true })).toBeVisible();
+      const date = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
+      const panelOf = (name: string) =>
+        page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
+      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide searches · hasta el ${date}$`))).toBeVisible();
+      await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide km · hasta el ${date}$`))).toBeVisible();
+      const body = (await page.locator("main").textContent()) ?? "";
+      expect(body).not.toMatch(/diccionario|alimentada|solo lo que dijiste tú|No pudimos leer/i);
+    } finally {
+      await context.close();
+      for (const id of goals) await db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;
+    }
+  });
+});
+
+// `ReporteTareaParte` (module 578, RP-54, user decision 2026-10-09): a task the
+// plan splits shows the part that falls in this month and «sigue en <mes> ·
+// <total> en total» under its name. There is no «viene de».
+test.describe("a task split across months (module 578)", () => {
+  const today = todayInZone();
+  const next = (() => {
+    const d = civilDateToDate(`${today.slice(0, 7)}-01`);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    return dateToCivilDate(d);
+  })();
+  const nextLabel = MONTH_NAMES[Number(next.slice(5, 7)) - 1];
+  const SIGUE = new RegExp(`sigue en ${nextLabel}( de \\d{4})? · 10 h en total`);
+
+  // 12 h a month, in plan order: 4 h, a 7 h parent of 1 h + 6 h, then a 10 h
+  // task of which only the 1 h left in the month fits.
+  async function seedSplit(db: postgres.Sql, person: Person) {
+    const stamp = Date.now();
+    const names = {
+      whole: `Leer AI Engineering cap. 1–4 ${stamp}`,
+      tutor: `Tutor ${stamp}`,
+      long: `Construir un harness de evals ${stamp}`,
+    };
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${person.id}, ${`IA aplicada ${stamp}`}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${names.whole}, 240, true)
+    `;
+    const [tutor] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, in_plan, note)
+      values (${person.id}, ${goal.id}, ${names.tutor}, true, 'Preguntar por la tarifa por hora.')
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${tutor.id}, ${`Elegir tutor ${stamp}`}, 60)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${tutor.id}, ${`Sesiones 1–4 ${stamp}`}, 360)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${names.long}, 600, true)
+    `;
+    return { goalId: goal.id, goalName: `IA aplicada ${stamp}`, ...names };
+  }
+
+  const rowOf = (page: import("@playwright/test").Page, name: string) =>
+    page
+      .locator("main")
+      .getByText(name, { exact: true })
+      .and(page.locator(":visible"))
+      .locator("xpath=ancestor::*[count(.//*[@role='img'])=1][last()]");
+
+  for (const width of [390, 1440]) {
+    test(`at ${width} the split task's row says 1 h and «sigue en», a whole one says its estimate and no «sigue en»`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const seeded = await seedSplit(db, person);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 900 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true })).toBeVisible();
+
+        const split = rowOf(page, seeded.long);
+        await expect(split).toContainText(SIGUE, { useInnerText: true });
+        const splitText = (await split.innerText()).replace(/\s+/g, " ");
+        expect(splitText.replace(/10 h en total/, "")).toMatch(/(^|\D)1 h\b/);
+        expect(splitText.replace(/10 h en total/, "")).not.toMatch(/(^|\D)10 h\b/);
+
+        const whole = rowOf(page, seeded.whole);
+        await expect(whole).toContainText(/(^|\D)4 h\b/, { useInnerText: true });
+        await expect(whole).not.toContainText(/sigue en/);
+
+        const panel = page
+          .getByRole("heading", { name: seeded.goalName, exact: true })
+          .locator("xpath=ancestor::*[count(.//h2)=1][last()]");
+        await expect(panel.getByText(/sigue en/)).toHaveCount(1);
+        expect((await panel.textContent()) ?? "").not.toMatch(/viene de/i);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
+
+  test("at 360 the split goal's page does not overflow", async ({ person, browser, baseURL, db }) => {
+    const seeded = await seedSplit(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 360, height: 740 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(rowOf(page, seeded.long)).toContainText(SIGUE, { useInnerText: true });
+      const sizes = await page.evaluate(() => [
+        document.documentElement.scrollWidth,
+        document.documentElement.clientWidth,
+        document.querySelector("main")!.scrollWidth,
+        document.querySelector("main")!.clientWidth,
+      ]);
+      expect(sizes[0]).toBeLessThanOrEqual(sizes[1]);
+      expect(sizes[2]).toBeLessThanOrEqual(sizes[3]);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("on paper the split task prints its part and «sigue en», never «viene de»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seedSplit(db, person);
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const dir = resolve(process.cwd(), "private/export-pdf");
+      mkdirSync(dir, { recursive: true });
+      const file = resolve(dir, `578-${seeded.goalId}.pdf`);
+      writeFileSync(file, await page.pdf({ format: "A4" }));
+      const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
+      const from = flat.indexOf(seeded.long);
+      expect(from).toBeGreaterThanOrEqual(0);
+      const row = flat.slice(from, from + 220);
+      expect(row).toMatch(SIGUE);
+      const rest = row.replace(/10 h en total/, "");
+      expect(rest).toMatch(/(^|\D)1 h\b/);
+      expect(rest).not.toMatch(/(^|\D)10 h\b/);
+      expect(flat.slice(flat.indexOf(seeded.goalName))).not.toMatch(/viene de/i);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
 });
