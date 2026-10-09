@@ -45,7 +45,6 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
   const [name, setName] = useState("");
   const [hours, setHours] = useState("");
   const [minutes, setMinutes] = useState("");
-  const [single, setSingle] = useState("");
   const [withChildren, setWithChildren] = useState(false);
   const [error, setError] = useState<MessageKey | null>(null);
   // The field a refusal belongs to; it reads there, under its control.
@@ -60,11 +59,6 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
   // a value that is not a whole number, a message key for minutes past 59.
   function typedAmount(): number | MessageKey | null {
     if (!asksAmount) return null;
-    if (!timed) {
-      const text = single.trim();
-      if (text === "") return null;
-      return WHOLE.test(text) ? Number(text) : Number.NaN;
-    }
     if (hours.trim() === "" && minutes.trim() === "") return null;
     const h = hours.trim() === "" ? "0" : hours.trim();
     const min = minutes.trim() === "" ? "0" : minutes.trim();
@@ -145,7 +139,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
         autoFocus
       />
 
-      {asksAmount && timed ? (
+      {asksAmount ? (
         <Flex gap="3">
           <Field
             label={t("month.task.hoursLabel")}
@@ -171,19 +165,6 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
             hint={error !== null && refused === "amount" ? t(error) : undefined}
           />
         </Flex>
-      ) : null}
-      {asksAmount && !timed && unit ? (
-        <Field
-          label={t("month.task.amountLabel", { unit })}
-          type="number"
-          inputMode="numeric"
-          min={0}
-          step={1}
-          value={single}
-          onChange={(event) => setSingle(event.target.value)}
-          invalid={error !== null && refused === "amount"}
-          hint={error !== null && refused === "amount" ? t(error) : undefined}
-        />
       ) : null}
 
       {sumLine ? (
