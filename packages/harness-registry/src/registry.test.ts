@@ -183,6 +183,36 @@ test("registerOAuthClient writes one row stamped with the run openRun opened", (
       assert.deepEqual(statements[0].values, ["client-1", run]);
     })));
 
+test("registerOAuthClient stamps the run a parent exported when this process opened none", () =>
+  withEnv(undefined, () =>
+    withLocalUrl(async () => {
+      const before = process.env.HARNESS_RUN_ID;
+      process.env.HARNESS_RUN_ID = "run-from-parent";
+      try {
+        const { registerOAuthClient } = await freshRegistry();
+        const { sql, statements } = recordingSql();
+
+        await registerOAuthClient(sql, "client-2");
+
+        assert.deepEqual(statements[0].values, ["client-2", "run-from-parent"]);
+      } finally {
+        if (before === undefined) delete process.env.HARNESS_RUN_ID;
+        else process.env.HARNESS_RUN_ID = before;
+      }
+    })));
+
+test("runId throws when no run was opened and none was exported", () =>
+  withEnv(undefined, async () => {
+    const before = process.env.HARNESS_RUN_ID;
+    delete process.env.HARNESS_RUN_ID;
+    try {
+      const { runId } = await freshRegistry();
+      assert.throws(() => runId(), /openRun has not run/);
+    } finally {
+      if (before !== undefined) process.env.HARNESS_RUN_ID = before;
+    }
+  }));
+
 test("registerOAuthClient refuses a remote host before issuing any statement", () =>
   withEnv(undefined, async () => {
     const before = process.env.MIGRATION_DATABASE_URL;
