@@ -1595,3 +1595,16 @@ Taken by the user on the critic's questions. Each opens its module with a board 
 - **iPhone: measure first.** The user checks on a real iPhone whether the installed app keeps its storage apart from
   Safari; if it does, sign-in moves to a six-digit code typed in the app (RL-22 retired for a successor).
 - **RL-37 and RL-47 are retired for successors (user, 2026-10-08).** RL-57 and RL-58 carry the hand table and the lemma block under the form's first group. If the iPhone measurement confirms it, the six-digit code rides on the shared Supabase email template (`{{ .Token }}`).
+- **The boards of this slice are approved** (user, 2026-10-08, canvas version 40): `CuentaCopiaConfirmarUnaDireccion`,
+  `CuentaCopiaConfirmarOtroLector`, `CuentaCopiaConfirmarEnCursoBusquedas`, `CuentaCopiaConfirmarEnCursoBajada`,
+  `CuentaCopiaHecha`, `CuentaCopiaAlAbrir`, `CuentaCopiaFallida{SinRed,Cuota,Servidor}`, `CuentaCopiaRetirada`,
+  `DispositivosRetirarPropioConfirmar`, `DispositivosLista`, `DispositivosFallo`, `CuentaInformacionCreditos`,
+  `CuentaSinSesionOscuroEscritorio`, `RegistroEstudioPorLema`, `PalabraHistorialLema`, `PalabraHistorialRed`,
+  `PalabraLemaBajoPrimerGrupo`, `SinEntradaFraseFuncion`. Along with them: each credit link on its own 32 px row;
+  a form in `/registro` opens its lemma's page; the dictionary line sits muted under a function word's table
+  translation; the signed-out button at 1280 shares the field's 400 px; an unknown browser on a known platform reads
+  «Navegador desconocido en {platform}»; «the first group» is the first category of the first pronunciation block.
+- **The canvas has an Índice page** listing every board and its state, and an Archivo page for the 39 superseded ones.
+- **Boards that do not exist:** no light face and no 1280 face of the new `/cuenta`, `/registro` and word boards (light
+  is the token inversion; 1280 is the same column wider, except signed-out); no board for pulling on open while
+  unconfirmed, retired or signed out (nothing is drawn: the pull does not run).
