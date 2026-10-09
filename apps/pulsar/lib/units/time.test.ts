@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatQuantity, formatTime, isTimeUnit, parseTime, splitMinutes } from "./time";
+import { formatQuantity, formatTime, isHourUnit, isTimeUnit, parseTime, splitMinutes, storedMeasure } from "./time";
 
 const words = {
   h: (h: string) => `${h} h`,
@@ -78,4 +78,29 @@ test("a quantity's unit word is the one the caller agrees with the number", () =
   const agreeing = { ...words, unit: (unit: string, n: number) => (unit === "lecciones" && n === 1 ? "lección" : unit) };
   assert.equal(formatQuantity(1, "lecciones", agreeing), "1 lección");
   assert.equal(formatQuantity(2, "lecciones", agreeing), "2 lecciones");
+});
+
+test("hours are stored as minutes, times sixty", () => {
+  assert.deepEqual(storedMeasure("horas", 2), { unit: "minutos", amount: 120 });
+});
+
+test("hora, h and any case or border space read as hours", () => {
+  assert.equal(isHourUnit(" H "), true);
+  assert.deepEqual(storedMeasure("Hora", 1), { unit: "minutos", amount: 60 });
+  assert.deepEqual(storedMeasure(" H ", 3), { unit: "minutos", amount: 180 });
+});
+
+test("an hour word without an amount keeps the amount null", () => {
+  assert.deepEqual(storedMeasure("h", null), { unit: "minutos", amount: null });
+});
+
+test("any other unit is stored as written", () => {
+  assert.deepEqual(storedMeasure("km", 2), { unit: "km", amount: 2 });
+  assert.deepEqual(storedMeasure("min", 45), { unit: "min", amount: 45 });
+  assert.equal(isHourUnit("km"), false);
+});
+
+test("reading is untouched: an hour word is still not a stored time unit", () => {
+  assert.equal(isTimeUnit("horas"), false);
+  assert.equal(isTimeUnit("h"), false);
 });
