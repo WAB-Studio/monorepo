@@ -8,7 +8,6 @@ import { measureOf } from "@/lib/day/derive";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
   toCadence,
   toDeclaredFact,
@@ -18,6 +17,8 @@ import {
   type PhaseRow,
 } from "@/lib/queries/rows";
 import { readEvidenceOutcome } from "@/lib/queries/day";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
@@ -284,11 +285,6 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
   return counts;
 }
 
-type EvidenceOutcome = {
-  status: "read" | "unreadable";
-  bySourceKey: Record<string, EvidenceDay[]>;
-};
-
 /**
  * The goal's own span, as two `SQL` fragments rather than two values: the
  * reading transaction opens blind, in the same `Promise.all` as the goals
@@ -318,27 +314,6 @@ function goalSpan(goalId: string): { from: SQL; to: SQL } {
     // the span ends the day before it.
     to: sql`(select g.horizon - 1 from "goals"."goals" g where g.id = ${goalId})`,
   };
-}
-
-// One query per known source (today, exactly one), independent of which of
-// the goal's own commitments actually reference it — the same shape `lib/
-// queries/day.ts` and `lib/queries/week.ts` run, bounded to the goal's own
-// span rather than one day or one week.
-async function queryEvidenceBySource(
-  tx: Transaction,
-  personId: string,
-  goalId: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-  const { from, to } = goalSpan(goalId);
-
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from, to, zone: TIME_ZONE, tx });
-  }
-
-  return bySourceKey;
 }
 
 // The source keys a goal's own evidence-satisfied commitments name, in its
@@ -511,7 +486,10 @@ export async function loadGoal(
 
   const [row, evidenceOutcome] = await Promise.all([
     withGoalsDb((tx) => queryGoalRow(tx, goalId)),
-    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, goalId)).then(
+    withReadingDb((tx) => {
+      const { from, to } = goalSpan(goalId);
+      return queryEvidenceBySource(tx, person.id, from, to);
+    }).then(
       (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
       (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
     ),
