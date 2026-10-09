@@ -720,6 +720,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   screen lives at `/conexiones`, reached from `/metas`'s «el plan» («Conectar una IA»). Phone and light face only; the dark
   face is the token table's, and 1280 follows the desktop layout. Approved by the user 2026-10-05, «por mientras», with the
   desktop layout as a whole under review.
+- **A key or connection unused for 90 days stays on `/conexiones`, muted like a revoked one, with no «Revocar»:
+  «venció el {date} · sin uso desde el {used}».** `ConexionesVencida` draws it; a claude.ai connection expires the same way,
+  in its own section. Order: live, expired, revoked; newest first within each. The screen derives the row from
+  `expiredAt` and computes no date. Phone and light face only; dark is the token table's. Approved by the user 2026-10-08
+  (audit B3, Q2).
 - **Signed out, the consent screen names no client.** Before sign-in the name is only what the client declares, so anyone
   could call itself «Claude»: it reads «Una aplicación pidió entrar…». `AutorizarSinSesion`'s «Claude» is the signed-in
   name. No grant to `anon`. Decided 2026-10-05 by the coordinator.

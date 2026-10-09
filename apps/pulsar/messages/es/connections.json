@@ -34,6 +34,7 @@
     "stampOn": "el <fig>{date}</fig>",
     "stampOnClock": "el <fig>{date}</fig> <fig>{time}</fig>",
     "revokedMeta": "revocada el <fig>{date}</fig> · ya no entra",
+    "expiredMeta": "venció el <fig>{date}</fig> · sin uso desde el <fig>{used}</fig>",
     "revoke": "Revocar"
   },
   "oauth": {

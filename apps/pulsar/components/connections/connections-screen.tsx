@@ -29,6 +29,7 @@ export type ConnectionRow = {
   name: string;
   revoked: boolean;
   revokedAt: ConnectionStamp | null;
+  expiredAt: ConnectionStamp | null;
   created: ConnectionStamp;
   used: ConnectionStamp | null;
 };
@@ -101,6 +102,10 @@ function Keys({ rows, section, onAsk, busy }: {
   const at = (created: ReactNode, used?: ReactNode) => ({ created: () => created, used: () => used, ...fig });
   const line = (row: ConnectionRow) => {
     if (row.revokedAt) return t.rich("row.revokedMeta", { date: row.revokedAt.date, ...fig });
+    if (row.expiredAt) {
+      const since = row.used ?? row.created;
+      return t.rich("row.expiredMeta", { date: row.expiredAt.date, used: since.date, ...fig });
+    }
     const created = stamp(row.created, false);
     const used = row.used ? stamp(row.used, true) : null;
     if (row.kind === "oauth") {
@@ -114,24 +119,27 @@ function Keys({ rows, section, onAsk, busy }: {
 
   return (
     <Section label={section}>
-      {rows.map((row) => (
-        <div key={row.id}>
-          <Separator />
-          <Flex align="center" justify="between" gap="3" py="3" minHeight="56px">
-            <Flex direction="column" gap="1">
-              <Text variant="name" tone={row.revoked ? "muted" : undefined}>
-                {row.name}
-              </Text>
-              <Text variant="sentence">{line(row)}</Text>
+      {rows.map((row) => {
+        const dead = row.revoked || row.expiredAt !== null;
+        return (
+          <div key={row.id}>
+            <Separator />
+            <Flex align="center" justify="between" gap="3" py="3" minHeight="56px">
+              <Flex direction="column" gap="1">
+                <Text variant="name" tone={dead ? "muted" : undefined}>
+                  {row.name}
+                </Text>
+                <Text variant="sentence">{line(row)}</Text>
+              </Flex>
+              {dead ? null : (
+                <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>
+                  {t("row.revoke")}
+                </Button>
+              )}
             </Flex>
-            {row.revoked ? null : (
-              <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>
-                {t("row.revoke")}
-              </Button>
-            )}
-          </Flex>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </Section>
   );
 }
