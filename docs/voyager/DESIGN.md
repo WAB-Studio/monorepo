@@ -1572,3 +1572,20 @@ lines without spending it.
 **When a board and the code disagree, this is the direction the fix runs.** The canvas is the
 artifact; a screen that drifted from it drifted by accident, not by decision. Read the boards before
 assuming the shipped screen is the intended one.
+
+### Decisions of 2026-10-08, after the product critic of the audit slice
+
+Taken by the user on the critic's questions. Each opens its module with a board first where a person sees it.
+
+- **A second reader copies only what they searched.** When the reader on a device changes, the first copy sends only the
+  searches made after the new reader confirms; older rows stay on the device and never reach the new account.
+- **An unlisted word answered over the network is recorded.** Only when the answer arrived. RL-39 is retired for a
+  successor that counts it as found; the copy schema accepts the new outcome.
+- **Opening the record pulls.** With the copy on, opening `/registro` or `/cuenta` pulls once and the list refreshes when
+  it lands; the box itself stays off the network (RNL-09 reworded). «Al día» goes: the line reads «Última copia hace X».
+- **The other-reader rule rewrites RL-52, unticked.** Its words change; no successor.
+- **«Retirar» goes grey.** The retire button takes the soft weight «Cerrar sesión» has; the one-tap confirm stays.
+- **Two devices are told apart.** A label keeps its known half («Chrome en otro sistema» rather than «Dispositivo
+  desconocido» when only the platform is unknown) and each row adds «Desde el {fecha}» from `created_at`.
+- **Function words in the per-word fallback (RL-37) come from a hand table.** About a hundred words with their common
+  translation, read before the dictionary's order in that fallback only.
