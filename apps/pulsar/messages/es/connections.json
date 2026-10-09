@@ -53,7 +53,6 @@
   "created": {
     "title": "Tu llave",
     "once": "No la volverás a ver. Si la pierdes, revócala y crea otra.",
-    "copy": "Copiar",
     "copyName": "Copiar la llave",
     "terminal": "pégalo en tu terminal",
     "claudeCode": "claude mcp add --transport http pulsar {url}/mcp --header \"Authorization: Bearer {key}\"",

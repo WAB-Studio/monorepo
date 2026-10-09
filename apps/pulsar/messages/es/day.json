@@ -104,7 +104,6 @@
     "undo": "Deshacer"
   },
   "cadence": {
-    "daily": "diario",
     "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
     "weekdayPlural": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
     "onlyWeekday": "solo los {weekday}",

@@ -1,12 +1,7 @@
 {
-  "line": "llevas {reached} de {planned} en {month}",
-  "progress": "llevas {percent} % · faltan {days, plural, one {# día} other {# días}}",
-  "pace": "día {day} · {percent} %, bajo el {threshold} %",
   "noPlan": "sin monto planeado",
   "planMonth": "Planear {month}",
-  "seeMonths": "Ver por mes",
   "declaredOnly": "solo lo que dijiste tú",
-  "unreadable": "solo lo que dijiste tú · no pudimos leer el diccionario de lectura",
   "plan": {
     "eyebrow": "{goal} · {month}",
     "title": "¿Cuánto en {month}?",
@@ -21,7 +16,6 @@
   },
   "months": {
     "title": "Por mes",
-    "subtitle": "lo planeado, lo alcanzado y lo que pasó al mes siguiente",
     "caption": "{count, plural, one {# mes} other {# meses}}",
     "planned": "planeado",
     "noAmount": "sin monto",
@@ -29,15 +23,11 @@
     "ofFigure": "de <fig>{planned}</fig>",
     "current": "en curso",
     "carriedTo": "{percent} % pasó a {month}",
-    "notReached": "—",
-    "hint": "Toca un mes para ver sus tareas o cambiar su monto.",
     "emptyBody": "Ningún mes tiene monto. Ponle uno a {month} y la meta dirá cuánto llevas de él.",
     "emptyAction": "Planear {month}",
     "withoutMeasure": {
-      "subtitle": "las tareas de cada mes",
       "tasks": "{count, plural, one {# tarea} other {# tareas}}",
       "none": "sin tareas",
-      "hint": "Toca un mes para ver sus tareas.",
       "goalTasks": "{count, plural, one {# tarea} other {# tareas}} · {done, plural, one {# hecha} other {# hechas}}",
       "columnTasks": "tareas"
     },
