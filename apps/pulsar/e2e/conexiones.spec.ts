@@ -8,6 +8,8 @@ import { test, expect, type Person } from "./fixtures";
 // it is made, and no later render holds it.
 const NAME = "Claude Code";
 const KEY = /^pls_[A-Za-z0-9_-]{20,}$/;
+// What `row.metaUnusedFirst` draws for a key made today and never used.
+const FRESH_UNUSED = /^Creada hoy a las \d\d:\d\d · sin usar$/;
 
 // 15:00Z lands on the same calendar day in any zone the specs run in.
 function daysAgo(days: number): Date {
@@ -134,7 +136,7 @@ test.describe("the connections screen (RP-38)", () => {
       await expect(page.getByRole("button", { name: messages.create })).toBeVisible();
       await absentEverywhere(page, key);
       await expect(page.getByText(NAME, { exact: true })).toBeVisible();
-      await expect(page.getByText(messages.row.neverUsed)).toBeVisible();
+      await expect(page.getByText(FRESH_UNUSED)).toBeVisible();
     } finally {
       await context.close();
     }
@@ -164,11 +166,11 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       const key = await create(page, NAME);
       await page.getByRole("button", { name: messages.created.done }).click();
-      await expect(page.getByText(messages.row.neverUsed)).toBeVisible();
+      await expect(page.getByText(FRESH_UNUSED)).toBeVisible();
 
       expect((await mcp(baseURL!, key)).status()).toBe(200);
       await page.reload();
-      await expect(page.getByText(messages.row.neverUsed)).toHaveCount(0);
+      await expect(page.getByText(FRESH_UNUSED)).toHaveCount(0);
       await expect(page.getByText(/usada hoy a las \d\d:\d\d$/)).toBeVisible();
 
       await confirmRevoke(page);
