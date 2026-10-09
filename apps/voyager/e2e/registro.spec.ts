@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { createTranslator } from "next-intl";
-import { expect, test } from "./fixtures";
+import { confirmCopy, expect, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import postgres from "postgres";
 
@@ -619,7 +619,6 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
   const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   const runId = await openRun("e2e", sql);
   const reader = await mintReaderIdentity(sql, runId);
-  const ownDeviceId = randomUUID();
   const foreignDeviceId = randomUUID();
 
   try {
@@ -636,26 +635,16 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
     await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
     await firstMount;
 
-    await seedLocalDatabase(page, {
-      sync: {
-        deviceId: ownDeviceId,
-        pushedThroughLocalId: null,
-        pulledThroughCursor: null,
-        lastSyncedAt: null,
-        enabled: true,
-        readerId: null,
-        retired: false,
-      },
-    });
-
     await signInAs(page, reader.hash);
 
-    // First sync: pulls the foreign row down onto this device.
-    await hideTab(page);
+    // First copy: the reader confirms on /cuenta (RL-52), and it pulls the
+    // foreign row down onto this device.
+    await page.goto("/cuenta");
+    await confirmCopy(page);
     await expect
       .poll(() => readLastSyncedAt(page), { message: "the first sync never finished" })
       .toBeGreaterThan(0);
-    await page.reload();
+    await page.goto("/registro");
     let rows = await readLogRows(page);
     expect(rows.map((row) => row.normalised), "the foreign row never made it down").toContain("foreign-word");
 
@@ -738,7 +727,14 @@ test("«Vaciar aquí y en mi cuenta» empties every device's copy, and a reader 
     });
 
     await signInAs(page, reader.hash);
-    await page.reload();
+    // This device is copying for the reader (RL-52): the account wipe has a
+    // live copy to empty, not only rows another device left behind.
+    await page.goto("/cuenta");
+    await confirmCopy(page);
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the copy never finished" })
+      .toBeGreaterThan(0);
+    await page.goto("/registro");
 
     const clearTrigger = page.getByRole("button", { name: messages.log.clear.trigger });
     await expect(clearTrigger).toBeVisible();

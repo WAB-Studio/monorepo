@@ -1,5 +1,6 @@
 import { assertSuiteDatabase } from "@repo/harness-registry";
 import { test as base, expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 // `registro`, `offline` and `sync` insert `auth.users` rows on `MIGRATION_DATABASE_URL`; with
 // none set, no spec can write. Specs without a database keep running.
@@ -161,5 +162,17 @@ export const test = base.extend<WordRouteFixtures>({
     });
   },
 });
+
+// The approved words of the board `CuentaCopiaConfirmar` (docs/voyager/DESIGN.md,
+// 2026-10-08). The key the worker adds to `messages/es.json` is
+// `account.copy.confirmAction`; until it exists the literal stands here.
+export const COPY_CONFIRM_LABEL = "Empezar a copiar";
+
+// The one gesture that starts a copy: with a session open and the copy not yet
+// confirmed, `/cuenta` sends nothing until this button is tapped. Resolves once
+// the tap landed; callers wait for the response they care about themselves.
+export async function confirmCopy(page: Page): Promise<void> {
+  await page.getByRole("button", { name: COPY_CONFIRM_LABEL }).click();
+}
 
 export { expect };
