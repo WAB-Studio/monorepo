@@ -45,7 +45,7 @@ async function precedes(a: Locator, b: Locator): Promise<boolean> {
 // RL-58 + RL-51 ("the first group" = the first category of the first
 // pronunciation block, user 2026-10-08). `left` is an exact entry AND an
 // inflection of `leave`; its own senses are verb, adjective, adverb, noun.
-const OFFER = '"left" también es una forma de "leave"';
+const OFFER = '«left» también es una forma de «leave»';
 const FIRST_GROUP = "sobrado, sobras"; // left, verbo
 const SECOND_GROUP = "izquierda, de izquierda, izquierdo"; // left, adjetivo
 const LAST_GROUP_DEFINITION = "The left side or direction."; // left, sustantivo
@@ -187,7 +187,7 @@ test("RL-58: with two pronunciation blocks the offer sits under block 1's first 
   await gotoReady(page);
   await search(page, "said");
 
-  const header = page.getByText('"said" también es una forma de "say"', { exact: true });
+  const header = page.getByText('«said» también es una forma de «say»', { exact: true });
   await expect(header).toBeVisible({ timeout: 5000 });
   const blockOneGroup = line(page, "dicho");
   const lemmaVerb = line(page, "decir, poner, digamos, se dice");

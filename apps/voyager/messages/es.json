@@ -38,8 +38,8 @@
     "preparingReadOnly": "Instalando el diccionario en el dispositivo"
   },
   "word": {
-    "viaInflectionWithEntry": "\"{surface}\" también es una forma de \"{lemma}\"",
-    "formOf": "\"{surface}\" es una forma de \"{lemma}\"",
+    "viaInflectionWithEntry": "«{surface}» también es una forma de «{lemma}»",
+    "formOf": "«{surface}» es una forma de «{lemma}»",
     "translations": "Traducciones",
     "networkTranslations": "Traducciones de internet",
     "definitionEnglish": "Definición en inglés",
@@ -157,7 +157,7 @@
     },
     "copy": {
       "label": "Copia",
-      "neverSynced": "Aún no ha habido una copia. La primera sale cuando cierres esta pestaña.",
+      "neverSynced": "Aún no ha habido una copia.",
       "failedTitle": "La copia no salió",
       "failedAction": "Reintentar",
       "noSessionTitle": "Tu registro vive solo en este dispositivo",
@@ -177,7 +177,7 @@
       "failedOfflineTitle": "La copia no salió",
       "failedOffline": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
       "failedQuotaTitle": "Hoy ya no se copia más",
-      "failedQuotaBody": "Copiaste el máximo de hoy. Mañana sigue sola; tus palabras siguen en este dispositivo.",
+      "failedQuotaBody": "Copiaste el máximo de hoy. Sigue sola a las {time}; tus palabras siguen en este dispositivo.",
       "failedServer": "Falló de nuestro lado. Tus palabras siguen en este dispositivo."
     },
     "info": {
@@ -189,7 +189,6 @@
       "dictionaryName": "FreeDict eng–spa",
       "dictionaryStats": "{entries, number} entradas · {edition} · {size} en este dispositivo.",
       "licenceLabel": "Licencia",
-      "licenceCredit": "Obra derivada de DBnary, bajo <cc>CC BY-SA 3.0</cc>. Esta app la distribuye bajo la misma licencia.",
       "frequencyLabel": "Orden de las acepciones",
       "appLabel": "La app",
       "appVersion": "Diccionario de lectura · versión {version}",

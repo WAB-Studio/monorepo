@@ -9,6 +9,7 @@ import { countPendingUpload, readSyncState, signOutSync, startCopyFor, writeSync
 import { clearNavQuery } from "@/lib/nav/query-storage";
 import { elapsed, type Elapsed } from "@/lib/format/elapsed";
 import { isOtherReader } from "@/lib/log/sync-state";
+import { nextQuotaReset } from "@/lib/sync/quota-day";
 import { syncNow } from "@/lib/sync/driver";
 import type { SyncFailure } from "@/lib/sync/failure";
 import type { SyncState } from "@/lib/log/types";
@@ -288,7 +289,14 @@ function SyncedSection({
           </Text>
           <Text size="2" muted>
             {cause === "quota"
-              ? t("copy.failedQuotaBody")
+              ? t("copy.failedQuotaBody", {
+                  time: format.dateTime(nextQuotaReset(now), {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                  }),
+                })
               : cause === "offline"
                 ? offlineBody
                 : t("copy.failedServer")}
@@ -387,6 +395,12 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
     setNow(Date.now());
     await runSync();
   }
+
+  // Local only: the line's age moves with the clock, never with a request.
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(tick);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

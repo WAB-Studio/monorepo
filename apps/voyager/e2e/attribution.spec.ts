@@ -3,10 +3,9 @@ import { expect, test } from "./fixtures";
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 
-// The rich-text tag `account-info.tsx` binds to a link: the credit names the
-// licence and only the licence's own name sits inside `<cc>`.
-const licenceLinkText = messages.account.info.licenceCredit.match(/<cc>(.*?)<\/cc>/)?.[1];
-if (!licenceLinkText) throw new Error("messages.account.info.licenceCredit carries no <cc> tag");
+// The licence's own name is the link: `licenceName` is the catalog key the
+// screen draws it from.
+const licenceLinkText = messages.account.info.licenceName;
 
 // Module 6 dropped `SourceNote`, the search screen's own link to `/fuente`
 // (`components/search/source-note.tsx`), and nothing else in the app ever
