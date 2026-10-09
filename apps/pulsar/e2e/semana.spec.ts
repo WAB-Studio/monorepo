@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Seeded by `harness:seed-goal`: the one goal and its one one-off, already
 // attributed to it (RP-20).
@@ -220,5 +221,50 @@ test("a one-off belonging to nothing, done today, fills a mark in the Sueltas gr
     // Deletes the fact along with it (`facts.one_off_id`'s own cascade) —
     // never a blanket delete by name, only this exact row's id.
     await db`delete from goals.one_offs where id = ${id} and user_id = ${personId}`;
+  }
+});
+
+// The desktop footer tallies each day that has come as «done de total», today
+// included, and leaves the days not yet come blank.
+test("at 1440 the footer's cell for today reads «1 de 2» with one of two done today, and days to come stay blank (RP-16)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  const today = todayInZone();
+  const todayIndex = (civilDateToDate(today).getUTCDay() + 6) % 7;
+  const created = new Date(`${dateToCivilDate(new Date(civilDateToDate(today).getTime() - 40 * 86_400_000))}T17:00:00Z`);
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${"Pie de hoy"}, now() + interval '60 days', ${created}) returning id
+  `;
+  const [done] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${person.id}, ${goal.id}, ${"Hecha hoy"}, 'daily', 'tap', ${created}) returning id
+  `;
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${person.id}, ${goal.id}, ${"Abierta hoy"}, 'daily', 'tap', ${created})
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day)
+    values (${person.id}, ${goal.id}, ${done.id}, ${today}::date)
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/semana");
+    const cells = page.locator("tfoot td");
+    await expect(cells).toHaveCount(7);
+    await expect(cells.nth(todayIndex)).toHaveText("1 de 2");
+    for (let index = 0; index < 7; index++) {
+      if (index < todayIndex) await expect(cells.nth(index)).toHaveText("0 de 2");
+      if (index > todayIndex) await expect(cells.nth(index)).toHaveText("");
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
   }
 });
