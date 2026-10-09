@@ -315,7 +315,7 @@ test("RNL-01 stays under 10ms with a 10,000-row merge in flight (RNL-06 under de
   expect(rowCount).toBe(20_001);
 });
 
-test("RL-34: a word's stored translation spans senses, and the 120-char cut still wins over the 3-sense cap", async ({
+test("RL-34: a word's stored translation spans senses, and the 120-char cut between glosses still wins over the 3-sense cap", async ({
   page,
 }) => {
   await deleteTranslator(page);
@@ -344,7 +344,7 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut stil
   expect(backRow?.translation?.length).toBeLessThanOrEqual(120);
 
   // A one-sense headword whose glosses alone run to 154 raw characters: the
-  // cut still lands at exactly 120, unmoved by the sense cap above it.
+  // cut lands after the last whole gloss that fits, unmoved by the sense cap.
   await searchBox.fill("the road to hell is paved with good intentions");
   await expect(page.getByRole("heading", { name: "the road to hell is paved with good intentions" })).toBeVisible({
     timeout: 5000,
@@ -356,7 +356,9 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut stil
     (row) => row.normalised === "the road to hell is paved with good intentions",
   );
   expect(idiomRow?.senses).toBe(1);
-  expect(idiomRow?.translation).toHaveLength(120);
+  expect(idiomRow?.translation).toBe(
+    "el camino al infierno está empedrado de buenas intenciones, el infierno está empedrado de buenas intenciones",
+  );
 
   // "anyway" carries one sense whose raw glosses run to 195 characters, and
   // the 120-char cut lands right after "comoquiera, " — a separator, not a
