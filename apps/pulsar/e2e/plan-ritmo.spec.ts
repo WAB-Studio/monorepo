@@ -248,6 +248,7 @@ for (const width of [390, 1440]) {
         try {
           await visit(page, `/metas/${goalId}/plan`);
           const box = await planned(page).boundingBox();
+          expect(box).not.toBeNull();
           expect(Math.abs(box!.width - 640)).toBeLessThanOrEqual(1);
         } finally {
           await drop(db, personId, goalId);

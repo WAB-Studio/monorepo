@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 
 import oauth from "../messages/es/oauth.json";
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, appAlerts, type Person } from "./fixtures";
 
 // RP-60: the signed-in consent line names where the person returns, «al permitir,
 // vuelves a <host>». The words are written here, not read from `oauth.json`:
@@ -124,7 +124,13 @@ for (const width of [390, 1280]) {
           const lead = [...document.querySelectorAll("main p")].find((p) =>
             p.textContent?.startsWith("Podrá leer"),
           )!;
+          const probe = document.createElement("span");
+          probe.style.fontFamily = "var(--font-mono)";
+          document.body.append(probe);
+          const mono = getComputedStyle(probe).fontFamily;
+          probe.remove();
           return {
+            mono,
             family: own.fontFamily,
             size: own.fontSize,
             color: own.color,
@@ -136,8 +142,10 @@ for (const width of [390, 1280]) {
             marginTop: own.marginTop,
           };
         });
-        expect(style.family).toMatch(/mono/i);
-        expect(style.hostFamily).toMatch(/mono/i);
+        // `/mono/` also matches the fallback `monospace`; DM Mono is the resolved `--font-mono`.
+        expect(style.mono).toMatch(/^"?dm[ _]mono/i);
+        expect(style.family).toBe(style.mono);
+        expect(style.hostFamily).toBe(style.mono);
         expect(style.size).toBe("13px");
         expect(style.color).toBe(style.titleColor);
         expect(style.color).not.toBe(style.leadColor);
@@ -215,7 +223,7 @@ for (const width of [390, 1280]) {
         // The session lapses between seeing the screen and answering it.
         await context.clearCookies();
         await page.getByRole("button", { name: oauth.allow, exact: true }).click();
-        await expect(page.getByRole("alert")).toBeVisible();
+        await expect(appAlerts(page)).toBeVisible();
         await expect(lineOf(page)).toHaveText(`${LEAD} claude.ai`);
         await expect(page.getByRole("button", { name: oauth.allow, exact: true })).toBeEnabled();
       } finally {

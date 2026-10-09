@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, settled, type Person } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import {
   civilDateToDate,
@@ -996,6 +996,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       try {
         const page = await context.newPage();
         await page.goto("/exportar");
+        await settled(page);
         const main = page.getByRole("main");
         const parent = await main.getByText(seeded.taskName, { exact: true }).boundingBox();
         const child = await main.getByText(seeded.childName, { exact: true }).boundingBox();

@@ -18,7 +18,7 @@ test("a field label is Archivo 13 and a selected cadence chip is not the primary
     const style = getComputedStyle(el);
     return { family: style.fontFamily, size: style.fontSize, transform: style.textTransform };
   });
-  expect(label.family).toMatch(/archivo|sans/i);
+  expect(label.family).toMatch(/archivo/i);
   expect(label.family).not.toMatch(/mono/i);
   expect(label.size).toBe("13px");
   expect(label.transform).toBe("none");

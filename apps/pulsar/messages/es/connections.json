@@ -29,7 +29,6 @@
     "metaUnused": "creada <created></created> · sin usar",
     "metaUsedFirst": "Creada <created></created> · usada <used></used>",
     "metaUnusedFirst": "Creada <created></created> · sin usar",
-    "neverUsed": "sin usar",
     "stampToday": "hoy a las <fig>{time}</fig>",
     "stampOn": "el <fig>{date}</fig>",
     "stampOnClock": "el <fig>{date}</fig> <fig>{time}</fig>",
