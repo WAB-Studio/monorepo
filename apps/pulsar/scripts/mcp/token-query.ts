@@ -81,7 +81,7 @@ test("two live keys newest first, then the revoked one, the intruder's never", a
 test("the fields are the contract's, instants are ISO strings, no fingerprint", async () => {
   const list = await session.actAs(asResolved(subject), () => tokens.listAccessTokens());
   const [live, , gone] = list;
-  assert.deepEqual(Object.keys(live).sort(), ["createdAt", "expiredAt", "hint", "id", "kind", "lastUsedAt", "name", "revokedAt"]);
+  assert.deepEqual(Object.keys(live).sort(), ["createdAt", "expiredAt", "folded", "hint", "id", "kind", "lastUsedAt", "name", "returnHost", "revokedAt"]);
   assert.equal(live.kind, "personal");
   assert.equal(live.name, "check second");
   assert.equal(live.hint?.length, 4);
@@ -121,13 +121,13 @@ async function seedPersonal(person: Person, name: string, lastUsed: Date | null,
 }
 
 // Same shape the OAuth grant leaves: `expires_at` an hour past the refresh's birth.
-async function seedConnection(person: Person, name: string, lastUse: Date): Promise<Seeded> {
+async function seedConnection(person: Person, name: string, lastUse: Date, redirectUri: string | null = null): Promise<Seeded> {
   const hash = randomBytes(32);
   const refresh = randomBytes(32);
   const [client] = await admin<{ id: string }[]>`select goals.oauth_register_client('c', array['https://a.example.invalid/cb'], null) as id`;
   const [row] = await admin<{ id: string }[]>`
-    insert into goals.access_tokens (user_id, kind, name, token_hash, expires_at, created_at)
-    values (${person.id}, 'oauth', ${name}, ${hash}, ${new Date(lastUse.getTime() + 3_600_000)}, ${lastUse})
+    insert into goals.access_tokens (user_id, kind, name, token_hash, expires_at, created_at, redirect_uri)
+    values (${person.id}, 'oauth', ${name}, ${hash}, ${new Date(lastUse.getTime() + 3_600_000)}, ${lastUse}, ${redirectUri})
     returning id`;
   await admin`
     insert into goals.oauth_refresh (access_token_id, client_id, refresh_hash, created_at)
@@ -214,4 +214,82 @@ test("live first, then expired, then revoked, newest first inside each", async (
   assert.deepEqual(ids.map(rank).filter((r) => r === 1).length, 3);
   const expired = list.filter((token) => token.expiredAt && !token.revokedAt);
   assert.deepEqual(expired.map((token) => token.createdAt), [...expired.map((token) => token.createdAt)].sort().reverse());
+});
+
+// Own owner, read once: the host, the fold and the edge of the hour.
+let folding: ReturnType<typeof seedFolding> | undefined;
+
+function seedFolding() {
+  return (async () => {
+    const [owner] = await createPeople(admin, expiryRun, door, 1);
+    const seeds: Record<string, Seeded> = {
+      claude: await seedConnection(owner, "Claude", ago(1), "https://claude.ai/api/mcp/auth_callback"),
+      local: await seedConnection(owner, "Local", ago(2), "http://localhost:33418/callback"),
+      noAddress: await seedConnection(owner, "Old grant", ago(3)),
+      personal: await seedPersonal(owner, "personal", null, ago(4)),
+      revoked31: await seedPersonal(owner, "revoked 31", null, ago(200), ago(31)),
+      revoked29: await seedPersonal(owner, "revoked 29", null, ago(200), ago(29)),
+      lapsed31: await seedPersonal(owner, "lapsed 31", ago(90 + 31), ago(300)),
+      lapsed29: await seedPersonal(owner, "lapsed 29", ago(90 + 29), ago(300)),
+      live: await seedPersonal(owner, "live", ago(1), ago(300)),
+      // Refresh born 90 days and 30 minutes ago: past the door's line by exactly the hour the mutant forgets.
+      pastHour: await seedConnection(owner, "past hour", ago(90, -1_800_000)),
+      beforeHour: await seedConnection(owner, "before hour", ago(90, 1_800_000)),
+    };
+    const list = await session.actAs(asResolved(owner), () => tokens.listAccessTokens());
+    return { list, seeds };
+  })();
+}
+
+async function readFolding(name: string) {
+  folding ??= seedFolding();
+  const { list, seeds } = await folding;
+  return { token: list.find((token) => token.id === seeds[name].id)!, seed: seeds[name] };
+}
+
+test("a connection says the host it returns to, port included", async () => {
+  assert.equal((await readFolding("claude")).token.returnHost, "claude.ai");
+  assert.equal((await readFolding("local")).token.returnHost, "localhost:33418");
+});
+
+test("a personal key and a connection with no address have no host", async () => {
+  assert.equal((await readFolding("personal")).token.returnHost, null);
+  assert.equal((await readFolding("noAddress")).token.returnHost, null);
+});
+
+test("folded counts thirty days from when the key stopped working", async () => {
+  assert.equal((await readFolding("revoked31")).token.folded, true);
+  assert.equal((await readFolding("revoked29")).token.folded, false);
+  assert.equal((await readFolding("lapsed31")).token.folded, true);
+  assert.equal((await readFolding("lapsed29")).token.folded, false);
+  assert.equal((await readFolding("live")).token.folded, false);
+});
+
+test("a key created long ago but live is not folded", async () => {
+  const { token } = await readFolding("live");
+  assert.equal(token.folded, false);
+  assert.equal(token.expiredAt, null);
+});
+
+test("the hour edge: the list and the door agree 30 minutes either side of 90 days", async () => {
+  for (const name of ["pastHour", "beforeHour"]) {
+    const { token, seed } = await readFolding(name);
+    assert.equal(token.expiredAt === null, await doorOpens(seed), `door and list disagree on ${name}`);
+  }
+  assert.notEqual((await readFolding("pastHour")).token.expiredAt, null);
+  assert.equal((await readFolding("beforeHour")).token.expiredAt, null);
+});
+
+test("the query carries no literal of the 90-day rule", async () => {
+  const { readFileSync } = await import("node:fs");
+  assert.ok(!readFileSync("lib/queries/tokens.ts", "utf8").includes("90 days"));
+});
+
+test("the list is one application statement besides the session settle", async () => {
+  const run = () => session.actAs(asResolved(subject), () => tokens.listAccessTokens());
+  await run();
+  wire.length = 0;
+  await run();
+  const application = wire.filter((query) => !/^\s*(begin|commit)\s*$/i.test(query));
+  assert.equal(application.filter((query) => /access_tokens/.test(query)).length, 1, application.join("\n---\n"));
 });
