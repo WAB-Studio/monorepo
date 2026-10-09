@@ -52,11 +52,12 @@ function copyOn(extra: Partial<SyncState> = {}): SyncState {
   };
 }
 
-// Seeds from /registro itself while the copy is still off there, so the seed
-// page sends nothing; callers attach their counters after this returns.
+// Seeds from the home screen: /registro itself reads the sync row on open
+// (and mints its device id when absent), which would race this write and put
+// the default back over the seeded copy.
 async function seed(page: Page, rows: { sync?: SyncState; lookups?: SeedLookup[] }): Promise<void> {
-  await page.goto("/registro");
-  await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
@@ -144,8 +145,10 @@ async function watchSkeleton(page: Page): Promise<void> {
   await page.evaluate((needle) => {
     const w = window as unknown as { __skeletonSeen: boolean };
     w.__skeletonSeen = false;
+    // `innerText`, not `textContent`: the latter reads the page's own script
+    // payload, which carries every message of the app, skeleton words included.
     new MutationObserver(() => {
-      if (document.body.textContent?.includes(needle)) w.__skeletonSeen = true;
+      if (document.body.innerText.includes(needle)) w.__skeletonSeen = true;
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   }, messages.log.study.skeletonWord);
 }
