@@ -192,7 +192,7 @@ export function TaskRow({
     row = (
       <Row
         leading={<Mark state="empty" />}
-        leadingLabel={markLabel ?? t("day.oneOffs.markLabel")}
+        leadingLabel={markLabel ?? t("oneOffs.markDone", { name })}
         name={name}
         meta={stacked}
         metaVariant="sentence"
