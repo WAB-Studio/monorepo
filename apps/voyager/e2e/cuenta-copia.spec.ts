@@ -513,23 +513,183 @@ test("RL-52, RNL-02: a 30-second-old copy reads «hace un momento» or its own w
   });
 });
 
-test("RL-22: the daily cap names the cause, says it resumes tomorrow, never blames the connection, and offers no retry", async ({
-  page,
-}) => {
-  test.setTimeout(45_000);
-  await withReader(page, async ({ reader, signIn }) => {
-    await seedLocal(page, { sync: confirmedFor(reader) });
-    await signIn();
-    await page.route("**/api/log/sync", (route) =>
-      route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "quota" }) }),
-    );
-    await page.goto("/cuenta");
+// Module 653. The cap counts the UTC day, so the copy resumes at the next
+// 00:00 UTC, drawn in the zone of the browser. Board `CuentaCopiaFallidaCuotaHora`:
+// «Copiaste el máximo de hoy. Sigue sola a las 7:00 p. m.; tus palabras siguen en este dispositivo.»
+// The clock is pinned to an October day so Madrid is UTC+2 whatever day this runs.
+const OCT_9 = new Date("2026-10-09T15:00:00Z");
+const normal = (text: string | null): string => (text ?? "").replace(/[\s  ]+/g, " ").trim();
 
-    await expect(page.getByText(copy.failedQuotaTitle, { exact: true })).toBeVisible();
-    await expect(page.getByText(copy.failedQuotaBody, { exact: true })).toBeVisible();
-    await expect(page.getByText(/Sin conexión/)).toHaveCount(0);
-    await expect(page.getByText(copy.failedOfflineTitle, { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: copy.failedAction })).toHaveCount(0);
+async function openCapped(page: Page, reader: Reader, signIn: () => Promise<void>): Promise<void> {
+  await page.clock.install({ time: OCT_9 });
+  await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: OCT_9.getTime() - 5 * 60_000 }) });
+  await signIn();
+  await page.route("**/api/log/sync", (route) =>
+    route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "quota" }) }),
+  );
+  await page.goto("/cuenta");
+  await expect(page.getByText(copy.failedQuotaTitle, { exact: true })).toBeVisible();
+}
+
+const quotaLine = (page: Page) => page.getByText(/Copiaste el máximo de hoy\./);
+
+async function expectCapRefusal(page: Page): Promise<void> {
+  await expect(page.getByText(/Sin conexión/)).toHaveCount(0);
+  await expect(page.getByText(copy.failedOfflineTitle, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: copy.failedAction })).toHaveCount(0);
+  await expect(page.getByText(/Mañana/)).toHaveCount(0);
+  await expect(page.getByText(/\{|\}/)).toHaveCount(0);
+}
+
+test.describe("daily cap, Bogotá reader", () => {
+  test.use({ timezoneId: "America/Bogota" });
+
+  test("RL-22: the cap names the cause and the hour it resumes in the reader's zone: 7:00 p. m., never «Mañana»", async ({
+    page,
+  }) => {
+    test.setTimeout(45_000);
+    await withReader(page, async ({ reader, signIn }) => {
+      await openCapped(page, reader, signIn);
+      expect(normal(await quotaLine(page).textContent())).toBe(
+        "Copiaste el máximo de hoy. Sigue sola a las 7:00 p. m.; tus palabras siguen en este dispositivo.",
+      );
+      await expectCapRefusal(page);
+    });
+  });
+});
+
+test.describe("daily cap, Bogotá reader, wide screen", () => {
+  test.use({ timezoneId: "America/Bogota", viewport: { width: 1280, height: 800 } });
+
+  test("RL-22: at 1280 the same line reads 7:00 p. m. and fits its column", async ({ page }) => {
+    test.setTimeout(45_000);
+    await withReader(page, async ({ reader, signIn }) => {
+      await openCapped(page, reader, signIn);
+      expect(normal(await quotaLine(page).textContent())).toBe(
+        "Copiaste el máximo de hoy. Sigue sola a las 7:00 p. m.; tus palabras siguen en este dispositivo.",
+      );
+      const fits = await quotaLine(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
+      expect(fits).toBe(true);
+    });
+  });
+});
+
+test.describe("daily cap, Madrid reader", () => {
+  test.use({ timezoneId: "Europe/Madrid" });
+
+  test("RL-22: the same refusal reads 2:00 for a reader in Madrid (UTC+2 in October)", async ({ page }) => {
+    test.setTimeout(45_000);
+    await withReader(page, async ({ reader, signIn }) => {
+      await openCapped(page, reader, signIn);
+      const line = normal(await quotaLine(page).textContent());
+      expect(line).toMatch(/^Copiaste el máximo de hoy\. Sigue sola a las 2:00( a\. m\.)?; tus palabras siguen en este dispositivo\.$/);
+      expect(line).not.toContain("7:00");
+      await expectCapRefusal(page);
+    });
+  });
+});
+
+test.describe("first copy not yet made", () => {
+  test.use({ timezoneId: "America/Bogota" });
+
+  test("RL-52: a confirmed reader with no copy yet reads «Aún no ha habido una copia.» and nothing about closing the tab", async ({
+    page,
+  }) => {
+    test.setTimeout(45_000);
+    await withReader(page, async ({ reader, signIn }) => {
+      await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: null }) });
+      await signIn();
+      // The pull on open is held: the line is read while no round has finished.
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      await page.route("**/api/log/sync", async (route) => {
+        await gate;
+        await route.continue();
+      });
+      await page.goto("/cuenta");
+
+      await expect(page.getByText("Aún no ha habido una copia.", { exact: true })).toBeVisible();
+      await expect(page.getByText(/cierres esta pestaña/)).toHaveCount(0);
+      await expect(page.getByText(/La primera sale/)).toHaveCount(0);
+      await expect(page.getByText(/Última copia/)).toHaveCount(0);
+      release();
+      await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
+      await expect(page.getByText("Aún no ha habido una copia.")).toHaveCount(0);
+    });
+  });
+});
+
+test.describe("the last-copy line keeps time", () => {
+  test("RL-52, RNL-09: with the screen open, two minutes later it reads «hace 2 minutos» with no request and no reload", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await withReader(page, async ({ reader, signIn }) => {
+      const t0 = Date.now();
+      await page.clock.install({ time: t0 });
+      await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: t0 - 10_000 }) });
+      await signIn();
+      // The pull on open is held for the whole test: only the clock moves the line.
+      await page.route("**/api/log/sync", () => new Promise<never>(() => {}));
+      const calls: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/api/")) calls.push(`${request.method()} ${request.url()}`);
+      });
+      // The device list asks once on open; the snapshot is taken after it.
+      const devicesAsked = page.waitForRequest((request) => request.url().includes("/api/devices"));
+      await page.goto("/cuenta");
+      await devicesAsked;
+      await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
+      const before = [...calls];
+
+      await page.clock.runFor(2 * 60_000);
+
+      await expect(
+        page.getByText(fillTemplate(copy.lastCopy, { time: "2 minutos" }), { exact: true }),
+      ).toBeVisible();
+      await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toHaveCount(0);
+      expect(calls, "requests the minute clock made").toEqual(before);
+    });
+  });
+
+  test("RL-52: leaving /cuenta clears the minute clock: the intervals standing are the ones the search screen had", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await page.addInitScript(() => {
+      const live = new Set<number>();
+      const set = window.setInterval.bind(window);
+      const clear = window.clearInterval.bind(window);
+      window.setInterval = ((...args: Parameters<typeof setInterval>) => {
+        const id = set(...args) as unknown as number;
+        live.add(id);
+        return id;
+      }) as typeof setInterval;
+      window.clearInterval = ((id?: number) => {
+        if (id !== undefined) live.delete(id);
+        return clear(id);
+      }) as typeof clearInterval;
+      (window as unknown as { __liveIntervals: () => number }).__liveIntervals = () => live.size;
+    });
+    await withReader(page, async ({ reader, signIn }) => {
+      await seedLocal(page, { sync: confirmedFor(reader) });
+      await signIn();
+      await page.route("**/api/log/sync", () => new Promise<never>(() => {}));
+      const live = () => page.evaluate(() => (window as unknown as { __liveIntervals: () => number }).__liveIntervals());
+
+      await page.goto("/");
+      await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+      const baseline = await live();
+
+      const nav = page.getByRole("navigation", { name: messages.nav.label });
+      await nav.getByRole("link", { name: messages.nav.account }).click();
+      await expect(page.getByText(copy.lastCopy.replace("{time}", "5 minutos"), { exact: true })).toBeVisible();
+      expect(await live(), "an interval stands while /cuenta is open").toBeGreaterThan(baseline);
+
+      await nav.getByRole("link", { name: messages.nav.search }).click();
+      await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+      await expect.poll(live).toBe(baseline);
+    });
   });
 });
 

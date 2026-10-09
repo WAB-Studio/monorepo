@@ -580,7 +580,7 @@ test("RL-40: a word's own entry answers first, and a plausible inflection is off
   await expect(glossLocator(page, "izquierda").first()).toBeVisible();
   // The offer's own label and heading, naming both the surface and the
   // lemma it also inflects from.
-  await expect(page.getByText('"left" también es una forma de "leave"', { exact: false })).toBeVisible();
+  await expect(page.getByText('«left» también es una forma de «leave»', { exact: false })).toBeVisible();
   await expect(leaveHeading).toBeVisible();
   await expect(glossLocator(page, "dejar").first()).toBeVisible();
   // `left`'s own entry sits above the offer in document order — it answers
