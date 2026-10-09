@@ -376,7 +376,7 @@ test("createOneOff: no day lands a null day; yesterday is refused and writes no 
   }
 });
 
-test("scheduleOneOff: a dayless one gets today; a second call is refused and the day holds; one with a fact is refused", async () => {
+test("scheduleOneOff: a dayless one gets today; a second call moves it on (RP-61); one with a fact is refused", async () => {
   const ids: string[] = [];
   try {
     const made = await createOneOff({ name: "RP-59 por fechar", day: null });
@@ -388,13 +388,13 @@ test("scheduleOneOff: a dayless one gets today; a second call is refused and the
     assert.equal(await oneOffDay(made.oneOffId), today);
 
     const second = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, 3) });
-    assert.equal(second.ok, false);
-    if (!second.ok) assert.equal(second.error, "day.errors.oneOffAlreadyDated");
-    assert.equal(await oneOffDay(made.oneOffId), today);
+    assert.deepEqual(second, { ok: true });
+    assert.equal(await oneOffDay(made.oneOffId), shiftDay(today, 3));
 
     const past = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, -1) });
     assert.equal(past.ok, false);
     if (!past.ok) assert.equal(past.error, "day.errors.oneOffDayPast");
+    assert.equal(await oneOffDay(made.oneOffId), shiftDay(today, 3));
 
     const missing = await scheduleOneOff({ oneOffId: randomUUID(), day: today });
     assert.equal(missing.ok, false);
@@ -471,7 +471,7 @@ test("moveHorizon: another person's goal answers notFound and is unchanged", asy
   }
 });
 
-test("scheduleOneOff: a one-off dated after today moves; one dated today is refused; another person's is notFound", async () => {
+test("scheduleOneOff: a one-off dated after today moves; one dated today moves too (RP-61); another person's is notFound", async () => {
   const ids: string[] = [];
   const [member] = await sql<{ id: string }[]>`
     select id from auth.users where email = ${memberEmail}`;
@@ -495,9 +495,8 @@ test("scheduleOneOff: a one-off dated after today moves; one dated today is refu
     assert.ok(loaded.oneOffs.some((o) => o.id === made.oneOffId));
 
     const dated = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, 3) });
-    assert.equal(dated.ok, false);
-    if (!dated.ok) assert.equal(dated.error, "day.errors.oneOffAlreadyDated");
-    assert.equal(await oneOffDay(made.oneOffId), today);
+    assert.deepEqual(dated, { ok: true });
+    assert.equal(await oneOffDay(made.oneOffId), shiftDay(today, 3));
 
     const [withFact] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, name, day)
