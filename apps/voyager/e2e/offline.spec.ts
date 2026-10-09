@@ -268,15 +268,15 @@ for (const [first, second] of [
     });
     // The chunks only `/` names. A prefetch from a nav link can race the
     // test and fetch them while the worker controls the page, which is not
-    // the reader this test models; abort that race at the page. The worker's
-    // own requests are not routed by Playwright, so a precache still works.
+    // the reader this test models; abort that race at the page. `page.route`
+    // leaves the worker's own requests alone; `context.route` aborts them too.
     const named = async (route: string) =>
       new Set((await (await context.request.get(route)).text()).match(/\/_next\/static\/[^"'\\ ]+?\.(?:js|css)/g) ?? []);
     const [home, registro, cuenta] = await Promise.all([named("/"), named("/registro"), named("/cuenta")]);
     const homeOnly = [...home].filter((chunk) => !registro.has(chunk) && !cuenta.has(chunk));
     // A build whose `/` shares every chunk with the others has nothing to precache: not this test's reader.
     expect(homeOnly.length).toBeGreaterThan(0);
-    await context.route(
+    await page.route(
       (url) => homeOnly.includes(url.pathname),
       (route) => route.abort(),
     );
@@ -295,7 +295,7 @@ for (const [first, second] of [
     await expect.poll(() => isCached(page, "/")).toBe(true);
 
     problems.length = 0;
-    await context.unroute((url) => homeOnly.includes(url.pathname));
+    await page.unroute((url) => homeOnly.includes(url.pathname));
     await context.setOffline(true);
     // The page can hide a missing chunk behind server HTML, so count the
     // chunk requests that nobody answered, not only what is drawn.
