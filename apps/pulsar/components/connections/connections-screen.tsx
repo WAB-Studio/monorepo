@@ -122,22 +122,22 @@ function Keys({ rows, section, onAsk, busy }: {
       {rows.map((row) => {
         const dead = row.revoked || row.expiredAt !== null;
         return (
-        <div key={row.id}>
-          <Separator />
-          <Flex align="center" justify="between" gap="3" py="3" minHeight="56px">
-            <Flex direction="column" gap="1">
-              <Text variant="name" tone={dead ? "muted" : undefined}>
-                {row.name}
-              </Text>
-              <Text variant="sentence">{line(row)}</Text>
+          <div key={row.id}>
+            <Separator />
+            <Flex align="center" justify="between" gap="3" py="3" minHeight="56px">
+              <Flex direction="column" gap="1">
+                <Text variant="name" tone={dead ? "muted" : undefined}>
+                  {row.name}
+                </Text>
+                <Text variant="sentence">{line(row)}</Text>
+              </Flex>
+              {dead ? null : (
+                <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>
+                  {t("row.revoke")}
+                </Button>
+              )}
             </Flex>
-            {dead ? null : (
-              <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>
-                {t("row.revoke")}
-              </Button>
-            )}
-          </Flex>
-        </div>
+          </div>
         );
       })}
     </Section>

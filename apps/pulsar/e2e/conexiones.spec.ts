@@ -371,8 +371,10 @@ test.describe("the connections screen (RP-38)", () => {
   }) => {
     await seed(db, person, { kind: "personal", name: "Antigua", created: "2025-10-05T15:00:00Z", used: "2025-12-31T15:00:00Z" });
     await seed(db, person, { kind: "personal", name: "Revocada", created: "2025-01-02T15:00:00Z", revoked: "2026-02-03T15:00:00Z" });
+    await seed(db, person, { kind: "personal", name: "Viva", created: "2025-10-05T15:00:00Z", used: new Date().toISOString() });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
+      await expect(page.getByText(/^creada el 5 oct 2025 · usada hoy a las \d\d:\d\d$/)).toBeVisible();
       // Unused for over 90 days, so it reads expired: both its dates still carry the year.
       await expect(page.getByText("venció el 31 mar 2026 · sin uso desde el 31 dic 2025", { exact: true })).toBeVisible();
       await expect(page.getByText("revocada el 3 feb 2026 · ya no entra", { exact: true })).toBeVisible();
