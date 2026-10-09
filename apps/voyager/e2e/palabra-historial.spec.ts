@@ -831,6 +831,36 @@ test("a word with no entry that the network answered carries the latest network 
   ).toHaveCount(2);
 });
 
+test("the network translation in the subtitle is the latest unlisted row's, not the latest row's", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    {
+      at: Date.now() - 3 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: "¿en dónde?, adónde",
+      outcome: "unlisted",
+      headword: null,
+    },
+    {
+      at: Date.now() - 1 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: null,
+      outcome: "miss",
+      headword: null,
+    },
+  ]);
+
+  await page.goto("/registro/whereat");
+  await expect(
+    page.getByText(/^¿en dónde\?, adónde · 2 búsquedas desde el /),
+  ).toBeVisible();
+});
+
 test("a lemma none of whose forms was searched draws the empty state, even with other words recorded", async ({
   page,
 }) => {

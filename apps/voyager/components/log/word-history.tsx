@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { readLemmaHistory, readWordStudy, type WordHistoryRow } from "@/lib/log/summary";
+import { readLemmaHistory, readLemmaKey, type WordHistoryRow } from "@/lib/log/summary";
 import type { LookupOutcome } from "@/lib/log/types";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
@@ -97,13 +97,10 @@ export function WordHistory({ normalised }: { normalised: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    // The URL word may be a form: the lemma it answered to comes off the
-    // stored rows, never off a lookup. A word held under two lemmas opens
-    // the one named like it, else the first.
-    readWordStudy()
-      .then(async ({ rows: groups }) => {
-        const holders = groups.filter((group) => group.forms.some((form) => form.text === normalised));
-        const key = (holders.find((group) => group.key === normalised) ?? holders[0])?.key ?? normalised;
+    // The URL word may be a form: its lemma comes off its own stored rows,
+    // never off a lookup.
+    readLemmaKey(normalised)
+      .then(async (key) => {
         const { rows, total } = await readLemmaHistory(key);
         if (cancelled) return;
         setState(rows.length === 0 ? { kind: "empty", key } : { kind: "ready", key, rows, total });
