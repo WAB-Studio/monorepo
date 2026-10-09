@@ -986,8 +986,8 @@ test("a form's URL draws its lemma's senses, never the «es una forma de» notic
   await expect(
     page.getByRole("heading", { name: "linger", exact: true }),
   ).toBeVisible();
-  // A translation `linger` has and a lookup of `lingered` alone would
-  // reach only through the inflection notice.
+  // `lingered` also reaches this gloss, under the inflection notice, so the
+  // sense alone proves nothing: the clause rests on the notice's absence.
   await expect(glossLocator(page, "persistir")).toBeVisible();
   await expect(page.getByText(/es una forma de/)).toHaveCount(0);
 });
