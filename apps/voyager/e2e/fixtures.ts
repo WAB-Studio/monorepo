@@ -32,7 +32,7 @@ type PhraseNotesBody = { notes: Array<{ term: string; note: string }> };
 // "a stub answered" from "the real route answered" without trusting that
 // every caller remembered to opt in — the same gap `OPENAI_API_KEY=""`
 // left, as a convention rather than a guard.
-const STUB_HEADER = "x-e2e-word-stub";
+export const STUB_HEADER = "x-e2e-word-stub";
 
 // Each route is a single POST with no subpath, so matching on pathname
 // alone — ignoring `?headword=...` — catches every request it makes, with

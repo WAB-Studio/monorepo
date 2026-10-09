@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, STUB_HEADER, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -221,7 +221,7 @@ test("bajo su búsqueda: an answer for coccidiosis that arrives after the box mo
         await gate;
         await route.fallback();
       } else {
-        await route.fulfill({ status: 204, headers: { "x-e2e-word-stub": "1" } });
+        await route.fulfill({ status: 204, headers: { [STUB_HEADER]: "1" } });
       }
     },
   );
