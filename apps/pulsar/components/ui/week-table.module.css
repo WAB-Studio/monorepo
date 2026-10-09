@@ -32,7 +32,7 @@
 
 /* Today's column, header to footer. */
 .today {
-  background: var(--pulsar-accent-soft);
+  background: var(--pulsar-raised);
 }
 
 .head.today {
@@ -51,7 +51,8 @@
 }
 
 .head.today {
-  background-image: linear-gradient(var(--pulsar-accent-soft), var(--pulsar-accent-soft));
+  background-image: linear-gradient(var(--pulsar-raised), var(--pulsar-raised));
+  font-weight: 600;
 }
 
 /* The width the header's own text has to draw in: «hoy» rides beside the day
@@ -235,7 +236,7 @@
 }
 
 .foldToday {
-  background: var(--pulsar-accent-soft);
+  background: var(--pulsar-raised);
 }
 
 .foldDayBox {
@@ -254,7 +255,7 @@
 
 .foldToday .foldDayBox {
   color: var(--pulsar-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .foldGroup {
