@@ -295,7 +295,11 @@ for (const width of [360, 1440]) {
   });
 }
 
-test("at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the theme button without overflow, «ayer» between the title and the theme button", async ({
+// The widest date the app can draw, so the line is measured whatever day the suite runs.
+const LONGEST_DATE = "miércoles 30 de septiembre";
+
+for (const longest of [false, true]) {
+test(`at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the theme button without overflow (${longest ? "the longest date" : "today's date"})`, async ({
   person,
   browser,
   db,
@@ -311,8 +315,10 @@ test("at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the them
     const link = page.locator(`main a[href="/dia/${plusDays(-1)}"]`);
     const theme = page.getByRole("button", { name: THEME });
     await expect(link).toHaveText("ayer");
+    const eyebrow = page.locator("main > header:visible").getByText(/^[a-zñáéíóú]+ \d{1,2} de [a-zñ]+$/).first();
+    if (longest) await eyebrow.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
     const boxes = {
-      eyebrow: (await page.locator("main").getByText(/^[a-zñáéíóú]+ \d{1,2} de [a-zñ]+$/).first().boundingBox())!,
+      eyebrow: (await eyebrow.boundingBox())!,
       h1: (await h1.boundingBox())!,
       count: (await count.boundingBox())!,
       link: (await link.boundingBox())!,
@@ -325,11 +331,15 @@ test("at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the them
     expect(boxes.link.x).toBeGreaterThanOrEqual(boxes.h1.x + boxes.h1.width);
     expect(boxes.link.x + boxes.link.width).toBeLessThanOrEqual(boxes.theme.x);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    // Date and controls share the header's first line: «ayer» and the toggle stand at its end.
+    expect(boxes.link.x).toBeGreaterThanOrEqual(boxes.eyebrow.x + boxes.eyebrow.width);
+    expect(Math.abs(boxes.link.y + boxes.link.height / 2 - (boxes.eyebrow.y + boxes.eyebrow.height / 2))).toBeLessThan(12);
   } finally {
     await context.close();
     await cleanOwed(db, person, seeded);
   }
 });
+}
 
 test("a person whose first goal opened today reads «hechos 0 de 3» and no link to yesterday; opened yesterday, the link stays (RP-01)", async ({
   person,
