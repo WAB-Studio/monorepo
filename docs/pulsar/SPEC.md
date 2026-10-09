@@ -148,7 +148,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 #### An AI at the person's side
 
 - [x] **RP-38** — A person connects an AI assistant to their log with a key they create and name in the app, on a screen of its own reached from the goals. The key is shown once, when it is created, with what to paste into the assistant, and never again. The person sees each key's name, when it was created and when it was last used, and revokes it; a revoked key opens nothing, at once. A key reaches its person's log and no one else's. Claude Code and Claude Desktop connect this way. Decided by the user 2026-10-05.
-- [x] **RP-39** — An AI connected to a person's log (RP-38, RP-41) reads what the app's own screens read, in the same figures: the goals, each goal's phases, commitments, months, tasks and measure, one month's list with what it carried, today, the one-offs waiting for a day, and the report (RP-49). Months read as YYYY-MM, days as YYYY-MM-DD, amounts as whole numbers in their unit. Decided by the user 2026-10-05: «lee tal proyecto».
+- [x] **RP-39** — An AI connected to a person's log (RP-38, RP-60) reads what the app's own screens read, in the same figures: the goals, each goal's phases, commitments, months, tasks and measure, one month's list with what it carried, today, the one-offs waiting for a day, and the report (RP-49). Months read as YYYY-MM, days as YYYY-MM-DD, amounts as whole numbers in their unit. Decided by the user 2026-10-05: «lee tal proyecto».
 
 #### The week and the review
 
@@ -320,4 +320,4 @@ Principles, not recipes:
 | A PDF library (pdfkit, react-pdf, pdf-lib, puppeteer) | The browser's print to PDF over a print-styled page (RP-49). |
 | `@modelcontextprotocol/sdk` (1.x) | `@modelcontextprotocol/server` 2, which `mcp-handler` 2 requires. |
 | redis, `@upstash/*` | `mcp-handler` 2 is stateless. |
-| An OAuth server library (oidc-provider, @node-oauth/oauth2-server) | Route handlers of this app (RP-41). |
+| An OAuth server library (oidc-provider, @node-oauth/oauth2-server) | Route handlers of this app (RP-60). |
