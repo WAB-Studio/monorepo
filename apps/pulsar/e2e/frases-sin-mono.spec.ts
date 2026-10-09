@@ -113,7 +113,7 @@ test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53
         expect(set.transform).not.toBe("uppercase");
         expect(set.weight).toBe("500");
         expect(set.size).toBe("16px");
-        const sentence = page.getByText(connections.created.connected, { exact: true });
+        const sentence = page.getByText("Prueba: «lee mis metas y dime qué sigue».", { exact: true });
         expect(await sentence.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
       } finally {
         await context.close();

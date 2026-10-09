@@ -48,6 +48,12 @@ async function expectMetasCurrent(page: Page) {
   await expect(nav.getByRole("link", { name: "Metas", exact: true })).toHaveAttribute("aria-current", "page");
 }
 
+// Dead rows older than 30 days sit behind a fold (RP-64); open every one that is shut.
+async function openFolds(page: Page) {
+  const shut = page.getByRole("button", { name: /que ya no entran?$/, expanded: false });
+  while ((await shut.count()) > 0) await shut.first().click();
+}
+
 // The row's button only asks; the sheet's own «Revocar» is what revokes.
 async function confirmRevoke(page: Page) {
   await page.getByRole("button", { name: messages.row.revoke }).click();
@@ -389,6 +395,7 @@ test.describe("the connections screen (RP-38)", () => {
     await seed(db, person, { kind: "personal", name: "Viva", created: "2025-10-05T15:00:00Z", used: new Date().toISOString() });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
+      await openFolds(page);
       await expect(page.getByText(/^creada el 5 oct 2025 · usada hoy a las \d\d:\d\d$/)).toBeVisible();
       // Unused for over 90 days, so it reads expired: both its dates still carry the year.
       await expect(page.getByText("venció el 31 mar 2026 · sin uso desde el 31 dic 2025", { exact: true })).toBeVisible();
