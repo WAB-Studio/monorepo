@@ -43,7 +43,7 @@ type SeedRow = {
   text: string;
   normalised: string;
   translation: string | null;
-  outcome?: LookupOutcome;
+  outcome?: LookupOutcome | "unlisted";
   // "word" unless said otherwise: every seeded row until RL-34 was one.
   kind?: "word" | "phrase";
   // Set on a row standing in for one another device already merged in
@@ -487,4 +487,43 @@ test("a phrase that never translated shows its own missing-translation copy, not
   await expect(page.getByRole("heading", { name: phrase })).toBeVisible();
   await expect(page.getByText(messages.log.word.phraseMissing)).toBeVisible();
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+});
+
+// RL-55: a word the dictionary has no entry for and the network answered is
+// a row of its own. Its history names that origin, «De la red», never the
+// dictionary's «Sin entrada» (miss) and never a blank label.
+test("a word the network answered names its search «De la red» in the word's history", async ({ page }) => {
+  await deleteTranslator(page);
+
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: Date.now() - DAY_MS, text: "whereat", normalised: "whereat", translation: "a lo cual", outcome: "unlisted" },
+    { at: Date.now(), text: "whereat", normalised: "whereat", translation: "a lo cual", outcome: "miss" },
+  ]);
+
+  await page.goto("/registro/whereat");
+  await expect(page.getByRole("heading", { name: "whereat" })).toBeVisible();
+  await expect(page.getByText(/2 búsquedas/)).toBeVisible();
+  await expect(page.getByText(messages.log.outcome.unlisted, { exact: true })).toHaveCount(1);
+  await expect(page.getByText(messages.log.outcome.miss, { exact: true })).toHaveCount(1);
+  expect(messages.log.outcome.unlisted).toBe("De la red");
+});
+
+// Order is by `at`, and the network label sits on the row it belongs to.
+test("a network row keeps its own place among a word's other outcomes", async ({ page }) => {
+  await deleteTranslator(page);
+
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: Date.now() - 2 * DAY_MS, text: "whereat", normalised: "whereat", translation: null, outcome: "miss" },
+    { at: Date.now() - 1 * DAY_MS, text: "whereat", normalised: "whereat", translation: "a lo cual", outcome: "unlisted" },
+  ]);
+
+  await page.goto("/registro/whereat");
+  await expect(page.getByText(/2 búsquedas/)).toBeVisible();
+  const labelPattern = new RegExp(`^(${messages.log.outcome.unlisted}|${messages.log.outcome.miss})$`);
+  expect(await page.getByText(labelPattern).allTextContents()).toEqual([
+    messages.log.outcome.unlisted,
+    messages.log.outcome.miss,
+  ]);
 });
