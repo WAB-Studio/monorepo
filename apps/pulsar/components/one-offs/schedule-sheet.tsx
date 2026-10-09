@@ -85,6 +85,9 @@ export function ScheduleSheet({
           setError(null);
         }}
         allowNone={false}
+        // Moving a task of today (or one carried over) offers no «hoy»;
+        // `/sueltas` moves a later one and still does.
+        allowToday={!current || current.day > todayInZone()}
         min={todayInZone()}
         error={dateError}
       />

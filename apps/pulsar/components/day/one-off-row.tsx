@@ -6,14 +6,19 @@ import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
+import { ScheduleSheet } from "@/components/one-offs/schedule-sheet";
 import { TaskSheet } from "@/components/plan/task-sheet";
 import { IconButton, Mark, Row, Text } from "@/components/ui";
 
+import { dayPhrase } from "@/lib/day/day-phrase";
+import { todayInZone } from "@/lib/zone";
 import { type MessageKey } from "@/i18n/translator";
 
 export type OneOffRowProps = {
   oneOffId: string;
   name: string;
+  // The civil day it is drawn under; the step «Darle otro día» reads «ahora» from it.
+  day: string;
   // «del sábado 19»: set only on a one-off carried from a day before the one
   // drawn (RP-19), so today's own read with no second line.
   carriedFrom?: string;
@@ -34,12 +39,25 @@ export type OneOffRowProps = {
  * (`onLeadingClick`), the name opens its sheet (`onClick`) —
  * `Row`'s own split, so neither tap reaches the other's act by mistake.
  */
-export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow, goalName }: OneOffRowProps) {
+export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow, goalName }: OneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const today = todayInZone();
+
+  const dayLabel =
+    day === today
+      ? t("day.choice.today")
+      : dayPhrase(
+          (key, values) => t(key, values),
+          "oneOffs.when",
+          day,
+          today,
+          { weekdays: t.raw("day.weekdayLong") as string[], months: t.raw("day.monthLong") as string[] },
+        );
 
   function handleComplete() {
     if (pending) return;
@@ -105,6 +123,16 @@ export function OneOffRow({ oneOffId, name, carriedFrom, note, noteEyebrow, goal
         canDelete
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        onGiveDay={() => setScheduleOpen(true)}
+        giveDayLabel="oneOffs.sheet.giveOtherDay"
+      />
+      <ScheduleSheet
+        key={day}
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        oneOffId={oneOffId}
+        name={name}
+        current={{ day, label: dayLabel }}
       />
     </>
   );
