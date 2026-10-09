@@ -102,7 +102,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 ### The canvases
 
-- `apps/voyager` — «Diccionario de lectura», https://claude.ai/code/artifact/92f7291c-d0f3-4134-b652-be4affe98521
+- `apps/voyager` — «Diccionario de lectura», https://claude.ai/artifact/K9acY69gRz13JPtAn7GWwz (the old `claude.ai/code/artifact/92f7…` link opens the same canvas)
 - `apps/pulsar` — «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
 - `apps/portal` — «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
 - `apps/orbit` — **none yet.** Its screens were built before this rule. The next orbit screen opens
@@ -226,6 +226,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   day: this checkout's `main` had sat at the 2026-09-10 merge for nine days, 81 commits behind, and
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
+- Delete it only after `gh pr view <n> --json state` reads `MERGED`. Never chain the delete after `gh pr merge` in one
+  command: on 2026-10-09 a merge refused on a conflict still deleted #526's branch, and GitHub closed the PR.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
 - Commit and push a worker's branch from the main session when the environment denied the worker's
   commit or push. A working branch only, never `main` or `integracion`; say it in the report. Decided by

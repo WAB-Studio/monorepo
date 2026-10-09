@@ -1092,3 +1092,33 @@ Taken by the user on the critic's questions. No board drawn yet; each one opens 
   receives a part carried from before; there is no «viene de».
 - **A goal with no measure keeps «El plan»** (user, 2026-10-09, module 583). Only a goal measured in a unit other than time
   loses it: its `/metas/<id>/plan` redirects to the goal. A goal with no measure estimates its tasks in hours, as before.
+
+## Decisions of 2026-10-09, after the slice-close critic
+
+Taken by the user the same day («elige el recomendado», `private/plan-cierre-2026-10-09.md` Part 2). Each one waits on its
+module; until it lands, the screen and its approved board stay as built.
+
+- **A done task adds its figure only to a goal measured in time.** In a goal measured in km or pages a task carries no
+  figure: its sheet asks no estimate and Hoy never says «sin estimar». RP-36 retires for a successor in the module that
+  builds it.
+- **Hours are time.** `horas`, `hora` and `h` are accepted as a goal's unit and stored in minutes, so such a goal keeps
+  «El plan».
+- **An imported `ritmo:` moves the plan.** With `ritmo:` in the template, each task goes into the plan and its month only
+  orders it; the review lets the person change the rhythm like any other amount. Needs a board.
+- **Semana marks today with its own tint at 1440**, distinct from the card and from the evidence fill, checked for
+  contrast in both faces. Needs a board. The step back reads «‹ semana anterior», as Hoy reads «‹ ayer».
+- **Claude Desktop connects like claude.ai**, as a custom connector to `/mcp` with the OAuth consent, if the person's
+  Claude plan allows custom connectors; otherwise the `mcp-remote` file stays and says where the file lives in each
+  system, that it merges with other servers and that it needs Node.
+- **`PermisoPalabras` and `FuenteCaidaPalabras` are redrawn.** The consent lists only acts that exist: «darle mes o día a
+  una tarea, devolverla al plan y cambiar el monto de un mes», and «nunca» gains «cambiar el ritmo» (RP-56). An evidence
+  row under a fallen source says what it asks and that the source was not read.
+- **The connections section on `/conexiones` reads «conexiones»**, not «claude.ai»; each row already says where it
+  returns.
+- **The report:** the table header reads «por mes | hecho | planeado», as `ReporteImpresoCompacto` draws it; «HECHO km»
+  stays; the month's tasks stay a full list and every open task says it is pending; A4 is the app's promise, and the
+  tests print with the app's own `@page`.
+- **A goal's month line says tasks in tasks** («0 de 4 tareas») next to the measure's figure, so the two are not read as
+  the same number.
+- **The harness registry learns OAuth clients**, so `harness:reap` deletes the ones a test registers.
+- **Deploy when this cut closes.**

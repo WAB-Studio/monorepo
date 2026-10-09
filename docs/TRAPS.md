@@ -375,6 +375,15 @@ and `validator.ts`: both processes write the same files and the result is splice
 surfaces as exactly two bogus `TS1128` in generated files nobody edited. Stop the server, remove
 the directory, regenerate.
 
+### `next dev` keeps the old server code after a `git apply`
+
+A mutation applied with `git apply` to a server file (`lib/queries/*.ts`, an action) is not
+always picked up by a running `next dev`: the test stays green with the mutant in place. Only CSS
+reloaded reliably. Measured 2026-10-09 three times: module 643's `report.ts` mutants (even a
+`throw`) stayed green, and the validator of 642 saw m71 pass with the patch applied. Restart
+`next dev` after every `git apply`, or prove mutants on `next start` after a rebuild. A green
+under a mutant on a server you did not restart measures nothing.
+
 ## The harness
 
 ### Three layers plus the policies
@@ -487,6 +496,14 @@ HARNESS_LANE=2 HARNESS_BASE_URL=http://localhost:3001 \
 The helper in `e2e/accounts.spec.ts` strips `\D`, which takes the U+2212 minus along with the
 currency symbol. A sign asserted through it passes with the sign and without it. **Assert a sign
 against the raw `innerText`.**
+
+### Every lane commits as the global git identity
+
+A worktree reads the repository's config, and this repository had no `user.email` of its own,
+so every lane committed as the machine's global identity (`wilson@x`). Measured 2026-10-09: module
+660's first commit carried it and was amended. Since then `.git/config` sets `user.name wilson`
+and `user.email cxrkeybwp2004@gmail.com` locally, which every worktree inherits. Read
+`git config user.email` in a lane before its first commit; the global value is not this repo's.
 
 ### Dropping a worktree burns the report inside it
 
