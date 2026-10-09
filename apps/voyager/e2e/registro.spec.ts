@@ -644,7 +644,12 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
     await expect
       .poll(() => readLastSyncedAt(page), { message: "the first sync never finished" })
       .toBeGreaterThan(0);
+    // RNL-09: opening /registro with the copy on is one round of its own.
+    const openedSync = page.waitForResponse(
+      (response) => response.url().includes("/api/log/sync") && response.request().method() === "POST",
+    );
     await page.goto("/registro");
+    await openedSync;
     let rows = await readLogRows(page);
     expect(rows.map((row) => row.normalised), "the foreign row never made it down").toContain("foreign-word");
 
@@ -656,9 +661,19 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
 
     // A fresh mount resets `SyncOnHide`'s own 60s gate, so the sync below is
     // a new call, not the same one blocked from firing twice.
+    const syncedBeforeReload = await readLastSyncedAt(page);
     const mounted = armListener();
+    const reopenedSync = page.waitForResponse(
+      (response) => response.url().includes("/api/log/sync") && response.request().method() === "POST",
+    );
     await page.reload();
     await mounted;
+    // RNL-09: the reload is an open of /registro with the copy on, so a round
+    // leaves by itself; the hide below must be a second one, not this one.
+    await reopenedSync;
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the open's own round never finished" })
+      .toBeGreaterThan(syncedBeforeReload);
     const syncedBefore = await readLastSyncedAt(page);
     await hideTab(page);
     await expect
@@ -734,7 +749,11 @@ test("«Vaciar aquí y en mi cuenta» empties every device's copy, and a reader 
     await expect
       .poll(() => readLastSyncedAt(page), { message: "the copy never finished" })
       .toBeGreaterThan(0);
+    const openedSync = page.waitForResponse(
+      (response) => response.url().includes("/api/log/sync") && response.request().method() === "POST",
+    );
     await page.goto("/registro");
+    await openedSync;
 
     const clearTrigger = page.getByRole("button", { name: messages.log.clear.trigger });
     await expect(clearTrigger).toBeVisible();
