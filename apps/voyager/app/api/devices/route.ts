@@ -15,8 +15,7 @@ export async function GET(): Promise<Response> {
   if (!reader) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const devices = await withReaderDb((tx) => listDevices(tx, reader.id));
-  // `pending` stays at 0 only because `devices-panel.tsx` still parses it as required.
-  return Response.json({ devices, pending: 0 }, { status: 200 });
+  return Response.json({ devices }, { status: 200 });
 }
 
 // `revalidatePath` is never called here: `/cuenta` is a client component and
