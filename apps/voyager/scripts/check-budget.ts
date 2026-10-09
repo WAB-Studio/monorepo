@@ -91,6 +91,7 @@ const CALLER_IPS = [
   "203.0.113.205",
   "203.0.113.206",
   "203.0.113.207",
+  "203.0.113.208",
 ];
 const clients = new Set<string>(
   CALLER_IPS.flatMap((ip) => {
@@ -156,11 +157,11 @@ async function main() {
   // Plain lowercase headwords, so the route's own normalising leaves them as they are.
   const plain = index.sortedHeadwords.filter((headword) => /^q[a-z]{5,}$/.test(headword));
   const nonThin = plain.filter((headword) => !isThinAnswer(groupFor(index, headword)!)).slice(0, 10);
-  const thin = plain.filter((headword) => isThinAnswer(groupFor(index, headword)!)).slice(0, 3);
+  const thin = plain.filter((headword) => isThinAnswer(groupFor(index, headword)!)).slice(0, 4);
   const headwords = [...nonThin, ...thin];
   console.log(`non-thin headwords: ${nonThin.join(", ")}`);
   console.log(`thin headwords: ${thin.join(", ")}`);
-  if (nonThin.length < 10 || thin.length < 3) throw new Error("check-budget: the asset no longer has the headwords it picks");
+  if (nonThin.length < 10 || thin.length < 4) throw new Error("check-budget: the asset no longer has the headwords it picks");
 
   const unlistedWords = ["quorblintic", "zestrovanic", "plimvarticon"];
   const notesSource = "the grey heron waited";
@@ -346,6 +347,38 @@ async function main() {
       "text: a thin word whose cold answer carries no translations is written open",
       nullCold.status === 200 && providerCalls === 1 && nullRow?.translations_asked === false,
       `status=${nullCold.status} providerCalls=${providerCalls} row=${JSON.stringify(nullRow)}`,
+    );
+
+    // Thin, cached and still open: the backfill claims the caller's cap too.
+    await sql`
+      insert into reading.word_texts (headword, definition, example_en, example_es, model, translations, translations_asked)
+      values (${thin[3]}, null, ${EXAMPLE.en}, ${EXAMPLE.es}, 'check-budget', null, false)`;
+    providerReply = modelSays({ definition: null, example: EXAMPLE, translations: ["prueba"] });
+    const backfillIp = "203.0.113.208";
+    await setClientCalls(textKey(backfillIp), TEXT_CLIENT_CAP);
+    const dailyBeforeBackfill = await dailyCalls();
+    providerCalls = 0;
+    const backfillAtCap = await text.POST(
+      post("/api/word/text", { headword: thin[3], needDefinition: false }, backfillIp),
+    );
+    const [backfillRow] = await sql<{ translations_asked: boolean }[]>`
+      select translations_asked from reading.word_texts where headword = ${thin[3]}`;
+    assert(
+      "text: a backfill from a caller at WORD_TEXT_DAILY_CLIENT_CAP answers the cached row without the model",
+      backfillAtCap.status === 200 &&
+        providerCalls === 0 &&
+        (await dailyCalls()) === dailyBeforeBackfill &&
+        (await clientCalls(textKey(backfillIp))) === TEXT_CLIENT_CAP &&
+        backfillRow?.translations_asked === false,
+      `status=${backfillAtCap.status} providerCalls=${providerCalls} model_spend=${await dailyCalls()} ` +
+        `(was ${dailyBeforeBackfill}) row=${JSON.stringify(backfillRow)}`,
+    );
+    providerCalls = 0;
+    const backfillNoKey = await text.POST(post("/api/word/text", { headword: thin[3], needDefinition: false }, null));
+    assert(
+      "text: a backfill from a caller with no address to key never reaches the model",
+      backfillNoKey.status === 200 && providerCalls === 0 && (await dailyCalls()) === dailyBeforeBackfill,
+      `status=${backfillNoKey.status} providerCalls=${providerCalls} model_spend=${await dailyCalls()}`,
     );
 
     // --- /api/phrase/notes ------------------------------------------------

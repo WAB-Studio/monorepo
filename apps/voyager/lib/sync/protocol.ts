@@ -3,7 +3,7 @@ import { z } from "zod";
 // The wire format of the account copy (RL-22). The client driver and the
 // route handler both import this file, so the shape a `fetch` sends is
 // exactly the shape the handler parses — one schema, not two hand-kept in
-// sync (the pattern is app/api/translate/route.ts's `translateRequestSchema`).
+// sync (the pattern is lib/translate/types.ts's `translateRequestSchema`).
 
 // ~155 KB per request at ~310 bytes/row typical (424 B/row worst case admits
 // 212 KB), up from 289 B/row measured before `translation`. Both stay well
