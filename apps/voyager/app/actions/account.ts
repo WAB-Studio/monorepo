@@ -5,11 +5,12 @@ import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-// `@repo/supabase-auth` starts with `import "server-only"`, and `@/lib/env`
-// throws when its required vars are unset — both resolvable only inside
-// Next's own build. A plain Node import (Playwright's test runner, driving
-// `isDomainDeliverable` on its own below) dies on either. Deferred so
-// importing this file to reach that check never has to load them.
+// `@repo/supabase-auth` and `@/lib/account/sign-in-budget` start with
+// `import "server-only"`, and `@/lib/env` throws when its required vars are
+// unset — all resolvable only inside Next's own build. A plain Node import
+// (Playwright's test runner, driving `isDomainDeliverable` on its own below)
+// dies on any of them. Deferred so importing this file to reach that check
+// never has to load them.
 async function supabaseClient() {
   const [{ createSupabaseServerClient }, { env }] = await Promise.all([
     import("@repo/supabase-auth"),
@@ -113,6 +114,16 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
   // must not get a row in `auth.users` or a send against the project's own
   // quota, both spent whether or not the message can land.
   if (!(await isDomainDeliverable(domain))) return { ok: false, error: "domainUndeliverable" };
+
+  // After the guard, so a dead address never spends a caller's allowance; before
+  // Supabase, so a caller over it never spends the project's mail quota.
+  const [{ headers }, { claimSignInLink }] = await Promise.all([
+    import("next/headers"),
+    import("@/lib/account/sign-in-budget"),
+  ]);
+  if ((await claimSignInLink(await headers(), parsed.data)) === "rateLimited") {
+    return { ok: false, error: "rateLimited" };
+  }
 
   const [supabase, { env }] = await Promise.all([supabaseClient(), import("@/lib/env")]);
 

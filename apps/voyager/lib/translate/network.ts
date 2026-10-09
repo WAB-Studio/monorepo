@@ -1,8 +1,7 @@
-import { translateRequestSchema } from "@/app/api/translate/route";
-import type { TranslationResult } from "./types";
+import { translateRequestSchema, type TranslationResult } from "./types";
 
-// Client and server validate the same shape: `translateRequestSchema` lives
-// in the route this posts to, so the two never drift apart (RL-09).
+// Client and server validate the same shape: the route this posts to parses
+// `translateRequestSchema` too, so the two never drift apart (RL-09).
 export async function translateOverNetwork(
   text: string,
   options?: { signal?: AbortSignal },
