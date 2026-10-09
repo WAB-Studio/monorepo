@@ -2397,6 +2397,7 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runPlanReadCheck();
   await runGoallessDaylessCheck();
   await runEvidenceInfoAndFirstGoalDayCheck();
+  await runWeekAcrossMonthEvidenceCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -3178,6 +3179,68 @@ async function runEvidenceInfoAndFirstGoalDayCheck(): Promise<void> {
     if (goalIds.length > 0) {
       await db`delete from goals.commitments where goal_id in ${db(goalIds)} and user_id = ${userId}`;
       await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
+    await db.end();
+  }
+}
+
+/**
+ * A week that crosses a month still counts the evidence of its days in the
+ * month before: 2010-05-31 is the Monday of the week of Thursday 2010-06-03.
+ */
+async function runWeekAcrossMonthEvidenceCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runWeekAcrossMonthEvidenceCheck: no verified session");
+  const userId = person.id;
+  console.log(`\nmodule 593 check — ${new Date().toISOString()}`);
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const deviceId = "00000000-0000-4000-8000-0000000000d6";
+  let goalId: string | null = null;
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${userId}, 'check-593 measured', '2099-12-31'::date, 'searches', 'searches',
+              '2009-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+    const [source] = await db<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (${userId}, ${goalId}, 'check-593 evidence', 'daily', 'evidence', ${source.id}, 1,
+              '2009-12-01T00:00:00Z'::timestamptz)
+    `;
+    // Monday 05-31 (the previous month), Tuesday 06-01, and the Sunday before the week.
+    const lookupAt = ["2010-05-31T17:00:00Z", "2010-06-01T17:00:00Z", "2010-05-30T17:00:00Z"];
+    for (const [i, at] of lookupAt.entries()) {
+      await db`
+        insert into reading.lookups
+          (user_id, device_id, local_id, at, received_at, text, normalised, kind, outcome,
+           dictionary_ready, record_schema)
+        values (${userId}, ${deviceId}::uuid, ${i + 1}, ${at}::timestamptz, ${at}::timestamptz, 'x', 'x',
+                'word', 'exact', true, 1)
+      `;
+    }
+    const measure = (await loadDay("2010-06-03")).weekMeasure[goalId];
+    assert(
+      "weekMeasure on a Thursday of a week crossing a month counts the Monday of the month before",
+      measure === 2,
+      `weekMeasure = ${measure}, seeded 05-31 and 06-01 in the week and 05-30 the Sunday before`,
+    );
+  } finally {
+    await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
+    const [left] = await db<{ n: number }[]>`
+      select count(*)::int as n from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid
+    `;
+    assert("the week-across-month case leaves no reading.lookups behind", left.n === 0, `${left.n} rows left`);
+    if (goalId) {
+      await db`delete from goals.commitments where goal_id = ${goalId} and user_id = ${userId}`;
+      await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
     }
     await db.end();
   }
