@@ -31,7 +31,7 @@ export const syncRowSchema = z.object({
   text: z.string().min(1).max(500),
   normalised: z.string().min(1).max(500),
   kind: z.enum(["word", "phrase"]),
-  outcome: z.enum(["exact", "inflected", "miss", "translated", "untranslated"]),
+  outcome: z.enum(["exact", "inflected", "miss", "translated", "untranslated", "unlisted"]),
   headword: z.string().max(500).nullable(),
   rule: z.string().max(100).nullable(),
   senses: z.int().min(0).max(MAX_INT4),
