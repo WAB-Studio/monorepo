@@ -11,6 +11,7 @@ function goal(patch: Partial<GoalReport> = {}): GoalReport {
     horizon: "2027-10-01",
     endedOn: null,
     unit: "horas",
+    measureName: null,
     measureFed: false,
     thisMonth: { planned: 44, reached: 20, underPace: false },
     tasks: [

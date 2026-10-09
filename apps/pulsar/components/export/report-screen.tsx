@@ -9,6 +9,7 @@ import {
   type Section as GoalSection,
 } from "@/lib/export/sections";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
+import { formatQuantity } from "@/lib/units/time";
 import { civilDateToDate } from "@/lib/zone";
 import {
   Figure,
@@ -29,6 +30,7 @@ import {
   Text,
   type TableRow,
 } from "@/components/ui";
+import { useTimeWords } from "@/components/ui/figure";
 
 import { PrintButton } from "./print-button";
 
@@ -93,6 +95,21 @@ function MonthFigures({
 // What closes a task's row: the amount owed (a carried task still open), its
 // amount, or failing both the words the board uses: how many sub-tasks are
 // done, «hecha», «pendiente».
+// The task's whole estimate: its own, or its children's sum.
+function totalOf(task: ReportTask): number | null {
+  if (task.children.length === 0) return task.estimate;
+  const estimates = task.children.flatMap((child) =>
+    child.estimate === null ? [] : [child.estimate],
+  );
+  return estimates.length > 0 ? estimates.reduce((sum, value) => sum + value, 0) : null;
+}
+
+// Plain text, not a Figure: a sentence keeps its words in one run.
+function Quantity({ value, unit }: { value: number; unit: string }) {
+  const words = useTimeWords();
+  return <Text variant="meta">{formatQuantity(value, unit, words)}</Text>;
+}
+
 function Trailing({
   task,
   unit,
@@ -102,6 +119,9 @@ function Trailing({
   unit: string | null;
   t: Translator<"export">;
 }) {
+  if (unit !== null && task.part !== null) {
+    return <Quantity value={task.part} unit={unit} />;
+  }
   if (unit !== null && task.from !== null && !task.done && task.hasAmount) {
     return (
       <>
@@ -110,17 +130,9 @@ function Trailing({
       </>
     );
   }
-  const estimates = task.children.flatMap((child) =>
-    child.estimate === null ? [] : [child.estimate],
-  );
-  const amount =
-    task.children.length === 0
-      ? task.estimate
-      : estimates.length > 0
-        ? estimates.reduce((sum, value) => sum + value, 0)
-        : null;
+  const amount = totalOf(task);
   if (unit !== null && amount !== null) {
-    return <Figure variant="meta" value={amount} unit={unit} />;
+    return <Quantity value={amount} unit={unit} />;
   }
   if (task.children.length > 0) {
     return t("taskProgress", {
@@ -135,6 +147,7 @@ function TaskLine({
   name,
   done,
   meta,
+  continues,
   note,
   trailing,
   indented,
@@ -142,7 +155,8 @@ function TaskLine({
 }: {
   name: string;
   done: boolean;
-  meta?: string;
+  meta?: ReactNode;
+  continues?: ReactNode;
   note: string | null;
   trailing: ReactNode;
   indented?: boolean;
@@ -158,6 +172,11 @@ function TaskLine({
         {meta ? (
           <Text as="p" variant="sentence">
             {meta}
+          </Text>
+        ) : null}
+        {continues ? (
+          <Text as="p" variant="meta">
+            {continues}
           </Text>
         ) : null}
         {note !== null ? (
@@ -222,17 +241,18 @@ function GoalPart({
   const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
   const thisMonth = monthOnly.format(civilDateToDate(today));
 
+  const measure = goal.measureName ?? unit;
   const measureLine =
-    unit === null
+    unit === null || measure === null
       ? t("noMeasure", { date: until })
-      : declaredOnly
-        ? t("measuresFed", { unit })
-        : t("measures", { unit, date: until });
+      : declaredOnly && goal.measureFed
+        ? t("measuresDeclared", { measure, date: until })
+        : t("measures", { measure, date: until });
 
   const render = (section: GoalSection) => {
     switch (section) {
       case "month":
-        return <MonthFigures goal={goal} declaredOnly={declaredOnly} month={thisMonth} t={t} />;
+        return <MonthFigures goal={goal} declaredOnly={declaredOnly && goal.measureFed} month={thisMonth} t={t} />;
       case "toDate":
         return (
           <Section label={t("sections.toDate")}>
@@ -275,6 +295,14 @@ function GoalPart({
                     task.from !== null
                       ? t("fromMonth", {
                           month: monthOnly.format(civilDateToDate(task.from)),
+                        })
+                      : undefined
+                  }
+                  continues={
+                    unit !== null && task.part !== null && task.continuesIn !== null
+                      ? t.rich("continuesIn", {
+                          month: monthOnly.format(civilDateToDate(task.continuesIn)),
+                          total: () => <Quantity value={totalOf(task) ?? 0} unit={unit} />,
                         })
                       : undefined
                   }

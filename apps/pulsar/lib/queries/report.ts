@@ -205,6 +205,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       horizon: row.goal.horizon,
       endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
       unit: row.goal.measure_unit,
+      measureName: row.goal.measure_name,
       measureFed: matchingSourceKeys(row.goal, row.commitments).size > 0,
       thisMonth: {
         planned: figures.month?.planned ?? null,

@@ -12,8 +12,9 @@
   "download": "Descargar PDF",
   "printBrand": "Bitácora de metas",
   "printHead": "{brand} · {date}",
-  "measures": "mide {unit} · hasta el {date}",
-  "measuresFed": "mide {unit} · alimentada por el diccionario",
+  "measures": "mide {measure} · hasta el {date}",
+  "measuresDeclared": "mide {measure} · hasta el {date} · solo lo que dijiste tú",
+  "continuesIn": "sigue en {month} · <total>x</total> en total",
   "noMeasure": "no mide nada · hasta el {date}",
   "sections": {
     "month": "este mes · {month}",
@@ -49,7 +50,7 @@
   "taskPending": "pendiente",
   "taskProgress": "{done} de {total}",
   "declaredOnly": "solo lo que dijiste tú",
-  "unreadable": "No pudimos leer el diccionario de lectura. Las cifras que salen de él son solo lo que dijiste tú.",
+  "unreadable": "No pudimos leer una fuente. Las cifras que salen de ella son solo lo que dijiste tú.",
   "empty": "No tienes metas abiertas. No hay nada que exportar.",
   "place": "Metas"
 }
