@@ -110,6 +110,10 @@ for (const width of WIDTHS) {
       await expect(step.getByRole("radio", { name: "otro día", exact: true })).toBeVisible();
       await expect(step.getByRole("button", { name: oneOffs.schedule.move, exact: true })).toBeVisible();
       await expect(step.getByRole("button", { name: oneOffs.schedule.stay, exact: true })).toBeVisible();
+      // HoySueltaMoverDia, decided 2026-10-09: «mañana» is chosen, never «otro día» with today's date.
+      await expect(step.getByRole("radio", { name: "mañana", exact: true })).toBeChecked();
+      await expect(step.getByRole("radio", { name: "otro día", exact: true })).not.toBeChecked();
+      await expect(step.getByLabel("qué día")).toHaveCount(0);
     } finally {
       await db`delete from goals.one_offs where id = ${id}`;
     }
@@ -134,6 +138,91 @@ for (const width of WIDTHS) {
 
       await page.goto("/sueltas");
       await expect(nameButton(page, name)).toContainText(weekdayAndNumber(plusDays(1)));
+    } finally {
+      await db`delete from goals.one_offs where id = ${id}`;
+    }
+  });
+
+  test(`Hoy at ${width}: «${GIVE_OTHER}» → «Moverla» without touching anything moves a task of today to tomorrow and never sends today (RP-61)`, async ({
+    page,
+    db,
+    personId,
+  }) => {
+    await page.setViewportSize({ width, height: width < 1024 ? 800 : 900 });
+    const name = `Moverla sin tocar ${width} ${Date.now()}`;
+    const id = await seed(db, personId, name, todayInZone());
+    const posted: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && request.headers()["next-action"]) posted.push(request.postData() ?? "");
+    });
+    try {
+      await page.goto("/");
+      const step = await openStep(page, name);
+      await step.getByRole("button", { name: oneOffs.schedule.move, exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(nameButton(page, name)).toHaveCount(0);
+      expect(await dayOf(db, id)).toBe(plusDays(1));
+      const sent = posted.filter((body) => body.includes(id));
+      expect(sent.length).toBeGreaterThan(0);
+      for (const body of sent) expect(body).not.toContain(todayInZone());
+    } finally {
+      await db`delete from goals.one_offs where id = ${id}`;
+    }
+  });
+
+  test(`Hoy at ${width}: a task carried from last Wednesday offers «hoy» first and chosen; «Moverla» keeps it on Hoy with today's day and no «del …» (RP-61, RP-19)`, async ({
+    page,
+    db,
+    personId,
+  }) => {
+    await page.setViewportSize({ width, height: width < 1024 ? 800 : 900 });
+    const name = `Pagar el seguro ${width} ${Date.now()}`;
+    const old = plusDays(-6);
+    const id = await seed(db, personId, name, old);
+    try {
+      await page.goto("/");
+      const carried = weekdayAndNumber(old);
+      await expect(nameButton(page, name)).toContainText(`del ${carried}`);
+      const step = await openStep(page, name);
+      await expect(step).toContainText(`ahora: ${carried}`);
+      // HoySueltaMoverArrastrada: hoy, mañana, otro día, sin día — hoy chosen.
+      const radios = step.getByRole("radiogroup", { name: "Para cuándo" }).getByRole("radio");
+      await expect(radios).toHaveText(["hoy", "mañana", "otro día"]);
+      await expect(step.getByRole("radio", { name: "hoy", exact: true })).toBeChecked();
+      await expect(step.getByLabel("qué día")).toHaveCount(0);
+
+      await step.getByRole("button", { name: oneOffs.schedule.move, exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      expect(await dayOf(db, id)).toBe(todayInZone());
+      await expect(nameButton(page, name)).toBeVisible();
+      await expect(nameButton(page, name)).not.toContainText("del ");
+    } finally {
+      await db`delete from goals.one_offs where id = ${id}`;
+    }
+  });
+
+  test(`Hoy at ${width}: a carried task never says «${day.errors.oneOffDayPast}» and its «${oneOffs.schedule.stay}» leaves it as it was (RP-61)`, async ({
+    page,
+    db,
+    personId,
+  }) => {
+    await page.setViewportSize({ width, height: width < 1024 ? 800 : 900 });
+    const name = `Arrastrada sin pasado ${width} ${Date.now()}`;
+    const old = plusDays(-2);
+    const id = await seed(db, personId, name, old);
+    try {
+      await page.goto("/");
+      const step = await openStep(page, name);
+      await step.getByRole("button", { name: oneOffs.schedule.move, exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      expect(await dayOf(db, id)).not.toBe(old);
+
+      await db`update goals.one_offs set day = ${old} where id = ${id}`;
+      await page.goto("/");
+      const again = await openStep(page, name);
+      await again.getByRole("button", { name: oneOffs.schedule.stay, exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      expect(await dayOf(db, id)).toBe(old);
     } finally {
       await db`delete from goals.one_offs where id = ${id}`;
     }
@@ -244,7 +333,7 @@ test("Hoy: a loose task carried from two days ago reads «ahora: <its day>» in 
     const step = await openStep(page, name);
     await expect(step).toContainText(`ahora: ${weekdayAndNumber(old)}`);
     await expect(step).not.toContainText("ahora: hoy");
-    await expect(step.getByRole("radio", { name: "hoy", exact: true })).toHaveCount(0);
+    await expect(step.getByRole("radio", { name: "hoy", exact: true })).toBeVisible();
 
     await step.getByRole("radio", { name: "mañana", exact: true }).click();
     await step.getByRole("button", { name: oneOffs.schedule.move, exact: true }).click();
