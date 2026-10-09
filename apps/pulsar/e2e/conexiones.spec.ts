@@ -240,7 +240,7 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
       await expect(page.getByText("Claude", { exact: true })).toBeVisible();
-      const stamp = (d: Date) => `${d.getUTCDate()} \\p{L}+ ${d.getUTCFullYear()}`;
+      const stamp = (d: Date) => `${d.getUTCDate()} \\p{L}+\\.? ${d.getUTCFullYear()}`;
       await expect(
         page.getByText(new RegExp(`^conectada el ${stamp(created)} · usada el ${stamp(used)} \\d\\d:\\d\\d$`, "u")),
       ).toBeVisible();
