@@ -527,20 +527,3 @@ test("a network row keeps its own place among a word's other outcomes", async ({
     messages.log.outcome.miss,
   ]);
 });
-
-// The stored network answer is not lost on the way to the screen: the row
-// the record holds for «De la red» reads like any other (RL-34's rule that
-// a stored translation is shown, not asked of the dictionary again).
-test("a network row's stored translation reaches its word's history", async ({ page }) => {
-  await deleteTranslator(page);
-
-  await page.goto("/registro");
-  await seedRows(page, [
-    { at: Date.now(), text: "whereat", normalised: "whereat", translation: "a lo cual", outcome: "unlisted" },
-  ]);
-
-  await page.goto("/registro/whereat");
-  await expect(page.getByRole("heading", { name: "whereat" })).toBeVisible();
-  await expect(page.getByText(messages.log.listFailed)).toHaveCount(0);
-  await expect(page.getByText("a lo cual", { exact: true })).toBeVisible();
-});

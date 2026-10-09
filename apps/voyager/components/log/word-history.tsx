@@ -37,11 +37,12 @@ type ViewState =
   | { kind: "ready"; rows: WordHistoryRow[]; total: number }
   | { kind: "failed" };
 
-type OutcomeKey = "exact" | "inflected" | "translated" | "miss";
+type OutcomeKey = "exact" | "inflected" | "translated" | "miss" | "unlisted";
 
 // Mirrors `history-list.tsx`'s own fold: `untranslated` reads the same as
 // `miss` to a reader, neither found an answer.
-function outcomeKey(outcome: LookupOutcome): OutcomeKey {
+// `unlisted` is a lookup the network answered; `LookupOutcome` does not name it yet.
+function outcomeKey(outcome: LookupOutcome | "unlisted"): OutcomeKey {
   return outcome === "untranslated" ? "miss" : outcome;
 }
 
