@@ -1398,7 +1398,7 @@ test.describe("a task split across months (module 578)", () => {
           .getByRole("heading", { name: seeded.goalName, exact: true })
           .locator("xpath=ancestor::*[count(.//h2)=1][last()]");
         await expect(panel.getByText(/sigue en/)).toHaveCount(1);
-        expect((await panel.textContent()) ?? "").not.toMatch(/viene de/i);
+        expect((await panel.innerText()) ?? "").not.toMatch(/viene de/i);
       } finally {
         await context.close();
         await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
