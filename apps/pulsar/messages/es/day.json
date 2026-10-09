@@ -105,6 +105,9 @@
   },
   "cadence": {
     "weekdayShort": ["L", "M", "X", "J", "V", "S", "D"],
+    "weekdayName": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
+    "everyDay": "todos los días",
+    "daysJoin": "{list} y {last}",
     "weekdayPlural": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
     "onlyWeekday": "solo los {weekday}",
     "timesPerWeek": "{count, plural, one {# vez por semana} other {# veces por semana}}",
@@ -116,7 +119,6 @@
   },
   "row": {
     "saidByYou": "lo dijiste tú",
-    "asksNumber": "pide el número",
     "partialAmount": "{logged} de {target}",
     "evidenceAmount": "{count} {unit}"
   },

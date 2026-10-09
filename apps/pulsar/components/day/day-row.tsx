@@ -111,7 +111,7 @@ export function DayRow({
       : undefined;
   const cadenceText = cadence
     ? cadencePhrase((key, values) => t(key, values), cadence, {
-        weekdayShort: t.raw("day.cadence.weekdayShort") as string[],
+        weekdayShort: t.raw("day.cadence.weekdayName") as string[],
         weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
       })
     : null;
