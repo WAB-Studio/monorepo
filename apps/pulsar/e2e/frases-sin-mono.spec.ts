@@ -102,17 +102,16 @@ test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53
         await page.getByLabel(connections.nameLabel).fill("portátil del trabajo");
         await page.getByRole("button", { name: connections.create }).click();
         await expect(page.getByRole("heading", { level: 1, name: connections.created.title })).toBeVisible();
-        const group = page.getByText(connections.sections.keys, { exact: true });
-        await expect(group).toBeVisible();
+        // The key's own name is the section's label, not a «llaves» group with a name under it.
+        await expect(page.getByText(connections.sections.keys, { exact: true })).toHaveCount(0);
         const name = page.getByText("portátil del trabajo", { exact: true });
+        await expect(name).toBeVisible();
         const set = await name.evaluate((el) => {
           const style = getComputedStyle(el);
-          return { family: style.fontFamily, transform: style.textTransform, weight: style.fontWeight, size: style.fontSize };
+          return { family: style.fontFamily, transform: style.textTransform };
         });
-        expect(set.family).not.toMatch(/mono/i);
-        expect(set.transform).not.toBe("uppercase");
-        expect(set.weight).toBe("500");
-        expect(set.size).toBe("16px");
+        expect(set.family).toMatch(/mono/i);
+        expect(set.transform).toBe("uppercase");
         const sentence = page.getByText("Prueba: «lee mis metas y dime qué sigue».", { exact: true });
         expect(await sentence.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
       } finally {
@@ -133,6 +132,8 @@ test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53
       try {
         const page = await context.newPage();
         await page.goto("/conexiones");
+        // Dead for over 30 days, so the row sits behind its fold (RP-64).
+        await page.getByRole("button", { name: /^1 llave que ya no entra$/ }).click();
         const revoked = page.getByText(/^revocada el .* · ya no entra$/);
         await expect(revoked).toBeVisible();
         await expectMixed(revoked, ["3 feb 2026"]);

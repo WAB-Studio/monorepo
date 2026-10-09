@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -11,6 +11,7 @@ import {
   CodeBlock,
   Field,
   Figure,
+  Fold,
   Flex,
   Notice,
   Page,
@@ -32,6 +33,8 @@ export type ConnectionRow = {
   expiredAt: ConnectionStamp | null;
   created: ConnectionStamp;
   used: ConnectionStamp | null;
+  returnHost: string | null;
+  folded: boolean;
 };
 
 // An instant as the page reads it in the person's zone.
@@ -86,10 +89,12 @@ function Copyable({ text, label }: { text: string; label: string }) {
   );
 }
 
-function Keys({ rows, section, onAsk, busy }: {
+function Keys({ rows, section, foldKey, onAsk, onRenew, busy }: {
   rows: ConnectionRow[];
   section: string;
+  foldKey: "folds.keys" | "folds.connections";
   onAsk: (row: ConnectionRow) => void;
+  onRenew: (row: ConnectionRow) => void;
   busy: boolean;
 }) {
   const t = useTranslations("connections");
@@ -117,29 +122,54 @@ function Keys({ rows, section, onAsk, busy }: {
     return t.rich(first ? "row.metaUnusedFirst" : "row.metaUnused", { ...at(created) });
   };
 
+  const revokeName = (row: ConnectionRow) => {
+    if (row.kind === "personal") return t("row.revokeKey", { name: row.name });
+    if (row.returnHost) return t("row.revokeHost", { name: row.name, host: row.returnHost });
+    return t("row.revokeConnection", { name: row.name, date: row.created.date });
+  };
+  const host = (row: ConnectionRow) =>
+    t.rich("oauth.returns", {
+      host: row.returnHost ?? "",
+      strong: (chunks) => (
+        <Text asChild variant="sentence" tone="ink" strong>
+          <strong>{chunks}</strong>
+        </Text>
+      ),
+    });
+  const render = (row: ConnectionRow) => {
+    const dead = row.revoked || row.expiredAt !== null;
+    const renewable = row.kind === "personal" && row.expiredAt !== null && !row.revoked;
+    return (
+      <div key={row.id}>
+        <Separator />
+        <Flex align="center" justify="between" gap="3" py="3" minHeight="56px">
+          <Flex direction="column" align="start" gap="1" minWidth="0">
+            <Text variant="name" tone={dead ? "muted" : undefined}>
+              {row.name}
+            </Text>
+            {!dead && row.returnHost ? <Text variant="sentence">{host(row)}</Text> : null}
+            <Text variant="sentence">{line(row)}</Text>
+            {renewable ? (
+              <Button variant="ghost" tone="accent" tap={44} onClick={() => onRenew(row)}>
+                {t("row.renew")}
+              </Button>
+            ) : null}
+          </Flex>
+          {dead ? null : (
+            <Button variant="outline" tap={44} disabled={busy} aria-label={revokeName(row)} onClick={() => onAsk(row)}>
+              {t("row.revoke")}
+            </Button>
+          )}
+        </Flex>
+      </div>
+    );
+  };
+  const folded = rows.filter((row) => row.folded);
+
   return (
     <Section label={section}>
-      {rows.map((row) => {
-        const dead = row.revoked || row.expiredAt !== null;
-        return (
-          <div key={row.id}>
-            <Separator />
-            <Flex align="center" justify="between" gap="3" py="3" minHeight="56px">
-              <Flex direction="column" gap="1">
-                <Text variant="name" tone={dead ? "muted" : undefined}>
-                  {row.name}
-                </Text>
-                <Text variant="sentence">{line(row)}</Text>
-              </Flex>
-              {dead ? null : (
-                <Button variant="outline" tap={44} disabled={busy} onClick={() => onAsk(row)}>
-                  {t("row.revoke")}
-                </Button>
-              )}
-            </Flex>
-          </div>
-        );
-      })}
+      {rows.filter((row) => !row.folded).map(render)}
+      {folded.length > 0 ? <Fold label={t(foldKey, { count: folded.length })}>{folded.map(render)}</Fold> : null}
     </Section>
   );
 }
@@ -158,6 +188,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
   const [error, setError] = useState<MessageKey | null>(null);
   const [asked, setAsked] = useState<ConnectionRow | null>(null);
   const [pending, startTransition] = useTransition();
+  const nameField = useRef<HTMLInputElement>(null);
 
   const keys = rows.filter((row) => row.kind === "personal");
   const connected = rows.filter((row) => row.kind === "oauth");
@@ -176,6 +207,13 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
     });
   }
 
+  // A lapsed key's name goes back in the field so the new one replaces it by that name.
+  function renew(row: ConnectionRow) {
+    setName(row.name);
+    setError(null);
+    nameField.current?.focus();
+  }
+
   function revoke(id: string) {
     startTransition(async () => {
       // Zero rows reads as «already revoked»: either way the list is refreshed.
@@ -187,20 +225,37 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
 
   if (created) {
     const command = t("created.claudeCode", { url: siteUrl, key: created.key });
+    const desktop = JSON.stringify(
+      {
+        mcpServers: {
+          pulsar: {
+            command: "npx",
+            args: ["mcp-remote", `${siteUrl}/mcp`, "--header", `Authorization: Bearer ${created.key}`],
+          },
+        },
+      },
+      null,
+      2,
+    );
     return (
       <Page>
         <ScreenHeader title={t("created.title")} back={place} />
         <Notice role="note">{t("created.once")}</Notice>
-        <Section label={t("sections.keys")}>
-          <Text variant="name">{created.name}</Text>
+        <Section label={created.name}>
           <Copyable text={created.key} label={t("created.copyName")} />
         </Section>
         <Section label={t("created.terminal")}>
           <Copyable text={command} label={t("created.copyCommandName")} />
-          <Text as="p" variant="sentence" tone="muted">
-            {t("created.connected")}
-          </Text>
         </Section>
+        <Section label={t("created.desktop")}>
+          <Text as="p" variant="sentence" tone="muted">
+            {t("created.desktopNote")}
+          </Text>
+          <Copyable text={desktop} label={t("created.copyDesktopName")} />
+        </Section>
+        <Text as="p" variant="sentence" tone="muted">
+          {t("created.connected")}
+        </Text>
         <Button variant="outline" tap={52} block onClick={() => setCreated(null)}>
           {t("created.done")}
         </Button>
@@ -211,6 +266,7 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
   const form = (
     <Section label={keys.length > 0 || connected.length > 0 ? t("sections.another") : t("sections.first")}>
       <Field
+        ref={nameField}
         label={t("nameLabel")}
         placeholder={t("namePlaceholder")}
         hint={error ? root(error) : t("nameHint")}
@@ -229,9 +285,25 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
     <Page>
       <ScreenHeader title={t("title")} back={place} />
       <Text as="p">{t("intro")}</Text>
-      {keys.length > 0 ? <Keys rows={keys} section={t("sections.keys")} onAsk={setAsked} busy={pending} /> : null}
+      {keys.length > 0 ? (
+        <Keys
+          rows={keys}
+          section={t("sections.keys")}
+          foldKey="folds.keys"
+          onAsk={setAsked}
+          onRenew={renew}
+          busy={pending}
+        />
+      ) : null}
       {connected.length > 0 ? (
-        <Keys rows={connected} section={t("sections.oauth")} onAsk={setAsked} busy={pending} />
+        <Keys
+          rows={connected}
+          section={t("sections.oauth")}
+          foldKey="folds.connections"
+          onAsk={setAsked}
+          onRenew={renew}
+          busy={pending}
+        />
       ) : null}
       {form}
       <RevokeSheet
