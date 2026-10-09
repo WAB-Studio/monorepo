@@ -297,8 +297,17 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                               ? "partial"
                               : "empty"
                       }
-                      sourceName={
-                        slot.satisfiedBy === "evidence" && slot.labelKey ? t(slot.labelKey) : undefined
+                      evidence={
+                        commitment.evidence
+                          ? {
+                              asks: t(commitment.evidence.unitKey, { count: commitment.evidence.threshold }),
+                              got:
+                                slot.satisfiedBy === "evidence"
+                                  ? t(commitment.evidence.unitKey, { count: slot.quantity ?? 0 })
+                                  : null,
+                              source: slot.satisfiedBy === "evidence" ? t(commitment.evidence.labelKey) : null,
+                            }
+                          : undefined
                       }
                       target={commitment.target}
                       unit={commitment.unit}

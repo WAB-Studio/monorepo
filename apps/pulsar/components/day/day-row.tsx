@@ -24,10 +24,9 @@ export type DayRowProps = {
   // the quantity sheet.
   kind: DayRowKind;
   markState: MarkState;
-  // The evidence catalogue's own name for the source, shown only once this
-  // row is actually satisfied by it (RP-09): before that there is nothing
-  // yet to attribute to a source.
-  sourceName?: string;
+  // An evidence row's ask, and once met what it got and its source (RP-08,
+  // RP-09): `got` and `source` stay null until the row is satisfied.
+  evidence?: { asks: string; got: string | null; source: string | null };
   // The plan's own number, unit and cadence for a `quantity` row (RP-03):
   // null for every other kind, which needs none of them.
   target?: number | null;
@@ -77,7 +76,7 @@ export function DayRow({
   name,
   kind,
   markState,
-  sourceName,
+  evidence,
   target,
   unit,
   cadence,
@@ -108,8 +107,8 @@ export function DayRow({
         ? formatQuantity(loggedQuantity, unit, words)
         : target != null && unit != null
           ? formatQuantity(target, unit, words)
-          : sourceName
-      : sourceName;
+          : undefined
+      : undefined;
   const cadenceText = cadence
     ? cadencePhrase((key, values) => t(key, values), cadence, {
         weekdayShort: t.raw("day.cadence.weekdayShort") as string[],
@@ -129,6 +128,7 @@ export function DayRow({
     quiet: Boolean(quiet),
     cadenceText: progress ? null : cadenceText,
     amount,
+    evidence,
     status: metWords ?? progress,
     writtenTime,
     writtenLabel,
