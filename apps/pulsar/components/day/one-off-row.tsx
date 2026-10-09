@@ -87,7 +87,7 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
     <>
       <Row
         leading={<Mark state="empty" />}
-        leadingLabel={t("day.oneOffs.markLabel")}
+        leadingLabel={t("oneOffs.markDone", { name })}
         name={name}
         meta={carriedFrom}
         metaVariant="sentence"
