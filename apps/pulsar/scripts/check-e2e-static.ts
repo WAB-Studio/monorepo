@@ -9,8 +9,11 @@ export type Allowed = { file: string; line: number; why: string };
 export type Violation = { file: string; line: number; text: string };
 
 const NAVIGATIONS = [/\.goto\(/, /\.waitForURL\(/, /\.reload\(/, /\.goBack\(/, /\.goForward\(/];
-// `expect(` retries; `settled(` and `visit(` (e2e/fixtures.ts) wait for the one visible `main` and the fonts.
-const ANCHORS = [/\bexpect\b/, /\bsettled\(/, /\bvisit\(/];
+// `settled(` and `visit(` (e2e/fixtures.ts) wait for the one visible `main` and the fonts.
+const ANCHORS = [/\bsettled\(/, /\bvisit\(/];
+// An awaited web-first assertion retries; one whose argument is itself awaited has already read
+// the page, and a bare `expect(value)` waits for nothing. It anchors from the next statement on.
+const ASSERTION = /\bawait\s+expect\s*(?:\.poll\s*)?\((?!\s*\(?\s*await\b)/;
 const MEASURES = [
   /\.boundingBox\(/,
   /\.screenshot\(/,
@@ -23,7 +26,7 @@ const MEASURES = [
 // A new test, or a top-level declaration, starts from a page nobody navigated.
 const BOUNDARY = /^\s*test(?:\.\w+)*\(|^(?:export\s+)?(?:async\s+)?function\b|^(?:export\s+)?const\s+\w+\s*=|^\}\);?\s*$/;
 
-type Event = { at: number; kind: "nav" | "anchor" | "measure" };
+type Event = { at: number; kind: "nav" | "anchor" | "assertion" | "measure" };
 
 function events(code: string): Event[] {
   const found: Event[] = [];
@@ -35,9 +38,17 @@ function events(code: string): Event[] {
   };
   add(NAVIGATIONS, "nav");
   add(ANCHORS, "anchor");
+  add([ASSERTION], "assertion");
   add(MEASURES, "measure");
-  // Equal positions cannot happen between kinds; order by position, reads before anchors on a tie.
   return found.sort((a, b) => a.at - b.at);
+}
+
+// Net open brackets of `code` from `from` on, with string contents dropped.
+function depth(code: string, from: number): number {
+  const bare = code.slice(from).replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, "");
+  let open = 0;
+  for (const ch of bare) open += "([{".includes(ch) ? 1 : ")]}".includes(ch) ? -1 : 0;
+  return open;
 }
 
 export function scan(
@@ -47,15 +58,30 @@ export function scan(
   const raw: Violation[] = [];
   for (const { name, text } of files) {
     let armed = false;
+    // Open brackets of an assertion's statement; null when none is being read.
+    let assertion: number | null = null;
     text.split("\n").forEach((line, i) => {
-      if (BOUNDARY.test(line)) armed = false;
+      if (BOUNDARY.test(line)) {
+        armed = false;
+        assertion = null;
+      }
       const code = line.replace(/^\s*\/\/.*$/, "");
-      // A line with several navigations or reads is judged by the first of each kind.
+      let from = 0;
       for (const event of events(code)) {
         if (event.kind === "nav") armed = true;
         else if (event.kind === "anchor") armed = false;
-        else if (armed) {
+        else if (event.kind === "assertion") {
+          assertion ??= 0;
+          from = event.at;
+        } else if (armed) {
           raw.push({ file: name, line: i + 1, text: line.trim() });
+          armed = false;
+        }
+      }
+      if (assertion !== null) {
+        assertion += depth(code, from);
+        if (assertion <= 0) {
+          assertion = null;
           armed = false;
         }
       }
@@ -69,7 +95,18 @@ export function scan(
 }
 
 // `file:line` of a read that is safe without an anchor, and why. An entry that matches no violation fails the run.
-export const ALLOWED: readonly Allowed[] = [];
+export const ALLOWED: readonly Allowed[] = [
+  {
+    file: "armazon-estados.spec.ts",
+    line: 133,
+    why: "`loaded(page)` on :132 is `expect(main).toContainText(/\\S/)`, a web-first wait the scan cannot see through",
+  },
+  {
+    file: "pestanas.spec.ts",
+    line: 249,
+    why: "`loaded(page)` on :248 is `expect(main).toContainText(/\\S/)`, a web-first wait the scan cannot see through",
+  },
+];
 
 function main(): void {
   const dir = path.join(import.meta.dirname, "..", "e2e");

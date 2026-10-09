@@ -147,6 +147,7 @@ test("each open goal draws its month: the line, the carried task first, the task
     // One tap on the name lands on the goal's month, on a target 48px tall.
     await page.goto("/mes");
     const nameLink = page.getByRole("link", { name: `Inglés ${stamp}` });
+    await expect(nameLink).toBeVisible();
     expect((await nameLink.boundingBox())!.height).toBeGreaterThanOrEqual(48);
     await nameLink.click();
     await expect(page).toHaveURL(new RegExp(`/metas/${timed}/meses/${seg}$`));

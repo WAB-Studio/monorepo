@@ -70,3 +70,34 @@ test("an allowlist entry that matches nothing is stale", () => {
   assert.equal(out.violations.length, 1);
   assert.deepEqual(out.stale, allowed);
 });
+
+const GOTO = "  await page.goto(\"/hoy\");";
+
+test("a measure inside the arguments of an expect on the armed line still fails", () => {
+  const out = run([GOTO, "  expect((await el.boundingBox())!.width).toBe(6);"]);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].line, 3);
+});
+
+test("a measure in the arguments of a multi-line awaited expect still fails", () => {
+  const out = run([GOTO, "  await expect(", "    await el.evaluate((n) => n.getBoundingClientRect().width),", "  ).toBe(6);"]);
+  assert.equal(out.violations.length, 1);
+  assert.equal(out.violations[0].line, 4);
+});
+
+test("an awaited expect anchors the statement after it, even when it spans lines", () => {
+  const out = run([GOTO, "  await expect(", "    page.locator(\"main\"),", "  ).toBeVisible();", MEASURE]);
+  assert.equal(out.violations.length, 0);
+});
+
+test("a bare expect of a value anchors nothing", () => {
+  assert.equal(run([GOTO, "  expect(value).toBe(1);", MEASURE]).violations.length, 1);
+});
+
+test("an awaited expect of an awaited read anchors nothing", () => {
+  assert.equal(run([GOTO, "  await expect(await page.title()).toBe(\"a\");", MEASURE]).violations.length, 1);
+});
+
+test("expect.poll anchors", () => {
+  assert.equal(run([GOTO, "  await expect.poll(() => n).toBe(1);", MEASURE]).violations.length, 0);
+});
