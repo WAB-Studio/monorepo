@@ -159,7 +159,13 @@
       "failedAction": "Reintentar",
       "noSessionTitle": "Tu registro vive solo en este dispositivo",
       "noSessionBody": "Con una cuenta lo llevas al teléfono y al portátil. Sin ella, nada sale de aquí.",
-      "noSessionAction": "Entrar con mi correo"
+      "noSessionAction": "Entrar con mi correo",
+      "confirmTitle": "Copiar tu registro a {email}",
+      "confirmBody": "Hasta que lo confirmes, nada sale de este dispositivo.",
+      "confirmAction": "Empezar a copiar",
+      "failedBodyFirst": "Tus palabras siguen en este dispositivo.",
+      "retiredTitle": "Este dispositivo ya no copia",
+      "retiredBody": "Lo retiraste de tu cuenta y tu registro se quedó completo aquí. Para copiarlo de nuevo, cierra sesión y vuelve a entrar."
     },
     "info": {
       "tabs": {
@@ -191,8 +197,26 @@
       "loading": "Cargando los dispositivos…",
       "empty": "Todavía no hay ningún dispositivo copiando tu registro",
       "confirmBody": "Sus búsquedas salen de tu copia y este dispositivo deja de sincronizar. Lo que ya se copió a tus otros dispositivos sigue en ellos.",
-      "confirmBodyOwn": "Además, la copia se apaga en este dispositivo: tu registro local se queda completo aquí, y si la activas de nuevo se sube todo desde cero.",
-      "confirmBodyLastDevice": "Es tu único dispositivo copiando: la copia queda vacía. Tu registro local se queda entero donde esté, y si vuelves a activarla se sube todo otra vez."
+      "confirmBodyOwn": "Además, este dispositivo deja de copiar: tu registro se queda completo aquí. Para copiarlo de nuevo, cierra sesión y vuelve a entrar.",
+      "confirmBodyLastDevice": "Es tu único dispositivo copiando: la copia de tu cuenta queda vacía. Tu registro se queda entero aquí.",
+      "label": "{browser} en {platform}",
+      "labelUnknown": "Dispositivo desconocido",
+      "browser": {
+        "chrome": "Chrome",
+        "safari": "Safari",
+        "firefox": "Firefox",
+        "edge": "Edge",
+        "opera": "Opera",
+        "samsung": "Samsung Internet"
+      },
+      "platform": {
+        "android": "Android",
+        "ios": "iPhone",
+        "ipados": "iPad",
+        "windows": "Windows",
+        "macos": "macOS",
+        "linux": "Linux"
+      }
     }
   },
   "error": {

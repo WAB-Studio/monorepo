@@ -86,7 +86,7 @@ export default async function CuentaPage({
           </Flex>
         )}
 
-        {tab === "account" ? <AccountPanel readerEmail={reader?.email ?? null} /> : <AccountInfo />}
+        {tab === "account" ? <AccountPanel reader={reader} /> : <AccountInfo />}
       </Flex>
     </Page>
   );
