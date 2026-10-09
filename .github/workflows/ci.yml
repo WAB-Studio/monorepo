@@ -460,6 +460,8 @@ jobs:
       # Creates or refreshes lane 7's shared pair; idempotent.
       - run: npm run harness:token -w apps/orbit
 
+      - run: npm run check:e2e-static -w apps/pulsar
+
       - run: npm run build -w apps/pulsar
 
       - name: Start the app and wait for it to answer
