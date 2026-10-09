@@ -1137,21 +1137,24 @@ test.describe("the report's type and space (module 317)", () => {
           /mono/i,
         );
         // A section's label sits 12 above its content; sections 32 apart.
-        const gaps = await page.evaluate(() => {
+        const gaps = await page.evaluate((goalName) => {
           const labels = [...document.querySelectorAll("main section > *:first-child")]
             .filter((node) => /^(este mes|hasta hoy|fases|tareas de)|· por mes$/.test(node.textContent ?? ""))
             .map((node) => ({
+              text: node.textContent ?? "",
               label: node.getBoundingClientRect(),
               next: node.nextElementSibling?.getBoundingClientRect() ?? null,
               section: node.parentElement!.getBoundingClientRect(),
               after: node.parentElement!.nextElementSibling?.getBoundingClientRect() ?? null,
             }));
           return labels.map((entry) => ({
+            own: entry.text.includes(goalName),
             inner: entry.next ? Math.round(entry.next.top - entry.label.bottom) : null,
             outer: entry.after ? Math.round(entry.after.top - entry.section.bottom) : null,
           }));
-        });
-        expect(gaps.length).toBeGreaterThan(1);
+        }, seeded.name);
+        // The seeded goal's own «<meta> · por mes» section is among those measured.
+        expect(gaps.filter((gap) => gap.own).length).toBeGreaterThan(0);
         for (const gap of gaps) {
           if (gap.inner !== null) expect(gap.inner).toBe(12);
           if (gap.outer !== null) expect(gap.outer).toBe(32);

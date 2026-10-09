@@ -14,6 +14,7 @@ import postgres from "postgres";
 
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "./lib/people";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
+import { todayInZone } from "@/lib/zone";
 
 type Call = { at: number; connection: number; query: string };
 type Handler = (input: Record<string, unknown>, ctx: ServerContext) => Promise<{
@@ -230,7 +231,7 @@ test("get_today answers today's day", async () => {
   const result = await call("get_today", {});
   assert.notEqual(result.isError, true);
   const body = result.structuredContent as { day: string; goals: { id: string }[]; slots: unknown[] };
-  assert.match(body.day, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(body.day, todayInZone());
   assert.deepEqual(body.goals.map((goal) => goal.id), [subjectGoal]);
   assert.equal(body.slots.length, 1);
 });
