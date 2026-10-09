@@ -12,6 +12,7 @@ export function Panel({
   bordered = false,
   stacked = false,
   label,
+  print,
 }: {
   children?: ReactNode;
   as?: "section" | "div";
@@ -23,12 +24,15 @@ export function Panel({
   // own stacking; from 1024px the card, without the gap between rows.
   stacked?: boolean;
   label?: string;
+  // `plain`: on paper no card, only what it holds.
+  print?: "plain";
 }) {
   const className = [
     styles.panel,
     row ? styles.row : undefined,
     bordered ? styles.bordered : undefined,
     stacked ? styles.stacked : undefined,
+    print === "plain" ? styles.printPlain : undefined,
   ]
     .filter(Boolean)
     .join(" ");
@@ -41,6 +45,7 @@ export function Panel({
 
 // Cards side by side from 1024px, tops aligned, two columns at every width;
 // below, the children stay the parent's own items.
-export function PanelGrid({ children }: { children: ReactNode }) {
-  return <div className={styles.grid}>{children}</div>;
+// `print="stack"`: on paper one full-width column.
+export function PanelGrid({ children, print }: { children: ReactNode; print?: "stack" }) {
+  return <div className={print === "stack" ? `${styles.grid} ${styles.printStack}` : styles.grid}>{children}</div>;
 }

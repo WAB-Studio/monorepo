@@ -1245,6 +1245,14 @@ test.describe("the report's type and space (module 317)", () => {
         }, seeded.name);
         // The seeded goal's own «<meta> · por mes» section is among those measured.
         expect(gaps.filter((gap) => gap.own).length).toBeGreaterThan(0);
+        // The months table's cell padding is the screen's own (18): the compact paper rule must not reach it.
+        const cellPadding = await page.evaluate(() => {
+          const cell = document.querySelector("main table td");
+          if (!cell) return null;
+          const style = getComputedStyle(cell);
+          return [style.paddingTop, style.paddingBottom];
+        });
+        expect(cellPadding).toEqual(["18px", "18px"]);
         for (const gap of gaps) {
           if (gap.inner !== null) expect(gap.inner).toBe(12);
           if (gap.outer !== null) expect(gap.outer).toBe(32);
