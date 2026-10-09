@@ -3,6 +3,12 @@
   display: none;
 }
 
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
 @media print {
   @page {
     size: A4;
@@ -46,6 +52,57 @@
      label and its goal's heading stay with what follows. */
   .block h2,
   .block section > :first-child {
+    break-after: avoid;
+  }
+
+  /* Paper is one column as wide as the sheet's margins leave: the screen's
+     max width, its centring, the rail's room and the card chrome come off, and
+     the goals stack. Goals run on the page's own padding, which is `@page`. */
+  :global(body):has(.page) :global(main):has(> .page) {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .page {
+    gap: 16px;
+    padding: 0;
+    max-width: none;
+    margin: 0;
+  }
+
+  .page > :global(div) {
+    gap: 16px;
+  }
+
+  .page > :global(div) > :global(div:last-child) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .page > :global(div) > :global(div:last-child) > * {
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .goal {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    row-gap: 12px;
+  }
+
+  .all {
+    grid-column: 1 / -1;
+  }
+
+  .lead {
     break-after: avoid;
   }
 

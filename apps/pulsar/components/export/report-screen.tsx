@@ -19,6 +19,7 @@ import {
   Panel,
   PanelGrid,
   PrintBlock,
+  PrintGoal,
   PrintHidden,
   PrintOnly,
   PrintPage,
@@ -463,26 +464,25 @@ function GoalPart({
     }
   };
 
-  const [first, ...rest] = sections;
+  const spans = (section: GoalSection) => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
-    <Flex direction="column" gap="6">
-      <PrintBlock>
-        <Flex direction="column" gap="6">
-          <Flex direction="column" gap="3">
-            <Text asChild variant="name" rule>
-              <h2>{goal.name}</h2>
-            </Text>
-            <Text as="p" variant="sentence">
-              {measureLine}
-            </Text>
-          </Flex>
-          {first ? render(first) : null}
+    <PrintGoal>
+      <PrintBlock span="lead">
+        <Flex direction="column" gap="3">
+          <Text asChild variant="name" rule>
+            <h2>{goal.name}</h2>
+          </Text>
+          <Text as="p" variant="sentence">
+            {measureLine}
+          </Text>
         </Flex>
       </PrintBlock>
-      {rest.map((section) => (
-        <PrintBlock key={section}>{render(section)}</PrintBlock>
+      {sections.map((section) => (
+        <PrintBlock key={section} span={spans(section)}>
+          {render(section)}
+        </PrintBlock>
       ))}
-    </Flex>
+    </PrintGoal>
   );
 }
 

@@ -177,21 +177,25 @@ test.describe("the report folds its weeks (RP-49)", () => {
     const box = execFileSync("pdftotext", ["-bbox", file, "-"], { encoding: "utf8" });
     const lines: Line[] = [];
     let page = 0;
-    const words: { page: number; x: number; top: number; bottom: number; text: string }[] = [];
+    const words: { page: number; x: number; right: number; top: number; bottom: number; text: string }[] = [];
     for (const raw of box.split("\n")) {
       if (raw.includes("<page ")) page += 1;
-      const found = /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">(.*)<\/word>/.exec(raw);
+      const found = /<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">(.*)<\/word>/.exec(raw);
       if (found) {
-        words.push({ page, x: Number(found[1]), top: Number(found[2]), bottom: Number(found[3]), text: found[4] });
+        words.push({ page, x: Number(found[1]), right: Number(found[3]), top: Number(found[2]), bottom: Number(found[4]), text: found[5] });
       }
     }
+    // Side-by-side columns (the figures of a goal on paper) are separate lines: a gap wider than a space splits one.
+    let reach = 0;
     for (const word of words.sort((a, b) => a.page - b.page || a.top - b.top || a.x - b.x)) {
       const last = lines[lines.length - 1];
-      if (last && last.page === word.page && Math.abs(last.top - word.top) < 2) {
+      if (last && last.page === word.page && Math.abs(last.top - word.top) < 2 && word.x - reach < 24) {
         last.text += ` ${word.text}`;
         last.bottom = Math.max(last.bottom, word.bottom);
+        reach = word.right;
       } else {
         lines.push({ page: word.page, top: word.top, bottom: word.bottom, text: word.text });
+        reach = word.right;
       }
     }
     return lines;

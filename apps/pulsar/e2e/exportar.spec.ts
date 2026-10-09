@@ -22,7 +22,7 @@ import exportMessages from "../messages/es/export.json";
 // Pages the two-goal seeded report takes on A4 with the carried notes
 // printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265; 317 spaced the sections: 11 to 10;
 // 379 printed the months alone and let a section run across pages: 10 to 6).
-const A4_PAGES = 6;
+const A4_PAGES = 4;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {

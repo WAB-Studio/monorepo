@@ -361,6 +361,14 @@
     break-after: avoid;
   }
 
+  .header {
+    padding-block-end: 6px;
+  }
+
+  .cell {
+    padding-block: 6px;
+  }
+
   /* The header and the first row stay together, so the label above them
      follows its first row onto the next page. */
   .wide thead,
