@@ -22,6 +22,10 @@ export function syncStateForReader(current: SyncState, readerId: string, mintId:
   const hasCursors = current.pushedThroughLocalId !== null || current.pulledThroughCursor !== null;
   const sameReader = current.readerId === readerId || (current.readerId === null && !hasCursors);
   if (sameReader && !current.retired) return { ...current, readerId, enabled: true };
+  return freshSyncState(readerId, mintId);
+}
+
+function freshSyncState(readerId: string | null, mintId: () => string): SyncState {
   return {
     deviceId: mintId(),
     pushedThroughLocalId: null,
@@ -31,4 +35,14 @@ export function syncStateForReader(current: SyncState, readerId: string, mintId:
     readerId,
     retired: false,
   };
+}
+
+/**
+ * The state a sign-out leaves behind: the copy off and the reader kept, so
+ * the same reader signing back in confirms and carries on. A retired device
+ * also drops its identity and cursors, so the next copy starts over.
+ */
+export function signOutSyncState(current: SyncState, mintId: () => string): SyncState {
+  if (!current.retired) return { ...current, enabled: false };
+  return { ...freshSyncState(current.readerId, mintId), enabled: false };
 }

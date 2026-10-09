@@ -5,7 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { sendSignInLink, signOut } from "@/app/actions/account";
 import type { SendSignInLinkResult } from "@/app/actions/account";
-import { countRecords, readSyncState, startCopyFor, writeSyncState } from "@/lib/log/record";
+import { countRecords, readSyncState, signOutSync, startCopyFor, writeSyncState } from "@/lib/log/record";
 import { clearNavQuery } from "@/lib/nav/query-storage";
 import { syncNow } from "@/lib/sync/driver";
 import type { SyncState } from "@/lib/log/types";
@@ -229,23 +229,10 @@ function SyncedSection({
 
   // Fires before the sign-out `<form>` submits: `signOut` redirects to
   // `/registro`, so this component never gets to unmount and run an effect
-  // of its own first (RNL-09). A retired device leaves with a fresh identity
-  // and no cursors, so the next sign-in confirms a copy that starts over.
-  // The same gesture drops the box's last query, which otherwise pre-fills
-  // `Buscar` for whoever signs in next on this tab.
+  // of its own first (RNL-09). The same gesture drops the box's last query,
+  // which otherwise pre-fills `Buscar` for whoever signs in next on this tab.
   function handleSignOutClick(): void {
-    void writeSyncState(
-      syncState.retired
-        ? {
-            enabled: false,
-            retired: false,
-            deviceId: crypto.randomUUID(),
-            pushedThroughLocalId: null,
-            pulledThroughCursor: null,
-            lastSyncedAt: null,
-          }
-        : { enabled: false },
-    );
+    void signOutSync();
     clearNavQuery();
   }
 
@@ -341,6 +328,10 @@ function SyncedSection({
 
       <Separator size="4" />
 
+      <DevicesPanel refreshSignal={syncVersion} onOwnDeviceRetired={onOwnDeviceRetired} />
+
+      <Separator size="4" />
+
       {/* A raw server action, not `execute()`: `signOut` throws Next's own
           redirect, and a `<form>` is the invocation the framework documents
           for that (node_modules/next/dist/docs's server-actions guide). */}
@@ -349,10 +340,6 @@ function SyncedSection({
           {t("signOut")}
         </Button>
       </form>
-
-      <Separator size="4" />
-
-      <DevicesPanel refreshSignal={syncVersion} onOwnDeviceRetired={onOwnDeviceRetired} />
     </Flex>
   );
 }
@@ -383,7 +370,6 @@ function SignedInPanel({ reader }: { reader: { id: string; email: string } }) {
   }
 
   async function confirm(): Promise<void> {
-    if (syncStatus.kind === "syncing") return;
     setConfirmedHere(true);
     setSyncStatus({ kind: "syncing" });
     setSyncState(await startCopyFor(reader.id));

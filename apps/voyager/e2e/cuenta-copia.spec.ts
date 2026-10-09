@@ -276,6 +276,23 @@ test("RL-52: a session with no confirmation shows the address and the button, an
   });
 });
 
+test("RL-52: /cuenta reads Copia, Dispositivos, Cerrar sesión, top to bottom", async ({ page }) => {
+  test.setTimeout(45_000);
+  await withReader(page, async ({ signIn }) => {
+    await signIn();
+    await page.goto("/cuenta");
+    const top = async (locator: ReturnType<Page["getByText"]>) => {
+      await expect(locator).toBeVisible();
+      return (await locator.boundingBox())!.y;
+    };
+    const copia = await top(page.getByText(messages.account.copy.label, { exact: true }));
+    const devices = await top(page.getByText(messages.account.devices.title, { exact: true }));
+    const signOut = await top(page.getByRole("button", { name: messages.account.signOut }));
+    expect(copia, "Copia above Dispositivos").toBeLessThan(devices);
+    expect(devices, "Dispositivos above Cerrar sesión").toBeLessThan(signOut);
+  });
+});
+
 test("RL-52: tapping the button sends exactly one POST and the button is gone while it copies", async ({
   page,
 }) => {

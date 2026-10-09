@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { normaliseSyncState, syncStateForReader } from "./sync-state";
+import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
 import type { SyncState } from "./types";
 
 function state(overrides: Partial<SyncState> = {}): SyncState {
@@ -67,4 +67,20 @@ test("syncStateForReader: a retired device starts over even for the same reader"
   assert.equal(next.retired, false);
   assert.equal(next.pushedThroughLocalId, null);
   assert.equal(next.enabled, true);
+});
+
+test("signOutSyncState: a live device only turns the copy off and keeps everything else", () => {
+  const next = signOutSyncState(state({ enabled: true }), mint);
+  assert.deepEqual(next, state({ enabled: false }));
+});
+
+test("signOutSyncState: a retired device forgets its identity and cursors but keeps the reader", () => {
+  const next = signOutSyncState(state({ retired: true, enabled: false }), mint);
+  assert.equal(next.deviceId, "device-new");
+  assert.equal(next.pushedThroughLocalId, null);
+  assert.equal(next.pulledThroughCursor, null);
+  assert.equal(next.lastSyncedAt, null);
+  assert.equal(next.retired, false);
+  assert.equal(next.readerId, "A");
+  assert.equal(next.enabled, false);
 });
