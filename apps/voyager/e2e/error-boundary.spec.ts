@@ -34,7 +34,8 @@ async function seedCorruptRow(page: Page): Promise<void> {
             normalised: "corrupt",
             kind: "word",
             outcome: "exact",
-            headword: "corrupt",
+            // The headword is the title /registro draws; an object there is the child React refuses.
+            headword: { corrupt: true },
             rule: null,
             senses: 1,
             translation: null,
