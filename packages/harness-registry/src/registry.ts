@@ -195,6 +195,31 @@ export async function registeredIdentities(
   return rows.map((row) => row.user_id);
 }
 
+/**
+ * Records an OAuth client this run registered in `goals.oauth_clients`, stamped
+ * with this run's id, so the run's close or a later reap can drop it by registry
+ * rather than by its name or its address.
+ */
+export async function registerOAuthClient(sql: Sql, clientId: string): Promise<void> {
+  assertSuiteDatabase();
+  const run = runId();
+
+  await sql`
+    insert into harness.oauth_clients (client_id, run_id) values (${clientId}, ${run})
+  `;
+}
+
+// Every OAuth client id this run registered.
+export async function registeredOAuthClients(sql: Sql): Promise<string[]> {
+  const run = runId();
+
+  const rows = await sql<{ client_id: string }[]>`
+    select client_id from harness.oauth_clients where run_id = ${run}
+  `;
+
+  return rows.map((row) => row.client_id);
+}
+
 // Stops the heartbeat and stamps `finished_at`. Safe to call twice: the second
 // call finds `closed` already set and spends no round trip.
 export async function closeRun(sql: Sql): Promise<void> {
