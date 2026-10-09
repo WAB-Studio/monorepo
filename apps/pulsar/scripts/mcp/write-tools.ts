@@ -238,7 +238,7 @@ before(async () => {
       cadenceKind: "daily",
       satisfaction: "quantity",
       targetQuantity: 10,
-      unit: "páginas",
+      unit: "minutos",
     } as never);
     if (!commitment.ok) throw new Error(`addCommitment intruder: ${commitment.error}`);
     intruderCommitment = commitment.commitmentId;

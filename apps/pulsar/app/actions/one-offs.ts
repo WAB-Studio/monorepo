@@ -8,7 +8,7 @@ import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
-import { isTimeUnit } from "@/lib/units/time";
+import { isTimeUnit, TIME_UNITS } from "@/lib/units/time";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import {
   createOneOffSchema,
@@ -139,6 +139,9 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
         if (isClosed(goal)) throw new NamedError("month.errors.closed");
         if (estimate != null && goal.measureUnit === null) {
           throw new NamedError("month.errors.noMeasure");
+        }
+        if (estimate != null && !isTimeUnit(goal.measureUnit)) {
+          throw new NamedError("month.errors.estimateNotTime");
         }
         if (
           plannedMonth != null &&
@@ -338,6 +341,7 @@ type TaskWrite = {
 
 const REFUSALS: Record<string, MessageKey> = {
   noMeasure: "month.errors.noMeasure",
+  estimateNotTime: "month.errors.estimateNotTime",
   invalid: "month.errors.invalid",
   closed: "month.errors.closed",
   doneTask: "roadmap.errors.doneTask",
@@ -365,6 +369,10 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
   const touchesEstimate = estimate !== undefined;
   const touchesMonth = month !== undefined;
   const today = todayInZone();
+  const timeUnits = sql`array[${sql.join(
+    TIME_UNITS.map((unit) => sql`${unit}`),
+    sql`, `,
+  )}]::text[]`;
 
   const rows = await withGoalsDb((tx) =>
     tx.execute<{ goal_id: string | null; refusal: string | null; updated: number }>(sql`
@@ -396,6 +404,8 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
                 when archived_at is not null or horizon <= ${today}::date then 'closed'
                 when ${estimate ?? null}::int is not null and has_children then 'parentEstimate'
                 when ${estimate ?? null}::int is not null and measure_unit is null then 'noMeasure'
+                when ${estimate ?? null}::int is not null
+                  and lower(trim(measure_unit)) <> all(${timeUnits}) then 'estimateNotTime'
                 when ${month ?? null}::text is not null and (
                   ${month ? monthStart(month) : null}::date < date_trunc('month', opened)
                   or ${month ? monthStart(month) : null}::date > date_trunc('month', horizon - 1)

@@ -497,7 +497,7 @@ test("RP-62: a task of a goal measured in minutes with no month stays in the pla
 
 test("RP-62: a sub-task of a km task keeps no month of its own", async () => {
   const parentId = await created({ name: "RP-62 km padre", day: null, goalId: kmGoalId });
-  const childId = await created({ name: "RP-62 km hija", day: null, parentId, estimate: 3 });
+  const childId = await created({ name: "RP-62 km hija", day: null, parentId });
   const row = (await rowsOf(kmGoalId)).find((r) => r.id === childId)!;
   assert.equal(row.planned_month, null);
   assert.equal(row.parent_id, parentId);
