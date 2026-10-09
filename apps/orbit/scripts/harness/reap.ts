@@ -36,6 +36,15 @@ async function deadRuns(): Promise<DeadRun[]> {
   `;
 }
 
+// Finished runs over a week old. A clean close leaves none of them holding a
+// client; one that leaked a client still loses it here.
+async function staleFinishedRuns(): Promise<{ id: string }[]> {
+  return fixtureSql<{ id: string }[]>`
+    select id from harness.runs
+    where finished_at is not null and finished_at < now() - interval '7 days'
+  `;
+}
+
 async function ephemeralIdentitiesUnder(runIds: string[]): Promise<Identity[]> {
   if (runIds.length === 0) return [];
   return fixtureSql<Identity[]>`
@@ -74,17 +83,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const dead = await run(deadRuns());
-  if (dead.length === 0) {
-    console.log("nothing dead — no harness.runs row is finished_at null with a stale heartbeat");
+  const [dead, stale] = await Promise.all([run(deadRuns()), run(staleFinishedRuns())]);
+  if (dead.length === 0 && stale.length === 0) {
+    console.log(
+      "nothing dead — no harness.runs row is finished_at null with a stale heartbeat, none finished over 7 days ago",
+    );
     console.log(`\nREPORT  reap — ${trips} round trip(s), nothing deleted.`);
     process.exit(0);
   }
 
   const deadIds = dead.map((r) => r.id);
+  const staleIds = stale.map((r) => r.id);
   const [identities, clients] = await Promise.all([
     run(ephemeralIdentitiesUnder(deadIds)),
-    run(oauthClientsUnder(deadIds)),
+    run(oauthClientsUnder([...deadIds, ...staleIds])),
   ]);
 
   console.log(`${dryRun ? "PLAN" : "REAPING"}  ${dead.length} dead run(s):`);
@@ -95,6 +107,14 @@ async function main(): Promise<void> {
       `  ${describe(r)} — ${owned.length} ephemeral identity(ies), ${ownedClients.length} OAuth client(s)`,
     );
     for (const i of owned) console.log(`    ${i.email} (${i.user_id})`);
+    for (const c of ownedClients) console.log(`    oauth client ${c.client_id}`);
+  }
+  console.log(`${dryRun ? "PLAN" : "REAPING"}  ${stale.length} run(s) finished over 7 days ago:`);
+  // Only the ones still holding a client: a week of clean runs is thousands of rows.
+  for (const id of staleIds) {
+    const ownedClients = clients.filter((c) => c.run_id === id);
+    if (ownedClients.length === 0) continue;
+    console.log(`  ${id} — ${ownedClients.length} OAuth client(s)`);
     for (const c of ownedClients) console.log(`    oauth client ${c.client_id}`);
   }
 
@@ -161,14 +181,13 @@ async function main(): Promise<void> {
     await run(fixtureSql`delete from harness.runs where id in ${fixtureSql(clearRunIds)}`);
   }
 
-  const staleFinished = await run(fixtureSql`
-    delete from harness.runs
-    where finished_at is not null and finished_at < now() - interval '7 days'
-      and not exists (select 1 from harness.oauth_clients c where c.run_id = harness.runs.id)
-  `);
+  const clearStaleIds = staleIds.filter((id) => !failed.includes(id));
+  if (clearStaleIds.length > 0) {
+    await run(fixtureSql`delete from harness.runs where id in ${fixtureSql(clearStaleIds)}`);
+  }
 
   console.log(
-    `\nREPORT  reap — dropped ${purgedIds.length} identity(ies), ${droppedClients} OAuth client(s), ${clearRunIds.length} dead run(s), ${staleFinished.count} stale finished run(s), ${trips} round trip(s).`,
+    `\nREPORT  reap — dropped ${purgedIds.length} identity(ies), ${droppedClients} OAuth client(s), ${clearRunIds.length} dead run(s), ${clearStaleIds.length} stale finished run(s), ${trips} round trip(s).`,
   );
 
   if (failed.length > 0) {
