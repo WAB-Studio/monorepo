@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { classify, PHRASE_MAX_TOKENS, type QueryKind } from "@/lib/query/classify";
@@ -177,20 +177,6 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // True when this mount is restoring a query this tab already recorded.
   const restoringRef = useRef(false);
 
-  // The call site the log's fields are true to: an effect fires after React
-  // has already committed the answer, never inside the path that produced it.
-  useEffect(() => {
-    if (!logPayload) return;
-    // Conditioned on both the flag and the text, so a restore can never
-    // swallow the next genuine lookup, whatever order the two arrive in.
-    if (restoringRef.current && logPayload.text === lastLoggedText) {
-      restoringRef.current = false;
-      return;
-    }
-    recordLookup(logPayload);
-    lastLoggedText = logPayload.text;
-  }, [logPayload]);
-
   useEffect(() => {
     return () => {
       if (urlSettleRef.current) clearTimeout(urlSettleRef.current);
@@ -324,7 +310,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       // RL-37: a phrase in range that cannot be translated falls to the same
       // per-word breakdown RL-31 draws for one that was never tried — the
       // trigger is this `failed` state, never a `done` with empty text.
-      // RL-39 still logs the call: `commit` in record.ts is what drops an
+      // RL-55 still logs the call: `commit` in record.ts is what drops an
       // "untranslated" outcome, so the chain keeps advancing past it instead
       // of leaving an earlier, answered prefix stranded in `pending`.
       setPhraseState({ kind: "failed" });
@@ -359,7 +345,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // reaches it. Above the ceiling, nothing is asked at all. Both branches
   // still log the call, as a "miss": `commit` in record.ts is what drops it,
   // so an abandoned phrase can't leave an earlier, answered prefix behind
-  // (the same reasoning as RL-39's word path).
+  // (the same reasoning as RL-55's word path).
   function scheduleNoEntry(phraseText: string, tokens: number, dictionaryReady: boolean): void {
     if (tokens > PHRASE_MAX_TOKENS) {
       setNoEntryState({ kind: "tooLong", query: phraseText, tokens });
@@ -432,7 +418,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       if (latestTextRef.current !== queryText || !answer) return;
       setWordAnswer(answer);
       setSuggestions(items);
-      // RL-39: a miss leaves no row, but the call still happens — `commit`
+      // RL-55: a miss leaves no row here, but the call still happens — `commit`
       // in record.ts is what drops a "miss" outcome, not this call site. A
       // guard here would leave the last *answered* prefix stuck in
       // `pending` forever, to be written once the reader had moved on to
@@ -536,6 +522,47 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       ? normaliseHeadword(wordAnswer.query)
       : null;
   const networkAnswer = useNetworkAnswer(networkWord);
+
+  // RL-55: a word with no entry is recorded only once the network's answer
+  // for that same text is in hand. It replaces the miss payload that call
+  // produced, so `networkWord` going null (the box left the text) or a
+  // failed, absent or pending answer leaves the miss, which `commit` drops.
+  // A form with a lemma never reaches here: its payload is `inflected`.
+  const unlistedTranslation =
+    networkWord !== null && networkAnswer.kind === "resolved"
+      ? cutTranslation(networkAnswer.answer.translations.join(", "))
+      : null;
+  const unlistedPayload = useMemo<LogPayload | null>(() => {
+    if (networkWord === null || unlistedTranslation === null) return null;
+    if (!logPayload || logPayload.kind !== "word" || logPayload.outcome !== "miss") return null;
+    if (logPayload.normalised !== networkWord) return null;
+    return {
+      ...logPayload,
+      outcome: "unlisted",
+      headword: networkWord,
+      rule: null,
+      senses: 0,
+      translation: unlistedTranslation,
+      origin: null,
+    };
+  }, [logPayload, networkWord, unlistedTranslation]);
+  const recordable = unlistedPayload ?? logPayload;
+  const recordedRef = useRef<LogPayload | null>(null);
+
+  // The call site the log's fields are true to: an effect fires after React
+  // has already committed the answer, never inside the path that produced it.
+  useEffect(() => {
+    if (!recordable || recordable === recordedRef.current) return;
+    recordedRef.current = recordable;
+    // Conditioned on both the flag and the text, so a restore can never
+    // swallow the next genuine lookup, whatever order the two arrive in.
+    if (restoringRef.current && recordable.text === lastLoggedText) {
+      restoringRef.current = false;
+      return;
+    }
+    recordLookup(recordable);
+    lastLoggedText = recordable.text;
+  }, [recordable]);
 
   return (
     <Flex direction="column" gap="5">

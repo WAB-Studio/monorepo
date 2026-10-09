@@ -242,7 +242,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 #### The shell
 
 - [ ] **RL-16** — The app opens with no connection and shows its box, and it can be launched from the phone's home screen without a browser around it. This holds from the second time it is opened onwards: the first open needs the network to deliver the app itself.
-- [ ] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
+- [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
   sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that
   answer arrived. A word whose network answer failed or never arrived, and a sentence that could not
