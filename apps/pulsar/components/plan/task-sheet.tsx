@@ -97,15 +97,14 @@ export function TaskSheet({
   const timed = isTimeUnit(unit);
   const thisYear = String(new Date().getFullYear());
 
-  const initial = estimate === null ? { hours: "", minutes: "", single: "" } : timed
-    ? { hours: String(splitMinutes(estimate).h), minutes: String(splitMinutes(estimate).min), single: "" }
-    : { hours: "", minutes: "", single: String(estimate) };
+  const initial = estimate !== null && timed
+    ? { hours: String(splitMinutes(estimate).h), minutes: String(splitMinutes(estimate).min) }
+    : { hours: "", minutes: "" };
   const start = fixedMonth ?? months.find((month) => planMonth === null || month >= planMonth) ?? months[0] ?? "";
 
   const [name, setName] = useState(current);
   const [hours, setHours] = useState(initial.hours);
   const [minutes, setMinutes] = useState(initial.minutes);
-  const [single, setSingle] = useState(initial.single);
   const [pin, setPin] = useState(fixedMonth !== null);
   const [month, setMonth] = useState(start);
   const [error, setError] = useState<{ key: MessageKey; field: "name" | "estimate" | "month" } | null>(null);
@@ -119,7 +118,6 @@ export function TaskSheet({
       setName(current);
       setHours(initial.hours);
       setMinutes(initial.minutes);
-      setSingle(initial.single);
       setPin(fixedMonth !== null);
       setMonth(start);
       setError(null);
@@ -127,21 +125,17 @@ export function TaskSheet({
   }
 
   const loose = kind === "loose";
-  const asksEstimate = unit !== null && kind !== "parent" && !loose && !done;
+  const asksEstimate = timed && kind !== "parent" && !loose && !done;
   const asksMonth = kind !== "child" && !loose && !done;
 
   // Minutes (or the unit's count) typed; null while blank; a key for a figure the sheet refuses.
   function typed(): number | null | MessageKey {
-    if (timed) {
-      if (hours.trim() === "" && minutes.trim() === "") return null;
-      const h = hours.trim() === "" ? "0" : hours.trim();
-      const min = minutes.trim() === "" ? "0" : minutes.trim();
-      if (!WHOLE.test(h)) return "month.errors.estimateInvalid";
-      if (!WHOLE.test(min) || Number(min) > 59) return "month.errors.minutesInvalid";
-      return Number(h) * 60 + Number(min);
-    }
-    if (single.trim() === "") return null;
-    return WHOLE.test(single.trim()) ? Number(single.trim()) : "month.errors.estimateInvalid";
+    if (hours.trim() === "" && minutes.trim() === "") return null;
+    const h = hours.trim() === "" ? "0" : hours.trim();
+    const min = minutes.trim() === "" ? "0" : minutes.trim();
+    if (!WHOLE.test(h)) return "month.errors.estimateInvalid";
+    if (!WHOLE.test(min) || Number(min) > 59) return "month.errors.minutesInvalid";
+    return Number(h) * 60 + Number(min);
   }
 
   function refuse(raw: MessageKey) {
@@ -228,7 +222,7 @@ export function TaskSheet({
             autoFocus={mode === "create"}
           />
 
-          {asksEstimate && timed ? (
+          {asksEstimate ? (
             <FieldPair baseline>
               <Field
                 label={t("roadmap.fijar.estimate")}
@@ -255,24 +249,10 @@ export function TaskSheet({
               />
             </FieldPair>
           ) : null}
-          {asksEstimate && timed && refused("estimate") ? (
+          {asksEstimate && refused("estimate") ? (
             <Text as="p" variant="sentence" role="alert">
               {t(refused("estimate")!.key)}
             </Text>
-          ) : null}
-          {asksEstimate && !timed && unit ? (
-            <Field
-              label={t("roadmap.fijar.estimate")}
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={1}
-              value={single}
-              onChange={(event) => setSingle(event.target.value)}
-              suffix={unit}
-              invalid={refused("estimate") !== null}
-              hint={refused("estimate") ? t(refused("estimate")!.key) : undefined}
-            />
           ) : null}
 
           {asksMonth ? (

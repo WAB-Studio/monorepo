@@ -53,7 +53,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
 
   const timed = isTimeUnit(unit);
   const measured = unit !== null;
-  const asksAmount = measured && !withChildren;
+  const asksAmount = timed && !withChildren;
   const monthHref = `/metas/${goalId}/meses/${month}`;
 
   // Minutes (or the unit's own count) typed so far; null while blank, NaN for
@@ -209,7 +209,7 @@ export function TaskForm({ goalId, goalName, unit, month, monthName, parent }: T
             {t("month.task.withChildren")}
           </Chip>
           <Text as="p" variant="sentence" id="task-with-children-hint">
-            {t(measured ? "month.task.withChildrenHint" : "month.task.withChildrenHintNoMeasure")}
+            {t(timed ? "month.task.withChildrenHint" : "month.task.withChildrenHintNoMeasure")}
           </Text>
         </Flex>
       ) : null}
