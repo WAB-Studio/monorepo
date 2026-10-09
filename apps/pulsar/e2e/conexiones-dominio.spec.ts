@@ -295,7 +295,8 @@ for (const width of [390, 1440]) {
         await expect(conns).toHaveAttribute("aria-expanded", "false");
         // Keys' fold sits above the claude.ai label, the connections' fold below it.
         const y = async (l: Locator) => (await l.boundingBox())!.y;
-        const label = (await page.getByText("claude.ai", { exact: true }).boundingBox())!.y;
+        // The host in a row is a <strong>; the section label is the one that is not.
+        const label = (await page.getByText("claude.ai", { exact: true }).and(page.locator(":not(strong)")).boundingBox())!.y;
         expect(await y(keys)).toBeLessThan(label);
         expect(await y(conns)).toBeGreaterThan(label);
 
