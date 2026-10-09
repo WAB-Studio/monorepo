@@ -232,3 +232,40 @@ for (const width of [390, 1280]) {
     }
   });
 }
+
+// The phone footer counts the days that have come: a partial day still to come
+// is no partial yet (RP-16).
+async function seedDailyQuantity(db: postgres.Sql, person: Person, partialDays: string[]) {
+  const goalId = await seed(db, person, 40);
+  const [commitment] = await db<{ id: string }[]>`
+    select id from goals.commitments where goal_id = ${goalId}
+  `;
+  for (const day of partialDays) {
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${person.id}, ${goalId}, ${commitment.id}, ${day}::date, 29)
+    `;
+  }
+  return goalId;
+}
+
+test("at 390 the footer counts today's partial and not a partial day still to come (RP-16)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  const goalId = await seedDailyQuantity(db, person, [today, shift(today, 1), shift(today, 2)]);
+  const elapsed = ((civilDateToDate(today).getUTCDay() + 6) % 7) + 1;
+  try {
+    await withPage(browser, baseURL, person, 390, async (page) => {
+      await page.goto(`/semana?semana=${thisMonday}`);
+      await expect(markOf(page, today)).toHaveAttribute("data-state", "partial");
+      await expect(
+        page.getByText(`hechos 0 de ${elapsed} · 1 en parte`, { exact: true }).filter({ visible: true }),
+      ).toHaveCount(1);
+    });
+  } finally {
+    await db`delete from goals.goals where id = ${goalId}`;
+  }
+});
