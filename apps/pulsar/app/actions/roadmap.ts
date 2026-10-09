@@ -12,10 +12,10 @@ import {
   setRhythmSchema,
   type DismissPlanNoticeInput,
   type DismissPlanNoticesInput,
-  type SetRhythmInput,
 } from "@/lib/validation/rhythm";
 import { TIME_ZONE, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type SetRhythmResult = { ok: true } | { ok: false; error: MessageKey };
 export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: MessageKey };
@@ -33,9 +33,10 @@ export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: Message
  * A goal the person cannot see, or one refused, updates and inserts nothing,
  * so the refusal needs no rollback.
  */
-export async function setRhythm({ goalId, amount }: SetRhythmInput): Promise<SetRhythmResult> {
-  const parsed = setRhythmSchema.safeParse({ goalId, amount });
+export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
+  const parsed = setRhythmSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+  const { goalId, amount } = parsed.data;
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "month.errors.signedOut" };
@@ -99,9 +100,6 @@ export async function setRhythm({ goalId, amount }: SetRhythmInput): Promise<Set
   revalidatePath("/");
   return { ok: true };
 }
-
-// Carries a message key out of the transaction, so the write rolls back.
-class NamedError extends Error {}
 
 /**
  * Dismisses Hoy's notices for months already over (RP-53) in one statement,

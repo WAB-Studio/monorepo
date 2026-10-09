@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { classify, PHRASE_MAX_TOKENS, PHRASE_MIN_TOKENS, type QueryKind } from "@/lib/query/classify";
+import { classify, PHRASE_MAX_TOKENS, type QueryKind } from "@/lib/query/classify";
 import { PHRASE_DEBOUNCE_MS } from "@/lib/query/settle";
 import { normaliseHeadword } from "@/lib/dictionary/format";
 import type { Sense, SenseGroup } from "@/lib/dictionary/index-build";
@@ -145,9 +145,9 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // — a paused prefix keeps its list. Decided by the user 2026-09-09.
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [phraseState, setPhraseState] = useState<PhraseState>({ kind: "idle" });
-  // RL-31: a two-token miss or a >60-token string never reaches
-  // `translatePhrase` — this is the state that draws in its place. RL-37
-  // reuses it for a 3-to-60-token phrase whose translation failed instead.
+  // A >60-token string never reaches `translatePhrase` — this is the state
+  // that draws in its place. RL-37 reuses it for a phrase whose translation
+  // failed instead.
   const [noEntryState, setNoEntryState] = useState<NoEntryState | null>(null);
   const [deviceOffer, setDeviceOffer] = useState<DeviceOffer>({ kind: "hidden" });
   const [logPayload, setLogPayload] = useState<LogPayload | null>(null);
@@ -207,13 +207,15 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // effect fires runs once, client-side, against whatever `status` reads at
   // that first tick — the worker still queues it if the dictionary is not
   // built yet (mirrors a keystroke landing mid-install).
-  useEffect(() => {
+  const runInitialQuery = useEffectEvent(() => {
     if (initialQueryRanRef.current || !resolvedQuery) return;
     initialQueryRanRef.current = true;
     restoringRef.current = resolvedQuery === lastLoggedText;
     latestTextRef.current = resolvedQuery;
     void runQuery(resolvedQuery, status.state === "ready");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    runInitialQuery();
   }, []);
 
   // A block of the breakdown links to `/?q=<word>` while this very screen
@@ -223,28 +225,30 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // effect above run again. `committedTextRef` is what tells the two apart
   // from a keystroke's own write to the same ref: a prop the mount effect
   // already consumed is skipped here.
-  useEffect(() => {
+  const followInitialQuery = useEffectEvent(() => {
     if (!initialQuery || initialQuery === committedTextRef.current) return;
     committedTextRef.current = initialQuery;
     boundaryRef.current = false;
     applyText(initialQuery, { schedule: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    followInitialQuery();
   }, [initialQuery]);
 
   // The browser's own back and forward across this screen's own history
   // entries: nothing else updates the box or re-asks the dictionary when
   // the URL changes out from under a mounted `SearchScreen` (RNL-05's rule
   // 4 extended to a navigation, not only to a keystroke).
+  const handlePopState = useEffectEvent(() => {
+    const nextText = new URLSearchParams(window.location.search).get(QUERY_PARAM) ?? "";
+    committedTextRef.current = nextText;
+    boundaryRef.current = nextText === "";
+    applyText(nextText, { schedule: false });
+  });
   useEffect(() => {
-    function handlePopState(): void {
-      const nextText = new URLSearchParams(window.location.search).get(QUERY_PARAM) ?? "";
-      committedTextRef.current = nextText;
-      boundaryRef.current = nextText === "";
-      applyText(nextText, { schedule: false });
-    }
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const listener = () => handlePopState();
+    window.addEventListener("popstate", listener);
+    return () => window.removeEventListener("popstate", listener);
   }, [status.state]);
 
   // Writes `/?q=<text>` once a lookup settles — never on the keystroke that
@@ -313,7 +317,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       if (controller.signal.aborted) return;
       phraseCacheRef.current.set(normaliseHeadword(phraseText), result);
       trimPhraseCache(phraseCacheRef.current);
-      setPhraseState({ kind: "done", result });
+      setPhraseState({ kind: "done", result, source: phraseText });
       setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "translated", result.origin, result.text));
     } catch {
       if (controller.signal.aborted) return;
@@ -369,7 +373,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   }
 
   function schedulePhrase(phraseText: string, tokens: number, dictionaryReady: boolean): void {
-    if (tokens < PHRASE_MIN_TOKENS || tokens > PHRASE_MAX_TOKENS) {
+    if (tokens > PHRASE_MAX_TOKENS) {
       scheduleNoEntry(phraseText, tokens, dictionaryReady);
       return;
     }
@@ -378,7 +382,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     // nothing, however far back the box was cleared to reach it.
     const cached = phraseCacheRef.current.get(normaliseHeadword(phraseText));
     if (cached) {
-      setPhraseState({ kind: "done", result: cached });
+      setPhraseState({ kind: "done", result: cached, source: phraseText });
       setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "translated", cached.origin, cached.text));
       return;
     }
@@ -460,6 +464,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     }
     phraseAbortRef.current?.abort();
     phraseAbortRef.current = null;
+
+    // A translation of another text must stop drawing, and stop asking for
+    // notes, the moment the box differs from what it answered.
+    setPhraseState((current) => (current.kind === "done" && current.source !== nextText ? { kind: "idle" } : current));
 
     if (urlSettleRef.current) {
       clearTimeout(urlSettleRef.current);
@@ -556,11 +564,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       )}
 
       {kind.kind === "phrase" &&
-        (kind.tokens < PHRASE_MIN_TOKENS || kind.tokens > PHRASE_MAX_TOKENS || phraseState.kind === "failed" ? (
+        (kind.tokens > PHRASE_MAX_TOKENS || phraseState.kind === "failed" ? (
           noEntryState && <NoEntryAnswer state={noEntryState} />
         ) : (
           <PhraseAnswer
-            source={text}
             state={phraseState}
             offer={deviceOffer}
             onEnableDevice={handleEnableDevice}

@@ -18,13 +18,10 @@ import {
 } from "@/lib/validation/fact";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type DeclareFactResult = { ok: true; factId: string } | { ok: false; error: MessageKey };
 export type UndoFactResult = { ok: true } | { ok: false; error: MessageKey };
-
-// Carries a message key out of the transaction without collapsing every
-// rejection into the same generic failure.
-class NamedError extends Error {}
 
 /**
  * Writes a fact in one gesture (RP-02, RP-03, RP-04). The day it happened is

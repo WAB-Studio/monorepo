@@ -29,6 +29,7 @@ import {
   type RetireCommitmentInput,
 } from "@/lib/validation/plan";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type CreateGoalResult = { ok: true; goalId: string } | { ok: false; error: MessageKey };
 export type AddPhaseResult = { ok: true; phaseId: string } | { ok: false; error: MessageKey };
@@ -40,10 +41,6 @@ export type RenameGoalResult = { ok: true } | { ok: false; error: MessageKey };
 export type ArchiveGoalResult = { ok: true } | { ok: false; error: MessageKey };
 export type ReopenGoalResult = { ok: true } | { ok: false; error: MessageKey };
 export type MoveHorizonResult = { ok: true } | { ok: false; error: MessageKey };
-
-// Carries a message key out of the transaction without collapsing every
-// rejection into the same generic failure.
-class NamedError extends Error {}
 
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal

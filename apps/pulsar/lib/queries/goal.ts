@@ -314,8 +314,9 @@ function goalSpan(goalId: string): { from: SQL; to: SQL } {
     // leaves the statement that needs it.
     from: sql`(select (g.created_at at time zone ${TIME_ZONE})::date
                  from "goals"."goals" g where g.id = ${goalId})`,
-    // `horizon` is already a civil date (RP-11): no zone conversion needed.
-    to: sql`(select g.horizon from "goals"."goals" g where g.id = ${goalId})`,
+    // `horizon` is the first day after the goal (RP-11), already a civil date:
+    // the span ends the day before it.
+    to: sql`(select g.horizon - 1 from "goals"."goals" g where g.id = ${goalId})`,
   };
 }
 

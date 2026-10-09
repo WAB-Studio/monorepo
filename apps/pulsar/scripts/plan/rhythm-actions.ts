@@ -201,6 +201,15 @@ test("setRhythm: 0 and 1 000 001 are refused, 1 and 1 000 000 land", async () =>
   }
 });
 
+test("setRhythm: an input that is not an object is refused with a key, not thrown", async () => {
+  for (const input of [undefined, null, "x"]) {
+    assert.deepEqual(await as(owner, () => roadmap.setRhythm(input)), {
+      ok: false,
+      error: "month.errors.invalid",
+    });
+  }
+});
+
 test("setRhythm: another person's goal is refused and untouched", async () => {
   const goalId = await goal(owner, "ajena", true);
   goalIds.push(goalId);

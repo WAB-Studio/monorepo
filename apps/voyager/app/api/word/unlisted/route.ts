@@ -1,14 +1,10 @@
 import "server-only";
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
-import type { DictionaryPayload } from "@/lib/dictionary/format";
-import { buildIndex, type DictionaryIndex } from "@/lib/dictionary/index-build";
 import { lookupWord } from "@/lib/dictionary/lookup";
 import { env } from "@/lib/env";
 import { admitWord } from "@/lib/word/admit";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
+import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { MODEL_NAME } from "@/lib/word/model";
 import { claimDailyCall } from "@/lib/word/spend";
 import { generateUnlistedAnswer } from "@/lib/word/unlisted-model";
@@ -20,6 +16,9 @@ import { unlistedRequestSchema, unlistedResponseSchema } from "@/lib/word/unlist
 // answer is never a candidate for the full route cache.
 export const dynamic = "force-dynamic";
 
+// Above the provider's own 20 s timeout.
+export const maxDuration = 30;
+
 const NO_STORE = { "Cache-Control": "no-store" };
 
 function json(body: unknown, status: number): Response {
@@ -28,26 +27,6 @@ function json(body: unknown, status: number): Response {
 
 function empty(status: 204 | 400): Response {
   return new Response(null, { status, headers: NO_STORE });
-}
-
-const DICTIONARY_ASSET = path.join(
-  process.cwd(),
-  "public",
-  "dictionary",
-  "eng-spa-2025.11.23.json",
-);
-
-// Read once per server process, the same asset `/api/word/text` loads —
-// each route keeps its own copy rather than sharing one module, matching
-// that route's own pattern.
-let dictionaryIndex: DictionaryIndex | null = null;
-
-function loadDictionaryIndex(): DictionaryIndex {
-  if (!dictionaryIndex) {
-    const payload = JSON.parse(readFileSync(DICTIONARY_ASSET, "utf8")) as DictionaryPayload;
-    dictionaryIndex = buildIndex(payload);
-  }
-  return dictionaryIndex;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -101,16 +80,14 @@ export async function POST(request: Request): Promise<Response> {
     return empty(204);
   }
 
-  const clientCalls = await claimClientCall(client);
-  if (clientCalls > env.WORD_UNLISTED_DAILY_CLIENT_CAP) {
+  if (!(await claimClientCall(client, env.WORD_UNLISTED_DAILY_CLIENT_CAP))) {
     return empty(204);
   }
 
   // The global cap `/api/word/text` already spends against: one model, one
   // daily budget, whichever route claims it first (docs/TRAPS.md, "The
   // OpenAI CSV does not say what this app spent").
-  const calls = await claimDailyCall();
-  if (calls > env.WORD_TEXT_DAILY_CALL_CAP) {
+  if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) {
     return empty(204);
   }
 

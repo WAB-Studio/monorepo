@@ -13,8 +13,9 @@ export const wordTexts = reading.table("word_texts", {
   exampleEs: text().notNull(),
   model: text().notNull(),
   resolvedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-  // RL-45's network translations for a thin entry, asked for once and cached
-  // beside the example: null until asked, an empty array is a real "none".
+  // RL-45's network translations for a thin entry, cached beside the example:
+  // null when never thin or never answered; an empty array is the model's
+  // real "none", and closes the ask as surely as a list does.
   translations: text().array(),
   translationsAsked: boolean().notNull().default(false),
 });

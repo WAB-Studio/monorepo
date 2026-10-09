@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { clientKey, clientKeyFromAddress } from "./client-key";
+import { clientKey, clientKeyFromAddress, clientKeyFromHeaders, scopeClientKey } from "./client-key";
 
 function request(headers: Record<string, string>): Request {
   return new Request("http://localhost/api/word/unlisted", { headers });
@@ -87,4 +87,32 @@ test("the formula itself is fixed, because banked quotas are keyed on it", () =>
     clientKeyFromAddress("203.0.113.7", "a-fixed-salt-for-this-test"),
     "694782ef69512ca7ba99a28e1e471529d5fd0a3702c18238bce72a3825b6ac31",
   );
+});
+
+test("headers alone give the key a whole request gives", () => {
+  const cases: Record<string, string>[] = [
+    { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
+    { "x-real-ip": "203.0.113.9" },
+    { "x-forwarded-for": "203.0.113.9", "x-real-ip": "203.0.113.10" },
+    {},
+  ];
+  for (const headers of cases) {
+    assert.equal(
+      clientKeyFromHeaders(new Headers(headers), "a-real-salt-value"),
+      clientKey(request(headers), "a-real-salt-value"),
+    );
+  }
+  assert.equal(clientKeyFromHeaders(new Headers({ "x-forwarded-for": "203.0.113.9" }), undefined), null);
+});
+
+test("each scope keys the same caller to its own row", () => {
+  const key = clientKeyFromAddress("203.0.113.9", "a-real-salt-value");
+  const scoped = (["text", "translate", "signin", "signin-to"] as const).map((scope) => scopeClientKey(scope, key));
+  assert.equal(new Set(scoped).size, scoped.length);
+  assert.ok(scoped.every((value) => value !== key));
+  assert.equal(scopeClientKey("translate", key), `translate:${key}`);
+});
+
+test("no key stays no key whatever the scope", () => {
+  assert.equal(scopeClientKey("text", null), null);
 });

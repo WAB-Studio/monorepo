@@ -34,12 +34,14 @@ export async function readCachedText(headword: string): Promise<CachedText | nul
 }
 
 /**
- * The one place this rule is written: a call closes the ask only when it
- * actually returned something. Both the insert path and the backfill path
+ * The one place this rule is written: a call closes the ask once the model
+ * answered it, an empty array included — asked again, it answers the same
+ * nothing at a paid call a lookup. Only `null`, a call that failed, leaves it
+ * open, bounded by the daily cap. Both the insert path and the backfill path
  * call this instead of each carrying their own copy of the check.
  */
-export function translationsWereFound(translations: readonly string[] | null): boolean {
-  return translations !== null && translations.length > 0;
+export function translationsWereAnswered(translations: readonly string[] | null): boolean {
+  return translations !== null;
 }
 
 /**
@@ -84,7 +86,7 @@ export async function markTranslationsAsked(
   headword: string,
   translations: readonly string[] | null,
 ): Promise<void> {
-  if (!translationsWereFound(translations)) return;
+  if (!translationsWereAnswered(translations)) return;
   await db.execute(sql`
     update reading.word_texts
     set translations = ${sql.param(translations)}, translations_asked = true

@@ -187,3 +187,184 @@ test("a keystroke mid-phrase raises no request to /api/phrase/notes", async ({ p
     .poll(() => notesRequests, { message: "the one request leaves only once the translation is already done" })
     .toBe(1);
 });
+
+// ---- RL-46 / RNL-05: notes are asked once per translation, never per keystroke ----
+
+type Translate = { text: string; status?: number; delayMs?: number };
+
+// Every call is recorded in order; `answer` decides each reply from the
+// text and from how many times that text was already asked for.
+async function stubTranslateCalls(
+  page: Page,
+  answer: (text: string, nth: number) => Translate,
+): Promise<{ texts: string[] }> {
+  const texts: string[] = [];
+  await page.route("**/api/translate", async (route) => {
+    const { text } = route.request().postDataJSON() as { text: string };
+    const nth = texts.filter((asked) => asked === text).length;
+    texts.push(text);
+    const reply = answer(text, nth);
+    if (reply.delayMs) await new Promise((resolve) => setTimeout(resolve, reply.delayMs));
+    if (reply.status && reply.status !== 200) {
+      await route.fulfill({ status: reply.status, contentType: "application/json", body: "{}" });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ text: reply.text, origin: "network" }),
+    });
+  });
+  return { texts };
+}
+
+// The `request` event, not the route handler: a request the page aborts
+// mid-flight still counts, which is what spending the cap looks like. The
+// answer stays `fixtures.ts`'s default 204, so no paid route is ever reached.
+function recordNotes(page: Page): Array<{ source: string; translation: string }> {
+  const bodies: Array<{ source: string; translation: string }> = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/phrase/notes") {
+      bodies.push(request.postDataJSON() as { source: string; translation: string });
+    }
+  });
+  return bodies;
+}
+
+const SETTLE_MS = 1200;
+const PHRASE = "frisking from side to side";
+const PHRASE_ES = "correteando de lado a lado";
+
+test("a phrase typed key by key is translated once and noted once", async ({ page }) => {
+  await disableDeviceTranslator(page);
+  const translations = await stubTranslateCalls(page, () => ({ text: PHRASE_ES }));
+  const notes = recordNotes(page);
+  await waitForDictionary(page);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.pressSequentially(PHRASE, { delay: 40 });
+  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
+  await page.waitForTimeout(SETTLE_MS);
+
+  expect(translations.texts, "a debounce turns the keys into one translation").toEqual([PHRASE]);
+  expect(notes, "one translation owes exactly one notes request").toEqual([
+    { source: PHRASE, translation: PHRASE_ES },
+  ]);
+});
+
+test("typing after a translation raises no notes request until the next translation lands", async ({ page }) => {
+  await disableDeviceTranslator(page);
+  await stubTranslateCalls(page, (text) => ({ text: text === PHRASE ? PHRASE_ES : "otra traduccion nueva" }));
+  const notes = recordNotes(page);
+  await waitForDictionary(page);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill(PHRASE);
+  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
+  await expect.poll(() => notes.length).toBe(1);
+
+  // Five keys, each well inside the debounce, and a read before it ends.
+  await searchBox.pressSequentially(" more", { delay: 40 });
+  await page.waitForTimeout(300);
+  expect(notes, "keys after a translation spend nothing").toHaveLength(1);
+
+  // The settled phrase is a new translation: one more request, with its own text.
+  await expect(page.getByText("otra traduccion nueva")).toBeVisible({ timeout: 5000 });
+  await expect.poll(() => notes.length).toBe(2);
+  await page.waitForTimeout(SETTLE_MS);
+  expect(notes).toEqual([
+    { source: PHRASE, translation: PHRASE_ES },
+    { source: `${PHRASE} more`, translation: "otra traduccion nueva" },
+  ]);
+});
+
+test("returning to a phrase already translated and noted raises no request", async ({ page }) => {
+  await disableDeviceTranslator(page);
+  const other = "a quite different sentence";
+  await stubTranslateCalls(page, (text) => ({ text: text === PHRASE ? PHRASE_ES : "una frase distinta" }));
+  const notes = recordNotes(page);
+  await waitForDictionary(page);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill(PHRASE);
+  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
+  await searchBox.fill(other);
+  await expect(page.getByText("una frase distinta")).toBeVisible({ timeout: 5000 });
+  await expect.poll(() => notes.length).toBe(2);
+
+  await searchBox.fill(PHRASE);
+  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
+  await page.waitForTimeout(SETTLE_MS);
+  expect(notes, "the same source with the same translation is already answered").toHaveLength(2);
+});
+
+test("the same phrase with another translation asks again", async ({ page }) => {
+  test.setTimeout(90_000);
+  await disableDeviceTranslator(page);
+  // Past `PHRASE_CACHE_LIMIT` (20) the screen forgets the first translation
+  // and asks for it afresh; the second answer differs.
+  await stubTranslateCalls(page, (text, nth) => ({
+    text: text === PHRASE ? (nth === 0 ? PHRASE_ES : "saltando de un lado a otro") : `filler ${text}`,
+  }));
+  const notes = recordNotes(page);
+  await waitForDictionary(page);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill(PHRASE);
+  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
+  for (let index = 0; index < 21; index++) {
+    const filler = `filler sentence number ${index}`;
+    await searchBox.fill(filler);
+    await expect(page.getByText(`filler ${filler}`)).toBeVisible({ timeout: 5000 });
+  }
+  await expect.poll(() => notes.length).toBe(22);
+
+  await searchBox.fill(PHRASE);
+  await expect(page.getByText("saltando de un lado a otro")).toBeVisible({ timeout: 5000 });
+  await expect.poll(() => notes.length).toBe(23);
+  expect(notes[22]).toEqual({ source: PHRASE, translation: "saltando de un lado a otro" });
+});
+
+test("no notes request while the translation is pending", async ({ page }) => {
+  await disableDeviceTranslator(page);
+  await stubTranslateCalls(page, () => ({ text: PHRASE_ES, delayMs: 1500 }));
+  const notes = recordNotes(page);
+  await waitForDictionary(page);
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill(PHRASE);
+  await expect(page.getByText(messages.phrase.translating)).toBeVisible({ timeout: 5000 });
+  await page.waitForTimeout(800);
+  expect(notes, "nothing to note while the translation is still out").toHaveLength(0);
+
+  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
+  await expect.poll(() => notes.length).toBe(1);
+});
+
+test("no notes request when the translation fails", async ({ page }) => {
+  await disableDeviceTranslator(page);
+  const translations = await stubTranslateCalls(page, () => ({ text: "", status: 502 }));
+  const notes = recordNotes(page);
+  await waitForDictionary(page);
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill(PHRASE);
+  await expect.poll(() => translations.texts.length).toBe(1);
+  await page.waitForTimeout(SETTLE_MS);
+  expect(notes).toHaveLength(0);
+});
+
+test("emptying the box after a translation raises no notes request", async ({ page }) => {
+  await disableDeviceTranslator(page);
+  await stubTranslateCalls(page, () => ({ text: PHRASE_ES }));
+  const notes = recordNotes(page);
+  await waitForDictionary(page);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill(PHRASE);
+  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
+  await expect.poll(() => notes.length).toBe(1);
+
+  await searchBox.fill("");
+  await page.waitForTimeout(SETTLE_MS);
+  expect(notes).toHaveLength(1);
+  await expect(page.getByText(PHRASE_ES)).toHaveCount(0);
+});
