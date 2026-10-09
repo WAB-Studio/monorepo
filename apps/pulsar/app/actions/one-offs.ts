@@ -28,6 +28,7 @@ import {
 
 import { declareFact, type DeclareFactResult } from "./facts";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type CreateOneOffResult = { ok: true; oneOffId: string } | { ok: false; error: MessageKey };
 export type CompleteOneOffResult = DeclareFactResult;
@@ -36,10 +37,6 @@ export type DeleteOneOffResult = { ok: true } | { ok: false; error: MessageKey }
 export type SetOneOffNoteResult = { ok: true } | { ok: false; error: MessageKey };
 export type EditTaskResult = { ok: true } | { ok: false; error: MessageKey };
 export type FixTaskResult = EditTaskResult;
-
-// Carries a message key out of the transaction without collapsing every
-// rejection into the same generic failure.
-class NamedError extends Error {}
 
 /**
  * Writes something to do once (RP-19, RP-20), or a task of a goal's month
