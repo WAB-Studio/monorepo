@@ -71,24 +71,10 @@ this gets built, and no schema, table or column is "prepared for" it.
   **What it cannot do, measured the same day.** The order is a corpus's, so it is wrong wherever the
   reader's book disagrees with film subtitles. `creep` is scored `"nv"` and draws its noun group —
   «deformación por fluencia lenta, fatiga, alimaña, degenerado» — above «reptar, hormiguear», to a
-  reader in *Animal Farm*. Four more did the same: `shriek`, `frost`, `toil` and `stern`. **RL-47's
+  reader in *Animal Farm*. Four more did the same: `shriek`, `frost`, `toil` and `stern`. **RL-58's
   suffix clause is what answers those**, from the device and with no table at all, because an `-ing`
   can only be a verb and an `-ly` can only come from an adjective. See `DESIGN.md`, "Pruning the
   dictionary was measured and refused".
-- [x] **RL-47** *(successor of RL-40)* — The form the reader typed leads the answer with its own
-  translation and one example sentence, resolved over the network when the dictionary has no row for
-  the form itself. The headword it inflects from sits **underneath**, named as such, with its own
-  sense groups: `swishing` answers «silbando» and offers `swish` under it. An exact entry the reader
-  typed on purpose still wins the top of the screen: `bed` answers as `bed` and offers nothing.
-  **When the form's suffix pins a part of speech — only a verb takes `-ing` or `-ed`, only an
-  adjective takes `-ly` — that group leads the headword's own, ahead of any frequency order.** It is
-  answered from the device and touches the network on no keystroke.
-  - Measured by `apps/voyager/scripts/check-dictionary.ts` (D7, D12), the figures and the two filter rules
-    are RL-40's: see its Measured sub-point under «Retired». D12 reads 23 candidates before the filter, 0 after.
-  - Driven, not asserted: `bed` answers with its own entry and offers nothing; `left` offers `leave`,
-    `faster` offers `fast`, `gone` offers `go`, `women` offers `woman`, `people` offers `person`.
-    `word` offers nothing, so an answered query gains no clutter.
-
 - [x] **RL-51** — A headword whose senses carry more than one pronunciation answers in one block per
   pronunciation, its IPA named once at the block's head, and RL-43's frequency order governs the
   parts of speech **inside** a block rather than across the whole entry. `row` answers `/rɑː/` —
@@ -153,7 +139,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   - **Driven, not asserted, 2026-09-20.** `row` answers `/rɑː/` — remo, fila, remar — then `/ɹaʊ/` —
     pelea, pelear. `can` draws its two pronunciations and then the acronym under a block nothing
     heads. `leave`, `grudge`, `bed` and `sternly` draw no block at all, and `bed` still answers as
-    its own entry: RL-43 and RL-47 both hold inside the grouping.
+    its own entry: RL-43 and RL-58 both hold inside the grouping.
   - A mutator broke the lines the branch changed: 15 mutations, 14 killed, and the one survivor —
     deleting the guard that keeps the `compact` breakdown from grouping — now has its own test. No
     phrase any suite drives contains one of the grouped headwords, so that guard had been green by
@@ -286,13 +272,11 @@ this gets built, and no schema, table or column is "prepared for" it.
   them, their own included.
 - [ ] **RL-52** *(successor of RL-30)* — With an account open on the device, nothing leaves it until the reader
   confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
-  had and brings down what the others recorded, with no further act. Signing out stops it. A device the reader
+  had and brings down what the others recorded, with no further act. When the device last copied for another reader, it sends up only what is searched after this
+  confirmation; the earlier rows stay on the device and never reach this account. Signing out stops it. A device the reader
   retired stays retired: it offers no copy until the reader signs out and signs in, and then it copies as a new
   device. The sign-in link works in any browser. With no account, nothing leaves the device. Decided by the user
   2026-10-08.
-- [x] **RL-32** — The reader reads their record grouped by word: one row per word, with how many
-  times it was searched, ordered by frequency, case-insensitive; and tapping a word opens every one
-  of its searches with its date. This replaces the chronological list.
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.
@@ -319,15 +303,27 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-46** — A sentence answered by translation also names the terms in it that are not obvious
   and says what they are. The app picks which terms earn a note; a note on every word is RL-31's
   answer, not this one.
+- [ ] **RL-56** *(successor of RL-32)* — The reader reads their record grouped by the headword each search
+  reached: one row per headword — the lemma when an inflected form was typed, the typed string when no headword was
+  reached — with the forms searched under it and how many times, ordered by frequency, case-insensitive; tapping a row
+  opens every search of every form with its date. Decided by the user 2026-10-08.
+- [ ] **RL-57** *(successor of RL-37)* — A sentence the app cannot translate gets the same answer a string it never
+  tried to translate gets: the app names what it could not answer and offers, underneath, the dictionary's own answer
+  for each of its words. For a function word, that answer reads a hand-written table of about a hundred words, each
+  with its common translation, before the dictionary's order; the table serves this fallback alone. It answers from
+  the device, so it holds with no network at all. Decided by the user 2026-10-08.
+- [ ] **RL-58** *(successor of RL-47)* — The form the reader typed leads the answer with its own translation and one
+  example sentence, resolved over the network when the dictionary has no row for the form itself. The headword it
+  inflects from sits named as such, with its own sense groups, **right under the form's first group**, not at the end:
+  `left` answers its own first group and the `leave` block follows it. An exact entry the reader typed on purpose still
+  wins the top of the screen: `bed` answers as `bed` and offers nothing. When the form's suffix pins a part of speech —
+  only a verb takes `-ing` or `-ed`, only an adjective takes `-ly` — that group leads the headword's own, ahead of any
+  frequency order. It is answered from the device and touches the network on no keystroke. Decided by the user
+  2026-10-08.
 - [x] **RL-54** *(successor of RL-31)* — A string of two or more words that the dictionary has no entry for is
-  answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-37's answer. Only a string of more than 60 words is not sent anywhere: the app names how many words it holds and asks
+  answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-57's answer. Only a string of more than 60 words is not sent anywhere: the app names how many words it holds and asks
   for one word, or a sentence of up to sixty. That answer comes from the device and touches the network on
   no keystroke. Decided by the user 2026-10-08.
-- [x] **RL-37** — A sentence the app cannot translate gets the same answer a string it never tried
-  to translate gets: the app names what it could not answer and offers, underneath, the dictionary's
-  own answer for each of its words. This replaces the notice that only said the translation failed —
-  a reader who typed a sentence and got nothing back now gets the dictionary's own words instead.
-  It answers from the device, so it holds with no network at all.
 
 ### Non-functional requirements
 
@@ -362,6 +358,30 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [x] **RL-32** — The reader reads their record grouped by word: one row per word, with how many
+  times it was searched, ordered by frequency, case-insensitive; and tapping a word opens every one
+  of its searches with its date. This replaces the chronological list.
+  _Retired 2026-10-08. Successor: RL-56. Grouped by spelling, `linger` and `lingered` were two rows with the same translations; the record is read to study the word, not the form._
+- [x] **RL-37** — A sentence the app cannot translate gets the same answer a string it never tried
+  to translate gets: the app names what it could not answer and offers, underneath, the dictionary's
+  own answer for each of its words. This replaces the notice that only said the translation failed —
+  a reader who typed a sentence and got nothing back now gets the dictionary's own words instead.
+  It answers from the device, so it holds with no network at all.
+  _Retired 2026-10-08. Successor: RL-57. A function word in the per-word fallback came out of the dictionary's frequency order (`something` as «basurita», `nobody` without «nadie»); a hand table now answers it first._
+- [x] **RL-47** *(successor of RL-40)* — The form the reader typed leads the answer with its own
+  translation and one example sentence, resolved over the network when the dictionary has no row for
+  the form itself. The headword it inflects from sits **underneath**, named as such, with its own
+  sense groups: `swishing` answers «silbando» and offers `swish` under it. An exact entry the reader
+  typed on purpose still wins the top of the screen: `bed` answers as `bed` and offers nothing.
+  **When the form's suffix pins a part of speech — only a verb takes `-ing` or `-ed`, only an
+  adjective takes `-ly` — that group leads the headword's own, ahead of any frequency order.** It is
+  answered from the device and touches the network on no keystroke.
+  - Measured by `apps/voyager/scripts/check-dictionary.ts` (D7, D12), the figures and the two filter rules
+    are RL-40's: see its Measured sub-point under «Retired». D12 reads 23 candidates before the filter, 0 after.
+  - Driven, not asserted: `bed` answers with its own entry and offers nothing; `left` offers `leave`,
+    `faster` offers `fast`, `gone` offers `go`, `women` offers `woman`, `people` offers `person`.
+    `word` offers nothing, so an answered query gains no clutter.
+  _Retired 2026-10-08. Successor: RL-58. The headword block sat at the end of the answer, below every group of the form; it now rises under the form's first group._
 - [x] **RL-39** *(successor of RL-38)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: what was typed, whether it was answered as
   a word or a sentence, the headword it actually reached when an inflected form was typed, and when.
@@ -590,7 +610,7 @@ Principles, not recipes:
     that carry none, and an example sentence. Answers with no session, caches what it resolves, and
     answers with nothing rather than a provider's own error on any failure.
   - `app/api/word/unlisted/route.ts` — a word the dictionary has no entry for, answered over the
-    network on its own (RL-44, RL-47).
+    network on its own (RL-44, RL-58).
   - `app/api/phrase/notes/route.ts` — the terms a translated sentence names as not obvious (RL-46).
   - `app/cuenta/page.tsx` — a server component that reads the session and queries nothing.
   - `app/page.tsx`, `app/registro/page.tsx` and `app/registro/[palabra]/page.tsx` — the box and the

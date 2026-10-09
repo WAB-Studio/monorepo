@@ -1594,3 +1594,4 @@ Taken by the user on the critic's questions. Each opens its module with a board 
 - **`/registro` groups by lemma.** One row per lemma with the forms searched under it; RL-32 is retired for a successor.
 - **iPhone: measure first.** The user checks on a real iPhone whether the installed app keeps its storage apart from
   Safari; if it does, sign-in moves to a six-digit code typed in the app (RL-22 retired for a successor).
+- **RL-37 and RL-47 are retired for successors (user, 2026-10-08).** RL-57 and RL-58 carry the hand table and the lemma block under the form's first group. If the iPhone measurement confirms it, the six-digit code rides on the shared Supabase email template (`{{ .Token }}`).
