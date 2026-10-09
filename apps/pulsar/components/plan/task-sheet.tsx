@@ -167,7 +167,7 @@ export function TaskSheet({
       if (typeof value === "string") return refuse(value);
       amount = value;
     }
-    const fixes = asksMonth && (pin || !timed) ? month : null;
+    const fixes = asksMonth && (pin || !timed) && month !== "" ? month : null;
 
     if (mode === "create") {
       const parsed = createOneOffSchema.safeParse({
@@ -175,7 +175,8 @@ export function TaskSheet({
         day: null,
         goalId: goalId ?? null,
         estimate: amount,
-        ...(fixes ? { plannedMonth: fixes } : { inPlan: true }),
+        // No plan places a task of a goal that does not measure time; the server fixes its month.
+        ...(fixes ? { plannedMonth: fixes } : timed ? { inPlan: true } : {}),
       });
       if (!parsed.success) return refuse(messageKey(parsed.error.issues[0].message));
       startTransition(() => void createOneOff(parsed.data).then(finish));

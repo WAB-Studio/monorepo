@@ -21,7 +21,7 @@ const PIN_HINT = "Una tarea fijada no se mueve con el plan. Las demás se acomod
 
 type Db = import("postgres").Sql;
 
-async function seed(db: Db, personId: string, unit: "km" | "minutos") {
+async function seed(db: Db, personId: string, unit: "km" | "minutos" | null, plannedMonth: string | null = thisMonth) {
   const stamp = Date.now();
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
@@ -31,7 +31,7 @@ async function seed(db: Db, personId: string, unit: "km" | "minutos") {
   const name = `Comprar zapatillas ${stamp}`;
   const [task] = await db<{ id: string }[]>`
     insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month, in_plan)
-    values (${personId}, ${goal.id}, ${name}, ${unit === "minutos" ? 60 : null}, ${thisMonth}::date, true)
+    values (${personId}, ${goal.id}, ${name}, ${unit === "minutos" ? 60 : null}, ${plannedMonth}::date, ${plannedMonth !== null})
     returning id
   `;
   return { goalId: goal.id, goalName: `Correr 10K ${stamp}`, taskId: task.id, name };
@@ -134,3 +134,50 @@ test("at 390 a km goal's open sheet does not overflow horizontally", async ({ pe
     await context.close();
   }
 });
+
+for (const width of [390, 1440]) {
+  test(`at ${width} creating from «Añadir una tarea» on a goal that measures nothing stores the chosen month as planned_month`, async ({ person, browser, baseURL, db }) => {
+    const { goalId } = await seed(db, person.id, null);
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await page.goto(`/metas/${goalId}/plan`);
+      await page.getByRole("button", { name: "Añadir una tarea" }).click();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByRole("heading", { name: "Una tarea nueva" })).toBeVisible();
+      await expect(sheet.getByText("Lo pone el plan")).toHaveCount(0);
+      await expect(sheet.getByRole("radio", { name: label(thisMonth), exact: true })).toHaveAttribute("aria-checked", "true");
+      await sheet.getByLabel("Nombre").fill("Creada en el mes elegido");
+      await sheet.getByRole("radio", { name: label(later), exact: true }).click();
+      await sheet.getByRole("button", { name: "Guardar" }).click();
+      await expect(sheet).toBeHidden();
+      const [saved] = await db<{ planned_month: string | null; in_plan: boolean }[]>`
+        select to_char(planned_month, 'YYYY-MM-DD') as planned_month, in_plan
+        from goals.one_offs where goal_id = ${goalId} and name = 'Creada en el mes elegido'
+      `;
+      // The table forces in_plan on any row that holds a month, so the month is the proof.
+      expect(saved.planned_month).toBe(later);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test(`at ${width} a goal that measures nothing shows the month chips and the sentence, with no radio of the plan`, async ({ person, browser, baseURL, db }) => {
+    const { goalId } = await seed(db, person.id, null);
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await page.goto(`/metas/${goalId}/plan`);
+      await page.getByRole("button", { name: "Añadir una tarea" }).click();
+      const sheet = page.getByRole("dialog");
+      await expect(sheet.getByText("Mes", { exact: true })).toBeVisible();
+      await expect(sheet.getByRole("radio", { name: label(thisMonth), exact: true })).toBeVisible();
+      await expect(sheet.getByText("Lo pone el plan")).toHaveCount(0);
+      await expect(sheet.getByText("Fijarla en")).toHaveCount(0);
+      await expect(sheet).toContainText(SENTENCE);
+      await expect(sheet).not.toContainText(PIN_HINT);
+    } finally {
+      await context.close();
+    }
+  });
+}
