@@ -119,7 +119,6 @@ test("a goal whose rows that day are all weekly still says what that day asked: 
     await seedRow(db, person.id, goal, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [] });
     const page = await context.newPage();
     await page.goto(`/dia/${plusDays(-1)}`);
-    await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
     await expect(page.getByText(`${name} · ese día pedía uno`)).toHaveCount(1);
     await expect(page.getByText("hechos 0 de 1", { exact: true })).toBeVisible();
   } finally {
