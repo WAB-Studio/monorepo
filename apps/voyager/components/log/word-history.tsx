@@ -205,9 +205,11 @@ export function WordHistory({ normalised }: { normalised: string }) {
   const gloss = isPhrase
     ? null
     : (state.rows.find((row) => row.outcome === "unlisted") ?? state.rows[0]).translation;
+  // The provider formats in the server's zone; the reader's is the browser's.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const subtitleValues = {
     count: state.total,
-    date: format.dateTime(new Date(earliest.at), { day: "numeric", month: "long" }),
+    date: format.dateTime(new Date(earliest.at), { day: "numeric", month: "long", timeZone }),
   };
   // The lemma heads the page, in the casing a row wrote it when one did.
   const heading = key.toLowerCase() === latest.text.toLowerCase() ? latest.text : key;
@@ -215,14 +217,14 @@ export function WordHistory({ normalised }: { normalised: string }) {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  const dayOf = (value: Date) => format.dateTime(value, { year: "numeric", month: "numeric", day: "numeric" });
+  const dayOf = (value: Date) => format.dateTime(value, { year: "numeric", month: "numeric", day: "numeric", timeZone });
   const rowTime = (at: number): string => {
     const moment = new Date(at);
-    const time = format.dateTime(moment, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    const time = format.dateTime(moment, { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone });
     const day = dayOf(moment);
     if (day === dayOf(today)) return t("word.timeToday", { time });
     if (day === dayOf(yesterday)) return t("word.timeYesterday", { time });
-    return t("word.timeOther", { date: format.dateTime(moment, { day: "numeric", month: "short" }), time });
+    return t("word.timeOther", { date: format.dateTime(moment, { day: "numeric", month: "short", timeZone }), time });
   };
 
   return (
