@@ -422,6 +422,19 @@ test("the board's sentence: she and nobody lead with the table, whispered and he
   }
 });
 
+test("a function word written with a capital is headed by the dictionary's entry, not by what was typed", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "She whispered something nobody heard");
+  const headings = mainHeadings(page);
+  await expect(headings.filter({ hasText: /^she$/ }), "the entry's own headword").toHaveCount(1);
+  await expect(headings.filter({ hasText: /^She$/ }), "not the written token").toHaveCount(0);
+  // The block still leads with the table's line under that heading.
+  expect((await blockLines(page, "she", "whispered"))[0].text).toBe(functionWordTranslation("she"));
+});
+
 test("a content word's block draws the dictionary alone", async ({ page }) => {
   await deleteTranslator(page);
   await failTranslation(page);

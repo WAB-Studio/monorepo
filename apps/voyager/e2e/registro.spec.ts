@@ -438,6 +438,88 @@ test("with the store broken, /registro draws the failure, with no system red and
   await expect(page.getByRole("button", { name: messages.log.study.failedAction })).toBeVisible();
 });
 
+// Opens fail while `window.__store` is "throw" and never answer while it is
+// "hang"; anything else reaches the real store. The page flips it between the
+// first read and the retry, so the failure belongs to the first open alone.
+async function failStoreUntilReleased(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __store: "throw" | "hang" | "ok" };
+    w.__store = "throw";
+    const real = IDBFactory.prototype.open;
+    IDBFactory.prototype.open = function (...args: Parameters<typeof real>) {
+      if (w.__store === "throw") throw new Error("storage broken");
+      if (w.__store === "hang") return {} as IDBOpenDBRequest;
+      return real.apply(this, args);
+    };
+  });
+}
+
+async function seedOneLookup(page: Page): Promise<void> {
+  await deleteTranslator(page);
+  const assetResponse = page.waitForResponse(
+    (response) => response.url().includes(manifest.asset.path) && response.ok(),
+  );
+  await page.goto("/");
+  await assetResponse;
+  await dictionaryReady(page);
+  await recordSearch(page, "apple");
+}
+
+async function setStore(page: Page, mode: "throw" | "hang" | "ok"): Promise<void> {
+  await page.evaluate((m) => {
+    (window as unknown as { __store: string }).__store = m;
+  }, mode);
+}
+
+test("RL-34: «Reintentar» on the failed /registro reads the store again and lists the seeded row", async ({ page }) => {
+  await seedOneLookup(page);
+  // Registered after the seed: the first document kept the real store, and a
+  // fresh context starts empty, so no wipe is needed (and one would rerun on
+  // every navigation).
+  await failStoreUntilReleased(page);
+  await page.goto("/registro");
+  await expect(page.getByText(messages.log.study.failedTitle)).toBeVisible();
+
+  await setStore(page, "ok");
+  await page.getByRole("button", { name: messages.log.study.failedAction }).click();
+
+  await expect(page.locator('a[href="/registro/apple"]')).toBeVisible();
+  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(page.getByText(messages.log.study.failedTitle)).toHaveCount(0);
+});
+
+test("RL-34: the retry takes the failure off the screen at the click, before the second read answers", async ({ page }) => {
+  await seedOneLookup(page);
+  await failStoreUntilReleased(page);
+  await page.goto("/registro");
+  await expect(page.getByText(messages.log.study.failedTitle)).toBeVisible();
+
+  await setStore(page, "hang");
+  await page.getByRole("button", { name: messages.log.study.failedAction }).click();
+
+  await expect(page.getByText(messages.log.study.failedTitle)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: messages.log.study.failedAction })).toHaveCount(0);
+});
+
+test("RNL-02: the failed /registro title is full-weight ink, never muted, accent or red, in light and dark", async ({ page }) => {
+  await deleteTranslator(page);
+  await breakIndexedDB(page);
+
+  const palette = {
+    light: { ink: "#17160F", muted: "#6B675A" },
+    dark: { ink: "#F0EBDD", muted: "#9A9484" },
+  } as const;
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto("/registro");
+    const title = page.getByText(messages.log.study.failedTitle);
+    await expect(title).toBeVisible();
+    const colour = await computedColor(title);
+    expect(colour).toBe(hexToRgb(palette[scheme].ink));
+    expect(colour).not.toBe(hexToRgb(palette[scheme].muted));
+  }
+});
+
 test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar el registro» accent, and its confirm keeps the accent off both destructive options — no red, in light and dark", async ({
   page,
 }) => {
