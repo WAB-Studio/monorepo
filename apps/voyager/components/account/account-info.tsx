@@ -1,12 +1,13 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
+import { useFormatter, useTranslations } from "next-intl";
 
 import manifestJson from "@/public/dictionary/manifest.json";
 import { manifestSchema } from "@/lib/dictionary/format";
 import { POS_FREQUENCY_LICENCE_URL, POS_FREQUENCY_SOURCE_URL } from "@/lib/dictionary/pos-frequency-source";
 import packageJson from "@/package.json";
-import { Flex, Link, MetaLabel, Separator, Text } from "@/components/ui";
+import { Flex, Link, MetaLabel, Separator, TapTarget, Text } from "@/components/ui";
 
 // Imported, not fetched: the manifest is on disk at build time (RNL-04),
 // so this tab pays no request.
@@ -15,6 +16,17 @@ const manifest = manifestSchema.parse(manifestJson);
 // `docs/voyager/SPEC.md`'s own model table reads the payload in MiB, so the
 // figure here is 1024^2, not the decimal megabyte.
 const BYTES_PER_MIB = 1024 * 1024;
+
+// Each credit sits on its own row, a 32 px touch target that overlaps no other.
+function Credit({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Flex>
+      <Link href={href} target="_blank" rel="noreferrer">
+        <TapTarget align="center">{children}</TapTarget>
+      </Link>
+    </Flex>
+  );
+}
 
 /**
  * `CuentaInformacion` (`docs/voyager/DESIGN.md` "Settled"): the dictionary's
@@ -26,8 +38,12 @@ const BYTES_PER_MIB = 1024 * 1024;
  */
 export function AccountInfo() {
   const t = useTranslations("account.info");
+  const format = useFormatter();
   const { source, counts, asset } = manifest;
-  const sizeMib = `${(asset.bytes / BYTES_PER_MIB).toFixed(1)} MiB`;
+  const sizeMib = `${format.number(asset.bytes / BYTES_PER_MIB, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} MiB`;
 
   return (
     <Flex direction="column" gap="5">
@@ -35,11 +51,11 @@ export function AccountInfo() {
         <MetaLabel>{t("dictionaryLabel")}</MetaLabel>
         {/* The name doubles as the source link RL-33 asks for: FreeDict is
             what is named, and what is linked. */}
-        <Link href={source.url} target="_blank" rel="noreferrer">
+        <Credit href={source.url}>
           <Text size="5" serif>
             {t("dictionaryName")}
           </Text>
-        </Link>
+        </Credit>
         <Text size="2" muted>
           {t("dictionaryStats", { entries: counts.entries, edition: source.edition, size: sizeMib })}
         </Text>
@@ -50,14 +66,9 @@ export function AccountInfo() {
       <Flex direction="column" gap="1">
         <MetaLabel>{t("licenceLabel")}</MetaLabel>
         <Text size="2" as="p">
-          {t.rich("licenceCredit", {
-            cc: (chunks) => (
-              <Link href={source.licenceUrl} target="_blank" rel="noreferrer">
-                {chunks}
-              </Link>
-            ),
-          })}
+          {t("licenceBody")}
         </Text>
+        <Credit href={source.licenceUrl}>{t("licenceName")}</Credit>
       </Flex>
 
       <Separator size="4" />
@@ -65,19 +76,10 @@ export function AccountInfo() {
       <Flex direction="column" gap="1">
         <MetaLabel>{t("frequencyLabel")}</MetaLabel>
         <Text size="2" as="p">
-          {t.rich("frequencyCredit", {
-            source: (chunks) => (
-              <Link href={POS_FREQUENCY_SOURCE_URL} target="_blank" rel="noreferrer">
-                {chunks}
-              </Link>
-            ),
-            cc: (chunks) => (
-              <Link href={POS_FREQUENCY_LICENCE_URL} target="_blank" rel="noreferrer">
-                {chunks}
-              </Link>
-            ),
-          })}
+          {t("frequencyBody")}
         </Text>
+        <Credit href={POS_FREQUENCY_SOURCE_URL}>{t("frequencySource")}</Credit>
+        <Credit href={POS_FREQUENCY_LICENCE_URL}>{t("frequencyLicence")}</Credit>
       </Flex>
 
       <Separator size="4" />
