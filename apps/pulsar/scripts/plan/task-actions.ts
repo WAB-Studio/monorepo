@@ -96,6 +96,7 @@ let today: string;
 let thisMonth: string;
 let measuredGoalId: string;
 let unmeasuredGoalId: string;
+let kmGoalId: string;
 let archivedGoalId: string;
 let endedGoalId: string;
 // Planted while its goal was open, so a sub-task has a parent to be refused under.
@@ -141,18 +142,18 @@ before(async () => {
   // The 1st of the month after next: next month is the last one it plans.
   const horizon = `${monthFrom(today, 2)}-01`;
 
-  async function goal(name: string, measured: boolean): Promise<string> {
+  async function goal(name: string, measured: boolean, unit = "minutos"): Promise<string> {
     const made = await plan.createGoal({ name, horizon });
     if (!made.ok) throw new Error(`createGoal: ${made.error}`);
     goalIds.push(made.goalId);
     if (measured) {
       const commitment = await plan.addCommitment({
         goalId: made.goalId,
-        name: "RP-30 fixture: minutos",
+        name: `RP-30 fixture: ${unit}`,
         cadenceKind: "daily",
         satisfaction: "quantity",
         targetQuantity: 10,
-        unit: "minutos",
+        unit,
       });
       if (!commitment.ok) throw new Error(`addCommitment: ${commitment.error}`);
     }
@@ -161,6 +162,7 @@ before(async () => {
 
   measuredGoalId = await goal("RP-30 fixture: medida", true);
   unmeasuredGoalId = await goal("RP-30 fixture: sin medida", false);
+  kmGoalId = await goal("RP-62 fixture: km", true, "km");
   archivedGoalId = await goal("RP-30 fixture: archivada", true);
   const archived = await plan.archiveGoal({ goalId: archivedGoalId });
   if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
@@ -475,5 +477,40 @@ test("a goal that measures nothing: a sub-task under another person's parent is 
     assert.equal(children.length, 0);
   } finally {
     await sql`delete from goals.goals where id = ${foreignGoal.id} and user_id = ${member.id}`;
+  }
+});
+
+test("RP-62: a task of a goal measured in km is fixed to the month named, or to the current month", async () => {
+  const next = monthFrom(today, 1);
+  const named = await created({ name: "RP-62 km con mes", day: null, goalId: kmGoalId, plannedMonth: next });
+  const bare = await created({ name: "RP-62 km sin mes", day: null, goalId: kmGoalId });
+  const byId = new Map((await rowsOf(kmGoalId)).map((row) => [row.id, row]));
+  assert.equal(byId.get(named)!.planned_month, `${next}-01`);
+  assert.equal(byId.get(bare)!.planned_month, `${thisMonth}-01`);
+});
+
+test("RP-62: a task of a goal measured in minutes with no month stays in the plan, unpinned", async () => {
+  const id = await created({ name: "RP-62 minutos sin mes", day: null, goalId: measuredGoalId });
+  const row = (await rowsOf(measuredGoalId)).find((r) => r.id === id)!;
+  assert.equal(row.planned_month, null);
+});
+
+test("RP-62: a sub-task of a km task keeps no month of its own", async () => {
+  const parentId = await created({ name: "RP-62 km padre", day: null, goalId: kmGoalId });
+  const childId = await created({ name: "RP-62 km hija", day: null, parentId, estimate: 3 });
+  const row = (await rowsOf(kmGoalId)).find((r) => r.id === childId)!;
+  assert.equal(row.planned_month, null);
+  assert.equal(row.parent_id, parentId);
+});
+
+test("RP-62: a km goal not opened yet pins a task with no month to the first month of its span", async () => {
+  const future = monthFrom(today, 1);
+  await sql`update goals.goals set created_at = ${`${future}-05T12:00:00Z`} where id = ${kmGoalId}`;
+  try {
+    const id = await created({ name: "RP-62 km aún sin abrir", day: null, goalId: kmGoalId });
+    const row = (await rowsOf(kmGoalId)).find((r) => r.id === id)!;
+    assert.equal(row.planned_month, `${future}-01`);
+  } finally {
+    await sql`update goals.goals set created_at = now() where id = ${kmGoalId}`;
   }
 });
