@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { classify, PHRASE_MAX_TOKENS, type QueryKind } from "@/lib/query/classify";
 import { PHRASE_DEBOUNCE_MS } from "@/lib/query/settle";
 import { normaliseHeadword } from "@/lib/dictionary/format";
-import type { Sense, SenseGroup } from "@/lib/dictionary/index-build";
+import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { useDecoration } from "@/lib/word/use-decoration";
@@ -16,6 +16,7 @@ import { enableDeviceTranslator, translateOnDevice } from "@/lib/translate/on-de
 import { translateOverNetwork } from "@/lib/translate/network";
 import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
+import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
 import { Flex, Text } from "@/components/ui";
 import { InstallStatus } from "./install-status";
@@ -39,31 +40,6 @@ type LogPayload = Omit<LookupRecord, "id" | "schema">;
 // answers it again. Answering again is right; recording it again is not.
 // A reader who walks to the log and back five times looked the word up once.
 let lastLoggedText: string | null = null;
-
-// Cut, never truncated silently past the point RL-34's list can hold — the
-// module 27 wire schema and the row this fills both agree on the same 120.
-const TRANSLATION_MAX_CHARS = 120;
-const TRANSLATION_MAX_SENSES = 3;
-
-function cutTranslation(text: string): string {
-  if (text.length <= TRANSLATION_MAX_CHARS) return text;
-  // The cut can land mid-separator, leaving ", " or "," dangling at the
-  // end. Trim it — the 120 cap stays a ceiling, not a quota, so a shorter
-  // result here is fine. A cut that lands mid-word is left alone.
-  return text.slice(0, TRANSLATION_MAX_CHARS).replace(/[,\s]+$/u, "");
-}
-
-// Up to the group's first three senses, every translation each one carries,
-// joined the way `SenseCard` lists them within one sense. The 120-char cut
-// is the storage limit; this cap is only a maximum on top of it, so a word
-// with fewer, longer senses can still lose its third one to the cut.
-function formatSenseTranslations(senses: readonly Sense[]): string {
-  const joined = senses
-    .slice(0, TRANSLATION_MAX_SENSES)
-    .flatMap((sense) => sense.translations)
-    .join(", ");
-  return cutTranslation(joined);
-}
 
 // RL-41: "a word that already has a definition never asks for one" — true
 // only when none of the exact match's own senses carry one.
@@ -535,7 +511,6 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const unlistedPayload = useMemo<LogPayload | null>(() => {
     if (networkWord === null || unlistedTranslation === null) return null;
     if (!logPayload || logPayload.kind !== "word" || logPayload.outcome !== "miss") return null;
-    if (logPayload.normalised !== networkWord) return null;
     return {
       ...logPayload,
       outcome: "unlisted",
@@ -547,13 +522,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     };
   }, [logPayload, networkWord, unlistedTranslation]);
   const recordable = unlistedPayload ?? logPayload;
-  const recordedRef = useRef<LogPayload | null>(null);
 
   // The call site the log's fields are true to: an effect fires after React
   // has already committed the answer, never inside the path that produced it.
   useEffect(() => {
-    if (!recordable || recordable === recordedRef.current) return;
-    recordedRef.current = recordable;
+    if (!recordable) return;
     // Conditioned on both the flag and the text, so a restore can never
     // swallow the next genuine lookup, whatever order the two arrive in.
     if (restoringRef.current && recordable.text === lastLoggedText) {
