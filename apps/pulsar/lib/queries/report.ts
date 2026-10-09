@@ -33,7 +33,7 @@ type ReportRow = {
   tasks: (TaskRow & { in_plan: boolean; created_at: string; position: number })[];
 };
 
-// One statement over every goal not archived (RP-46). RLS narrows it to the
+// One statement over every goal not archived (RP-49). RLS narrows it to the
 // caller's own rows (RNP-05).
 async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
   const rows = await tx.execute<ReportRow>(sql`
@@ -107,7 +107,7 @@ function hasAmountOf(item: PlanItem): boolean {
     : item.children.some((child) => child.estimate !== null);
 }
 
-// What the plan hands «Mes», done and not (RP-46). A parent is done on its
+// What the plan hands «Mes», done and not (RP-49). A parent is done on its
 // last child's day; `owes` counts what is undone today.
 function toReportTask(item: PlanItem): ReportTask {
   const leaf = item.children.length === 0;
@@ -157,7 +157,7 @@ function withinGoal(
 }
 
 /**
- * The export's data (RP-46): every goal not archived, in two transactions
+ * The export's data (RP-49): every goal not archived, in two transactions
  * fanned with `Promise.all` — one over the goals, one over the evidence — so
  * the goal count never lengthens the chain (RNP-03). An evidence rejection
  * degrades to `"unreadable"` and every goal keeps its declared half (RNP-04).

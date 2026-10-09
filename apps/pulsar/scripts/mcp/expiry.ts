@@ -1,4 +1,4 @@
-// Proves RP-38 and RP-41 (0015): a key unused for 90 days no longer opens, a
+// Proves RP-38 and RP-60 (0015): a key unused for 90 days no longer opens, a
 // refresh older than 90 days no longer rotates. Every row is made in a
 // transaction the check rolls back.
 import assert from "node:assert/strict";

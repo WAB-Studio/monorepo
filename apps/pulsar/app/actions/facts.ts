@@ -46,8 +46,8 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // once the subject is read) are what keep it inside RP-06's reach.
       const day = parsed.data.day ?? todayInZone();
 
-      // Serialises every write for this (commitment, day) — round 2's own
-      // fix. Without it, "Cambiar" racing a plain tap on the same commitment
+      // Serialises every write for this (commitment, day).
+      // Without it, "Cambiar" racing a plain tap on the same commitment
       // could return a `factId` from a row the other call's own delete had
       // already removed by the time this one's fallback `select` ran: two
       // separate statements, no lock between them, each transaction reading
@@ -153,7 +153,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // with someone else's read.
       //
       // Adopts first, deletes only when there is something to actually
-      // change (round 2): the lock above serialises the two writes, but does
+      // change: the lock above serialises the two writes, but does
       // not by itself say what "replace" should do when it wins the race
       // *after* a concurrent plain tap already landed the very same
       // (commitment, day) row — deleting that row unconditionally would
@@ -190,13 +190,13 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // deliberately withheld from `authenticated`, left to the column's own
       // `now()` (RP-06).
       //
-      // `facts_commitment_day_unique` (module 38) is the arbiter for a
+      // `facts_commitment_day_unique` is the arbiter for a
       // `commitmentId` insert: two taps racing from two devices both reach
       // this statement, one lands and one conflicts, and `on conflict …
       // do nothing` turns the second into a no-op rather than a 500 — a
       // one-off's insert never carries a `commitmentId`, so it never matches
       // that partial index. Without a target it covers the one-off's own
-      // index too (module 410), and is correct before that index exists.
+      // index too, and is correct before that index exists.
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${facts}
           (user_id, commitment_id, one_off_id, goal_id, day, quantity, note)
@@ -240,7 +240,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
     // meets Postgres's own `integer` ceiling as a message, never a 500.
     // `pgCode`, not a bare `error.code`: drizzle-orm wraps the driver's error
     // in `DrizzleQueryError` and hangs the real one off `.cause`, so the
-    // bare check never fired (module 38, round 2).
+    // bare check never fires.
     if (pgCode(error) === "22003") return { ok: false, error: "day.errors.quantityInvalid" };
     throw error;
   }

@@ -4,7 +4,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// `MetasCentro` and `MetasCentroEscritorio` (module 267, RP-46, RP-37, RNP-07):
+// `MetasCentro` and `MetasCentroEscritorio` (module 267, RP-49, RP-37, RNP-07):
 // «el plan» is outline cards, each with its title on one line and its hint
 // under it, 12px apart.
 

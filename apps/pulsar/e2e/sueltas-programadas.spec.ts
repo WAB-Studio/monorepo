@@ -6,7 +6,7 @@ import oneOffs from "../messages/es/oneOffs.json";
 
 // `/sueltas` holds the one-offs dated after today under «programadas»: each
 // is moved, done or deleted from there, and a done one says where it went
-// (`SueltasProgramadas.dc.html`, `SueltaMover.dc.html`; RP-21, RP-22, RNP-07).
+// (`SueltasProgramadas.dc.html`, `SueltaMover.dc.html`; RP-59, RP-22, RNP-07).
 // Paths by day: tomorrow reads weekday and day with no month Monday to Saturday;
 // on a Sunday it falls in next week and reads its month.
 
@@ -41,7 +41,7 @@ function words(day: string): string {
   return `${WEEKDAYS[(date.getUTCDay() + 6) % 7]} ${date.getUTCDate()}`;
 }
 
-test("a one-off for tomorrow is listed under «programadas» with tomorrow's words, its goal as written (RP-21, RNP-07)", async ({
+test("a one-off for tomorrow is listed under «programadas» with tomorrow's words, its goal as written (RP-59, RNP-07)", async ({
   person,
   browser,
   db,
@@ -80,7 +80,7 @@ test("a one-off for tomorrow is listed under «programadas» with tomorrow's wor
   }
 });
 
-test("moved to today it leaves the list and draws on Hoy; moved to another day it reads the new one (RP-21)", async ({
+test("moved to today it leaves the list and draws on Hoy; moved to another day it reads the new one (RP-59)", async ({
   page,
   db,
   personId,
@@ -118,7 +118,7 @@ test("moved to today it leaves the list and draws on Hoy; moved to another day i
   }
 });
 
-test("a past day is refused in the move sheet and the one-off stays where it was (RP-21)", async ({
+test("a past day is refused in the move sheet and the one-off stays where it was (RP-59)", async ({
   page,
   db,
   personId,
@@ -144,7 +144,7 @@ test("a past day is refused in the move sheet and the one-off stays where it was
   }
 });
 
-test("done from the list it leaves, the status line survives and Hoy holds it in «hechas hoy» (RP-21, RP-19)", async ({
+test("done from the list it leaves, the status line survives and Hoy holds it in «hechas hoy» (RP-59, RP-19)", async ({
   page,
   db,
   personId,
@@ -169,7 +169,7 @@ test("done from the list it leaves, the status line survives and Hoy holds it in
   }
 });
 
-test("a dayless one done from the list shows the same line (RP-21)", async ({ page, db, personId }) => {
+test("a dayless one done from the list shows the same line (RP-59)", async ({ page, db, personId }) => {
   const name = `Suelta hecha con línea ${Date.now()}`;
   const oneOffId = await seed(db, personId, name, null);
 
@@ -213,7 +213,7 @@ const MONTHS = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 
-test("the scheduled list reads in day order, whatever order the one-offs were made in (RP-21)", async ({
+test("the scheduled list reads in day order, whatever order the one-offs were made in (RP-59)", async ({
   person,
   browser,
   db,
@@ -242,7 +242,7 @@ test("the scheduled list reads in day order, whatever order the one-offs were ma
   }
 });
 
-test("«Nada espera» shows only when nothing waits: not with dayless ones alone, not with scheduled ones alone (RP-21)", async ({
+test("«Nada espera» shows only when nothing waits: not with dayless ones alone, not with scheduled ones alone (RP-59)", async ({
   person,
   browser,
   db,
@@ -276,7 +276,7 @@ test("«Nada espera» shows only when nothing waits: not with dayless ones alone
   }
 });
 
-test("a scheduled day names its month only when it falls outside this week: «martes 30», «martes 30 de octubre» (RP-21)", async ({
+test("a scheduled day names its month only when it falls outside this week: «martes 30», «martes 30 de octubre» (RP-59)", async ({
   person,
   browser,
   db,

@@ -1,4 +1,4 @@
-// Proves RP-41 and RNP-19: the call limit on the two anonymous OAuth routes and
+// Proves RP-60 and RNP-19: the call limit on the two anonymous OAuth routes and
 // the ceiling on unused clients. Drives the lane's running server
 // (`PULSAR_BASE_URL`, else :3200 + lane - 1). Every address is a random /64 of
 // the documentation prefix, and every assertion is on rows this run made.

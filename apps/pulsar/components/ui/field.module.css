@@ -60,8 +60,8 @@
 /* docs/pulsar/DESIGN.md "The controls": disabled and read-only both drop the
    fill and read as one thing — "this does not move" — muted ink over the
    surface behind them, with a `line` ring; a field never leaves the two half
-   dressed, one with a ring and the other without (see "Decisions taken here",
-   2026-09-22). Radix pairs the two states in its own selector too, and washes
+   dressed, one with a ring and the other without (see "Decisions taken here").
+   Radix pairs the two states in its own selector too, and washes
    both with `--gray-a2` and `--gray-a6`, a scale this design does not use.
    `color` alone is not enough: Chromium and WebKit paint an input's glyph from
    `-webkit-text-fill-color` when it is set, and Radix sets that property on

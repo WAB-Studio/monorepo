@@ -25,23 +25,23 @@ function goal(patch: Partial<GoalReport> = {}): GoalReport {
   };
 }
 
-test("RP-46 goalSections: a goal with a unit, phases and tasks prints five sections, in order, and never weeks", () => {
+test("RP-49 goalSections: a goal with a unit, phases and tasks prints five sections, in order, and never weeks", () => {
   const sections = goalSections(goal());
   assert.deepEqual(sections, ["month", "toDate", "phases", "tasks", "months"]);
   assert.equal((sections as string[]).includes("weeks"), false);
   assert.equal((sections as string[]).includes("carried"), false);
 });
 
-test("RP-46 goalSections: tasks is present only with tasks", () => {
+test("RP-49 goalSections: tasks is present only with tasks", () => {
   assert.deepEqual(goalSections(goal({ tasks: [] })), ["month", "toDate", "phases", "months"]);
 });
 
-test("RP-46 goalSections: a goal with no unit prints only phases and tasks", () => {
+test("RP-49 goalSections: a goal with no unit prints only phases and tasks", () => {
   assert.deepEqual(goalSections(goal({ unit: null })), ["phases", "tasks"]);
   assert.deepEqual(goalSections(goal({ unit: null, phases: [], tasks: [] })), []);
 });
 
-test("RP-46 goalSections: month stays with a unit when this month has no amount", () => {
+test("RP-49 goalSections: month stays with a unit when this month has no amount", () => {
   const sections = goalSections(goal({ thisMonth: { planned: null, reached: 3, underPace: false } }));
   assert.equal(sections[0], "month");
 });
@@ -56,7 +56,7 @@ const week = (index: number, startsOn: string, endsOn: string, total = 0) => ({
 });
 const month = (day: string) => ({ month: day, planned: null, reached: 0, current: false, past: true, carried: null });
 
-test("RP-46 monthsWithWeeks: a week inside one month sits under it whole", () => {
+test("RP-49 monthsWithWeeks: a week inside one month sits under it whole", () => {
   const grouped = monthsWithWeeks(
     goal({
       months: [month("2026-09-01"), month("2026-10-01")],
@@ -67,7 +67,7 @@ test("RP-46 monthsWithWeeks: a week inside one month sits under it whole", () =>
   assert.deepEqual(grouped[1].weeks.map((w) => [w.index, w.total]), [[2, 7]]);
 });
 
-test("RP-46 monthsWithWeeks: a week 28 sep-4 oct sits under both months with its own span and share", () => {
+test("RP-49 monthsWithWeeks: a week 28 sep-4 oct sits under both months with its own span and share", () => {
   const grouped = monthsWithWeeks(
     goal({
       months: [month("2026-09-01"), month("2026-10-01")],
@@ -88,7 +88,7 @@ test("RP-46 monthsWithWeeks: a week 28 sep-4 oct sits under both months with its
   );
 });
 
-test("RP-46 monthsWithWeeks: the weeks under a month add up to the month's reached", () => {
+test("RP-49 monthsWithWeeks: the weeks under a month add up to the month's reached", () => {
   const grouped = monthsWithWeeks(
     goal({
       months: [{ ...month("2026-09-01"), reached: 9 }, { ...month("2026-10-01"), reached: 4 }],
@@ -104,7 +104,7 @@ test("RP-46 monthsWithWeeks: the weeks under a month add up to the month's reach
   }
 });
 
-test("RP-46 civilSpan: every span carries its year, both ends across a year", () => {
+test("RP-49 civilSpan: every span carries its year, both ends across a year", () => {
   assert.equal(civilSpan("2026-08-31", "2026-09-06"), "31 ago–6 sep 2026");
   assert.equal(civilSpan("2026-08-31", "2026-08-31"), "31 ago 2026");
   assert.equal(civilSpan("2026-10-05", "2026-10-11"), "5–11 oct 2026");

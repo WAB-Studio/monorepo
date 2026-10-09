@@ -1,6 +1,6 @@
 // The horizon is the first day AFTER a goal (RP-11): evidence recorded on it
 // belongs to no day of the goal, so neither the goal's total (`loadGoal`,
-// RP-14) nor the export (`loadReport`, RP-46) may count it. The opening day
+// RP-14) nor the export (`loadReport`, RP-49) may count it. The opening day
 // and the last day (`horizon - 1`) do count.
 //
 // The reader is replaced by one that behaves like the real one: it resolves

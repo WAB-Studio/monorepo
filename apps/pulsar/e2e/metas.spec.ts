@@ -5,7 +5,7 @@ import type postgres from "postgres";
 import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// `/metas` (`MetasCentro`, `MetasCentroEscritorio`; RP-11, RP-24, RP-27, RP-46,
+// `/metas` (`MetasCentro`, `MetasCentroEscritorio`; RP-11, RP-24, RP-27, RP-49,
 // RP-37; RNP-16, RNP-17, RNP-07): the open goals as rows with their last day,
 // «Abrir otra meta» in a group of its own, and «el plan» beside or below them.
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];

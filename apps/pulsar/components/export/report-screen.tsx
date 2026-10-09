@@ -461,8 +461,8 @@ function GoalPart({
 /**
  * `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
  * `ReporteImpresoTareas.dc.html`, `ReporteMarcoEscritorio.dc.html` and
- * `ReporteMarcoEscritorio1024.dc.html` (RP-46), on top of `ReporteSinEvidencia.dc.html`
- * and `ReporteVacio.dc.html` (RP-46, RP-35): the whole report as one page the
+ * `ReporteMarcoEscritorio1024.dc.html` (RP-49), on top of `ReporteSinEvidencia.dc.html`
+ * and `ReporteVacio.dc.html` (RP-49, RP-35): the whole report as one page the
  * browser prints. A goal prints the sections `goalSections` names and no
  * others, so one that measures nothing never prints a zero; a goal that has
  * ended prints its name, its last day and what it reached, and goes last.

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// RP-41: no page of the app is framed by another site. The consent screen is
+// RP-60: no page of the app is framed by another site. The consent screen is
 // the one a stolen click would land on, but the rule holds for every route.
 const CONSENT = "/oauth/autorizar?response_type=code&client_id=marco-ajeno&state=x";
 

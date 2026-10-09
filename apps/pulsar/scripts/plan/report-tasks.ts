@@ -1,4 +1,4 @@
-// Drives the report's `tasks` (RP-46, RP-47, module 256): this month's list as
+// Drives the report's `tasks` (RP-49, RP-47, module 256): this month's list as
 // «Mes» reads it, done and not, in plan order. Rows are planted by direct SQL
 // with explicit positions that run against creation order;
 // the session `harness:mint-session` left standing, `server-only`,
@@ -73,8 +73,8 @@ before(async () => {
   const { todayInZone } = await import("@/lib/zone");
   today = todayInZone();
   const horizon = `${monthFrom(today, 2)}-01`;
-  const first = await plan.createGoal({ name: "RP-46 fixture: primera", horizon });
-  const second = await plan.createGoal({ name: "RP-46 fixture: segunda", horizon });
+  const first = await plan.createGoal({ name: "RP-49 fixture: primera", horizon });
+  const second = await plan.createGoal({ name: "RP-49 fixture: segunda", horizon });
   if (!first.ok || !second.ok) throw new Error("createGoal failed");
   goalIds.push(first.goalId, second.goalId);
   [{ user_id: userId }] = await sql<{ user_id: string }[]>`
@@ -104,14 +104,14 @@ before(async () => {
   const thisMonth = `${today.slice(0, 7)}-01`;
   const lastMonth = `${monthFrom(today, -1)}-01`;
   // Creation order is the reverse of plan order inside the month.
-  const open = await task("RP-46 abierta", thisMonth, 3000020, { note: "RP-46 nota madre" });
-  const a = await task("RP-46 hija hecha", null, 3000022, { parent: open, estimate: 30, note: "RP-46 nota hija" });
-  await task("RP-46 hija abierta", null, 3000021, { parent: open, estimate: 50 });
+  const open = await task("RP-49 abierta", thisMonth, 3000020, { note: "RP-49 nota madre" });
+  const a = await task("RP-49 hija hecha", null, 3000022, { parent: open, estimate: 30, note: "RP-49 nota hija" });
+  await task("RP-49 hija abierta", null, 3000021, { parent: open, estimate: 50 });
   await doneOn(a, today);
-  const done = await task("RP-46 hecha", thisMonth, 3000010, { estimate: 25 });
+  const done = await task("RP-49 hecha", thisMonth, 3000010, { estimate: 25 });
   await doneOn(done, today);
-  await task("RP-46 arrastrada", lastMonth, 3000030, { estimate: 40 });
-  const closed = await task("RP-46 cerrada el mes pasado", lastMonth, 3000005, { estimate: 15 });
+  await task("RP-49 arrastrada", lastMonth, 3000030, { estimate: 40 });
+  const closed = await task("RP-49 cerrada el mes pasado", lastMonth, 3000005, { estimate: 15 });
   await doneOn(closed, `${monthFrom(today, -1)}-03`);
 });
 
@@ -127,9 +127,9 @@ test("loadReport: tasks reads the carried one, then the month's own in plan orde
   assert.deepEqual(
     goal.tasks.map((task) => [task.name, task.from, task.done]),
     [
-      ["RP-46 arrastrada", `${monthFrom(today, -1)}-01`, false],
-      ["RP-46 hecha", null, true],
-      ["RP-46 abierta", null, false],
+      ["RP-49 arrastrada", `${monthFrom(today, -1)}-01`, false],
+      ["RP-49 hecha", null, true],
+      ["RP-49 abierta", null, false],
     ],
   );
 });
@@ -137,15 +137,15 @@ test("loadReport: tasks reads the carried one, then the month's own in plan orde
 test("loadReport: a done task reads its day, an open parent its sub-tasks in order with state and notes", async () => {
   const report = await loadReport(today);
   const tasks = report.goals.find((entry) => entry.id === goalIds[0])?.tasks ?? [];
-  const done = tasks.find((task) => task.name === "RP-46 hecha");
+  const done = tasks.find((task) => task.name === "RP-49 hecha");
   assert.deepEqual([done?.doneOn, done?.estimate, done?.owes], [today, 25, 0]);
-  const open = tasks.find((task) => task.name === "RP-46 abierta");
+  const open = tasks.find((task) => task.name === "RP-49 abierta");
   assert.ok(open);
-  assert.equal(open.note, "RP-46 nota madre");
+  assert.equal(open.note, "RP-49 nota madre");
   assert.deepEqual([open.doneOn, open.estimate, open.owes, open.hasAmount], [null, null, 50, true]);
   assert.deepEqual(open.children, [
-    { name: "RP-46 hija abierta", done: false, doneOn: null, estimate: 50, note: null },
-    { name: "RP-46 hija hecha", done: true, doneOn: today, estimate: 30, note: "RP-46 nota hija" },
+    { name: "RP-49 hija abierta", done: false, doneOn: null, estimate: 50, note: null },
+    { name: "RP-49 hija hecha", done: true, doneOn: today, estimate: 30, note: "RP-49 nota hija" },
   ]);
 });
 
@@ -154,7 +154,7 @@ test("loadReport: carried keeps listing only the undone carried task", async () 
   const carried = report.goals.find((entry) => entry.id === goalIds[0])?.carried ?? [];
   assert.deepEqual(
     carried.map((item) => [item.name, item.from, item.owes]),
-    [["RP-46 arrastrada", `${monthFrom(today, -1)}-01`, 40]],
+    [["RP-49 arrastrada", `${monthFrom(today, -1)}-01`, 40]],
   );
 });
 

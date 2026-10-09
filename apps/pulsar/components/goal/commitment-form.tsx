@@ -49,7 +49,7 @@ const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
 
 /**
  * `CompromisoNuevo.dc.html` (RP-12): what it is, how often, what gives it for
- * done. Drives `addCommitment` (module 11) over its own Zod schema
+ * done. Drives `addCommitment` over its own Zod schema
  * (`lib/validation/plan.ts`), parsed here first so a bound the server would
  * refuse never leaves the device — the same shape `NewGoalForm` already
  * takes. No new server code.

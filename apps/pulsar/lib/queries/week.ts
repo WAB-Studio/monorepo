@@ -25,7 +25,7 @@ import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
 // chain RNP-03 forbids. A second source costs a reader, a catalogue row and
 // one more key in the registry's own map — never a migration (RNP-10).
 
-// The goal's own name, horizon and creation moment: module 17's screen groups
+// The goal's own name, horizon and creation moment: `WeekScreen` groups
 // its rows by goal and needs all three to say which week of the plan's own
 // horizon this one is (RP-16's overline) — `to_jsonb(g)` already carries every
 // column below, so this rides the same statement `commitments`, `phases` and
@@ -40,8 +40,8 @@ type GoalRow = {
 
 // `source_key` / `source_unit` ride in from the join to `evidence_sources`;
 // neither column exists on `commitments` itself. `goal_id` widens `rows.ts`'s
-// own `CommitmentRow` — module 17's screen is what groups a commitment's own
-// dot under the goal it belongs to; `deriveWeek` (module 4) never learns it.
+// own `CommitmentRow` — `WeekScreen` is what groups a commitment's own
+// dot under the goal it belongs to; `deriveWeek` never learns it.
 type CommitmentRow = BaseCommitmentRow & { goal_id: string };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
@@ -73,16 +73,15 @@ type WeekQueryRow = {
 };
 
 /**
- * One statement, four subqueries: every open goal, every commitment not
+ * One statement, six subqueries: every open goal, every commitment not
  * retired before the week's own first day (a commitment retired mid-week
  * must still explain the days it lived through), every phase touching the
  * week, and every fact from the first of the Monday's month to the week's
  * Sunday (`loadWeek` narrows what is drawn back to the seven days; the rest
  * only tells a «N al mes» its month is met) — a one-off's own fact
  * included, unfiltered here the same way `lib/queries/day.ts` leaves it
- * (RP-20): no new round trip, the same `to_jsonb(f)` this file already
- * selected already carries `one_off_id` and `goal_id`, only the mapping step
- * below is what changes. No `user_id` filter: RLS alone decides, the same
+ * (RP-20): the `to_jsonb(f)` already carries `one_off_id` and `goal_id`, so
+ * it costs no round trip. No `user_id` filter: RLS alone decides, the same
  * choice `lib/queries/day.ts` and `lib/evidence/reading-lookups.ts` took.
  *
  * `retired_at` is `timestamptz`; `at time zone ${TIME_ZONE}` reads it as the
@@ -90,7 +89,7 @@ type WeekQueryRow = {
  * day.ts` applies — a bare cast renders in the session's zone (UTC), which
  * would keep a commitment retired after 19:00 Bogotá live one day too long.
  *
- * `period_facts` is the fifth subquery of the same statement: every
+ * `period_facts` is the sixth subquery of the same statement: every
  * commitment fact from the first of `anyDay`'s month to the last of it or of
  * the week, whichever reaches further. A flexible cadence's «N de M» counts
  * inside its period, and «al mes» reaches days the week's own `facts` never
@@ -102,9 +101,8 @@ type WeekQueryRow = {
  * a goal opened later never enters it. A goal that ended mid-week stays, it
  * lived through the days before. `first_monday` is the Monday of the oldest
  * goal's creation, archived included: the bound of the screen's ‹.
- * `WeekScreen` (module 17) only ever
- * groups a dot under a goal it finds here, and `goals.length === 0` is what
- * decides the week's own empty state (`empty-week.tsx`).
+ * `WeekScreen` only ever groups a dot under a goal it finds here, and
+ * `goals.length === 0` is what decides the week's own empty state (`empty-week.tsx`).
  */
 async function queryGoalsRow(
   tx: Transaction,
@@ -184,7 +182,7 @@ function toGoalSummary(row: GoalRow): GoalSummary {
 }
 
 // Which goal a commitment's own dots belong to, and its name for the dot's
-// own label: `deriveWeek` (module 4) derives a slot keyed by `commitmentId`
+// own label: `deriveWeek` derives a slot keyed by `commitmentId`
 // alone, never a group — this is the one place that maps a slot back to the
 // goal section it draws under.
 export type CommitmentGoal = {
@@ -241,9 +239,9 @@ export type OneOffFact = {
  * `goals`, `commitments` and `oneOffFacts` ride out of the same
  * `withGoalsDb` statement `view` is derived from — no third query, still
  * four statements total, exactly as `lib/queries/day.ts`'s own comment
- * counts them. Module 17's screen is what groups a day's dots under the
+ * counts them. `WeekScreen` is what groups a day's dots under the
  * goal they belong to and draws a goalless one under its own "Sueltas"
- * group; `WeekView` and `deriveWeek` (module 4) are unchanged.
+ * group; `WeekView` and `deriveWeek` are unchanged.
  */
 export async function loadWeek(anyDayInIt: string): Promise<{
   view: WeekView;
@@ -273,8 +271,7 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
   // that always does, so a one-off's own fact plays no part in deriving a
   // commitment's slot (RP-20's own dot is `oneOffFacts` below, read by
-  // module 17's screen, never by `deriveWeek`, which stays exactly as module
-  // 4 left it) — the same filter `lib/queries/day.ts` applies.
+  // `WeekScreen`, never by `deriveWeek`) — the same filter `lib/queries/day.ts` applies.
   const monthFacts = row.facts
     .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);

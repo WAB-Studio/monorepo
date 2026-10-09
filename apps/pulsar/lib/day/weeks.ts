@@ -3,8 +3,7 @@ import { addWeeksToCivilDate, civilDateToDate, dateToCivilDate, weekOf } from "@
 // Whole civil days between two `YYYY-MM-DD` strings, at midday UTC so no
 // zone offset can shift the count by one — the one implementation every
 // screen that counts a goal's weeks shares (`lib/day/review.ts` and
-// `components/goal/phase-weeks.ts` held identical copies of this, verified
-// 2026-09-28).
+// `components/goal/phase-weeks.ts` held identical copies of this).
 export function daysBetween(from: string, to: string): number {
   const ms = civilDateToDate(to).getTime() - civilDateToDate(from).getTime();
   return Math.round(ms / 86_400_000);
@@ -16,7 +15,7 @@ function mondayOf(day: string): string {
 
 // The 1-based week `day` falls in, counted Monday to Sunday from the Monday
 // of the goal's opening day: week 1 is the partial week from the opening day
-// to its first Sunday (decided by the user 2026-09-28) — the one convention
+// to its first Sunday — the one convention
 // every screen that counts a goal's weeks reuses; never a second one.
 export function weekIndexOf(openedOn: string, day: string): number {
   return Math.floor(daysBetween(mondayOf(openedOn), mondayOf(day)) / 7) + 1;

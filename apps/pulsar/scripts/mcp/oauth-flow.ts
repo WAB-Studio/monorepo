@@ -1,4 +1,4 @@
-// Proves RP-41 over HTTP, RNP-14 and RNP-15: register, approve through the
+// Proves RP-60 over HTTP, RNP-14 and RNP-15: register, approve through the
 // consent act, exchange, list, refresh, revoke, and the replay that revokes.
 // Drives the lane's running server (`PULSAR_BASE_URL`, else :3200 + lane - 1)
 // started as `route.ts`'s header says; its log is `PULSAR_SERVER_LOG`.

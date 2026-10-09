@@ -13,7 +13,7 @@ function redirectUriValid(value: string): boolean {
 }
 
 /**
- * The request the consent screen carries (RP-41). `resource` has to be this
+ * The request the consent screen carries (RP-60). `resource` has to be this
  * server's own `/mcp`: a code is issued for one audience and no other. `scope`
  * is not read, so a parse drops it.
  */

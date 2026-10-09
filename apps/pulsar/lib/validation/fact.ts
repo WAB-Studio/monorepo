@@ -8,9 +8,8 @@ import { civilDateToDate, dateToCivilDate, isCivilDate, todayInZone } from "@/li
 // string and compare it lexicographically against another one.
 const civilDate = (message: string) => z.string().refine(isCivilDate, { error: message });
 
-// How far back a fact may reach (RP-06), decided by the user 2026-09-28, in
-// exactly one place — the one modules 46 and 49 read their date picker's
-// floor from, never a second 7 typed beside this one.
+// How far back a fact may reach (RP-06), in
+// exactly one place — the one the date pickers read their floor from, never a second 7 typed beside this one.
 export const PAST_DAY_LIMIT = 7;
 
 // The earliest civil day a fact may name, given today's. Goes through `Date`

@@ -1,4 +1,4 @@
-// Proves RP-38 and RP-41 at the query: inside `actAs` the person reads their
+// Proves RP-38 and RP-60 at the query: inside `actAs` the person reads their
 // own keys, live ones first, expired ones then revoked ones, newest first inside
 // each, never the fingerprint and never another person's. `expiredAt` is the
 // door's 90-day rule (RNP-20, 0015) read forward and agrees with it. Stubs and wire counting as `acting.ts`.
