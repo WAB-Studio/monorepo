@@ -1122,3 +1122,11 @@ module; until it lands, the screen and its approved board stay as built.
   the same number.
 - **The harness registry learns OAuth clients**, so `harness:reap` deletes the ones a test registers.
 - **Deploy when this cut closes.**
+
+## Decisions of 2026-10-09, the boards of the slice close
+
+- **The four boards are approved as drawn** (user, 2026-10-09, canvas version 91): `HoyTareaMesSinPlan`,
+  `HoySueltaMoverArrastrada`, `ConexionesVencidaSinUsar`, `ImportarErrorLinea`.
+- **The person's Claude plan allows custom connectors** (user, 2026-10-09). Claude Desktop connects like claude.ai: the
+  desktop section says «agrega un conector con esta dirección» and the `mcp-remote` JSON goes (module 672).
+- **RP-30 retires for RP-68** (user, 2026-10-09): a task carries an estimate only in a goal measured in time.
