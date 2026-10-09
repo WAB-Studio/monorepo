@@ -187,3 +187,124 @@ test("returning through the bar does not record the restored query again", async
   const manures = rows.filter((row) => row.normalised === "manures");
   expect(manures, "three round trips record the word once, not four times").toHaveLength(1);
 });
+
+// RNL-03 / docs/voyager/DESIGN.md "Viewport": the bar's labels are 11px / 600 /
+// 0.12em / uppercase and read as one even run of letters at both widths — the
+// bar at 360 and the side rail at 1280 draw the same `<span>`.
+const LABEL_WIDTHS = [360, 1280] as const;
+
+type LabelMeasure = {
+  text: string;
+  fontSize: string;
+  fontWeight: string;
+  letterSpacing: string;
+  textTransform: string;
+  whiteSpace: string;
+  lineTops: number[];
+  // Pen advance of every letter as drawn, letter-spacing taken out.
+  drawn: number[];
+  // The same letters at 1100px (hinting cannot round anything there), /100:
+  // what the font itself says each letter is worth at 11px.
+  designed: number[];
+};
+
+async function measureLabels(page: import("@playwright/test").Page): Promise<LabelMeasure[]> {
+  return page.evaluate(async () => {
+    await document.fonts.load('600 11px "IBM Plex Sans"');
+    await document.fonts.ready;
+    const nav = document.querySelector("nav");
+    if (!nav) throw new Error("no nav");
+    const labels = [...nav.querySelectorAll("a span")].filter((span) => span.children.length === 0 && span.textContent);
+    return labels.map((label) => {
+      const style = getComputedStyle(label);
+      const spacing = parseFloat(style.letterSpacing) || 0;
+      const text = label.firstChild as Text;
+      const boxes: DOMRect[] = [];
+      for (let i = 0; i < text.length; i += 1) {
+        const range = document.createRange();
+        range.setStart(text, i);
+        range.setEnd(text, i + 1);
+        boxes.push(range.getBoundingClientRect());
+      }
+      const ruler = document.createElement("span");
+      ruler.textContent = text.data.toUpperCase();
+      ruler.style.cssText = `position:absolute;white-space:nowrap;font-family:${style.fontFamily};font-weight:${style.fontWeight};font-size:1100px;letter-spacing:0;text-rendering:geometricPrecision`;
+      document.body.appendChild(ruler);
+      const big = ruler.firstChild as Text;
+      const designed: number[] = [];
+      for (let i = 0; i < big.length; i += 1) {
+        const range = document.createRange();
+        range.setStart(big, i);
+        range.setEnd(big, i + 1);
+        designed.push(range.getBoundingClientRect().width / 100);
+      }
+      ruler.remove();
+      return {
+        text: text.data,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        letterSpacing: style.letterSpacing,
+        textTransform: style.textTransform,
+        whiteSpace: style.whiteSpace,
+        lineTops: [...new Set(boxes.map((box) => Math.round(box.top)))],
+        drawn: boxes.map((box) => box.width - spacing),
+        designed,
+      };
+    });
+  });
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+for (const width of LABEL_WIDTHS) {
+  test.describe(`bar labels at ${width}px`, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.addInitScript(() => {
+        delete (window as unknown as { Translator?: unknown }).Translator;
+      });
+      await page.setViewportSize({ width, height: 740 });
+      await page.goto("/registro");
+      await page.waitForTimeout(500);
+    });
+
+    test("no letter pair opens a gap wider than the label's own median", async ({ page }) => {
+      const labels = await measureLabels(page);
+      expect(labels.map((label) => label.text)).toEqual([messages.nav.search, messages.nav.log, messages.nav.account]);
+
+      for (const label of labels) {
+        expect(label.drawn).toHaveLength(label.text.length);
+        // The space after letter i is the spacing plus whatever the letter
+        // was drawn wider than the font designed it; spacing is constant, so
+        // the excess is what can open a gap. The last letter has no neighbour.
+        const excess = label.drawn.slice(0, -1).map((drawn, i) => drawn - label.designed[i]);
+        const base = median(excess);
+        excess.forEach((value, i) => {
+          expect.soft(
+            value - base,
+            `${label.text}: letter ${label.text[i]} is drawn ${value.toFixed(2)}px wider than designed, the label's median is ${base.toFixed(2)}px`,
+          ).toBeLessThanOrEqual(1);
+        });
+      }
+    });
+
+    test("labels keep 11px / 600 / 0.12em / uppercase", async ({ page }) => {
+      for (const label of await measureLabels(page)) {
+        expect(label.fontSize, label.text).toBe("11px");
+        expect(label.fontWeight, label.text).toBe("600");
+        expect(label.letterSpacing, label.text).toBe("1.32px");
+        expect(label.textTransform, label.text).toBe("uppercase");
+      }
+    });
+
+    test("each label stays on one line", async ({ page }) => {
+      for (const label of await measureLabels(page)) {
+        expect(label.lineTops, `${label.text} letters sit on ${label.lineTops.length} lines`).toHaveLength(1);
+        expect(label.whiteSpace, label.text).toBe("nowrap");
+      }
+    });
+  });
+}
