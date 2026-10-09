@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { registerOAuthClient } from "@repo/harness-registry";
+import postgres from "postgres";
 
 import oauth from "../messages/es/oauth.json";
 import { test, expect } from "./fixtures";
@@ -9,6 +11,16 @@ import { test, expect } from "./fixtures";
 // client component, so the spec reads it from the flight payload the document carries.
 const REDIRECT = "http://localhost:6274/oauth/callback";
 const STATE = "estado-de-prueba-123";
+// HARNESS_RUN_ID reaches this process, not the server: the spec notes its own client.
+async function note(clientId: string): Promise<void> {
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    await registerOAuthClient(sql, clientId);
+  } finally {
+    await sql.end();
+  }
+}
+
 // A /64 of the documentation prefix, new per worker, so the throttled
 // `/oauth/registro` never shares a counter with another lane, file or run.
 const from = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::1`;
@@ -47,6 +59,7 @@ test.describe("the consent screen without a session (RP-60)", () => {
     });
     expect(registered.status).toBe(201);
     const { client_id } = (await registered.json()) as { client_id: string };
+    await note(client_id);
     const path = requestPath(client_id);
 
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] }, baseURL: baseURL! });

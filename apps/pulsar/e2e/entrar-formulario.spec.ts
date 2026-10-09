@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import type { Browser, Page } from "@playwright/test";
+import { registerOAuthClient } from "@repo/harness-registry";
+import postgres from "postgres";
 
 import account from "../messages/es/account.json";
 import oauth from "../messages/es/oauth.json";
@@ -10,6 +12,16 @@ import { test, expect, type Person } from "./fixtures";
 // form, and the consent signed in is centred where `/entrar` is. Nothing here
 // types an address or submits: a send reaches a real inbox (RNP-09).
 const REDIRECT = "http://localhost:6274/oauth/callback";
+// HARNESS_RUN_ID reaches this process, not the server: the spec notes its own client.
+async function note(clientId: string): Promise<void> {
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    await registerOAuthClient(sql, clientId);
+  } finally {
+    await sql.end();
+  }
+}
+
 const from = `2001:db8:${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}::1`;
 const signedOut = { cookies: [], origins: [] };
 const WIDTHS = [
@@ -28,6 +40,7 @@ test.beforeAll(async ({ baseURL }) => {
   });
   expect(registered.status).toBe(201);
   const { client_id } = (await registered.json()) as { client_id: string };
+  await note(client_id);
   consentPath = `/oauth/autorizar?${new URLSearchParams({
     response_type: "code",
     client_id,

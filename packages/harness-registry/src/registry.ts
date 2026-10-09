@@ -114,11 +114,14 @@ export async function openRun(suite: Suite, sql: Sql): Promise<string> {
   return id;
 }
 
-// The run's id, or throws when `openRun` has not run. Callers never carry it by
-// hand: every write below stamps it from here, not from an argument.
+// The run's id: the one `openRun` opened here, else the one a parent process
+// exported in HARNESS_RUN_ID (a Playwright worker never opens its own). Throws
+// when neither exists. Callers never carry it by hand.
 export function runId(): string {
-  if (!currentRunId) throw new Error("openRun has not run in this process");
-  return currentRunId;
+  const inherited = process.env.HARNESS_RUN_ID?.trim();
+  const id = currentRunId ?? (inherited || undefined);
+  if (!id) throw new Error("openRun has not run in this process");
+  return id;
 }
 
 /**

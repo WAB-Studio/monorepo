@@ -10,6 +10,7 @@ import Module from "node:module";
 import { resolve } from "node:path";
 import { after, before, test } from "node:test";
 
+import { registerOAuthClient } from "@repo/harness-registry";
 import postgres from "postgres";
 
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "./lib/people";
@@ -200,6 +201,7 @@ test("registration answers 201 with the client, and 400 invalid_client_metadata 
     response_types: ["code"],
   });
   clientId = body.client_id;
+  await registerOAuthClient(admin, clientId);
   const [row] = await admin`select client_name as name, redirect_uris from goals.oauth_clients where id = ${clientId}`;
   assert.equal(row.name, "flow client");
 
