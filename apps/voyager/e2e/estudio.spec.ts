@@ -147,15 +147,19 @@ test("a row's headword with no space to break on never scrolls the page sideways
   expect(scrollWidth).toBe(clientWidth);
 });
 
-// RL-56 / board `RegistroEstudioPorLema`. The forms line reads
-// «{lemma} · {forms}»: the board's two rows («linger · lingered, lingering»,
-// «left · leave») agree only on this — the line names every form searched
-// under the row, each once, and nothing else. Order inside it is not asserted.
+// RL-56 / board `RegistroFormasComasOscuroMovil`. The forms line is every
+// searched form, most searched first, separated by commas and nothing else.
+// A line is found by being exactly that list; a row's other lines are the
+// lemma, the translations and the count.
+function formsLineOf(text: string, ...forms: string[]): string | undefined {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => forms.some((f) => l.split(", ").includes(f)) && !/^\d+$/.test(l));
+}
+
 function formsOf(line: string): string[] {
-  return line
-    .split(/\s·\s|,\s*/)
-    .map((f) => f.trim())
-    .filter(Boolean);
+  return line.split(", ").map((f) => f.trim());
 }
 
 async function rowText(page: Page, href: string): Promise<string> {
@@ -181,8 +185,10 @@ test("a lemma and its inflected forms are one row: both forms under it, the coun
 
   const text = await rowText(page, "/registro/linger");
   expect(text).toMatch(/\b5\b/);
-  const forms = formsOf(text.split("\n").find((l) => l.includes("lingered")) ?? "");
-  expect(forms.sort()).toEqual(["linger", "lingered", "lingering"]);
+  const line = formsLineOf(text, "lingered");
+  expect(line).toBeDefined();
+  expect(line!).not.toContain("·");
+  expect(formsOf(line!).sort()).toEqual(["linger", "lingered", "lingering"]);
 });
 
 test("a form searched under another lemma shows in that lemma's row: «left» and «leave» under leave", async ({ page }) => {
@@ -199,8 +205,8 @@ test("a form searched under another lemma shows in that lemma's row: «left» an
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
   const text = await rowText(page, "/registro/leave");
   expect(text).toMatch(/\b3\b/);
-  const line = text.split("\n").find((l) => l.includes("left")) ?? "";
-  expect(formsOf(line).sort()).toEqual(["leave", "left"]);
+  // left ×2, leave ×1: the most searched leads.
+  expect(formsLineOf(text, "left")).toBe("left, leave");
 });
 
 test("a lemma searched under one spelling only draws no forms line", async ({ page }) => {
@@ -328,9 +334,10 @@ test("the forms line lists the most searched form first, a tie to the most recen
   await page.reload();
 
   const linger = await rowText(page, "/registro/linger");
-  expect(linger).toContain("lingered · linger");
+  expect(formsLineOf(linger, "lingered")).toBe("lingered, linger");
   const walk = await rowText(page, "/registro/walk");
-  expect(walk).toContain("walking · walks, walked");
+  expect(formsLineOf(walk, "walking")).toBe("walking, walks, walked");
+  expect(linger + walk).not.toContain(" · ");
 });
 
 test("a row whose only searched form is its key names it once", async ({ page }) => {
@@ -391,4 +398,66 @@ test("a lemma reached by one inflected form alone still names that form in its r
   const lines = (await rowText(page, "/registro/linger")).split("\n");
   expect(lines[0]!.trim()).toBe("linger");
   expect(lines.slice(1).some((l) => l.includes("lingered"))).toBe(true);
+});
+
+// The board, row by row, at both widths. Seeded counts: linger 9 (lingered 4,
+// linger 3, lingering 2), lukewarm 7, leave 6 (left 4, leave 2), serendipity
+// 4, go 2 (went 2).
+for (const viewport of [
+  { width: 360, height: 950 },
+  { width: 1280, height: 800 },
+]) {
+  test.describe(`RegistroFormasComas at ${viewport.width}px`, () => {
+    test.use({ viewport });
+
+    test("each row's forms line is comma-separated, most searched first, and absent when it says nothing new", async ({ page }) => {
+      await deleteTranslator(page);
+      const now = Date.now();
+      let n = 0;
+      const rows: SeedRow[] = [];
+      const add = (count: number, row: Omit<SeedRow, "at">) => {
+        for (let i = 0; i < count; i++) rows.push({ ...row, at: now - 100000 + n++ * 10 });
+      };
+      const inflected = { outcome: "inflected" as const };
+      add(4, { text: "lingered", normalised: "lingered", headword: "linger", ...inflected, translation: "demorar" });
+      add(3, { text: "linger", normalised: "linger", translation: "demorar" });
+      add(2, { text: "lingering", normalised: "lingering", headword: "linger", ...inflected, translation: "demorar" });
+      add(7, { text: "lukewarm", normalised: "lukewarm", translation: "tibio" });
+      add(4, { text: "left", normalised: "left", headword: "leave", ...inflected, translation: "dejar" });
+      add(2, { text: "leave", normalised: "leave", translation: "dejar" });
+      add(4, { text: "serendipity", normalised: "serendipity", translation: "casualidad" });
+      add(2, { text: "went", normalised: "went", headword: "go", ...inflected, translation: "ir" });
+      await page.goto("/registro");
+      await seedRows(page, rows);
+      await page.reload();
+
+      await expect(page.locator('a[href="/registro/linger"]')).toBeVisible();
+      const linger = await rowText(page, "/registro/linger");
+      expect(formsLineOf(linger, "lingered")).toBe("lingered, linger, lingering");
+      expect(linger).not.toContain(" · ");
+
+      const leave = await rowText(page, "/registro/leave");
+      expect(formsLineOf(leave, "left")).toBe("left, leave");
+
+      // One form, another than the key: it is named, alone.
+      const go = await rowText(page, "/registro/go");
+      expect(formsLineOf(go, "went")).toBe("went");
+
+      // One form, the key: no forms line, the word appears once.
+      for (const key of ["lukewarm", "serendipity"]) {
+        const text = await rowText(page, `/registro/${key}`);
+        expect(text.match(new RegExp(key, "g"))).toHaveLength(1);
+        expect(text).not.toContain("·");
+      }
+
+      expect(await page.locator("body").innerText()).not.toContain(" · lingered");
+    });
+  });
+}
+
+test("no searches at all draws the empty state, no rows", async ({ page }) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await expect(page.getByText("Todavía no has buscado nada")).toBeVisible();
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(0);
 });
