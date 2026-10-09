@@ -44,7 +44,7 @@ async function fetchNotes(source: string, translation: string, signal: AbortSign
 // teaching that file a request it does not otherwise make.
 export function PhraseNotes({ source, translation }: { source: string; translation: string }) {
   const t = useTranslations("phrase");
-  const fingerprint = normaliseHeadword(source);
+  const fingerprint = `${normaliseHeadword(source)}\u0000${translation}`;
   const [resolved, setResolved] = useState<{ fingerprint: string; result: NotesResult } | null>(null);
 
   useEffect(() => {

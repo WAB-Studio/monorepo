@@ -17,13 +17,10 @@ import {
 import { isClosed } from "@/lib/validation/closed";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type SetMonthBudgetResult = { ok: true } | { ok: false; error: MessageKey };
 export type RemoveMonthBudgetResult = { ok: true } | { ok: false; error: MessageKey };
-
-// Carries a message key out of the transaction without collapsing every
-// rejection into the same generic failure.
-class NamedError extends Error {}
 
 function revalidateMonthScreens(goalId: string, month: string): void {
   revalidatePath("/");

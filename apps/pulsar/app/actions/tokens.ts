@@ -13,13 +13,12 @@ import {
   type RevokeTokenInput,
 } from "@/lib/validation/token";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type CreateAccessTokenResult =
   | { ok: true; id: string; key: string; hint: string }
   | { ok: false; error: MessageKey };
 export type RevokeAccessTokenResult = { ok: true } | { ok: false; error: MessageKey };
-
-class NamedError extends Error {}
 
 /**
  * Mints a key for the signed-in person (RP-38). The clear key leaves in this

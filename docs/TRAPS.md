@@ -2903,6 +2903,12 @@ branch could pass until it was restored.
 - A check that deletes its rows by the key it computes cannot find rows a mutant wrote under another key. Measured
   2026-10-08: voyager 514's mutation M4 left one `client_spend` row on the local stack.
 - After a mutation run, read the table for rows of the day, not for the check's own keys, and delete what is left.
+## A throwaway `ci.yml` cut by line count duplicates `jobs:`
+
+- `.github/workflows/ci.yml` carries a blank line and then `jobs:` at lines 10-11. A script that keeps `lines[:11]` and
+  appends one job writes `jobs:` twice, and `gh workflow run` answers 422.
+- Cut at the `jobs:` line by matching it, never by a fixed count. Measured 2026-10-08: voyager module 511's mutation
+  branches.
 
 ## Un carril que cambia de rama sirve 404 en rutas que existen
 
