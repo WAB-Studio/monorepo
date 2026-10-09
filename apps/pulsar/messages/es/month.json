@@ -105,7 +105,8 @@
     "measuresNothing": "no mide nada · solo sus tareas",
     "measuresNothingCount": "no mide nada · {done} de {total} tareas hechas",
     "addTask": "Añadir una tarea",
-    "unreadable": "No se pudo leer el diccionario de lectura. Las cifras que dependen de él son solo lo que dijiste tú.",
+    "unreadableTitle": "No pudimos leer una fuente.",
+    "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
     "empty": {
       "title": "Todavía no tienes una meta abierta.",
       "create": "Crear una meta",

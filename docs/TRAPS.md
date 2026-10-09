@@ -2971,6 +2971,22 @@ server's. On a UTC server a reader in Bogotá sees every time five hours off.
 - Pass `timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone` from a client component, or set the provider's zone
   from the browser. Prove a date assertion with `TZ=UTC` on the server process.
 
+## The voyager build on CI sometimes cannot reach Google Fonts
+
+`voyager-e2e` and `build-*` fail in the build step with `Can't resolve '@vercel/turbopack-next/internal/font/google/font'`
+and `next/font/google queries have exactly one entry`, 48 errors, on a PR that touches nothing of voyager.
+
+- Seen twice: #505 (2026-10-08) and #516 (2026-10-09, a pulsar-only PR). Both passed on `gh run rerun <id> --failed`.
+- Read the build step's first error before chasing a red `voyager-e2e`. This one is the runner's network, not the branch.
+
+## `harness:mint-session` needs the lane's server up
+
+`HARNESS_LANE=n npm run harness:mint-session` with no server on the lane's port dies with a bare `FAILED  fetch failed`, and
+leaves a seed run open for `harness:reap`.
+
+- Measured 2026-10-09 (module 590): `check:day` said `session user … does not exist: re-mint`; the mint failed until
+  `PORT=3205 … npm run dev` was up, then minted and `check:day` passed.
+- Start the server first, then mint with `PULSAR_BASE_URL` pointing at it.
 ## A `pulsar-e2e` shard dies before its first test: port 54322 already in use
 
 The shard's `supabase start` fails with `failed to bind host port for 0.0.0.0:54322:172.18.0.2:5432/tcp: address already

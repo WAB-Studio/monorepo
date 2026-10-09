@@ -12,7 +12,7 @@ import { returnHost } from "@/lib/oauth/return-host";
 import { ConsentList } from "./consent-list";
 import { type MessageKey } from "@/i18n/translator";
 
-const MAY = ["read", "done", "write", "reorganize"] as const;
+const MAY = ["read", "done", "write", "rename", "phases", "plan"] as const;
 const NEVER = ["delete", "undo"] as const;
 
 export function Consent({

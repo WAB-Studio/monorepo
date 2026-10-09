@@ -4,13 +4,14 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
-import { Flex, IconButton, Page, ScreenHeader, Text } from "@/components/ui";
+import { Flex, IconButton, Page, ScreenHeader } from "@/components/ui";
 import { dayPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref } from "@/lib/day/week-href";
 import { weekSteps } from "@/lib/day/week-param";
 import { loadWeek, type GoalSummary } from "@/lib/queries/week";
 import { civilDateToDate, weekOf } from "@/lib/zone";
 
+import { EvidenceNote } from "@/components/day/evidence-note";
 import { EmptyWeek } from "./empty-week";
 import { EndedLine } from "./ended-line";
 import { endedLastDay } from "./week-progress";
@@ -137,9 +138,7 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
       />
 
       {evidence === "unreadable" ? (
-        <Text as="p" variant="sentence">
-          {t("week.unreadableEvidence")}
-        </Text>
+        <EvidenceNote title={t("week.unreadableTitle")} body={t("week.unreadableBody")} />
       ) : null}
 
       {goals.length === 0 ? (

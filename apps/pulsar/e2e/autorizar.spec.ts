@@ -99,7 +99,8 @@ test.describe("the consent screen (RP-60)", () => {
         await expect(page.getByText(text, { exact: true })).toBeVisible();
       }
       await expect(page.getByRole("button", { name: oauth.allow, exact: true })).toBeVisible();
-      await expect(page.getByText(oauth.consentLead, { exact: true })).toBeVisible();
+      // Literal: the lead no longer sends the person to a second place to revoke (PermisoPalabras).
+      await expect(page.getByText("Podrá leer tus metas y anotar lo que hagas.", { exact: true })).toBeVisible();
       // 318: the app has one name wherever a person reads it.
       await expect(page.getByText(oauth.eyebrow, { exact: true })).toBeVisible();
       expect(await page.locator("main").innerText()).not.toMatch(/pulsar ·/i);

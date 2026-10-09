@@ -3,8 +3,9 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
+import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
-import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
+import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
 import { owedAt } from "@/lib/plan/carry";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
@@ -240,13 +241,7 @@ export async function MonthAcrossScreen() {
       ) : (
         <>
           {across.evidence === "unreadable" ? (
-            <>
-              <Separator />
-              <Text as="p" variant="sentence" role="status">
-                {t("month.across.unreadable")}
-              </Text>
-              <Separator />
-            </>
+            <EvidenceNote title={t("month.across.unreadableTitle")} body={t("month.across.unreadableBody")} />
           ) : null}
           <Grid columns={{ initial: "1", lg: "3" }} gap={{ initial: "6", md: "4" }} align="start">
             {across.goals.map(block)}
