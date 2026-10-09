@@ -14,7 +14,7 @@ export type PhraseState =
   | { kind: "idle" }
   | { kind: "waiting" }
   | { kind: "translating" }
-  | { kind: "done"; result: TranslationResult }
+  | { kind: "done"; result: TranslationResult; source: string }
   | { kind: "failed" };
 
 // Whether the device's translator is worth mentioning, and how far its
@@ -25,12 +25,10 @@ export type DeviceOffer =
   | { kind: "downloading"; fraction: number | null };
 
 export function PhraseAnswer({
-  source,
   state,
   offer,
   onEnableDevice,
 }: {
-  source: string;
   state: PhraseState;
   offer: DeviceOffer;
   onEnableDevice: () => void;
@@ -60,7 +58,7 @@ export function PhraseAnswer({
         <Flex direction="column" gap="1">
           <Text variant="translation">{state.result.text}</Text>
           <Text size="2" color="gray">
-            {source}
+            {state.source}
           </Text>
           <MetaLabel>
             {state.result.origin === "device" ? t("originDevice") : t("originNetwork")}
@@ -71,7 +69,7 @@ export function PhraseAnswer({
       {/* RL-46: only mounted once a translation already answered, and only
           this leaf ever asks for its own notes — this file gains no state
           and no request of its own on its account. */}
-      {state.kind === "done" && <PhraseNotes source={source} translation={state.result.text} />}
+      {state.kind === "done" && <PhraseNotes source={state.source} translation={state.result.text} />}
 
       {offer.kind === "offered" && (
         <Flex direction="column" gap="1" align="start">
