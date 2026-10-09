@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
+import { FUNCTION_WORDS, functionWordTranslation } from "../lib/phrase/function-words";
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 
@@ -321,4 +322,155 @@ test("every block and the trailing line lead back to /?q=<word>, and that screen
   await more.click();
   await expect(page).toHaveURL(/\/\?q=bitter$/);
   await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible();
+});
+
+// RL-57 / module 559 (docs/voyager/DESIGN.md `SinEntradaFraseFuncion`): in the
+// per-word breakdown a function word leads with the table's translation and
+// the dictionary's own line follows, muted. The expected strings come from the
+// table's own function, never from the component.
+async function failTranslation(page: Page): Promise<void> {
+  await page.route("**/api/translate", async (route) => {
+    await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "provider" }) });
+  });
+}
+
+type Line = { text: string; color: string };
+
+// Every leaf text between a word's heading and the next block's heading (or the
+// end of the answer), in reading order: the block's lines without naming the
+// component or a class.
+async function blockLines(page: Page, word: string, next: string | null): Promise<Line[]> {
+  const from = await top(page, mainHeadings(page).filter({ hasText: new RegExp(`^${word}$`) }));
+  const to = next === null ? Infinity : await top(page, mainHeadings(page).filter({ hasText: new RegExp(`^${next}$`) }));
+  return page.locator("main *").evaluateAll(
+    (nodes, [lo, hi]) =>
+      nodes
+        .filter((node) => node.children.length === 0 && !node.closest("h1, h2, h3"))
+        .map((node) => ({
+          y: node.getBoundingClientRect().top + window.scrollY,
+          text: (node.textContent ?? "").trim(),
+          color: getComputedStyle(node).color,
+        }))
+        .filter((n) => n.text !== "" && n.y > lo && n.y < hi)
+        .sort((x, y) => x.y - y.y)
+        .map(({ text, color }) => ({ text, color })),
+    [from, to] as [number, number],
+  );
+}
+
+async function top(page: Page, locator: ReturnType<Page["getByText"]>): Promise<number> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error("not on screen");
+  return box.y + (await page.evaluate(() => window.scrollY));
+}
+
+async function breakdown(page: Page, query: string): Promise<void> {
+  await page.getByRole("textbox", { name: messages.search.label }).fill(query);
+  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 400);
+  await expect(page.getByText(messages.search.noEntry.titleTranslationFailed.replace("{query}", query))).toBeVisible();
+}
+
+const GLOSSES = new Set(Array.from(FUNCTION_WORDS.values()));
+
+test("a function word's block starts with the table translation and the dictionary's line follows it", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+  const tableText = functionWordTranslation("something") as string;
+  expect(tableText, "558's table owns `something`").not.toBeNull();
+
+  await breakdown(page, "something weird happened");
+  const lines = (await blockLines(page, "something", "weird")).map((l) => l.text);
+  expect(lines[0], "the table's translation leads the block").toBe(tableText);
+  expect(lines.indexOf("basurita"), "the dictionary's own line follows it").toBeGreaterThan(0);
+});
+
+test("the dictionary line under a function word is muted, the table line is not", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "she whispered something nobody heard");
+  const she = await blockLines(page, "she", "whispered");
+  const whispered = await blockLines(page, "whispered", "something");
+  const plain = whispered.find((l) => l.text === "susurrar, chamuyar, gaguear, shushushar");
+  expect(plain, "a content word's translation, today's tone").toBeDefined();
+
+  expect(she[0].text).toBe(functionWordTranslation("she"));
+  expect(she[0].color, "the table line wears the unmuted tone").toBe(plain?.color);
+  const dictionaryLine = she.slice(1).find((l) => l.text === "ella");
+  expect(dictionaryLine, "the dictionary's line stays under the table's").toBeDefined();
+  expect(dictionaryLine?.color, "and sits muted").not.toBe(plain?.color);
+});
+
+test("the board's sentence: she and nobody lead with the table, whispered and heard stay as the dictionary has them", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "she whispered something nobody heard");
+  expect((await blockLines(page, "she", "whispered"))[0].text).toBe(functionWordTranslation("she"));
+  expect((await blockLines(page, "nobody", "heard"))[0].text).toBe(functionWordTranslation("nobody"));
+  expect((await blockLines(page, "something", "nobody"))[0].text).toBe(functionWordTranslation("something"));
+
+  for (const [word, next] of [["whispered", "something"], ["heard", null]] as const) {
+    const lines = (await blockLines(page, word, next)).map((l) => l.text);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.filter((line) => GLOSSES.has(line)), `${word} takes nothing from the table`).toEqual([]);
+  }
+});
+
+test("a content word's block draws the dictionary alone", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "something weird happened");
+  const lines = (await blockLines(page, "weird", "happened")).map((l) => l.text);
+  expect(lines.length, "weird draws its senses").toBeGreaterThan(0);
+  expect(lines.filter((line) => GLOSSES.has(line))).toEqual([]);
+  expect(lines).toContain("raro, anormal, bizarro, cuático, extraño");
+});
+
+test("a function word typed alone answers as the dictionary does, with no table line first", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+  const tableText = functionWordTranslation("something") as string;
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill("something");
+  await expect(page.getByText("basurita")).toBeVisible();
+  const lines = (await blockLines(page, "something", null)).map((l) => l.text);
+  // The dictionary's own order: `basurita` first, `algo, alguna cosa` its second sense.
+  expect(lines.indexOf("basurita")).toBeLessThan(lines.indexOf(tableText));
+  expect(lines.filter((line) => line === tableText)).toHaveLength(1);
+});
+
+test("offline, the breakdown still leads with the table translation and asks for nothing", async ({ page, context }) => {
+  await deleteTranslator(page);
+  await openReady(page);
+  await context.setOffline(true);
+
+  const requestUrls: string[] = [];
+  page.on("request", (request) => requestUrls.push(request.url()));
+  await page.getByRole("textbox", { name: messages.search.label }).fill("something weird happened");
+  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 600);
+
+  const lines = (await blockLines(page, "something", "weird")).map((l) => l.text);
+  expect(lines[0]).toBe(functionWordTranslation("something"));
+  const stray = strayRequests(requestUrls).filter((url) => !url.includes("/api/translate"));
+  expect(stray).toEqual([]);
+});
+
+test("past sixty words of function words, the line stands alone with no block and no table line", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill(Array.from({ length: 61 }, () => "something").join(" "));
+  await expect(page.getByText(messages.search.noEntry.tooLong.replace("{count}", "61"))).toBeVisible();
+  await expect(mainHeadings(page)).toHaveCount(0);
+  await expect(page.getByText(functionWordTranslation("something") as string, { exact: true })).toHaveCount(0);
 });

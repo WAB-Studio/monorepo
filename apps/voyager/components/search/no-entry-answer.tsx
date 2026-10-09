@@ -4,7 +4,8 @@ import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
 import type { WordAnswer } from "@/lib/dictionary/lookup";
-import { Flex, Headword, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
+import { functionWordTranslation } from "@/lib/phrase/function-words";
+import { Box, Flex, Headword, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
 import { SenseList } from "./sense-list";
 
 export type NoEntryPart = { token: string; answer: WordAnswer | null };
@@ -79,7 +80,32 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
       </Flex>
     );
   }
-  return <SenseList answer={part.answer} variant="compact" wordHref={wordHref(part.token)} />;
+  const table = functionWordTranslation(part.token);
+  if (table === null) {
+    return <SenseList answer={part.answer} variant="compact" wordHref={wordHref(part.token)} />;
+  }
+  // RL-57: a function word leads with the table's translation, the
+  // dictionary's own block following whole and muted
+  // (docs/voyager/DESIGN.md `SinEntradaFraseFuncion`). `SenseList` draws its
+  // exact headword itself, so it is hidden there and drawn here, above the
+  // table line.
+  const heading = part.answer.exact?.headword ?? part.token;
+  return (
+    <Flex direction="column" gap="3">
+      <Link asChild underline="always">
+        <NextLink href={wordHref(part.token)}>
+          <TapTarget align="center" gap="1">
+            <Headword>{heading}</Headword>
+            <ChevronGlyph />
+          </TapTarget>
+        </NextLink>
+      </Link>
+      <Text variant="translation">{table}</Text>
+      <Box muted>
+        <SenseList answer={part.answer} variant="compact" wordHref={wordHref(part.token)} showExactHeadword={false} />
+      </Box>
+    </Flex>
+  );
 }
 
 // RL-31: the screen a typed word or a short phrase used to leave blank.

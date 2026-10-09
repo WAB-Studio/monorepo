@@ -12,3 +12,10 @@
     padding-inline-start: 16px;
   }
 }
+
+/* Tripled to outrank the doubled `.label.label` and `.rt-Text` colours it
+   reaches into. */
+.muted.muted.muted,
+.muted.muted.muted *:not(a):not(a *) {
+  color: var(--rl-muted);
+}
