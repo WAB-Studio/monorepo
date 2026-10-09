@@ -1637,3 +1637,5 @@ module; until it lands, the screen and its approved board stay as built.
 - **`log.spec.ts` keeps one test per teardown path**; the 0/200/400 ms matrix becomes a unit test of the recording
   machine (`settleCandidate`). The RNL-01 latency test drives the real `mergeForeign`.
 - **564 is measured by the user on a real iPhone**; 565–568 wait for it.
+- **`CuentaCopiaFallidaCuotaHora` and `CuentaCopiaSinCopia` are approved as drawn** (user, 2026-10-09, canvas version 42).
+  `CuentaCopiaFallidaCuotaHora` supersedes `CuentaCopiaFallidaCuota`, which moves to «Archivo».
