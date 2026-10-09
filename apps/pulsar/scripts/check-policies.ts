@@ -1044,9 +1044,10 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
   await sql.end();
 }
 
-// Module 73 (RP-59): `one_offs_update_self` lets a one-off dated after the
-// person's Bogota today move, and refuses today, the past, a fact and a
-// stranger. Driven bare under a settled session, forced rollback.
+// A one-off's `day` changes on any row with no fact, dated today, in the past
+// or ahead; a fact or a stranger refuses it. `planned_month` moves only while
+// the row is undated or dated after the person's Bogota today. Driven bare
+// under a settled session, forced rollback.
 async function checkScheduledOneOffMoveByZone(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
   const subject = randomUUID();
@@ -1062,16 +1063,27 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
       await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
 
       await enterUserContext(tx, subject);
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta', '2027-12-31') returning id`;
       const make = async (name: string, day: string): Promise<string> => {
         const [row] = await tx<{ id: string }[]>`
           insert into goals.one_offs (user_id, name, day) values (${subject}, ${name}, ${day}) returning id`;
+        return row.id;
+      };
+      // A month task that also carries a day: the only shape `planned_month` can move on.
+      const makeMonthTask = async (name: string, day: string): Promise<string> => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into goals.one_offs (user_id, goal_id, name, planned_month, day)
+          values (${subject}, ${goal.id}, ${name}, '2026-10-01', ${day}) returning id`;
         return row.id;
       };
       const onToday = await make("hoy", today);
       const yesterday = await make("ayer", dayAfter(today, -1));
       const withFact = await make("con hecho", dayAfter(today, 2));
       await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${withFact}, ${today})`;
-      const onUtcDay = await make("dia utc", utcDay);
+      const monthOnToday = await makeMonthTask("mes hoy", today);
+      const monthOnUtcDay = await makeMonthTask("mes dia utc", utcDay);
 
       await enterUserContext(tx, intruder);
       const [theirs] = await tx<{ id: string }[]>`
@@ -1085,8 +1097,8 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
         );
 
       const cases: [string, string, number][] = [
-        ["P59", onToday, 0],
-        ["P60", yesterday, 0],
+        ["P59", onToday, 1],
+        ["P60", yesterday, 1],
         ["P61", withFact, 0],
         ["P62", theirs.id, 0],
       ];
@@ -1096,31 +1108,36 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
         assert(
           label,
           result.code === undefined && result.rows.length === expected,
-          `own ${what} one-off moves (today = ${today}), sqlstate = ${result.code ?? "none"}, rows = ${result.rows.length}`,
+          `own ${what} one-off takes a day (today = ${today}), expected rows = ${expected}, sqlstate = ${result.code ?? "none"}, rows = ${result.rows.length}`,
         );
       }
 
       // Only when UTC has already turned the page (19:00-24:00 Bogota) does
       // the UTC day differ from Bogota's; otherwise it is today's case again.
       const utcDiffers = utcDay !== today;
-      const utc = await moveRows(onUtcDay);
+      const moveMonth = (id: string) =>
+        attemptRows<{ id: string }>(
+          tx,
+          (sp) => sp`update goals.one_offs set planned_month = '2026-12-01' where id = ${id} returning id`,
+        );
+      const utc = await moveMonth(monthOnUtcDay);
       assert(
         "P63",
         utc.code === undefined && utc.rows.length === (utcDiffers ? 1 : 0),
-        `one-off dated on the UTC day ${utcDay} (Bogota today ${today}, differs = ${utcDiffers}) moves, rows = ${utc.rows.length}`,
+        `month task dated on the UTC day ${utcDay} (Bogota today ${today}, differs = ${utcDiffers}) takes another month, rows = ${utc.rows.length}`,
       );
 
       // The session's own zone moved far east: `current_date` follows it, the
-      // policy must not. Differs from Bogota's day from 05:00 Bogota on.
+      // trigger's month rule must not. Differs from Bogota's day from 05:00 Bogota on.
       await tx`select set_config('TimeZone', 'Pacific/Kiritimati', true)`;
       const [{ far }] = await tx<{ far: string }[]>`select current_date::text as far`;
-      const tomorrow = await make("manana", dayAfter(today, 1));
-      const farToday = await moveRows(onToday);
-      const farTomorrow = await moveRows(tomorrow);
+      const monthTomorrow = await makeMonthTask("mes manana", dayAfter(today, 1));
+      const farToday = await moveMonth(monthOnToday);
+      const farTomorrow = await moveMonth(monthTomorrow);
       assert(
         "P66",
         farToday.rows.length === 0 && farTomorrow.rows.length === 1,
-        `session zone Kiritimati (current_date ${far}, Bogota ${today}): dated today rows = ${farToday.rows.length}, dated Bogota-tomorrow rows = ${farTomorrow.rows.length}`,
+        `session zone Kiritimati (current_date ${far}, Bogota ${today}): month task dated today takes another month, rows = ${farToday.rows.length}; dated Bogota-tomorrow rows = ${farTomorrow.rows.length}`,
       );
       await tx`select set_config('TimeZone', 'UTC', true)`;
 
@@ -1974,7 +1991,7 @@ async function checkTaskNote(): Promise<void> {
       assert(
         "P162",
         doneDay.code === undefined && doneDay.rows.length === 0,
-        `done one-off takes a day, sqlstate = ${doneDay.code ?? "none"}, rows = ${doneDay.rows.length}`,
+        `done one-off refuses a day, sqlstate = ${doneDay.code ?? "none"}, rows = ${doneDay.rows.length}`,
       );
 
       const doneMonth = await attemptRows<{ id: string }>(
@@ -1993,8 +2010,8 @@ async function checkTaskNote(): Promise<void> {
       );
       assert(
         "P164",
-        pastDay.code === undefined && pastDay.rows.length === 0,
-        `past-dated one-off takes a day, sqlstate = ${pastDay.code ?? "none"}, rows = ${pastDay.rows.length}`,
+        pastDay.code === undefined && pastDay.rows.length === 1,
+        `past-dated one-off with no fact takes a day, sqlstate = ${pastDay.code ?? "none"}, rows = ${pastDay.rows.length}`,
       );
 
       const foreignNote = await attemptRows<{ id: string }>(
