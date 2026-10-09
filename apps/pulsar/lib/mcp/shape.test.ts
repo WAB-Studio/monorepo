@@ -301,9 +301,10 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     weekMeasure: { [ID(10)]: 90 },
     monthLine: { [ID(10)]: { planned: 750, reached: 120, underPace: false } },
     commitments: [
-      { id: ID(12), goalId: ID(10), name: "Leer 30 min", kind: "quantity", target: 30, unit: "minutos", cadence: { kind: "daily" } },
-      { id: ID(14), goalId: ID(10), name: "Repasar", kind: "tap", target: null, unit: null, cadence: { kind: "daily" } },
+      { id: ID(12), goalId: ID(10), name: "Leer 30 min", kind: "quantity", target: 30, unit: "minutos", cadence: { kind: "daily" }, evidence: null },
+      { id: ID(14), goalId: ID(10), name: "Repasar", kind: "tap", target: null, unit: null, cadence: { kind: "daily" }, evidence: null },
     ],
+    firstGoalDay: "2026-09-01",
     phases: [],
     phasePositions: {},
     factsByCommitment: {},
