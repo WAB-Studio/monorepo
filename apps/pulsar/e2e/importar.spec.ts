@@ -10,6 +10,8 @@ import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 // the template reads without one, anything else answers 503, and no claim is
 // ever written (RP-37, RNP-13). The boards are `Importar*.dc.html`.
 const EXAMPLE = messages.template.example;
+// The example's own month line, counted from 1 as the parser names it.
+const BROKEN_LINE = EXAMPLE.split("\n").indexOf("- 2026-11 · 20 h") + 1;
 const PRIVACY = messages.privacy;
 const NO_KEY = messages.errors.noKey;
 
@@ -160,7 +162,9 @@ test.describe("the import screen (RP-37)", () => {
       await area.fill(broken);
       await page.getByRole("button", { name: "Leer el plan" }).click();
 
-      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(/^Línea 12: «- 2026-13 · 20 h»\. Esperaba - AAAA-MM · monto\.$/);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
+        new RegExp(`^Línea ${BROKEN_LINE}: «- 2026-13 · 20 h»\\. Esperaba - AAAA-MM · monto\\.$`),
+      );
       await expect(area).toHaveValue(broken);
       await expect(page).toHaveURL(/\/metas\/importar$/);
 
@@ -186,7 +190,7 @@ test.describe("the import screen (RP-37)", () => {
         buffer: Buffer.from(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h")),
       });
       await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveText(
-        /^Línea 12: «- 2026-13 · 20 h»\. Esperaba/,
+        new RegExp(`^Línea ${BROKEN_LINE}: «- 2026-13 · 20 h»\\. Esperaba`),
       );
     } finally {
       await context.close();
@@ -345,7 +349,7 @@ test.describe("the import screen (RP-37)", () => {
 
         await page.getByLabel(messages.textLabel).fill(EXAMPLE.replace("- 2026-11 · 20 h", "- 2026-13 · 20 h"));
         await page.getByRole("button", { name: "Leer el plan" }).click();
-        const alert = appAlerts(page).filter({ hasText: /Línea 12/ });
+        const alert = appAlerts(page).filter({ hasText: `Línea ${BROKEN_LINE}:` });
         await expect(alert).toBeVisible();
         const show = page.getByRole("button", { name: "ver la plantilla" });
         await expect(show).toBeVisible();
