@@ -75,6 +75,8 @@ function DeviceRowItem({
   const seenAt = new Date(row.lastSeenAt).getTime();
   const gone = elapsed(seenAt, now);
   const since = new Date(row.createdAt);
+  // The server formats in its own zone (UTC in production); the reader reads their own day.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { browser, platform } = parseLabel(row.label);
   const name =
     browser && platform
@@ -107,8 +109,8 @@ function DeviceRowItem({
         <Text size="2" muted>
           {t("since", {
             date: t("sinceDate", {
-              day: format.dateTime(since, { day: "numeric" }),
-              month: format.dateTime(since, { month: "short" }),
+              day: format.dateTime(since, { day: "numeric", timeZone }),
+              month: format.dateTime(since, { month: "short", timeZone }),
             }),
           })}
         </Text>
