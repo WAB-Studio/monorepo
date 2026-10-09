@@ -256,16 +256,17 @@ this gets built, and no schema, table or column is "prepared for" it.
 #### The shell
 
 - [ ] **RL-16** — The app opens with no connection and shows its box, and it can be launched from the phone's home screen without a browser around it. This holds from the second time it is opened onwards: the first open needs the network to deliver the app itself.
-- [x] **RL-39** *(successor of RL-38)* — A lookup a reader settles on is recorded on the device,
-  from the app's first day, only when it found something: what was typed, whether it was answered as
-  a word or a sentence, the headword it actually reached when an inflected form was typed, and when.
-  A word that matched nothing and a sentence that could not be translated leave no row — neither had
-  an answer to record. The record gains rows on its own and nothing edits one, but the reader can
+- [ ] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
+  from the app's first day, only when it found something: an entry in the dictionary, a translation for a
+  sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that
+  answer arrived. A word whose network answer failed or never arrived, and a sentence that could not
+  be translated, leave no row. A row holds what was typed, whether it was answered as a word or a
+  sentence, the headword it actually reached when an inflected form was typed, and when. The record gains rows on its own and nothing edits one, but the reader can
   empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
   device alone leaves the account's copy standing, and a device that signs in afterwards sees it
   again. No screen on the read path shows the record. It is read to take it off the device — to a
   file, or to the copy held by the reader's account — and to bring back what the same reader's other
-  devices recorded; never on the path that answers a lookup. Decided by the user 2026-09-10.
+  devices recorded; never on the path that answers a lookup. Decided by the user 2026-10-08.
 - [x] **RL-22** — A reader can keep their record in an account of their own: they sign in through a
   link sent to their address and, from then on, what this device records is copied to that account
   and what their other devices recorded comes down to this one **and stays in its local record,
@@ -319,9 +320,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   and says what they are. The app picks which terms earn a note; a note on every word is RL-31's
   answer, not this one.
 - [x] **RL-54** *(successor of RL-31)* — A string of two or more words that the dictionary has no entry for is
-  answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-37's answer. Only a string of
-  more than 60 words is not sent anywhere: the app names what it did not find and offers, underneath, the
-  dictionary's own answer for each of its words. That last answer comes from the device and touches the network on
+  answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-37's answer. Only a string of more than 60 words is not sent anywhere: the app names how many words it holds and asks
+  for one word, or a sentence of up to sixty. That answer comes from the device and touches the network on
   no keystroke. Decided by the user 2026-10-08.
 - [x] **RL-37** — A sentence the app cannot translate gets the same answer a string it never tried
   to translate gets: the app names what it could not answer and offers, underneath, the dictionary's
@@ -351,8 +351,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   exactly as before.
 - [ ] **RNL-09** — The copy is never on the read path: **with no account turned on the app opens not
   one connection, and the box still opens, focuses and answers the same**; with the box in view not
-  one request leaves while typing; the copy fires only when the tab is hidden or when the reader asks
-  for it; and a lookup answers in the same time with a ten-thousand-row merge in flight as without
+  one request leaves while typing; the copy fires only when the reader confirms or retries it, when the tab
+  is hidden, or once each time the reader opens `/registro` or `/cuenta` with the copy on; and a lookup answers in the same time with a ten-thousand-row merge in flight as without
   one.
 - [x] **RNL-10** — A reader's record is read and written by that reader alone. The access policies in
   the database decide it, not the query, and they are proved by driving them. No service path evades
@@ -361,6 +361,18 @@ this gets built, and no schema, table or column is "prepared for" it.
 ### Retired
 
 Dead codes. The number stays burned and the tick stays as it was.
+
+- [x] **RL-39** *(successor of RL-38)* — A lookup a reader settles on is recorded on the device,
+  from the app's first day, only when it found something: what was typed, whether it was answered as
+  a word or a sentence, the headword it actually reached when an inflected form was typed, and when.
+  A word that matched nothing and a sentence that could not be translated leave no row — neither had
+  an answer to record. The record gains rows on its own and nothing edits one, but the reader can
+  empty it whole: on this device alone, or in the copy their account holds as well. Emptying this
+  device alone leaves the account's copy standing, and a device that signs in afterwards sees it
+  again. No screen on the read path shows the record. It is read to take it off the device — to a
+  file, or to the copy held by the reader's account — and to bring back what the same reader's other
+  devices recorded; never on the path that answers a lookup. Decided by the user 2026-09-10.
+  _Retired 2026-10-08. Successor: RL-55. A word the network answered had an answer to record; leaving it out hid from the record the words a reader needed most._
 
 - [ ] **RL-36** — The answer to a concrete noun can carry an image, requested as the answer draws and
   only with a connection. The image never blocks or delays the answer; offline, with no result, or on
