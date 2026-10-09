@@ -350,3 +350,8 @@ test("no sentence repeats the line the person wrote", () => {
     assert.equal(sentence.includes(line), false, `«${sentence}» repeats «${line}»`);
   }
 });
+
+test("ritmo: in its place with an amount that is not a time says the amount is the fault", () => {
+  const text = `${RHYTHM_HEAD}medida: horas de estudio · minutos\nritmo: doce\n`;
+  assert.equal(sentenceOf(errorOf(text).expected), "El ritmo es un tiempo por mes, como «12 h».");
+});
