@@ -64,6 +64,7 @@
     "today": "hoy: {month}",
     "pinIn": "Fijarla en",
     "pinHint": "Una tarea fijada no se mueve con el plan. Las demás se acomodan alrededor.",
+    "pinHintUntimed": "Se queda en el mes que elijas. Esta meta no mide tiempo, así que ningún plan la mueve.",
     "save": "Guardar",
     "cancel": "Cancelar",
     "delete": "Borrar la tarea",

@@ -2987,3 +2987,12 @@ leaves a seed run open for `harness:reap`.
 - Measured 2026-10-09 (module 590): `check:day` said `session user … does not exist: re-mint`; the mint failed until
   `PORT=3205 … npm run dev` was up, then minted and `check:day` passed.
 - Start the server first, then mint with `PULSAR_BASE_URL` pointing at it.
+## A `pulsar-e2e` shard dies before its first test: port 54322 already in use
+
+The shard's `supabase start` fails with `failed to bind host port for 0.0.0.0:54322:172.18.0.2:5432/tcp: address already
+in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it red.
+
+- Seen 2026-10-09, run 37980310112, shard 1 of 4, on a branch whose other three shards were green. The log is in
+  `private/reportes/ci-37980310112-shard1-puerto-54322.log`.
+- It is the runner, not the branch. Read the shard's setup step before any spec: no `✘` line means nothing ran.
+- `gh run rerun <id> --failed` and read the rerun before merging.
