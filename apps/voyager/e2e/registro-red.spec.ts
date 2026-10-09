@@ -175,3 +175,28 @@ test("caché de la pestaña: a second visit to whereat after another word leaves
   expect(rows.filter((row) => row.normalised === "whereat" && row.outcome === "unlisted")).toHaveLength(2);
   expect(rows.filter((row) => row.normalised === "coccidiosis" && row.outcome === "unlisted")).toHaveLength(1);
 });
+
+test("corte: translations joined past 120 characters are stored cut, never longer", async ({
+  page,
+  stubUnlisted,
+}) => {
+  await deleteTranslator(page);
+  const long = Array.from({ length: 12 }, (_, i) => `traduccion${i}xx`);
+  const joined = long.join(", ");
+  expect(joined.length).toBeGreaterThan(120);
+  await stubUnlisted({ ...BODY, translations: long });
+  await openReady(page);
+
+  const box = page.getByRole("textbox", { name: messages.search.label });
+  await box.fill("whereat");
+  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 2000 });
+  await settle(page, box);
+
+  const rows = (await readLogRows(page)).filter((row) => row.normalised === "whereat");
+  expect(rows).toHaveLength(1);
+  const stored = rows[0].translation as string;
+  expect(stored.length).toBeLessThanOrEqual(120);
+  expect(stored.length).toBeGreaterThan(100);
+  expect(joined.startsWith(stored)).toBe(true);
+  expect(stored).not.toMatch(/[,\s]$/u);
+});
