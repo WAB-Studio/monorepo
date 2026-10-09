@@ -105,3 +105,8 @@ test("cutTranslation: text of 80 is untouched; a joined list cuts between its tr
   assert.ok(cut.length <= LIMIT);
   assert.ok(parts.includes(cut.split(", ").at(-1)!), cut);
 });
+
+test("cutTranslation: a separator that starts at 120 keeps the whole first translation", () => {
+  const first = `${"a".repeat(60)} ${"a".repeat(LIMIT - 61)}`;
+  assert.equal(cutTranslation(`${first}, bbbb`), first);
+});
