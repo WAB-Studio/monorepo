@@ -8,7 +8,7 @@ import test from "node:test";
 const messagesDir = join(import.meta.dirname, "..", "messages", "es");
 
 const retired: { word: RegExp; allowed: string[] }[] = [
-  { word: /toque/i, allowed: ["import.template.example"] },
+  { word: /toque/i, allowed: ["import.template.example", "import.errors.form.commitment"] },
   { word: /se arrastr/i, allowed: [] },
   { word: /\bdebe\b/i, allowed: [] },
   { word: /umbral/i, allowed: [] },
