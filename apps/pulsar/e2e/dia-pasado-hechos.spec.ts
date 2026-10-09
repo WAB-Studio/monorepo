@@ -48,7 +48,7 @@ async function seedRow(
   }
 }
 
-test("a past day with five daily rows (three done), a weekly row done and one partial reads «ese día pedía cinco» and «hechos 3 de 5 · 1 en parte»; the headings sum to the tally on three days (RP-44, RP-01)", async ({
+test("a past day with five daily rows (three done, one partial) and a weekly row reads «ese día pedía seis» and «hechos 3 de 9 · 1 en parte»; the headings sum to the tally on three days (RP-44, RP-01)", async ({
   browser,
   db,
   person,
@@ -66,11 +66,12 @@ test("a past day with five daily rows (three done), a weekly row done and one pa
   });
   try {
     const page = await context.newPage();
-    // Daily rows 1-3 done, 4 partial (quantity), 5 untouched; one weekly row done, each day.
+    // Daily rows 1-3 done, 4 partial (quantity), 5 untouched; one weekly row, done only on the earliest
+    // day so it asks on all three whatever week they fall in (RP-01).
     for (let i = 1; i <= 3; i += 1) await seedRow(db, person.id, main, { name: `Hecha ${i} ${stamp}`, done: days });
     await seedRow(db, person.id, main, { name: `Parte ${stamp}`, target: 10, done: days, quantity: 4 });
     await seedRow(db, person.id, main, { name: `Vacía ${stamp}`, done: [] });
-    await seedRow(db, person.id, main, { name: `Semanal ${stamp}`, kind: "times_per_week", done: days });
+    await seedRow(db, person.id, main, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [days[2]] });
     // A second goal: two daily rows and a weekly one, none done.
     await seedRow(db, person.id, other, { name: `Otra A ${stamp}`, done: [] });
     await seedRow(db, person.id, other, { name: `Otra B ${stamp}`, done: [] });
@@ -84,16 +85,16 @@ test("a past day with five daily rows (three done), a weekly row done and one pa
       expect(headings).toHaveLength(2);
       const summed = headings.reduce((sum, text) => sum + WORDS.indexOf(text.split("pedía ")[1]), 0);
       expect(summed).toBe(total);
-      expect(total).toBe(7);
+      expect(total).toBe(9);
     }
 
     await page.goto(`/dia/${days[0]}`);
-    await expect(page.getByText(`${mainName} · ese día pedía cinco`)).toHaveCount(1);
-    await expect(page.getByText(`${otherName} · ese día pedía dos`)).toHaveCount(1);
-    await expect(page.getByText(/^hechos 3 de 7 · 1 en parte$/)).toBeVisible();
+    await expect(page.getByText(`${mainName} · ese día pedía seis`)).toHaveCount(1);
+    await expect(page.getByText(`${otherName} · ese día pedía tres`)).toHaveCount(1);
+    await expect(page.getByText(/^hechos 3 de 9 · 1 en parte$/)).toBeVisible();
 
     // The tally is a sentence: its line is Archivo, its figures DM Mono.
-    const line = page.getByText(/^hechos 3 de 7 · 1 en parte$/);
+    const line = page.getByText(/^hechos 3 de 9 · 1 en parte$/);
     const fonts = await line.evaluate((el) => ({
       line: getComputedStyle(el).fontFamily,
       figures: [...el.querySelectorAll("span")].map((span) => getComputedStyle(span).fontFamily),
@@ -108,7 +109,7 @@ test("a past day with five daily rows (three done), a weekly row done and one pa
   }
 });
 
-test("a goal whose rows that day are all weekly reads its name alone (RP-44)", async ({ person, browser, db }) => {
+test("a goal whose rows that day are all weekly still says what that day asked: «pedía uno» (RP-44, RP-01)", async ({ person, browser, db }) => {
   const stamp = Date.now();
   const name = `Solo semanal ${stamp}`;
   const goal = await seedGoal(db, person.id, name);
@@ -118,8 +119,8 @@ test("a goal whose rows that day are all weekly reads its name alone (RP-44)", a
     await seedRow(db, person.id, goal, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [] });
     const page = await context.newPage();
     await page.goto(`/dia/${plusDays(-1)}`);
-    await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
-    await expect(page.getByText(/ese día pedía/)).toHaveCount(0);
+    await expect(page.getByText(`${name} · ese día pedía uno`)).toHaveCount(1);
+    await expect(page.getByText("hechos 0 de 1", { exact: true })).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal} and user_id = ${person.id}`;

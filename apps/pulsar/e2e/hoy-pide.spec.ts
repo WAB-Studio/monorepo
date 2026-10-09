@@ -64,7 +64,7 @@ test("Hoy says how many it asks, each row's cadence, the hour of a done one and 
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByText("Anki", { exact: true })).toBeVisible();
 
-    await expect(page.getByText("hechos 1 de 2", { exact: true })).toBeVisible();
+    await expect(page.getByText("hechos 1 de 3", { exact: true })).toBeVisible();
     await expect(page.getByText("fase 2 de 3 · desbloquear la boca", { exact: true })).toBeVisible();
     await expect(page.getByText("fase única", { exact: true })).toBeVisible();
     await expect(page.getByText(`solo los ${WEEKDAYS_PLURAL[isoWeekday - 1]}`, { exact: true })).toBeVisible();

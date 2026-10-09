@@ -73,7 +73,7 @@ test("tallyDay: a day of 1 of 2 commitments reads 1 of 2, whatever one-offs were
   assert.deepEqual(tally, { day: DAYS[0], done: 1, total: 2, partial: 0 });
 });
 
-test("tallyDays: a commitment counted by the week or the month leaves the daily count", () => {
+test("tallyDays: a commitment counted by the week or the month counts as a row the day asks (RP-01)", () => {
   const view = week((d) => [
     ["daily", d === DAYS[0]],
     ["weekly", d === DAYS[0]],
@@ -89,8 +89,8 @@ test("tallyDays: a commitment counted by the week or the month leaves the daily 
       { id: "monthly", goalId: "g1", cadence: { kind: "times_per_month", count: 4 } },
     ],
   });
-  assert.deepEqual(tally[0], { day: DAYS[0], done: 1, total: 1, partial: 0 });
-  assert.deepEqual(tally[1], { day: DAYS[1], done: 0, total: 1, partial: 0 });
+  assert.deepEqual(tally[0], { day: DAYS[0], done: 3, total: 3, partial: 0 });
+  assert.deepEqual(tally[1], { day: DAYS[1], done: 0, total: 3, partial: 0 });
 });
 
 test("tallyDays: weekday and every-n-days commitments still count by the day", () => {
@@ -133,7 +133,7 @@ test("tallyDay: equals tallyDays' cell for the same day, flexible included", () 
     });
     assert.deepEqual(single, cells[i]);
   }
-  assert.deepEqual(cells[1], { day: DAYS[1], done: 2, total: 2, partial: 0 });
+  assert.deepEqual(cells[1], { day: DAYS[1], done: 3, total: 3, partial: 0 });
 });
 
 test("tallyDay: a partial slot counts in total and partial, never in done", () => {

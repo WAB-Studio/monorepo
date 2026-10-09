@@ -1,8 +1,7 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { Face, Flex, IconButton, ScreenHeader, Text, TextLink, ThemeToggle } from "@/components/ui";
+import { Face, Flex, ScreenHeader, Text, TextLink, ThemeToggle } from "@/components/ui";
 
 type HeaderLink = { href: string; label: string };
 
@@ -71,11 +70,12 @@ export function DayHeader({
   ) : (
     <Flex justify="end" align="center" gap="5">
       {back ? (
-        <IconButton asChild tap={44} variant="ghost">
-          <Link href={back.href} aria-label={back.label}>
-            <ChevronLeft size={20} aria-hidden />
-          </Link>
-        </IconButton>
+        <TextLink href={back.href}>
+          <Flex as="span" align="center" gap="1">
+            <ChevronLeft size={16} aria-hidden />
+            {back.label}
+          </Flex>
+        </TextLink>
       ) : limitNote ? (
         <Flex width="14px" flexShrink="0" aria-hidden />
       ) : null}

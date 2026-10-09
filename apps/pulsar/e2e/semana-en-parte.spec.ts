@@ -223,7 +223,8 @@ for (const width of [390, 1280]) {
         // The key of the half dot shows on the phone even with no daily partial.
         if (width === 390) {
           await expect(page.getByTestId("week-legend").getByText("en parte", { exact: true })).toBeVisible();
-          await expect(page.getByText("en parte", { exact: false }).filter({ hasText: /de \d+ · / })).toHaveCount(0);
+          // The row asks all seven days, so the footer's sum counts it and names its partial (RP-01, RP-16).
+          await expect(page.getByText("hechos 0 de 7 · 1 en parte", { exact: true }).filter({ visible: true })).toHaveCount(1);
         }
       });
     } finally {

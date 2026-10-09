@@ -8,7 +8,7 @@
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
   ],
   "nav": {
-    "yesterday": "Ver ayer",
+    "yesterday": "ayer",
     "dayBefore": "día anterior",
     "today": "volver a hoy",
     "dayAfter": "día siguiente"

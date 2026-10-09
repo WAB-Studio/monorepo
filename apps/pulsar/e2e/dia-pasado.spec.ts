@@ -70,10 +70,25 @@ async function factsFor(db: postgres.Sql, commitmentId: string) {
 }
 
 test("from Hoy, steps back reach yesterday and then the seventh day back, and no eighth step is drawn (RP-06)", async ({
-  page,
+  person,
+  browser,
+  db,
 }) => {
+  // «ayer» is drawn only from the first day with a goal: this person's opened before the seven days back.
+  const { goalId } = await seedGoal(db, person.id, { name: `Fila ayer ${Date.now()}`, kind: "tap" });
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  try {
+    const page = await context.newPage();
+    await stepBack(page);
+  } finally {
+    await context.close();
+    await deleteGoal(db, person.id, goalId);
+  }
+});
+
+async function stepBack(page: import("@playwright/test").Page): Promise<void> {
   await page.goto("/");
-  await page.getByRole("link", { name: "Ver ayer" }).click();
+  await page.getByRole("link", { name: "ayer", exact: true }).click();
   await page.waitForURL(`**/dia/${pastDay(1)}`);
   await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Semana" })).toHaveAttribute("aria-current", "page");
@@ -88,7 +103,7 @@ test("from Hoy, steps back reach yesterday and then the seventh day back, and no
 
   await page.getByRole("link", { name: "volver a hoy" }).click();
   await page.waitForURL((url) => url.pathname === "/");
-});
+}
 
 test("on yesterday a tap writes one fact for yesterday, read as written today; Hoy is untouched; a second tap undoes it (RP-06, RP-05)", async ({
   page,
@@ -368,10 +383,18 @@ test("a past day draws the half mark, «ese día pedía» and the count with «e
   }
 });
 
-test("/dia/<today> is Hoy itself (RP-06)", async ({ page }) => {
-  await page.goto(`/dia/${todayInZone()}`);
-  await page.waitForURL((url) => url.pathname === "/");
-  await expect(page.getByRole("link", { name: "Ver ayer" })).toBeVisible();
+test("/dia/<today> is Hoy itself (RP-06)", async ({ person, browser, db }) => {
+  const { goalId } = await seedGoal(db, person.id, { name: `Fila hoy ${Date.now()}`, kind: "tap" });
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  try {
+    const page = await context.newPage();
+    await page.goto(`/dia/${todayInZone()}`);
+    await page.waitForURL((url) => url.pathname === "/");
+    await expect(page.getByRole("link", { name: "ayer", exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await deleteGoal(db, person.id, goalId);
+  }
 });
 
 // `DiaPasadoEscritorio.dc.html`: the date is the one `h1`, «volver a hoy» is the

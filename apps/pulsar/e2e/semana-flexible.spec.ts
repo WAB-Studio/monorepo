@@ -1,8 +1,8 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
-// «N veces por semana» and «N al mes» leave the daily «hechos N de M» and
-// carry their own count (`SemanaFlexible.dc.html`, `SemanaEscritorioFlexible.dc.html`).
+// «N veces por semana» and «N al mes» count in «hechos N de M» while their
+// quota is open (RP-01) and carry their own count too (`SemanaFlexible.dc.html`, `SemanaEscritorioFlexible.dc.html`).
 
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
@@ -10,7 +10,7 @@ function plusDays(days: number): string {
   return dateToCivilDate(date);
 }
 
-test("a flexible cadence is counted by its period, leaves «hechos», and its undone days read quiet (phone and 1280)", async ({
+test("a flexible cadence is counted by its period, counts in «hechos» while its quota is open, and its undone days read quiet (phone and 1280)", async ({
   person,
   browser,
   baseURL,
@@ -78,9 +78,9 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
       7 - inWeek.length,
     );
     await expect(page.getByRole("img", { name: new RegExp(`^${daily}, .*: hecho$`) })).toHaveCount(inWeek.length);
-    // Only the daily commitment is counted in «hechos»: every lived day reads «de 1».
+    // Daily, weekly and monthly all ask on every lived day (quotas 3 and 4, at most 2 done before): «de 3».
     const rests = await page.getByText(/^de \d+$/).locator("visible=true").allTextContents();
-    expect(rests).toEqual(Array(week.indexOf(today) + 1).fill("de 1"));
+    expect(rests).toEqual(Array(week.indexOf(today) + 1).fill("de 3"));
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     await page.screenshot({ path: "private/screenshots/semana-flexible-360.png", fullPage: true });
 
@@ -99,9 +99,9 @@ test("a flexible cadence is counted by its period, leaves «hechos», and its un
     for (const day of week.filter((other) => !inWeek.includes(other))) {
       await expect(cellsOf(day)).toHaveAttribute("data-state", "none");
     }
-    // Only the daily commitment's slots are in «hechos»: today it is 1 of 1.
+    // Today all three rows are done: 3 of 3.
     const todayIndex = week.indexOf(today);
-    await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("1 de 1");
+    await expect(table.locator("tfoot td").nth(todayIndex)).toHaveText("3 de 3");
     await page.screenshot({ path: "private/screenshots/semana-flexible-1280.png", fullPage: true });
   } finally {
     await context.close();
