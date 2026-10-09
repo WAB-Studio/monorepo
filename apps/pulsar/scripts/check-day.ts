@@ -2396,6 +2396,7 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runPastWeekCheck();
   await runPlanReadCheck();
   await runGoallessDaylessCheck();
+  await runEvidenceInfoAndFirstGoalDayCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -3090,6 +3091,93 @@ async function runGoallessDaylessCheck(): Promise<void> {
     }
     if (goalIds.length > 0) {
       await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${person.id}`;
+    }
+    await db.end();
+  }
+}
+
+/**
+ * `loadDay` hands each evidence commitment its threshold and the catalogue
+ * keys of its source, null for every other kind, and the civil day of the
+ * person's oldest goal, archived included.
+ */
+async function runEvidenceInfoAndFirstGoalDayCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runEvidenceInfoAndFirstGoalDayCheck: no verified session");
+  const userId = person.id;
+  const today = todayInZone();
+  console.log(`\nmodule 571 check — ${new Date().toISOString()} (today ${today})`);
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  try {
+    const [foreign] = await db<{ n: number; oldest: string | null }[]>`
+      select count(*)::int as n, min(created_at at time zone 'America/Bogota')::date::text as oldest
+      from goals.goals where user_id = ${userId}
+    `;
+    if (foreign.n === 0) {
+      assert("a person with no goals has firstGoalDay null", (await loadDay(today)).firstGoalDay === null, "goals exist");
+    } else {
+      console.log(`NOTE    ${foreign.n} goal(s) not seeded here (oldest ${foreign.oldest}); the null case is not driven`);
+    }
+
+    const seedGoal = async (name: string, createdAt: string, archived: boolean): Promise<string> => {
+      const [row] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+        values (${userId}, ${name}, '2099-12-31'::date, ${createdAt}::timestamptz,
+                ${archived ? "2001-04-01T12:00:00Z" : null}::timestamptz)
+        returning id
+      `;
+      goalIds.push(row.id);
+      return row.id;
+    };
+    const archivedFirst = await seedGoal("check-571 archived third", "2001-03-03T15:00:00Z", true);
+    await seedGoal("check-571 tenth", "2001-03-10T15:00:00Z", false);
+
+    const [source] = await db<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (${userId}, ${archivedFirst}, 'check-571 evidence', 'daily', 'evidence', ${source.id}, 3, '2001-03-03T15:00:00Z'::timestamptz)
+    `;
+    const openGoal = goalIds[1];
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${userId}, ${openGoal}, 'check-571 tap', 'daily', 'tap', '2001-03-10T15:00:00Z'::timestamptz)
+    `;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${openGoal}, 'check-571 quantity', 'daily', 'quantity', 10, 'min', '2001-03-10T15:00:00Z'::timestamptz)
+    `;
+
+    const loaded = await loadDay(today);
+    const mine = (name: string) => loaded.commitments.find((c) => c.name === name);
+    assert(
+      "an evidence commitment carries its threshold and its source's label and unit keys",
+      JSON.stringify(mine("check-571 evidence")?.evidence) ===
+        JSON.stringify({ threshold: 3, labelKey: "sources.readingLookups", unitKey: "sources.readingLookupsUnit" }),
+      `evidence = ${JSON.stringify(mine("check-571 evidence")?.evidence)}`,
+    );
+    assert(
+      "a tap and a quantity commitment carry evidence null",
+      mine("check-571 tap")?.evidence === null && mine("check-571 quantity")?.evidence === null,
+      `tap ${JSON.stringify(mine("check-571 tap")?.evidence)}, quantity ${JSON.stringify(mine("check-571 quantity")?.evidence)}`,
+    );
+    const expectedFirst = foreign.n === 0 || (foreign.oldest !== null && foreign.oldest > "2001-03-03") ? "2001-03-03" : foreign.oldest;
+    assert(
+      "firstGoalDay is the oldest goal's civil day, archived included",
+      loaded.firstGoalDay === expectedFirst,
+      `firstGoalDay = ${loaded.firstGoalDay}, expected ${expectedFirst}`,
+    );
+  } finally {
+    if (goalIds.length > 0) {
+      await db`delete from goals.commitments where goal_id in ${db(goalIds)} and user_id = ${userId}`;
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
     }
     await db.end();
   }

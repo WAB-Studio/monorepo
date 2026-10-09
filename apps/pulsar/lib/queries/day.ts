@@ -32,6 +32,7 @@ import {
   type CommitmentRow as BaseCommitmentRow,
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
+import { sourceKey, type SourceKey } from "@/i18n/translator";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
@@ -69,7 +70,7 @@ type GoalRow = {
 // `rows.ts`'s own `CommitmentRow` — nothing `CommitmentPlan`
 // reads, so `toCommitmentPlan` still ignores it; `DayScreen` is what
 // groups a slot by goal and names its row.
-type CommitmentRow = BaseCommitmentRow & { goal_id: string };
+type CommitmentRow = BaseCommitmentRow & { goal_id: string; source_label_key: string | null };
 
 type PhaseRow = BasePhaseRow & { goal_id: string };
 
@@ -169,6 +170,7 @@ type GoalsQueryRow = {
   scheduled_count: number;
   last_ended: { name: string; horizon: string } | null;
   ended_this_week: { id: string; name: string; horizon: string }[];
+  first_goal_at: string | null;
 };
 
 // A goal is open on `day` while its horizon, the first day after it, lies
@@ -215,9 +217,11 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(g) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
+      (select min(g.created_at) from "goals"."goals" g) as first_goal_at,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
-                 'source_unit', s.unit
+                 'source_unit', s.unit,
+                 'source_label_key', s.label_key
                ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
@@ -426,6 +430,9 @@ export type CommitmentInfo = {
   target: number | null;
   unit: string | null;
   cadence: Cadence;
+  // Evidence commitments only: how many readings satisfy the day, and the
+  // catalogue keys naming the source and its unit (RNP-10).
+  evidence: { threshold: number; labelKey: SourceKey; unitKey: SourceKey } | null;
 };
 
 function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
@@ -437,6 +444,14 @@ function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
     target: row.satisfaction === "quantity" ? row.target_quantity : null,
     unit: row.satisfaction === "quantity" ? row.unit : null,
     cadence: toCadence(row),
+    evidence:
+      row.satisfaction === "evidence" && row.source_label_key
+        ? {
+            threshold: row.threshold ?? 1,
+            labelKey: sourceKey(row.source_label_key),
+            unitKey: sourceKey(`${row.source_label_key}Unit`),
+          }
+        : null,
   };
 }
 
@@ -698,6 +713,8 @@ export async function loadDay(day: string): Promise<{
   // Each open goal's notice that a closed month moved its end; today only, `{}` on any other day.
   planNotice: Record<string, PlanNotice | null>;
   commitments: CommitmentInfo[];
+  // The civil day of the person's oldest goal, archived included; null without goals.
+  firstGoalDay: string | null;
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
   phasePositions: Record<string, { ordinal: number; total: number }>;
@@ -790,6 +807,7 @@ export async function loadDay(day: string): Promise<{
     monthTaskCounts: monthItems ? monthTaskCountsOf(monthItems) : {},
     planNotice: isToday ? planNoticeOf(goals, row, day) : {},
     commitments: row.commitments.map(toCommitmentInfo),
+    firstGoalDay: row.first_goal_at ? civilDateInZone(new Date(row.first_goal_at)) : null,
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),
     factsByCommitment: latestFactByCommitment(dayFacts.map(toFactForCommitment)),
