@@ -278,6 +278,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   when that run's `pulsar-e2e` is green. Measured 2026-10-05: it caught tren 4's rail duplicates after the merge and
   tren 5's `week.today` before it. Fix a red on `integracion` before anything else. **`integracion` → `main` only
   with the whole suite green.**
+- Fire it too on any single pulsar PR that touches `messages/`, the template or a screen. Measured 2026-10-09: 584
+  added `ritmo:` to the template's example, merged on the PR checks, and left `importar.spec.ts` red on `integracion` for a session.
 - Ship modules that share no file as one train: one branch merging them, one PR, one CI run. A red spec
   names its module.
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
