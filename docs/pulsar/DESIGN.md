@@ -1130,3 +1130,6 @@ module; until it lands, the screen and its approved board stay as built.
 - **The person's Claude plan allows custom connectors** (user, 2026-10-09). Claude Desktop connects like claude.ai: the
   desktop section says «agrega un conector con esta dirección» and the `mcp-remote` JSON goes (module 672).
 - **RP-30 retires for RP-68** (user, 2026-10-09): a task carries an estimate only in a goal measured in time.
+- **«Darle otro día» offers no «sin día»** (orchestrator, 2026-10-09, module 654). `HoySueltaMoverArrastrada` draws four
+  chips ending in «sin día»; RP-61 moves a one-off «to any day from today on», so the chip stays out and the step offers
+  «hoy», «mañana», «otro día». A one-off on today opens on «mañana»; a carried one opens on «hoy».
