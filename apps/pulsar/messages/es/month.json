@@ -83,6 +83,7 @@
   },
   "errors": {
     "noMeasure": "Esta meta no mide nada, así que no lleva montos ni tiempo.",
+    "estimateNotTime": "Esta meta no mide tiempo, así que sus tareas no llevan cifra.",
     "monthClosed": "Un mes cerrado guarda el monto con que terminó.",
     "outsideSpan": "Ese mes queda fuera del plazo de la meta.",
     "closed": "Esta meta ya terminó o está archivada.",

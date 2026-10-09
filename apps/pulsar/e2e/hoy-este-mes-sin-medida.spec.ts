@@ -75,7 +75,8 @@ test("a goal with no measure shows «N de M tareas» and its next task in «este
     await expect(movingLine).toContainText(/1\s*de 3 tareas/);
     await expect(movingLine.getByRole("button", { name: `Marcar hecha: Siguiente ${stamp}` })).toBeVisible();
     const runningLine = block.locator("div").filter({ hasText: running }).filter({ hasText: "de 2 tareas" }).last();
-    await expect(runningLine).toContainText(/5\s*kilómetros\s*· 1 de 2 tareas/);
+    // «Ruta» still holds its stored 5; in kilómetros a task's figure adds nothing (RP-65).
+    await expect(runningLine).toContainText(new RegExp(`${running}\\s*0\\s*kilómetros\\s*· 1 de 2 tareas`));
     await expect(runningLine.getByRole("button", { name: `Marcar hecha: Pendiente ${stamp}` })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 

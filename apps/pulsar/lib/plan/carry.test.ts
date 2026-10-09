@@ -192,3 +192,27 @@ test("estimateFacts: a null unit, no estimate or an undone task yields nothing",
   assert.deepEqual(estimateFacts(october(), null), []);
   assert.deepEqual(estimateFacts([task("a", { doneOn: "2026-10-01" }), task("b", { estimate: 5 })], "min"), []);
 });
+
+test("estimateFacts: a unit that is not time yields nothing, however many done tasks carry a figure", () => {
+  const done = [task("zapatillas", { estimate: 3, doneOn: "2026-10-03" })];
+  assert.deepEqual(estimateFacts(done, "km"), []);
+  assert.deepEqual(estimateFacts(done, "páginas"), []);
+});
+
+test("estimateFacts: a unit of time in any case yields the done leaf's fact", () => {
+  const tasks = [task("elegir", { estimate: 60, doneOn: "2026-10-03" })];
+  for (const unit of ["minutos", "MIN"]) {
+    const facts = estimateFacts(tasks, unit);
+    assert.equal(facts.length, 1);
+    assert.equal(facts[0].quantity, 60);
+    assert.equal(facts[0].unit, unit);
+  }
+});
+
+test("estimateFacts: a parent of done children adds no fact of its own in minutes", () => {
+  const tasks = [
+    task("madre", { estimate: 120, doneOn: "2026-10-03" }),
+    task("hija", { parentId: "madre", estimate: 60, doneOn: "2026-10-03" }),
+  ];
+  assert.deepEqual(estimateFacts(tasks, "minutos").map((f) => f.commitmentId), ["hija"]);
+});
