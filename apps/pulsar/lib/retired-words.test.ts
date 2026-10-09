@@ -15,6 +15,10 @@ const retired: { word: RegExp; allowed: string[] }[] = [
   { word: /ya sabe otra app/i, allowed: [] },
   { word: /cero (compromisos|fases)/i, allowed: [] },
   { word: /una programada|una sin día/i, allowed: [] },
+  { word: /diccionario de lectura/i, allowed: [] },
+  { word: /alimentada por/i, allowed: [] },
+  { word: /correr el plan/i, allowed: [] },
+  { word: /mover tareas de mes/i, allowed: [] },
 ];
 
 function values(node: unknown, path: string, out: [string, string][]) {

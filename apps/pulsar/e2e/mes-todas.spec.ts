@@ -202,9 +202,13 @@ test("with the dictionary unreadable the strip speaks and a goal with no amount 
     const page = await context.newPage();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/mes");
-    await expect(page.getByRole("status")).toHaveText(
-      "No se pudo leer el diccionario de lectura. Las cifras que dependen de él son solo lo que dijiste tú.",
+    // FuenteCaidaPalabras: the same words as Hoy, Semana and Meta, naming no source.
+    const note = page.getByRole("status").filter({ hasText: "No pudimos leer una fuente." });
+    await expect(note).toHaveCount(1);
+    await expect(note).toContainText(
+      "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
     );
+    expect(await page.locator("main").innerText()).not.toMatch(/diccionario|lectura/i);
     const block = (name: string) => page.locator("section", { has: page.getByRole("heading", { name: `${name} ${stamp}` }) });
 
     await expect(block("Inglés").getByText("solo lo que dijiste tú")).toBeVisible();
