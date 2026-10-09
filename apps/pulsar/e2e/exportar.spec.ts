@@ -1832,7 +1832,6 @@ test.describe("the report's last day, its ink and its share (RP-49)", () => {
     db,
   }) => {
     const seeded = await seed(db, person);
-    const monthStart = `${todayInZone().slice(0, 7)}-01`;
     // Last month, from the estimates seeded here and in `seed` (a parent whose
     // only sub-task owes 45): 45 + 110 owed, 200 done, so 155 of 355 passed on.
     const lastMonth = plusDays(-31).slice(0, 7);
