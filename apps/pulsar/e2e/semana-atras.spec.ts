@@ -214,3 +214,132 @@ for (const width of [360, 390, 1280, 1440]) {
     });
   });
 }
+
+// Module 671, board `SemanaPasoAtras`: the steps are words, not a lone ‹ ›.
+const visibleText = (link: ReturnType<typeof prev>) => link.evaluate((el) => (el as HTMLElement).innerText);
+
+function crossingMonday(): string {
+  for (let weeks = 1; weeks <= 5; weeks++) {
+    const monday = mondayAgo(weeks);
+    if (monday.slice(0, 7) !== shift(monday, 6).slice(0, 7)) return monday;
+  }
+  return mondayAgo(3);
+}
+
+for (const width of [390, 1440]) {
+  test(`at ${width} the steps read «semana anterior» and «semana siguiente», 48px tall, and lead to the adjacent Mondays (RP-44)`, async ({
+    browser,
+    baseURL,
+    db,
+    person,
+  }) => {
+    await withWeeks(browser, baseURL, db, person, width, async (page) => {
+      await page.goto(`/semana?semana=${mondayAgo(2)}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(mondayAgo(2)));
+      expect((await visibleText(prev(page))).toLowerCase()).toContain("semana anterior");
+      expect(await visibleText(prev(page))).toContain("semana anterior");
+      expect(await visibleText(next(page))).toContain("semana siguiente");
+      await expect(prev(page)).toHaveAttribute("href", `/semana?semana=${mondayAgo(3)}`);
+      await expect(next(page)).toHaveAttribute("href", `/semana?semana=${mondayAgo(1)}`);
+      for (const link of [prev(page), next(page)]) {
+        const box = (await link.boundingBox())!;
+        expect(box.height).toBeGreaterThanOrEqual(48);
+      }
+      await page.goto(`/semana?semana=${mondayAgo(1)}`);
+      await expect(next(page)).toHaveAttribute("href", /\/semana\/?$/);
+    });
+  });
+}
+
+test("at 390 the steps sit on their own row above the title, one at each edge (RP-44)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withWeeks(browser, baseURL, db, person, 390, async (page) => {
+    await page.goto(`/semana?semana=${mondayAgo(2)}`);
+    const h1 = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
+    const p = (await prev(page).boundingBox())!;
+    const n = (await next(page).boundingBox())!;
+    expect(p.y + p.height).toBeLessThanOrEqual(h1.y);
+    expect(n.y + n.height).toBeLessThanOrEqual(h1.y);
+    expect(Math.abs(p.y - n.y)).toBeLessThanOrEqual(2);
+    expect(p.x).toBeLessThan(195);
+    expect(p.x).toBeLessThanOrEqual(40);
+    expect(n.x + n.width).toBeGreaterThan(195);
+    expect(n.x + n.width).toBeGreaterThanOrEqual(390 - 40);
+    expect(p.x + p.width).toBeLessThanOrEqual(n.x);
+  });
+});
+
+test("at 1280 the steps sit to the right of the title, on the header row (RP-44)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withWeeks(browser, baseURL, db, person, 1280, async (page) => {
+    await page.goto(`/semana?semana=${mondayAgo(2)}`);
+    const h1 = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
+    const p = (await prev(page).boundingBox())!;
+    const n = (await next(page).boundingBox())!;
+    expect(p.x).toBeGreaterThan(h1.x + h1.width);
+    expect(n.x).toBeGreaterThan(p.x);
+    expect(p.y).toBeLessThan(h1.y + h1.height);
+  });
+});
+
+test("the first week with a goal has no back step; › stays at the right edge (RP-44)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withWeeks(browser, baseURL, db, person, 390, async (page) => {
+    await page.goto(`/semana?semana=${mondayAgo(6)}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(mondayAgo(6)));
+    await expect(page.getByRole("link", { name: /semana anterior/i })).toHaveCount(0);
+    expect(await page.getByText(/semana anterior/i).count()).toBe(0);
+    const n = (await next(page).boundingBox())!;
+    expect(n.x + n.width).toBeGreaterThanOrEqual(390 - 40);
+  });
+});
+
+test("this week has no next step; the back step stays at the left edge (RP-44)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withWeeks(browser, baseURL, db, person, 390, async (page) => {
+    await page.goto("/semana");
+    await expect(next(page)).toHaveCount(0);
+    expect(await page.getByText(/semana siguiente/i).count()).toBe(0);
+    const p = (await prev(page).boundingBox())!;
+    expect(p.x).toBeLessThanOrEqual(40);
+  });
+});
+
+for (const width of [360, 390, 1440]) {
+  test(`at ${width} both words and a long title overflow nothing (RP-44, RNP-07)`, async ({
+    browser,
+    baseURL,
+    db,
+    person,
+  }) => {
+    await withWeeks(browser, baseURL, db, person, width, async (page) => {
+      const monday = crossingMonday();
+      await page.goto(`/semana?semana=${monday}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(monday));
+      await expect(prev(page)).toBeVisible();
+      await expect(next(page)).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      for (const link of [prev(page), next(page)]) {
+        const box = (await link.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+      }
+    });
+  });
+}
