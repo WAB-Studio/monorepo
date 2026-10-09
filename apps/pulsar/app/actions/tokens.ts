@@ -23,7 +23,7 @@ export type RevokeAccessTokenResult = { ok: true } | { ok: false; error: Message
 /**
  * Mints a key for the signed-in person (RP-38). The clear key leaves in this
  * return value alone; the database keeps its hash. `access_tokens` has no
- * unique index on (user_id, name), so a live key with the same name is looked
+ * unique index on (user_id, name), so a key of the same name that still opens (neither revoked nor lapsed) is looked
  * for first in the same transaction. Two concurrent creations could still both
  * pass: the name is a label, not an identity.
  * Not a tool: an AI never mints a key.
@@ -39,7 +39,8 @@ export async function createAccessToken(input: CreateTokenInput): Promise<Create
     const issued = await withGoalsDb(async (tx) => {
       const taken = await tx.execute(sql`
         select 1 from goals.access_tokens
-        where user_id = ${person.id} and name = ${parsed.data.name} and revoked_at is null
+        where user_id = ${person.id} and name = ${parsed.data.name}
+          and goals.access_token_lapses_at(kind, last_used_at, created_at, expires_at, revoked_at) > now()
         limit 1`);
       if (taken.length > 0) throw new NamedError("connections.errors.nameTaken");
 

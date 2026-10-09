@@ -157,3 +157,22 @@ test("revoking with a tokenId that is no uuid answers notFound and revokes nothi
   });
   assert.equal((await tokens.resolveBearer(made.key))?.id, subject.id);
 });
+
+test("a lapsed name is free, a live one holds it, a revoked one is free", async () => {
+  const name = "portátil";
+  const lapsed = await as(subject, () => actions.createAccessToken({ name }));
+  assert.ok(lapsed.ok);
+  await admin`update goals.access_tokens set last_used_at = now() - interval '91 days', created_at = now() - interval '120 days' where id = ${lapsed.id}`;
+  const fresh = await as(subject, () => actions.createAccessToken({ name }));
+  assert.ok(fresh.ok, "a lapsed key still held its name");
+
+  await admin`update goals.access_tokens set last_used_at = now() where id = ${fresh.id}`;
+  assert.deepEqual(await as(subject, () => actions.createAccessToken({ name })), {
+    ok: false,
+    error: "connections.errors.nameTaken",
+  });
+
+  await admin`update goals.access_tokens set revoked_at = now() where name = ${name} and user_id = ${subject.id}`;
+  assert.ok((await as(subject, () => actions.createAccessToken({ name }))).ok);
+  await admin`delete from goals.access_tokens where name = ${name} and user_id = ${subject.id}`;
+});
