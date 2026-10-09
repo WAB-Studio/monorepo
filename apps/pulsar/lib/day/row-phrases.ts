@@ -12,11 +12,11 @@ export type CadenceNames = {
 };
 
 // The cadence as a row's second line says it (`HoyDia`): days as a sentence,
-// «lun, mié y vie». Null only for «every 1 day», which a daily cadence already says.
+// «lun, mié y vie». Null for a daily cadence and «every 1 day»: the default stays quiet.
 export function cadencePhrase(translate: Translate, cadence: Cadence, names: CadenceNames): string | null {
   switch (cadence.kind) {
     case "daily":
-      return translate("day.cadence.everyDay");
+      return null;
     case "weekdays":
       return cadence.days.length === 1
         ? translate("day.cadence.onlyWeekday", { weekday: names.weekdayPlural[cadence.days[0] - 1] })
