@@ -7,7 +7,9 @@
 //
 // Requires --experimental-test-module-mocks (see package.json's check:unit).
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mock, test } from "node:test";
+import { promisify } from "node:util";
 
 import type { LookupRecord } from "./types";
 
@@ -27,13 +29,6 @@ type FakeCursor = { value: Row; continue(): void };
 (globalThis as unknown as { IDBKeyRange: { only(value: string): { only: string } } }).IDBKeyRange = {
   only: (value) => ({ only: value }),
 };
-
-// Mirrors the real index's own order: ascending by the indexed key
-// (`normalised`), and ascending by primary key among rows that tie on it —
-// never the order the rows were inserted in.
-function sortedByIndex(rows: Row[]): Row[] {
-  return [...rows].sort((a, b) => (a.normalised < b.normalised ? -1 : a.normalised > b.normalised ? 1 : a.id - b.id));
-}
 
 function makeCursorRequest(rows: Row[]): FakeRequest<FakeCursor | null> {
   const request: FakeRequest<FakeCursor | null> = { onsuccess: null, onerror: null, error: null, result: null };
@@ -57,14 +52,22 @@ function makeCursorRequest(rows: Row[]): FakeRequest<FakeCursor | null> {
   return request;
 }
 
+// Every `openCursor` the code under test makes, with the index it asked
+// of and the range it bounded to (`undefined` for a pass over the lot).
+let cursorCalls: { index: string; range: { only: string } | undefined }[] = [];
+
 function fakeDatabase(rows: Row[]) {
   return {
     transaction: () => ({
       objectStore: () => ({
-        index: () => ({
+        index: (name: string) => ({
           openCursor: (range?: { only: string }) => {
-            const sorted = sortedByIndex(rows);
-            const filtered = range ? sorted.filter((r) => r.normalised === range.only) : sorted;
+            cursorCalls.push({ index: name, range });
+            const key = (r: Row): string => (name === "headword" ? (r.headword ?? "") : r.normalised);
+            const sorted = [...rows]
+              .filter((r) => name !== "headword" || r.headword !== null)
+              .sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a.id - b.id));
+            const filtered = range ? sorted.filter((r) => key(r) === range.only) : sorted;
             return makeCursorRequest(filtered);
           },
         }),
@@ -281,4 +284,123 @@ test("readWordHistory: a word never searched answers an empty history, not an er
   const { rows, total } = await readWordHistory("nonexistent");
   assert.deepEqual(rows, []);
   assert.equal(total, 0);
+});
+
+// --- module 561: grouped by lemma, bounded by two cursors ---
+
+test("por lema: an exact row and an inflected one share one group with both forms", async () => {
+  currentRows = [
+    row(1, "linger", { headword: "linger", outcome: "exact" }),
+    row(2, "lingered", { headword: "linger", outcome: "inflected" }),
+  ];
+  const { readWordStudy } = await getSummary();
+  const { rows, total } = await readWordStudy();
+  assert.equal(total, 1);
+  assert.equal(rows[0].key, "linger");
+  assert.equal(rows[0].count, 2);
+  assert.deepEqual(
+    [...rows[0].forms].sort((a, b) => a.text.localeCompare(b.text)),
+    [
+      { text: "linger", count: 1 },
+      { text: "lingered", count: 1 },
+    ],
+  );
+});
+
+test("sin lema: a phrase and an unlisted word each group by their own text", async () => {
+  currentRows = [
+    row(1, "a piece of cake", { headword: null, kind: "phrase", outcome: "phrase" as Row["outcome"] }),
+    row(2, "blorpt", { headword: null, outcome: "unlisted" as Row["outcome"] }),
+  ];
+  const { readWordStudy } = await getSummary();
+  const { rows, total } = await readWordStudy();
+  assert.equal(total, 2);
+  assert.deepEqual(rows.map((r) => r.key).sort(), ["a piece of cake", "blorpt"]);
+});
+
+test("una pasada: readWordStudy opens exactly one cursor", async () => {
+  currentRows = [row(1, "cat"), row(2, "dog")];
+  const { readWordStudy } = await getSummary();
+  cursorCalls = [];
+  await readWordStudy();
+  assert.equal(cursorCalls.length, 1);
+});
+
+test("historia de lema: both forms come back once, a row matching both indexes is not doubled", async () => {
+  currentRows = [
+    row(1, "linger", { headword: "linger", at: 1000 }),
+    row(2, "lingered", { headword: "linger", outcome: "inflected", at: 2000 }),
+    row(3, "other", { headword: "other" }),
+  ];
+  const { readLemmaHistory } = await getSummary();
+  const { rows, total } = await readLemmaHistory("linger");
+  assert.equal(total, 2);
+  assert.deepEqual(rows.map((r) => r.text), ["lingered", "linger"]);
+});
+
+test("acotada: readLemmaHistory opens only cursors ranged to the key, two of them", async () => {
+  currentRows = [row(1, "linger"), row(2, "lingered", { headword: "linger" }), row(3, "dog")];
+  const { readLemmaHistory } = await getSummary();
+  cursorCalls = [];
+  await readLemmaHistory("linger");
+  assert.equal(cursorCalls.length, 2);
+  assert.deepEqual(cursorCalls.map((c) => c.index).sort(), ["headword", "normalised"]);
+  assert.ok(cursorCalls.every((c) => c.range?.only === "linger"));
+});
+
+test("subida de versión: a v2 base opens at v3 with the same rows and the headword index", async () => {
+  // The real `record.ts` runs in a child process: the `./record` mock above
+  // cannot be lifted inside this one.
+  const script = `
+    const stores = new Map([
+      ["lookups", { indexes: new Set(["at", "normalised", "foreign"]), rows: [{ id: 1, normalised: "cat" }] }],
+      ["sync", { indexes: new Set(), rows: [] }],
+    ]);
+    let version = 2;
+    globalThis.indexedDB = {
+      open(_name, wanted) {
+        const request = {};
+        queueMicrotask(() => {
+          const database = {
+            get version() { return version; },
+            createObjectStore: (name) => stores.set(name, { indexes: new Set(), rows: [] }),
+            objectStore: (name) => ({ createIndex: (index) => stores.get(name).indexes.add(index) }),
+          };
+          request.result = database;
+          request.transaction = database;
+          if (wanted > version) {
+            const oldVersion = version;
+            version = wanted;
+            request.onupgradeneeded({ oldVersion });
+          }
+          request.onsuccess();
+        });
+        return request;
+      },
+    };
+    const real = await import(${JSON.stringify(new URL("./record.ts", import.meta.url).href)});
+    const database = await real.openLogDatabase();
+    console.log(JSON.stringify({
+      constant: real.DATABASE_VERSION,
+      version: database.version,
+      rows: stores.get("lookups").rows,
+      indexes: [...stores.get("lookups").indexes],
+    }));
+  `;
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ["--import", "tsx", "--input-type=module", "-e", script],
+    { cwd: process.cwd() },
+  );
+  const seen = JSON.parse(stdout.trim().split("\n").pop()!) as {
+    constant: number;
+    version: number;
+    rows: unknown[];
+    indexes: string[];
+  };
+  assert.equal(seen.constant, 3);
+  assert.equal(seen.version, 3);
+  assert.deepEqual(seen.rows, [{ id: 1, normalised: "cat" }]);
+  assert.ok(seen.indexes.includes("headword"));
+  assert.ok(seen.indexes.includes("normalised"));
 });

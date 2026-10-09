@@ -8,7 +8,7 @@ import type { LookupRecord, SyncState } from "./types";
 // scoped to one database, so a write here never queues behind a read of the
 // 8.2 MB payload (RNL-06).
 const DATABASE_NAME = "reading-log";
-export const DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 3;
 const STORE_NAME = "lookups";
 const AT_INDEX = "at";
 const SYNC_STORE_NAME = "sync";
@@ -49,8 +49,8 @@ function openDatabase(): Promise<IDBDatabase> {
   if (databasePromise) return databasePromise;
   databasePromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    // No branch here ever reads, writes or deletes a row: version 1 to 2
-    // adds a store and an index, nothing more, so an upgrade cannot lose one.
+    // No branch here ever reads, writes or deletes a row: versions 1 to 3
+    // add stores and indexes, nothing more, so an upgrade cannot lose one.
     request.onupgradeneeded = (event) => {
       const database = request.result;
       if (event.oldVersion < 1) {
@@ -69,12 +69,24 @@ function openDatabase(): Promise<IDBDatabase> {
           .objectStore(STORE_NAME)
           .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
       }
+      if (event.oldVersion < 3) {
+        // A null `headword` is not a valid key, so a phrase or an unlisted
+        // word stays out of this index.
+        request.transaction!.objectStore(STORE_NAME).createIndex("headword", "headword");
+      }
     };
     request.onsuccess = () => {
       const database = request.result;
       // A connection the browser closes on its own (eviction, another tab's
       // version change) stops being usable synchronously too.
       database.onclose = () => {
+        openDatabaseHandle = null;
+        databasePromise = null;
+      };
+      // A newer tab upgrading the schema waits on this connection: close it
+      // and let the next write reopen.
+      database.onversionchange = () => {
+        database.close();
         openDatabaseHandle = null;
         databasePromise = null;
       };
