@@ -175,7 +175,7 @@ function TaskLine({
           </Text>
         ) : null}
         {continues ? (
-          <Text as="p" tone="muted">
+          <Text as="p" variant="meta">
             {continues}
           </Text>
         ) : null}
