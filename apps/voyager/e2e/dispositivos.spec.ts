@@ -377,3 +377,28 @@ test("RL-25: two alike devices are told apart by the date each began copying", a
     await expect(page.getByText("Desde el 21 de sept.", { exact: true })).toHaveCount(1);
   });
 });
+
+test.describe("the reader's own zone", () => {
+  test.use({ timezoneId: "America/Bogota" });
+
+  test("RL-25: a device added at 21:00 Bogotá reads that Bogotá day, never the UTC one after it", async ({
+    page,
+  }) => {
+    test.setTimeout(45_000);
+    await withReader(page, async (signIn) => {
+      await signIn();
+      // 02:00Z on the 7th: the 6th in Bogotá. A server on UTC reads the 7th.
+      await stubDevices(
+        page,
+        list([
+          device("chrome:linux", { createdAt: "2026-10-06T21:00:00-05:00" }),
+          device("safari:ios", { createdAt: "2026-10-01T00:30:00-05:00" }),
+        ]),
+      );
+      await page.goto("/cuenta");
+      await expect(page.getByText("Desde el 6 de oct.", { exact: true })).toHaveCount(1);
+      await expect(page.getByText("Desde el 1 de oct.", { exact: true })).toHaveCount(1);
+      await expect(page.getByText("Desde el 7 de oct.", { exact: true })).toHaveCount(0);
+    });
+  });
+});
