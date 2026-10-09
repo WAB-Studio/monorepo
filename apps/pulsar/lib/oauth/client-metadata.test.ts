@@ -376,3 +376,31 @@ test("a redirect the stored client has is served from the row", async () => {
   assert.deepEqual(client, STORED);
   assert.deepEqual([calls.claim, calls.request], [0, 0]);
 });
+
+test("the document is asked of the first address, not the last", async () => {
+  const { client, calls } = await run(URL_OK, { resolve: () => ["93.184.216.34", "8.8.8.8"] });
+  assert.notEqual(client, null);
+  const lookup = calls.options?.lookup as (h: string, o: object, cb: (...a: unknown[]) => void) => void;
+  const seen: unknown[] = [];
+  lookup("app.example", {}, (...args) => seen.push(...args));
+  assert.deepEqual(seen, [null, "93.184.216.34", 4]);
+});
+
+test("carrier-grade NAT ends at 100.127.255.255", () => {
+  assert.equal(privateAddress("100.64.0.0"), true);
+  assert.equal(privateAddress("100.127.255.255"), true);
+  assert.equal(privateAddress("100.63.255.255"), false);
+  assert.equal(privateAddress("100.128.0.0"), false);
+});
+
+test("the cap is 64 KB exactly: that many bytes pass, one more is refused", async () => {
+  const exact = (extra: number) => {
+    const body = JSON.stringify(doc());
+    return " ".repeat(64 * 1024 + extra - Buffer.byteLength(body)) + body;
+  };
+  assert.notEqual((await run(URL_OK, { response: () => json(exact(0)) })).client, null);
+  assert.equal((await run(URL_OK, { response: () => json(exact(1)) })).client, null);
+  const declared = (size: number) => json(doc(), { headers: { "content-length": String(size) } });
+  assert.notEqual((await run(URL_OK, { response: () => declared(64 * 1024) })).client, null);
+  assert.equal((await run(URL_OK, { response: () => declared(64 * 1024 + 1) })).client, null);
+});

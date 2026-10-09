@@ -55,3 +55,7 @@ test("every error key the acts and their schemas can return has a sentence", () 
     assert.notEqual(message, key, `${key} resolved to its own name`);
   }
 });
+
+test("a path that reaches a sentence but has no key's shape reads unknown", () => {
+  assert.deepEqual(errorOf("mcp.instructions"), { key: "mcp.errors.unknown", message: UNKNOWN });
+});
