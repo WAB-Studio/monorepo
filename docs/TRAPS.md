@@ -2996,3 +2996,17 @@ in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it r
   `private/reportes/ci-37980310112-shard1-puerto-54322.log`.
 - It is the runner, not the branch. Read the shard's setup step before any spec: no `✘` line means nothing ran.
 - `gh run rerun <id> --failed` and read the rerun before merging.
+
+## The service worker's cache name lives in two files
+
+- `apps/voyager/e2e/despliegue.spec.ts` writes `CACHE_NAME` by hand. Bumping it in `apps/voyager/public/sw.js` without the
+  spec leaves `despliegue.spec.ts:38` red in CI («one cache, named by the worker in hand»), and nowhere else.
+- Measured 2026-10-09, module 651: v8 → v9 in `sw.js`, the spec still read v8, and the PR went red on its only e2e run.
+- Bump both in the same commit.
+
+## `context.route` also routes the service worker
+
+- In Playwright, `context.route` intercepts the worker's own fetches; `page.route` does not. A spec that aborts chunks with
+  `context.route` to model «the page never fetched them» also aborts the worker's precache, and no precache can pass it.
+- Measured 2026-10-09, module 651: two `offline.spec.ts` tests red on every run with a correct `sw.js`, green 10/10 once
+  switched to `page.route`, still red 6/6 on the old `sw.js`.
