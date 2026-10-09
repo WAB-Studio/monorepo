@@ -1618,3 +1618,22 @@ Taken by the user on the critic's questions. Each opens its module with a board 
   will reads «-ré, -rá (futuro)» and would «-ría (condicional)».
 - **`/cuenta` keeps the lines its boards did not write** (user, 2026-10-09): «Copiando tus búsquedas…», «Visto por última
   vez: hace un momento» and the two licence paragraphs.
+
+### Decisions of 2026-10-09, after the slice-close critic
+
+Taken by the user the same day («elige el recomendado», `private/plan-cierre-2026-10-09.md` Part 2). Each one waits on its
+module; until it lands, the screen and its approved board stay as built.
+
+- **`/cuenta` offline with a session says so.** The cached shell reads the session and the `sync` row from IndexedDB and
+  draws «Sin conexión desde hace X», never the signed-out screen. The shell carries no address. Needs a board.
+- **A word the network answered keeps its study page honest.** Now: the page drops «El diccionario no tiene esa palabra»
+  and shows the saved translation. Later: the row keeps the whole answer (definition and example).
+- **RL-58 reaches the compact breakdown.** Inside a sentence, a form's lemma block sits under its first group, as on the
+  word page. Needs a board (`SinEntradaLemaCompacto`).
+- **The muted dictionary block under a function word folds** behind one tap. Needs a board (`SinEntradaFuncionPlegada`).
+  This replaces the 2026-10-08 decision to show it whole.
+- **The forms line on `/registro` lists every searched form with commas, the most searched first, with no «·»**
+  («linger, lingered, lingering»). This replaces the line decided above for `RegistroEstudioPorLema`.
+- **`log.spec.ts` keeps one test per teardown path**; the 0/200/400 ms matrix becomes a unit test of the recording
+  machine (`settleCandidate`). The RNL-01 latency test drives the real `mergeForeign`.
+- **564 is measured by the user on a real iPhone**; 565–568 wait for it.
