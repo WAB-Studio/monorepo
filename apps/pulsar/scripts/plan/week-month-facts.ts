@@ -154,3 +154,45 @@ test("loadWeek: a «4 al mes» with two taps in the month and two in the month b
   const week = await loadWeek(thirdWeekDay);
   assert.deepEqual(askedDays(week, made.commitmentId), [1, 1, 1, 1, 1, 1, 1]);
 });
+
+test("loadWeek: a fact declared on the Sunday is read into the Sunday", async () => {
+  const plan = await import("@/app/actions/plan");
+  const made = await plan.addCommitment({
+    goalId,
+    name: "week-month-facts: domingo",
+    cadenceKind: "daily",
+    satisfaction: "tap",
+  });
+  if (!made.ok) throw new Error(`addCommitment: ${made.error}`);
+  const [owner] = await sql<{ user_id: string }[]>`select user_id from goals.goals where id = ${goalId}`;
+  await sql`update goals.commitments set created_at = '2026-01-01' where id = ${made.commitmentId}`;
+  // Week 2026-02-09 to 2026-02-15: the fact sits on the last day.
+  await sql`insert into goals.facts (user_id, goal_id, commitment_id, day)
+            values (${owner.user_id}, ${goalId}, ${made.commitmentId}, '2026-02-15'::date)`;
+  const week = await loadWeek("2026-02-11");
+  const sunday = week.view.days[6].slots.find((slot) => slot.commitmentId === made.commitmentId);
+  const saturday = week.view.days[5].slots.find((slot) => slot.commitmentId === made.commitmentId);
+  assert.equal(sunday?.satisfied, true);
+  assert.equal(saturday?.satisfied, false);
+});
+
+test("loadWeek: a «1 al mes» met before the week and tapped again on the Tuesday lists only that Tuesday, done", async () => {
+  const plan = await import("@/app/actions/plan");
+  const made = await plan.addCommitment({
+    goalId,
+    name: "week-month-facts: cumplida sin pedir",
+    cadenceKind: "times_per_month",
+    cadenceN: 1,
+    satisfaction: "tap",
+  });
+  if (!made.ok) throw new Error(`addCommitment: ${made.error}`);
+  const [owner] = await sql<{ user_id: string }[]>`select user_id from goals.goals where id = ${goalId}`;
+  await sql`update goals.commitments set created_at = '2026-01-01' where id = ${made.commitmentId}`;
+  for (const day of ["2026-02-02", "2026-02-10"]) {
+    await sql`insert into goals.facts (user_id, goal_id, commitment_id, day)
+              values (${owner.user_id}, ${goalId}, ${made.commitmentId}, ${day}::date)`;
+  }
+  const week = await loadWeek("2026-02-11");
+  assert.deepEqual(askedDays(week, made.commitmentId), [0, 1, 0, 0, 0, 0, 0]);
+  assert.equal(week.view.days[1].slots.find((slot) => slot.commitmentId === made.commitmentId)?.satisfied, true);
+});
