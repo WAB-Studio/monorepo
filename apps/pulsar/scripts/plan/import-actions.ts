@@ -149,12 +149,12 @@ function draftOf(text: string): Draft {
 }
 
 // Four goals, each with every section: more of everything than the example.
-function fourGoals(): string {
+function fourGoals(rhythmLine = ""): string {
   const goals = [1, 2, 3, 4].map(
     (n) => `
 # RP-37 fixture: meta ${n}
 horizonte: ${M12}-01
-medida: horas de estudio · minutos
+medida: horas de estudio · minutos${rhythmLine}
 
 ## Fases
 - ${TODAY} a ${shiftDay(`${M3}-01`, -1)} · Primera
@@ -412,4 +412,50 @@ test("confirmImport: the second person sees none of the rows", async () => {
   // And the owner does: the zeros above are RLS, not an empty write.
   const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from goals.goals where id in ${sql(ids)}`;
   assert.equal(count, ids.length);
+});
+
+// RP-63: the template's `ritmo:` arms the goal as `setRhythm`'s first rhythm would.
+function lastMonthStart(): string {
+  return `${addMonths(M0, -1)}-01`;
+}
+
+test("confirmImport: ritmo: 12 h writes goals.rhythm = 720 and plan_seen as setRhythm, and arms the plan", async () => {
+  const text = EXAMPLE.replace("# IA aplicada", "# RP-63 fixture: ritmo").replace("medida: horas de estudio · minutos", "medida: horas de estudio · minutos\nritmo: 12 h");
+  const draft = draftOf(text);
+  assert.equal(draft.goals[0].rhythm, 720);
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const [row] = await sql`select rhythm, plan_seen::text as plan_seen from goals.goals where id = ${goalId}`;
+  assert.deepEqual({ ...row }, { rhythm: 720, plan_seen: lastMonthStart() });
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const view = await loadGoal(goalId, TODAY);
+  assert.ok(view);
+  assert.equal(view.roadmap.state, "planned");
+  assert.equal(view.planSeen, lastMonthStart());
+});
+
+test("confirmImport: without ritmo: the rhythm and plan_seen stay null", async () => {
+  const { goalIds: [goalId] } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", "# RP-63 fixture: sin ritmo")));
+  const [row] = await sql`select rhythm, plan_seen from goals.goals where id = ${goalId}`;
+  assert.deepEqual({ ...row }, { rhythm: null, plan_seen: null });
+  const { loadGoal } = await import("@/lib/queries/goal");
+  assert.equal((await loadGoal(goalId, TODAY))?.roadmap.state, "noRhythm");
+});
+
+test("confirmImport: a rhythm on a measure that is not time is refused with its key and writes nothing", async () => {
+  const name = "RP-63 fixture: ritmo en km";
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  draft.goals[0] = { ...draft.goals[0], rhythm: 720, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "roadmap.errors.rhythmNotTime", at: "goals.0.rhythm" });
+  assert.equal(await countGoals(name), 0);
+});
+
+test("confirmImport: four goals with a rhythm pay the statements of one", async () => {
+  const draft = draftOf(fourGoals("\nritmo: 12 h"));
+  assert.ok(draft.goals.every((goal) => goal.rhythm === 720));
+  const { goalIds: ids, statements } = await confirmed(draft);
+  assert.equal(ids.length, 4);
+  assert.equal(statements, measured.one);
+  const [{ armed }] = await sql<{ armed: number }[]>`
+    select count(*)::int as armed from goals.goals where id in ${sql(ids)} and rhythm = 720 and plan_seen is not null`;
+  assert.equal(armed, 4);
 });
