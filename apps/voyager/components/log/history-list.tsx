@@ -22,16 +22,14 @@ type ListState =
 
 function StudyRowItem({ row }: { row: StudyRow }) {
   const t = useTranslations("log");
-  const [lead, ...rest] = row.forms;
+  const lead = row.forms[0];
   // A phrase or a miss reached no lemma: it keeps the text as typed.
   const lemmaless = row.lastOutcome === "translated" || row.lastOutcome === "unlisted";
   // A lone form that is the key says nothing the title does not.
   const formsLine =
-    lead === undefined || (rest.length === 0 && lead.text === row.key)
+    lead === undefined || (row.forms.length === 1 && lead.text === row.key)
       ? null
-      : rest.length === 0
-        ? lead.text
-        : t("study.forms", { lemma: lead.text, forms: rest.map((form) => form.text).join(", ") });
+      : row.forms.map((form) => form.text).join(", ");
   return (
     <Link asChild underline="none">
       <NextLink href={`/registro/${encodeURIComponent(row.key)}`}>
