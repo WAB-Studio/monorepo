@@ -9,6 +9,7 @@ import { fixtureSql, purgeAuditTrail, purgeIdentity } from "./fixtures";
 
 type DeadRun = { id: string; lane: number; suite: string; host: string; pid: number; heartbeat_at: Date };
 type Identity = { run_id: string; user_id: string; email: string };
+type OAuthClient = { run_id: string; client_id: string };
 
 /**
  * The only interlock. `pg_stat_activity` cannot serve as one — Supabase's
@@ -35,12 +36,28 @@ async function deadRuns(): Promise<DeadRun[]> {
   `;
 }
 
+// Finished runs over a week old. A clean close leaves none of them holding a
+// client; one that leaked a client still loses it here.
+async function staleFinishedRuns(): Promise<{ id: string }[]> {
+  return fixtureSql<{ id: string }[]>`
+    select id from harness.runs
+    where finished_at is not null and finished_at < now() - interval '7 days'
+  `;
+}
+
 async function ephemeralIdentitiesUnder(runIds: string[]): Promise<Identity[]> {
   if (runIds.length === 0) return [];
   return fixtureSql<Identity[]>`
     select run_id, user_id, email
     from harness.identities
     where run_id in ${fixtureSql(runIds)} and disposition = 'ephemeral'
+  `;
+}
+
+async function oauthClientsUnder(runIds: string[]): Promise<OAuthClient[]> {
+  if (runIds.length === 0) return [];
+  return fixtureSql<OAuthClient[]>`
+    select run_id, client_id from harness.oauth_clients where run_id in ${fixtureSql(runIds)}
   `;
 }
 
@@ -66,21 +83,39 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const dead = await run(deadRuns());
-  if (dead.length === 0) {
-    console.log("nothing dead — no harness.runs row is finished_at null with a stale heartbeat");
+  const [dead, stale] = await Promise.all([run(deadRuns()), run(staleFinishedRuns())]);
+  if (dead.length === 0 && stale.length === 0) {
+    console.log(
+      "nothing dead — no harness.runs row is finished_at null with a stale heartbeat, none finished over 7 days ago",
+    );
     console.log(`\nREPORT  reap — ${trips} round trip(s), nothing deleted.`);
     process.exit(0);
   }
 
   const deadIds = dead.map((r) => r.id);
-  const identities = await run(ephemeralIdentitiesUnder(deadIds));
+  const staleIds = stale.map((r) => r.id);
+  const [identities, clients] = await Promise.all([
+    run(ephemeralIdentitiesUnder(deadIds)),
+    run(oauthClientsUnder([...deadIds, ...staleIds])),
+  ]);
 
   console.log(`${dryRun ? "PLAN" : "REAPING"}  ${dead.length} dead run(s):`);
   for (const r of dead) {
     const owned = identities.filter((i) => i.run_id === r.id);
-    console.log(`  ${describe(r)} — ${owned.length} ephemeral identity(ies)`);
+    const ownedClients = clients.filter((c) => c.run_id === r.id);
+    console.log(
+      `  ${describe(r)} — ${owned.length} ephemeral identity(ies), ${ownedClients.length} OAuth client(s)`,
+    );
     for (const i of owned) console.log(`    ${i.email} (${i.user_id})`);
+    for (const c of ownedClients) console.log(`    oauth client ${c.client_id}`);
+  }
+  console.log(`${dryRun ? "PLAN" : "REAPING"}  ${stale.length} run(s) finished over 7 days ago:`);
+  // Only the ones still holding a client: a week of clean runs is thousands of rows.
+  for (const id of staleIds) {
+    const ownedClients = clients.filter((c) => c.run_id === id);
+    if (ownedClients.length === 0) continue;
+    console.log(`  ${id} — ${ownedClients.length} OAuth client(s)`);
+    for (const c of ownedClients) console.log(`    oauth client ${c.client_id}`);
   }
 
   if (dryRun) {
@@ -118,25 +153,45 @@ async function main(): Promise<void> {
     await run(fixtureSql`delete from harness.identities where user_id in ${fixtureSql(purgedIds)}`);
   }
 
-  // A run named in `failed` kept at least one identity — its harness.identities
-  // row still names that identity, so the run row stays too: deleting it would
+  // `goals.oauth_codes` and `goals.oauth_refresh` cascade from their client.
+  // The registry rows go only once their clients are gone, so a failed delete
+  // leaves the trail for the next reap.
+  const clientIds = clients.map((c) => c.client_id);
+  let droppedClients = 0;
+  if (clientIds.length > 0) {
+    try {
+      await run(fixtureSql`delete from goals.oauth_clients where id in ${fixtureSql(clientIds)}`);
+      await run(fixtureSql`delete from harness.oauth_clients where client_id in ${fixtureSql(clientIds)}`);
+      droppedClients = clientIds.length;
+    } catch (error) {
+      console.error(
+        `reap: ${clientIds.length} OAuth client(s) did not drop — ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      failed.push(...new Set(clients.map((c) => c.run_id)));
+    }
+  }
+
+  // A run named in `failed` kept at least one identity or OAuth client — its
+  // registry row still names it, so the run row stays too: deleting it would
   // cut the trail the next census needs to find the leak again.
   const clearRunIds = deadIds.filter((id) => !failed.includes(id));
   if (clearRunIds.length > 0) {
     await run(fixtureSql`delete from harness.runs where id in ${fixtureSql(clearRunIds)}`);
   }
 
-  const staleFinished = await run(fixtureSql`
-    delete from harness.runs
-    where finished_at is not null and finished_at < now() - interval '7 days'
-  `);
+  const clearStaleIds = staleIds.filter((id) => !failed.includes(id));
+  if (clearStaleIds.length > 0) {
+    await run(fixtureSql`delete from harness.runs where id in ${fixtureSql(clearStaleIds)}`);
+  }
 
   console.log(
-    `\nREPORT  reap — dropped ${purgedIds.length} identity(ies), ${clearRunIds.length} dead run(s), ${staleFinished.count} stale finished run(s), ${trips} round trip(s).`,
+    `\nREPORT  reap — dropped ${purgedIds.length} identity(ies), ${droppedClients} OAuth client(s), ${clearRunIds.length} dead run(s), ${clearStaleIds.length} stale finished run(s), ${trips} round trip(s).`,
   );
 
   if (failed.length > 0) {
-    console.error(`reap: ${failed.length} run(s) still hold an identity nothing here could drop.`);
+    console.error(`reap: ${failed.length} run(s) still hold an identity or an OAuth client nothing here could drop.`);
     process.exit(1);
   }
 }
