@@ -97,8 +97,8 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       // never names a source it could not read.
       const evidence = page.locator("button", { hasText: seeded.evidenceName });
       const meta = (await evidence.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
-      expect(meta).toContain("1 búsqueda");
-      expect(meta).toContain("sin leer la fuente");
+      expect(meta).toBe("sin leer la fuente");
+      expect(meta).not.toContain("búsqueda");
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;

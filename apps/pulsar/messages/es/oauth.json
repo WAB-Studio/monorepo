@@ -3,17 +3,19 @@
   "title": "{client} quiere ver tu bitácora",
   "mayLabel": "podrá",
   "may": {
-    "read": "leer tus metas, meses, tareas e informe",
+    "read": "leer tus metas, meses, tareas, sueltas e informe",
     "done": "marcar hecho y anotar cantidades",
-    "write": "escribir tareas y abrir metas",
-    "reorganize": "mover tareas de mes, cambiar montos, agregar fases y compromisos, correr el plan"
+    "write": "abrir metas, escribir tareas y sus notas",
+    "rename": "renombrar una meta y mover su final",
+    "phases": "agregar fases y compromisos, y retirar un compromiso",
+    "plan": "darle mes o día a una tarea, cambiar el monto de un mes y aceptar que el plan corra"
   },
   "neverLabel": "nunca",
   "never": {
     "delete": "borrar ni archivar nada",
     "undo": "desmarcar lo que ya hiciste"
   },
-  "consentLead": "Podrá leer tus metas y anotar lo que hagas. Puedes revocarlo en Conexiones.",
+  "consentLead": "Podrá leer tus metas y anotar lo que hagas.",
   "returnsTo": "al permitir, vuelves a <host>{address}</host>",
   "allow": "Permitir",
   "deny": "No permitir",
