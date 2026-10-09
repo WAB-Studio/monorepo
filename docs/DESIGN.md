@@ -37,3 +37,11 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - Reserve the bottom gutter on every app page.
 - Compose it from `Page` in `components/ui`.
 - Never write a page's padding at the page.
+
+## Debts
+
+- Show a card or liability with a positive balance as «A favor $ …» in `--accent-11`, never as «Debes». Add that balance to
+  the available credit. Decided by the user 2026-10-08 (Q-D4, module 601).
+- Keep instalments under RF-136: the next payment is the minimum, with no instalments added to it. The instalment dialog
+  becomes «proponer diferir». Decided by the user 2026-10-08 (Q-D5, module 604).
+- Neither has a board yet. Module 451 opens orbit's canvas with `Deudas · saldo a favor` and `Deudas · cuotas`.
