@@ -34,11 +34,13 @@
     "stampOnClock": "el <fig>{date}</fig> <fig>{time}</fig>",
     "revokedMeta": "revocada el <fig>{date}</fig> · ya no entra",
     "expiredMeta": "venció el <fig>{date}</fig> · sin uso desde el <fig>{used}</fig>",
+    "expiredUnused": "venció el <fig>{date}</fig> · sin usar",
     "revoke": "Revocar",
     "revokeKey": "Revocar la llave {name}",
     "revokeHost": "Revocar {name}, vuelve a {host}",
     "revokeConnection": "Revocar {name}, conectada el {date}",
-    "renew": "crea otra"
+    "renew": "crea otra",
+    "renewKey": "crea otra en lugar de {name}"
   },
   "folds": {
     "keys": "{count, plural, one {# llave que ya no entra} other {# llaves que ya no entran}}",
