@@ -2627,6 +2627,8 @@ async function runMonthLineCheck(): Promise<void> {
 
     // Estimates: a done leaf adds its 60, its undone sibling nothing.
     const estimated = await seedGoal("month-line estimate probe");
+    // Only a goal measured in time counts a task's figure (RP-65).
+    await db`update goals.goals set measure_name = 'minutos', measure_unit = 'minutos' where id = ${estimated}`;
     const [slotCommitment] = await db<{ id: string }[]>`
       insert into goals.commitments
         (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
