@@ -176,3 +176,27 @@ test("RL-58: the compact breakdown keeps all of left's glosses above the leave b
   expect(await precedes(first, leaveHeading)).toBe(true);
   expect(await precedes(second, leaveHeading), "compact does not split the entry").toBe(true);
 });
+
+// `said` draws two pronunciation blocks (/seɪd/ adjective, /saɪd/ proper
+// noun) and is an inflection of `say`: the offer sits under the first
+// category of block 1, never under block 2's.
+test("RL-58: with two pronunciation blocks the offer sits under block 1's first group, above block 2", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await gotoReady(page);
+  await search(page, "said");
+
+  const header = page.getByText('"said" también es una forma de "say"', { exact: true });
+  await expect(header).toBeVisible({ timeout: 5000 });
+  const blockOneGroup = line(page, "dicho");
+  const lemmaVerb = line(page, "decir, poner, digamos, se dice");
+  const blockTwoGroup = line(page, "Saíd");
+  await expect(blockOneGroup).toBeVisible();
+  await expect(lemmaVerb).toBeVisible();
+  await expect(blockTwoGroup).toBeVisible();
+
+  expect(await precedes(blockOneGroup, header), "block 1's first group comes before the offer").toBe(true);
+  expect(await precedes(header, lemmaVerb), "the say block follows its header").toBe(true);
+  expect(await precedes(lemmaVerb, blockTwoGroup), "block 2 comes after the say block").toBe(true);
+});
