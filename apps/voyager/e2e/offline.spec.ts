@@ -204,6 +204,8 @@ test("offline, /registro never resurrects the account wipe a signed-in visit onc
     // has something to show once the confirm panel opens.
     const searchBox = page.getByRole("textbox", { name: messages.search.label });
     await searchBox.fill("apple");
+    // The row is recorded once the answer paints; clearing first records nothing.
+    await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
     await searchBox.fill("");
     await page.waitForTimeout(300);
 
