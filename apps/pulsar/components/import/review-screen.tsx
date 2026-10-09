@@ -79,6 +79,7 @@ export function markedDraft(draft: ImportDraft, unmarked: Unmarked, refused: Rea
     return [
       {
         ...goal,
+        rhythm: kept(`${at}.rhythm`) ? goal.rhythm : null,
         phases: goal.phases.filter((_, p) => kept(`${at}.phases.${p}`)),
         months: goal.months.filter((_, m) => kept(`${at}.months.${m}`)),
         commitments: goal.commitments.filter((_, c) => kept(`${at}.commitments.${c}`)),
@@ -441,6 +442,15 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     name={goal.measure.name}
                     meta={t("import.review.measure")}
                     trailing={goal.measure.unit}
+                  />
+                ) : null}
+                {goal.measure && goal.rhythm !== null && isTimeUnit(goal.measure.unit) ? (
+                  <CheckRow
+                    checked={goalOn && on(`${at}.rhythm`)}
+                    disabled={!goalOn}
+                    onCheckedChange={(value) => toggle(`${at}.rhythm`, value)}
+                    name={t("import.review.rhythmOf", { amount: formatQuantity(goal.rhythm, goal.measure.unit, words) })}
+                    meta={t("import.review.rhythm")}
                   />
                 ) : null}
               </Section>

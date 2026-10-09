@@ -4,10 +4,9 @@ import messages from "../messages/es/import.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { todayInZone } from "../lib/zone";
 
-// RP-63: the review says each goal's rhythm before the person confirms. The
-// board is `ImportarRevisarRitmo`; its two lines are not in the catalogue
-// until the module lands, so they are written here as the board has them.
-const RHYTHM_LINE = "ritmo · el plan reparte las tareas a este paso";
+// RP-63: the review says each goal's rhythm before the person confirms (board `ImportarRevisarRitmo`).
+const RHYTHM_LINE = messages.review.rhythm;
+const rhythmOf = (amount: string) => messages.review.rhythmOf.replace("{amount}", amount);
 const SOURCE_LINE = "ritmo: 12 h";
 
 function shift(by: number) {
@@ -69,7 +68,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         await toReview(page, template());
         const card = goalCard(page, "IA aplicada");
 
-        const main = card.getByText("12 h al mes", { exact: true });
+        const main = card.getByText(rhythmOf("12 h"), { exact: true });
         const meta = card.getByText(RHYTHM_LINE, { exact: true });
         await expect(main).toBeVisible();
         await expect(meta).toBeVisible();
@@ -81,7 +80,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         const measure = (await card.getByText("horas de estudio", { exact: true }).boundingBox())!;
         expect(mainBox.y).toBeGreaterThan(measure.y);
         // Like the other rows of the board, it is a marked checkbox.
-        await expect(card.getByRole("checkbox", { name: /12 h al mes/ })).toBeChecked();
+        await expect(card.getByRole("checkbox", { name: new RegExp(rhythmOf("12 h")) })).toBeChecked();
       });
     });
   }
@@ -90,7 +89,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
     await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
       await toReview(page, template("1 h 30 min"));
       const card = goalCard(page, "IA aplicada");
-      await expect(card.getByText("1 h 30 min al mes", { exact: true })).toBeVisible();
+      await expect(card.getByText(rhythmOf("1 h 30 min"), { exact: true })).toBeVisible();
       await expect(card.getByText(RHYTHM_LINE, { exact: true })).toBeVisible();
       await expect(card.getByText(/90 min|1[.,]5 h/)).toHaveCount(0);
     });
@@ -133,6 +132,26 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         expect(goal.rhythm).toBe(720);
       } finally {
         await db`delete from goals.goals where user_id = ${person.id} and name in ('IA aplicada', 'Correr 10K')`;
+      }
+    });
+  });
+
+  test("unchecking the rhythm row creates the goal without a rhythm: the goal offers «Armar el plan»", async ({ person, browser, baseURL, db }) => {
+    await asPerson({ person, browser, baseURL }, { width: 390, height: 900 }, async (page) => {
+      try {
+        await toReview(page, template());
+        const box = goalCard(page, "IA aplicada").getByRole("checkbox", { name: new RegExp(rhythmOf("12 h")) });
+        await box.click();
+        await expect(box).not.toBeChecked();
+        await page.getByRole("button", { name: "Crear 1 meta" }).click();
+        await expect(page).toHaveURL(/\/metas$/);
+        await page.getByRole("link", { name: /IA aplicada/ }).first().click();
+        await expect(page.getByRole("link", { name: "Armar el plan" })).toBeVisible();
+        await expect(page.getByRole("link", { name: /A este ritmo terminas/ })).toHaveCount(0);
+        const [goal] = await db`select rhythm from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
+        expect(goal.rhythm).toBeNull();
+      } finally {
+        await db`delete from goals.goals where user_id = ${person.id} and name = 'IA aplicada'`;
       }
     });
   });
@@ -192,7 +211,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
       await toReview(page, withKmGoal());
       await expect(page.getByText(RHYTHM_LINE, { exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      const row = (await page.getByRole("checkbox", { name: /12 h al mes/ }).locator("xpath=ancestor::label").boundingBox())!;
+      const row = (await page.getByRole("checkbox", { name: new RegExp(rhythmOf("12 h")) }).locator("xpath=ancestor::label").boundingBox())!;
       expect(row.height).toBeGreaterThanOrEqual(44);
       expect(row.x + row.width).toBeLessThanOrEqual(360);
     });
