@@ -18,6 +18,7 @@ import {
   renameGoal,
   retireCommitment,
 } from "@/app/actions/plan";
+import { pgCode } from "@/lib/db-error";
 import { errorOf } from "@/lib/mcp/errors";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
 import { actAs } from "@/lib/session";
@@ -56,8 +57,8 @@ async function run(ctx: ServerContext, act: () => Promise<ActResult>): Promise<C
   try {
     return answer(await actAs(person, act));
   } catch (error) {
-    // The cause stays in the server's log; the caller reads only the sentence.
-    console.error("mcp write tool failed:", error instanceof Error ? error.message : String(error));
+    // The name and the SQLSTATE only: a driver's message carries the query and its parameters (RNP-15).
+    console.error("mcp write tool failed:", error instanceof Error ? error.name : "unknown", pgCode(error) ?? "");
     return answer({ ok: false, error: "mcp.errors.unknown" });
   }
 }
@@ -94,7 +95,6 @@ export function registerWriteTools(server: McpServer): void {
       one_off_id: id.optional(),
       quantity: count.optional(),
       note: text.optional(),
-      replace: z.boolean().optional(),
       day: day.optional(),
     },
     (input) => declareFact(input as Parameters<typeof declareFact>[0]),

@@ -2861,6 +2861,29 @@ branch could pass until it was restored.
   assertions that pin RP-47's plan order. The e2e followed a DESIGN line RP-47 had superseded; it was the spec that was wrong.
   The e2e only failed from a Wednesday, the first weekday that draws two endings.
 
+## An advisory lock taken inside a statement does not refresh that statement's snapshot
+
+- `select pg_advisory_xact_lock(k)` in a CTE of the same `insert … select count(*)` waits for the lock, but the count reads
+  the snapshot taken when the statement began. The second of two racing uploads waits, then counts zero of the first's rows
+  and writes past the cap.
+- Count inside a `VOLATILE` plpgsql function that takes the lock first: under READ COMMITTED each statement in it takes a
+  fresh snapshot after the lock is granted. One round trip still.
+- Measured 2026-10-08: voyager `reading.sync_rows_today`; mutant «inline lock» left 4 rows for a cap of 2 (S22 in
+  `apps/voyager/scripts/check-sync.ts`).
+
+## A `using(true)` UPDATE policy hides behind the SELECT policy
+
+- An `UPDATE … WHERE col = x` or `… RETURNING` also needs the row visible under the SELECT policy, so a probe written that
+  way stays green when the UPDATE policy is `using(true)`.
+- Prove an UPDATE policy with an update that reads no column: no `WHERE`, no `RETURNING`, inside a savepoint.
+- Measured 2026-10-08: voyager S16 and G5 green under `devices_update_self using(true)`; G8 and the rewritten S16 red.
+
+## `gh api …/jobs/<id>/logs` refuses a log with terminal escapes
+
+- It exits with nothing unless given `--allow-escape-sequences`; a grep over its output then reads as «no failures».
+- `workflow_dispatch` reads the `ci.yml` of the ref it runs on: a throwaway mutation branch may cut it to the one job it
+  needs. Never merge such a branch.
+
 ## Un carril que cambia de rama sirve 404 en rutas que existen
 
 Un carril reutilizado guarda el `.next` del servidor que corrió la rama anterior. Con la rama nueva, `next dev`

@@ -65,7 +65,11 @@ export const lookups = reading.table(
     pgPolicy("lookups_insert_self", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`${authUid} = ${t.userId}`,
+      // A retired device's rows are refused here, not only in the route.
+      withCheck: sql`${authUid} = ${t.userId} and not exists (
+        select 1 from reading.devices d
+        where d.user_id = ${t.userId} and d.device_id = ${t.deviceId} and d.retired_at is not null
+      )`,
     }),
     // No UPDATE policy: a copied row is never edited (RL-24).
     // DELETE is scoped to the owner only; the statement that runs it narrows
