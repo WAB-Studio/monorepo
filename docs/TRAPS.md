@@ -2884,6 +2884,13 @@ branch could pass until it was restored.
 - `workflow_dispatch` reads the `ci.yml` of the ref it runs on: a throwaway mutation branch may cut it to the one job it
   needs. Never merge such a branch.
 
+## A throwaway `ci.yml` cut by line count duplicates `jobs:`
+
+- `.github/workflows/ci.yml` carries a blank line and then `jobs:` at lines 10-11. A script that keeps `lines[:11]` and
+  appends one job writes `jobs:` twice, and `gh workflow run` answers 422.
+- Cut at the `jobs:` line by matching it, never by a fixed count. Measured 2026-10-08: voyager module 511's mutation
+  branches.
+
 ## Un carril que cambia de rama sirve 404 en rutas que existen
 
 Un carril reutilizado guarda el `.next` del servidor que corrió la rama anterior. Con la rama nueva, `next dev`
