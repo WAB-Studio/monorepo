@@ -33,6 +33,8 @@ export { SectionLabel } from "./section-label";
 
 export { Section } from "./section";
 
+export { Fold } from "./fold";
+
 export { TextLink } from "./text-link";
 
 export { Figure } from "./figure";

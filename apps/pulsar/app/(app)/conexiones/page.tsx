@@ -42,6 +42,8 @@ export default async function ConnectionsPage() {
     expiredAt: token.expiredAt ? stamp(token.expiredAt) : null,
     created: stamp(token.createdAt),
     used: token.lastUsedAt ? stamp(token.lastUsedAt) : null,
+    returnHost: token.returnHost,
+    folded: token.folded,
   }));
 
   return <ConnectionsScreen rows={rows} siteUrl={env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")} />;

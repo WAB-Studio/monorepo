@@ -124,6 +124,11 @@
   outline-offset: 2px;
 }
 
+.strong.strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
 @media print {
   .note.note {
     font-size: 12pt;

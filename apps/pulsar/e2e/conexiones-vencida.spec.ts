@@ -42,6 +42,12 @@ async function seed(db: Sql, person: Person, row: Seed) {
       ${row.expiresAt ?? null})`;
 }
 
+// Dead rows older than 30 days sit behind a fold (RP-64); open every one that is shut.
+async function openFolds(page: Page) {
+  const shut = page.getByRole("button", { name: /que ya no entran?$/, expanded: false });
+  while ((await shut.count()) > 0) await shut.first().click();
+}
+
 // A row is the flex line holding the name column and, for a live key, its button.
 const rowOf = (page: Page, name: string): Locator =>
   page.getByText(name, { exact: true }).locator("xpath=ancestor::div[2]");
@@ -64,6 +70,7 @@ for (const width of [390, 1440]) {
       await seed(db, person, STALE);
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         await expect(page.getByText(messages.sections.keys, { exact: true })).toBeVisible();
         const row = rowOf(page, STALE.name);
         await expect(row.getByText(STALE_WORDS, { exact: true })).toBeVisible();
@@ -84,8 +91,9 @@ for (const width of [390, 1440]) {
       await seed(db, person, { name: "Hace 89", created: ago(200), used: ago(89) });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         await expect(rowOf(page, "Hace 91").getByText(/^venció el .* · sin uso desde el .*$/)).toBeVisible();
-        await expect(rowOf(page, "Hace 91").getByRole("button")).toHaveCount(0);
+        await expect(rowOf(page, "Hace 91").getByRole("button", { name: /^Revocar/ })).toHaveCount(0);
         await expect(rowOf(page, "Hace 89").getByText(/^creada el .* · usada el .*$/)).toBeVisible();
         await expect(rowOf(page, "Hace 89").getByRole("button", { name: messages.row.revoke })).toBeVisible();
         await expect(page.getByText(/^venció el /)).toHaveCount(1);
@@ -98,6 +106,7 @@ for (const width of [390, 1440]) {
       await seed(db, person, { name: "Nunca usada", created: "2026-05-01T17:00:00Z" });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         await expect(
           rowOf(page, "Nunca usada").getByText("venció el 30 jul 2026 · sin uso desde el 1 may 2026", { exact: true }),
         ).toBeVisible();
@@ -122,7 +131,8 @@ for (const width of [390, 1440]) {
       });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
-        await expect(rowOf(page, STALE.name).getByRole("button")).toHaveCount(0);
+        await openFolds(page);
+        await expect(rowOf(page, STALE.name).getByRole("button", { name: /^Revocar/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: messages.row.revoke })).toHaveCount(1);
         const expired = await nameColor(page, STALE.name);
         expect(expired).toBe(await nameColor(page, "Cerrada"));
@@ -136,6 +146,7 @@ for (const width of [390, 1440]) {
       await seed(db, person, { name: "Viva", created: "2026-01-01T17:00:00Z", used: new Date() });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         const row = rowOf(page, "Viva");
         await expect(row.getByText(/^creada el 1 ene 2026 · usada hoy a las \d\d:\d\d$/)).toBeVisible();
         await expect(row.getByRole("button", { name: messages.row.revoke })).toBeVisible();
@@ -159,10 +170,11 @@ for (const width of [390, 1440]) {
       });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         const row = rowOf(page, "Revocada vieja");
         await expect(row.getByText("revocada el 2 oct 2026 · ya no entra", { exact: true })).toBeVisible();
         expect(await row.innerText()).not.toContain("venció");
-        await expect(row.getByRole("button")).toHaveCount(0);
+        await expect(row.getByRole("button", { name: /^Revocar/ })).toHaveCount(0);
       } finally {
         await context.close();
       }
@@ -183,11 +195,12 @@ for (const width of [390, 1440]) {
       });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
         await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
         const row = rowOf(page, "Claude");
         await expect(row.getByText("venció el 1 sep 2026 · sin uso desde el 3 jun 2026", { exact: true })).toBeVisible();
-        await expect(row.getByRole("button")).toHaveCount(0);
+        await expect(row.getByRole("button", { name: /^Revocar/ })).toHaveCount(0);
         expect(await row.innerText()).not.toContain("conectada");
       } finally {
         await context.close();
@@ -217,8 +230,9 @@ for (const width of [390, 1440]) {
       });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         await expect(rowOf(page, "Lapsed").getByText(/^venció /)).toBeVisible();
-        await expect(rowOf(page, "Lapsed").getByRole("button")).toHaveCount(0);
+        await expect(rowOf(page, "Lapsed").getByRole("button", { name: /^Revocar/ })).toHaveCount(0);
         await expect(rowOf(page, "Alive").getByText(/^conectada /)).toBeVisible();
         await expect(rowOf(page, "Alive").getByRole("button", { name: messages.row.revoke })).toBeVisible();
       } finally {
@@ -243,6 +257,7 @@ for (const width of [390, 1440]) {
       });
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         const y = async (name: string) => (await page.getByText(name, { exact: true }).boundingBox())!.y;
         const [live, expired, revoked] = [await y("A viva"), await y("B vencida"), await y("C revocada")];
         expect(live).toBeLessThan(expired);
@@ -259,6 +274,7 @@ for (const width of [390, 1440]) {
     }) => {
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        await openFolds(page);
         await expect(page.getByText(messages.sections.first, { exact: true })).toBeVisible();
         await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
         await expect(page.getByText(/venció/)).toHaveCount(0);
@@ -281,6 +297,7 @@ test("at 360 the expired rows do not overflow, long names included", async ({ pe
   });
   const { context, page } = await openScreen(browser, baseURL!, person, 360);
   try {
+    await openFolds(page);
     await expect(page.getByText(STALE_WORDS, { exact: true })).toBeVisible();
     await expect(page.getByText("venció el 1 sep 2026 · sin uso desde el 3 jun 2026", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
