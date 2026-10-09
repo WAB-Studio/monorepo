@@ -309,3 +309,38 @@ test("list_loose_one_offs keeps a goal's dayless task out of dayless and a goal'
   assert.deepEqual(body.dayless.map((item) => item.name), ["sin día"]);
   assert.ok(body.scheduled.some((item) => item.name === "tarea de meta con día" && item.day === dayFrom(4)));
 });
+
+// Module 594 (RP-39, RP-56): the annotations of every registered tool, taken from the registry.
+type Registered = { annotations?: Record<string, unknown>; inputSchema: { safeParse: (value: unknown) => { success: boolean } } };
+
+async function registry(): Promise<Map<string, Registered>> {
+  const seen = new Map<string, Registered>();
+  const server = {
+    registerTool: (name: string, config: Registered) => void seen.set(name, config),
+  } as unknown as McpServer;
+  const { registerReadTools } = await import("@/lib/mcp/tools/read");
+  const { registerWriteTools } = await import("@/lib/mcp/tools/write");
+  registerReadTools(server);
+  registerWriteTools(server);
+  return seen;
+}
+
+test("the registry holds twenty tools: six read and fourteen write, each with its annotations", async () => {
+  const seen = await registry();
+  assert.equal(seen.size, 20);
+  const reads = new Set(handlers.keys());
+  assert.equal(reads.size, 6);
+  for (const [name, config] of seen) {
+    const expected = reads.has(name)
+      ? { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
+      : { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+    assert.deepEqual(config.annotations, expected, name);
+  }
+  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 14);
+});
+
+test("get_month refuses the month 2026-00 and never answers data", async () => {
+  const config = (await registry()).get("get_month")!;
+  assert.equal(config.inputSchema.safeParse({ goal_id: subjectGoal, month: "2026-00" }).success, false);
+  assert.equal(config.inputSchema.safeParse({ goal_id: subjectGoal, month: currentMonth }).success, true);
+});
