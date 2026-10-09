@@ -1,11 +1,9 @@
 {
   "appName": "Bitácora de metas",
   "brand": "Bitácora de metas",
-  "tagline": "Lo que pasó, cuándo y quién lo escribió.",
   "nav": {
     "today": "Hoy",
     "week": "Semana",
-    "goal": "Meta",
     "goals": "Metas",
     "month": "Mes",
     "goalsSection": "metas abiertas"

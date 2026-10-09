@@ -14,9 +14,7 @@
     "partial": "en parte",
     "pending": "pendiente"
   },
-  "ratio": "{done} de {total}",
   "flexible": {
-    "group": "{name} · por semana y por mes",
     "week": "{count, plural, one {# vez por semana} other {# veces por semana}}",
     "month": "{count} al mes",
     "weekProgress": "{done} de {total} esta semana",
