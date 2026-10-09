@@ -166,7 +166,7 @@ export function ImportScreen() {
         ? t("import.errors.templateLine", {
             line: failure.line,
             text: failure.text,
-            expected: failure.expected,
+            expected: t(messageKey(failure.expected)),
           })
         : t(failure.key, failure.values)}
     </Notice>
