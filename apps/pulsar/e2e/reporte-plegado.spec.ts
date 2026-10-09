@@ -7,7 +7,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-// `ReportePlegado.dc.html` and `ReporteImpresoMeses.dc.html` (module 379, RP-49):
+// `ReportePlegado.dc.html` and `ReporteImpresoMeses.dc.html` (RP-49):
 // on screen a goal's weeks sit folded under its months; on paper only the months print,
 // and a section runs on across pages between its rows.
 
@@ -340,7 +340,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
   });
 });
 
-// RP-58, module 392: «Esta semana: <hecho> de <planeado>.» — the month's amount
+// RP-58: «Esta semana: <hecho> de <planeado>.» — the month's amount
 // spread over the month's days, summed over the week's days inside the goal.
 
 function firstOfMonth(day: string, offset: number): string {

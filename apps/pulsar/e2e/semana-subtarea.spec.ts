@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// Module 396, decision 2 of 393 (`HoyTareaMesSubtarea.dc.html`): a sub-task's
+// `HoyTareaMesSubtarea.dc.html`: a sub-task's
 // row on Semana says «de <parent>» as its second line, Archivo muted; a
 // top-level task draws no second line (RP-30, RP-44).
 

@@ -3,7 +3,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `MesesListaDetalle.dc.html` (module 260, RP-32, RNP-17): the goal's months
+// `MesesListaDetalle.dc.html` (RP-32, RNP-17): the goal's months
 // beside the open month keep the list at 320px, and «sin monto» there reads on
 // whole words at every desktop width.
 

@@ -281,7 +281,7 @@ test("each tool issues exactly its loader's statements", async () => {
     list_loose_one_offs: await measured("list_loose_one_offs", {}),
   };
   console.log(`wire: ${JSON.stringify(counts)}`);
-  // `/metas` reads the evidence beside the goals since module 210: two transactions.
+  // `/metas` reads the evidence beside the goals: two transactions.
   assert.equal(counts.list_goals.statements, 4);
   assert.equal(counts.get_goal.statements, 4);
   assert.equal(counts.get_month.statements, 4);
@@ -296,7 +296,7 @@ test("the two loose lists run in overlapping transactions", async () => {
   assert.equal(wireOf.overlap, true);
 });
 
-// Module 407 (RP-59): a goal's task with no day waits in its plan, never in the loose list.
+// RP-59: a goal's task with no day waits in its plan, never in the loose list.
 test("list_loose_one_offs keeps a goal's dayless task out of dayless and a goal's task with a later day in scheduled", async () => {
   await session.actAs(asResolved(subject), async () => {
     const waiting = await oneOffs.createOneOff({ name: "tarea de meta sin día", day: null, goalId: subjectGoal });
@@ -310,7 +310,7 @@ test("list_loose_one_offs keeps a goal's dayless task out of dayless and a goal'
   assert.ok(body.scheduled.some((item) => item.name === "tarea de meta con día" && item.day === dayFrom(4)));
 });
 
-// Module 594 (RP-39, RP-56): the annotations of every registered tool, taken from the registry.
+// RP-39, RP-56: the annotations of every registered tool, taken from the registry.
 type Registered = { annotations?: Record<string, unknown>; inputSchema: { safeParse: (value: unknown) => { success: boolean } } };
 
 async function registry(): Promise<Map<string, Registered>> {

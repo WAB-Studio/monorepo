@@ -3,7 +3,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `MesTodas`, `Mes`, `MesSubtarea` (module 264, RP-43, RP-30): the goal's name
+// `MesTodas`, `Mes`, `MesSubtarea` (RP-43, RP-30): the goal's name
 // is a heading link in ink with no underline, and every control on a month
 // page reaches 44 px on its shorter side at 360.
 

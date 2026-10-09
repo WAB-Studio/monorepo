@@ -39,7 +39,7 @@
  * too (and, as it happens, also breaks the no-session guard, which is what
  * `P34` below catches). `verifiedClaims` is the one thing genuinely out of
  * reach here — it needs `next/headers`'s `cookies()`, which throws outside a
- * request (the same wall module 3's own validator hit for orbit) — so
+ * request (the same wall orbit hit) — so
  * `@repo/supabase-auth` is mocked with `node:test`'s `mock.module`
  * (`--experimental-test-module-mocks`, the same flag `check:unit` already
  * runs under) to hand back a canned session without ever calling
@@ -96,7 +96,7 @@ async function attempt(
 }
 
 // The same shape as `attempt`, keeping the rows a successful statement
-// `returning`s — module 37's own checks need to read back what a rename or
+// `returning`s — the rename and archive checks need to read back what a rename or
 // an archive actually wrote, not only whether it was refused. Also what
 // keeps this suite from crashing outright when run *before* `0004` is
 // applied: `archived_at` does not exist yet, so a bare `update ... set
@@ -159,7 +159,7 @@ type Fixtures = {
 
 // One row of each of the four nouns, plus a phase, for a subject already
 // settled into its own context — enough for every cross-identity check below,
-// `phases` and `commitments` included (module 27's hole: "driven through the
+// `phases` and `commitments` included ("driven through the
 // door at all").
 async function seedFixtures(tx: postgres.TransactionSql, userId: string): Promise<Fixtures> {
   const [goal] = await tx<{ id: string }[]>`
@@ -232,7 +232,7 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
       assert("P05", foreignOneOff.length === 0, `another person's one-off, rows visible = ${foreignOneOff.length}`);
 
       // -- cross-identity INSERT refused by `WITH CHECK`, one per owned table:
-      // module 21 named this for `facts` alone, module 27's hole names it as
+      // it was first named for `facts` alone, then as
       // structurally unseen everywhere else `WITH CHECK` also guards --
       const insertGoal = await attempt(
         tx,
@@ -305,7 +305,7 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
       );
 
       // `phases` holds a `phases_delete_self` policy but no `UPDATE` grant at
-      // all — driving it for real, per module 27's hole, is what turns that
+      // all — driving it for real, is what turns that
       // gap from a claim in the migration into a measurement.
       const updatePhase = await attempt(tx, (sp) => sp`update goals.phases set aim = 'cambiada' where id = ${a.phaseId}`);
       assert("P14", updatePhase.code === "42501", `update a phase at all, sqlstate = ${updatePhase.code ?? "none"}`);
@@ -320,7 +320,7 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
         `update goal's measure pair, sqlstate = ${updateGoalMeasure.code ?? "none (succeeded)"}`,
       );
 
-      // Module 37 (RP-23): `name` is now grantable to the owner alone — the
+      // RP-23: `name` is now grantable to the owner alone — the
       // grant `0004_melodic_dreadnoughts.sql` adds, proved here rather than
       // only in `checkGoalRenameArchiveGrant` below, so a regression to
       // "column not granted" still turns this very P-number red. Red before
@@ -482,7 +482,7 @@ async function checkSettleMechanism(): Promise<void> {
 
   // Without a session: the guard must throw before `sql.begin` ever runs, so
   // zero statements reach the wire — read from this pool's own instrumented
-  // log, not inferred from a flat log's first "begin" (module 27's hole:
+  // log, not inferred from a flat log's first "begin" (
   // that method cannot tell one transaction's statements from another's).
   const sentBefore = wire.length;
   let threw = false;
@@ -501,7 +501,7 @@ async function checkSettleMechanism(): Promise<void> {
   await sql.end();
 }
 
-// Module 27's hole: a statement count must read its own connection, not
+// a statement count must read its own connection, not
 // assume the first "begin" in a merged log belongs to the transaction under
 // test. Two real, concurrently open connections (`max: 1` each, run
 // interleaved) prove the technique: every entry in one client's own debug log
@@ -559,7 +559,7 @@ async function checkStatementAttributionByConnection(): Promise<void> {
   await sqlB.end();
 }
 
-// Module 27's hole: the real `@supabase/supabase-js` client, not a stub whose
+// the real `@supabase/supabase-js` client, not a stub whose
 // notion of "verified" is an environment variable.
 async function checkRealClientRejectsBadTokens(): Promise<void> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -650,7 +650,7 @@ async function checkRealDoor(): Promise<void> {
 
 // Read the grant back from the catalogue, never from the migration file:
 // `facts` carried DELETE from 0000 ("undoing a tap is a delete of the whole
-// row"), `one_offs` from module 25 and `month_budgets` from 0007 (a month
+// row"), `one_offs` from its own migration and `month_budgets` from 0007 (a month
 // amount is removed, and moved by delete and insert). `goals`, `phases`,
 // `commitments` and `model_calls` carry none. Takes any
 // executor so a mutant run can read it inside its own rollback.
@@ -666,7 +666,7 @@ async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Pr
   );
 }
 
-// Module 25's own grant (RP-22): `one_offs_delete_self` (0000) stood inert
+// RP-22: `one_offs_delete_self` (0000) stood inert
 // until this migration's `GRANT DELETE`. Own connection, own transaction,
 // own forced rollback — nothing this seeds survives it, the same shape as
 // `checkPoliciesAndGrants`.
@@ -725,7 +725,7 @@ async function checkOneOffDeleteGrant(): Promise<void> {
   await sql.end();
 }
 
-// Round 2, 2026-09-28: an independent validator drove a bare `DELETE` under
+// An independent validator drove a bare `DELETE` under
 // a settled session, no server action in the way, and an own one-off that
 // carried a fact went — the invariant lived in `deleteOneOff`'s own check
 // alone, never in the grant layer. `one_offs_delete_self`'s own `USING`
@@ -775,7 +775,7 @@ async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
   await sql.end();
 }
 
-// Module 37 (RP-23, RP-24): the grant `0004_melodic_dreadnoughts.sql` adds —
+// RP-23, RP-24: the grant `0004_melodic_dreadnoughts.sql` adds —
 // `UPDATE (name, archived_at)` on `goals.goals`, to the owner alone — driven
 // for real rather than read from the migration. Own connection, own
 // transaction, own forced rollback, the same shape as `checkOneOffDeleteGrant`.
@@ -857,7 +857,7 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
       );
 
       // -- the owner cannot move `user_id`, `horizon` or `created_at`
-      // through this grant: neither column is ever named in it (`horizon` left it with module 63) --
+      // through this grant: neither column is ever named in it (`horizon` left it later) --
       await enterUserContext(tx, subject);
       const changeUserId = await attempt(
         tx,
@@ -865,7 +865,7 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
       );
       assert("P46", changeUserId.code === "42501", `owner updates goal.user_id, sqlstate = ${changeUserId.code ?? "none"}`);
 
-      // Module 63 (RP-25) grants `horizon` to the owner: it moves.
+      // (RP-25) grants `horizon` to the owner: it moves.
       const changeHorizon = await attempt(
         tx,
         (sp) => sp`update goals.goals set horizon = '2099-01-01' where id = ${goal.id}`,
@@ -913,7 +913,7 @@ function dayAfter(day: string, n: number): string {
   return civilDateInZone(new Date(civilDateToDate(day).getTime() + n * 86_400_000));
 }
 
-// Module 63 (RP-59, RP-25): `0005` grants `UPDATE (day)` on `one_offs` and
+// RP-59, RP-25: `0005` grants `UPDATE (day)` on `one_offs` and
 // `UPDATE (horizon)` on `goals`, and bounds the one-off's with
 // `one_offs_update_self`. Driven bare under a settled session, own
 // transaction, forced rollback.
@@ -1202,7 +1202,7 @@ async function privilegesOf(
     .join(" ");
 }
 
-// Module 124: what 0007 grants on the three plan tables and on `one_offs`,
+// What 0007 grants on the three plan tables and on `one_offs`,
 // read from the catalogue. Takes any executor so a mutant run can read it
 // inside its own rollback.
 async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
@@ -1247,7 +1247,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   );
 }
 
-// Module 124 (RP-28, RP-30, RP-31, RNP-13): every rule 0007 writes,
+// RP-28, RP-30, RP-31, RNP-13: every rule 0007 writes,
 // driven bare under a settled session, own transaction, forced rollback. The
 // row-to-row rules on `one_offs` and `facts` live in policies alone, so each
 // refusal below isolates one clause: the parent differs from a good one in
@@ -1574,7 +1574,7 @@ async function checkPlanByMonth(): Promise<void> {
   await sql.end();
 }
 
-// Module 181 (RP-38, RP-60, RNP-14, RNP-15): the key and the connection the
+// RP-38, RP-60, RNP-14, RNP-15: the key and the connection the
 // AI door opens with — 0009's grants, policies and four functions, driven as
 // the roles that would break them. Own transaction, forced rollback.
 // `AI_DOOR_MUTANT_SQL`, when set, runs inside that same transaction before
@@ -1929,7 +1929,7 @@ async function checkAiDoor(): Promise<void> {
   await sql.end();
 }
 
-// Module 237 (RP-45): `0011` adds `note`, loosens `one_offs_update_self` to the
+// RP-45: `0011` adds `note`, loosens `one_offs_update_self` to the
 // own row and moves RP-59's day/month rule into the `one_offs_guard_day`
 // trigger, which skips the row. Driven bare under a settled session.
 async function checkTaskNote(): Promise<void> {
@@ -2274,7 +2274,7 @@ async function checkGoalAndOneOffPositionPerPerson(): Promise<void> {
   await sql.end();
 }
 
-// Module 334 (RP-50 to RP-55): `0013` flags plan tasks, grants `name` and
+// RP-50 to RP-55: `0013` flags plan tasks, grants `name` and
 // `estimate` an UPDATE guarded by `one_offs_guard_day`, and adds `rhythm` and
 // `plan_seen` to goals. Driven bare, own transaction, forced rollback.
 async function checkRoadmapSchema(): Promise<void> {
@@ -2444,7 +2444,7 @@ async function checkRoadmapSchema(): Promise<void> {
   await sql.end();
 }
 
-// Module 410 (RP-19, RP-22, RP-38, RP-60, RNP-19): what 0015 leaves, read from
+// RP-19, RP-22, RP-38, RP-60, RNP-19: what 0015 leaves, read from
 // the catalogue and driven as `authenticated`. Own transaction, forced rollback.
 async function checkAuditoria0015(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });

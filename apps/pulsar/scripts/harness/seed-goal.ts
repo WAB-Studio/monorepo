@@ -2,7 +2,7 @@
 // three phases, six commitments and one one-off, all through the same
 // actions a person's own screen would call (`app/actions/plan.ts`,
 // `app/actions/one-offs.ts`) — never a raw INSERT, and never a privileged
-// connection. Until module 16's goal screen exists, this is the only writer
+// connection. Until the goal screen exists, this is the only writer
 // of a goal at all, so what it seeds is written to read like a person's own
 // plan, not a placeholder.
 //

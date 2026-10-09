@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 
 import { test, expect } from "./fixtures";
 
-// PermisoPalabras (module 580, RP-60): what the consent screen says it may and
+// PermisoPalabras (RP-60): what the consent screen says it may and
 // never may do, in the board's own words. Every string is a literal: a spec
 // that read them from oauth.json would pass on whatever the catalogue says.
 const REDIRECT = "http://localhost:6274/oauth/callback";

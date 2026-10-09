@@ -4,7 +4,7 @@ import { test, expect } from "./fixtures";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `RoadmapFijar` (module 347, RP-51, RP-54, RP-55, RP-22): a task's name opens
+// `RoadmapFijar` (RP-51, RP-54, RP-55, RP-22): a task's name opens
 // its sheet, where it is renamed, re-estimated and fixed to a month, and where
 // «Borrar la tarea» waits at the foot. Calendar-bound: «this month» is the
 // current one, the goal runs three months past it.

@@ -6,7 +6,7 @@ import { todayInZone } from "@/lib/zone";
 
 import { test as base, expect } from "./fixtures";
 
-// `MetaPlanHechas.dc.html` and `RoadmapMesCifras.dc.html` (module 405, RP-50,
+// `MetaPlanHechas.dc.html` and `RoadmapMesCifras.dc.html` (RP-50,
 // RP-52, RP-28): the plan's «hechas» says it counts tasks done. The words are
 // the approved boards' own, quoted here as literals, never read from the
 // catalogue: a catalogue edit is what this spec exists to catch.

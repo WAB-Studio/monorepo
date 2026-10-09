@@ -3,7 +3,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// Module 366: from 1024 a button or link-button standing alone in a `Page`
+// From 1024 a button or link-button standing alone in a `Page`
 // column is as wide as its text (160 at least), at the column's start; below
 // 1024 it keeps the column's width.
 

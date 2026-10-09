@@ -3,7 +3,7 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// Module 309, the UX review's Hoy findings: the marks of «este mes» stand on
+// The UX review's Hoy findings: the marks of «este mes» stand on
 // the same edge as the day's rows and its groups are spaced as sections; an
 // ended goal's line is a sentence in Archivo and the lines stand together;
 // refusals and notes are sentences, never mono.

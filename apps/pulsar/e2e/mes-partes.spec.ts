@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `RoadmapTramoMedio` (module 350, RP-54): a task split over months reads its
+// `RoadmapTramoMedio` (RP-54): a task split over months reads its
 // part under its name on each month's page and in «Mes». Calendar-bound: the
 // goal's rhythm is 10 h, so a 25 h task fills this month, the next and half of
 // the one after.

@@ -224,7 +224,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       return { id: existing.id, day };
     });
 
-    // `/dia/[fecha]` (modules 46, 49): the day a past fact just landed on has
+    // `/dia/[fecha]`: the day a past fact just landed on has
     // its own route, revalidated by its literal path — never the pattern,
     // which would need a `'page'` `type` this call has no business asking
     // for since the route itself is still unbuilt.

@@ -4,7 +4,7 @@ import { planMoved } from "@/lib/plan/roadmap-read";
 import type { PlanTask } from "@/lib/plan/roadmap";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// `RoadmapHoyMovido.dc.html`, `RoadmapHoyMovidoDias.dc.html` (module 353,
+// `RoadmapHoyMovido.dc.html`, `RoadmapHoyMovidoDias.dc.html` (
 // RP-52): a goal whose last month closed short draws the card; «Entendido»
 // writes `plan_seen` and a reload keeps it gone; a goal whose month met its
 // room draws none; the next task of the plan says this month's part.
@@ -221,7 +221,7 @@ for (const [width, kind] of [[390, "days"], [390, "weeks"], [1440, "days"], [144
   });
 }
 
-// `RoadmapHoyMovidoVarios.dc.html` (module 391, RP-52): two moved plans and a
+// `RoadmapHoyMovidoVarios.dc.html` (RP-52): two moved plans and a
 // met one draw one card with a line per moved goal and one «Entendido» that
 // writes `plan_seen` for both.
 for (const width of [360, 390, 1440]) {

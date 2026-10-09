@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// `HoyDia.dc.html` (module 591): a row's second line names its days in three
+// `HoyDia.dc.html`: a row's second line names its days in three
 // letters joined as a sentence, and never says «pide el número».
 
 const SHORT = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];

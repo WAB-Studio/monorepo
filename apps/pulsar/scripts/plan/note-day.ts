@@ -1,4 +1,4 @@
-// Drives the day's and the loose lists' readers (RP-45, module 240):
+// Drives the day's and the loose lists' readers (RP-45):
 // actions imported as plain async functions, `server-only`, `next/headers` and `next/cache` stubbed before the
 // first `@/` import, and the cookie `harness:mint-session` left standing is
 // the session `getPerson()` reads. Notes are written by direct SQL.

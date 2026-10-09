@@ -3,7 +3,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// Module 308 (`MesesListaDetalle.dc.html`, RNP-17): in the months list beside
+// `MesesListaDetalle.dc.html`, RNP-17: in the months list beside
 // the open month, each chevron stays inside its row, the reached figures share
 // one left edge, and the page has one `h1` with the month's heading an `h2`.
 const thisMonth = monthOf(todayInZone());
@@ -11,7 +11,7 @@ const lastMonth = monthOf(dayBefore(thisMonth));
 const monthBefore = monthOf(dayBefore(lastMonth));
 
 for (const width of [1024, 1440]) {
-  test(`at ${width}px the months list keeps its chevrons in their rows, its figures in one column and one h1 (module 308)`, async ({
+  test(`at ${width}px the months list keeps its chevrons in their rows, its figures in one column and one h1`, async ({
     person,
     browser,
     baseURL,

@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// What the mutator found nobody pinning on Hoy (module 99): every goal that
+// What the mutator found nobody pinning on Hoy: every goal that
 // ended this week gets its own line, and a row's second line reads in the
 // order `HoyEscritorio.dc.html` and `HoyCuenta.dc.html` draw it: cadence,
 // amount, count, hour, and the day it was written when that is not the day.

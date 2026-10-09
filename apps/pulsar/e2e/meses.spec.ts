@@ -4,7 +4,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `Meses.dc.html`, `MesesEscritorio`, `MesPlan.dc.html` (module 138, RP-28,
+// `Meses.dc.html`, `MesesEscritorio`, `MesPlan.dc.html` (RP-28,
 // RP-32, RP-35): a goal read month by month, and the sheet that sets,
 // changes and removes a month's amount.
 

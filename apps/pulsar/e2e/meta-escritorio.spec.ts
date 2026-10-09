@@ -62,7 +62,7 @@ test("at 1280 the commitments sit left, the end right and the phases under both,
       const { x, y } = el.getBoundingClientRect();
       return { x, y };
     });
-    // From 1024 the phases stand under both columns (module 369).
+    // From 1024 the phases stand under both columns.
     expect(phase.x).toBeLessThan(commitment.x + 100);
     expect(end.x).toBeGreaterThan(commitment.x + 300);
     expect(phase.y).toBeGreaterThan(end.y);
@@ -171,7 +171,7 @@ test("at 1280 a goal with no measure draws no empty card (RNP-17)", async ({
   }
 });
 
-// `MetaRiel.dc.html` (module 211): the name is the page's one h1, the actions
+// `MetaRiel.dc.html`: the name is the page's one h1, the actions
 // sit on its line, and the rail marks this goal.
 test("at 1280 and 1440 the goal's name is the one h1, «Renombrar» and «Archivar» sit on its line, the rail marks the goal (RP-23, RNP-16)", async ({
   page,

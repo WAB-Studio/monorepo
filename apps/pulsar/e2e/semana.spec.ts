@@ -156,7 +156,7 @@ test("a one-off under a goal completed today fills a mark in that goal's today c
     const nameButton = page.locator("button", { hasText: ONE_OFF_NAME });
     const rowContainer = nameButton.locator("xpath=ancestor::div[1]");
     await rowContainer.getByRole("button", { name: "Marcar como hecho" }).click();
-    // Done, it stays on Hoy under «hechas hoy», its mark now the undo (module 68).
+    // Done, it stays on Hoy under «hechas hoy», its mark now the undo.
     await expect(page.getByRole("button", { name: `Deshacer: ${ONE_OFF_NAME}` })).toBeVisible();
 
     await page.goto("/semana");

@@ -337,7 +337,7 @@ test("declareFact: a past-day fact revalidates /semana and its own /dia/<day>", 
   assert.ok(revalidated.includes(`/dia/${day}`), `revalidated: ${revalidated.join(", ")}`);
 });
 
-// Module 66: a one-off's day and a goal's horizon. Everything seeded here is
+// A one-off's day and a goal's horizon. Everything seeded here is
 // deleted by id in `finally`, never by a sweep.
 async function oneOffDay(id: string): Promise<string | null> {
   const [row] = await sql<{ day: string | null }[]>`

@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import messages from "../messages/es/import.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 
-// The import box keeps what was typed before the page settled (RP-37, module 400).
+// The import box keeps what was typed before the page settled (RP-37).
 // The page's JS is held by `page.route` until the typing is done, then released,
 // so the person always types into the server's box and hydration always follows:
 // no timer decides the order. Against the ordinary server (no model key): the

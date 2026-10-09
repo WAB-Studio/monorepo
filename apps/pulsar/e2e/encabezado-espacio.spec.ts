@@ -1,6 +1,6 @@
 import { test, expect, visit } from "./fixtures";
 
-// Module 306: the header spaces eyebrow -> title at 6 px and title -> lead at 12 px (`SistemaEspacio.dc.html`).
+// The header spaces eyebrow -> title at 6 px and title -> lead at 12 px (`SistemaEspacio.dc.html`).
 
 for (const path of ["/metas/nueva", "/semana"]) {
   test(`${path} holds 6 px between its eyebrow and its title`, async ({ page }) => {

@@ -4,7 +4,7 @@ import { todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// `RoadmapMesCifras.dc.html` (module 389, RP-50): the current month's figure
+// `RoadmapMesCifras.dc.html` (RP-50): the current month's figure
 // is what is done in it, by the plan's own rule, never the measure's reached
 // total; a later month says what the plan fills. Calendar-bound.
 

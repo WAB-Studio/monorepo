@@ -3,7 +3,7 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// RP-16 with creation honoured (module 64): a goal opened inside the week
+// RP-16 with creation honoured: a goal opened inside the week
 // draws no dot and no count on the days before, and a past day that did ask
 // still reads "N de M". Each test seeds its own goals and drops them by id.
 

@@ -203,7 +203,7 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
   }
 });
 
-test("changing a done quantity row's amount replaces the fact, never adds beside it — one row at 30, not two at 25 and 30 (RP-03, module 28's own goal total)", async ({
+test("changing a done quantity row's amount replaces the fact, never adds beside it — one row at 30, not two at 25 and 30 (RP-03, the goal total)", async ({
   page,
   db,
   personId,

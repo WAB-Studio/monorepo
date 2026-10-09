@@ -193,7 +193,7 @@ for (const width of [360, 390, 1280, 1440]) {
   });
 }
 
-// Module 311: the groups are `Section`s spaced by their parent (32, 40 from
+// The groups are `Section`s spaced by their parent (32, 40 from
 // 1024), a goal's name is a sentence in Archivo while the day beside it stays
 // a figure in mono, and «ver hoy» is the one accent link.
 for (const [width, gap] of [
@@ -247,7 +247,7 @@ for (const [width, gap] of [
   });
 }
 
-// Module 407 (RP-59): `/sueltas` and «N sin día» hold one-offs with no goal. A goal's
+// RP-59: `/sueltas` and «N sin día» hold one-offs with no goal. A goal's
 // task with no day is in its plan (0014); one with a later day stays under
 // «con día». Exact counts and absences ride on the disposable `person`.
 async function seedGoal(db: postgres.Sql, personId: string, name: string, rhythm: number | null = null): Promise<string> {

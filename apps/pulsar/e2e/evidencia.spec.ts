@@ -203,7 +203,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     expect(await lookupCountOf(db, otherId)).toBe(otherRows);
   } finally {
     // Deleted by the exact ids this spec minted — the identity's own purge
-    // (module 53's `dropRun`, `ON DELETE CASCADE`) is the backstop, not the
+    // (`dropRun`, `ON DELETE CASCADE`) is the backstop, not the
     // only door.
     await deleteLookups(db, personId, deviceId);
     if (goalId) await deleteGoal(db, personId, goalId);

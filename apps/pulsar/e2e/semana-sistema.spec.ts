@@ -3,7 +3,7 @@ import type { Browser, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// Module 310: Semana's sentences are Archivo and only its figures and dates are
+// Semana's sentences are Archivo and only its figures and dates are
 // mono; the ended line sits one gap from its «ver» link, which is a `TextLink`;
 // the eyebrow is the header's own string eyebrow.
 
@@ -30,7 +30,7 @@ async function withPage(browser: Browser, baseURL: string | undefined, storage: 
 const font = (locator: ReturnType<Page["locator"]>) =>
   locator.evaluate((el) => getComputedStyle(el).fontFamily);
 
-test("the phone footer's words are Archivo and its figures mono; the legend words are Archivo (module 310)", async ({
+test("the phone footer's words are Archivo and its figures mono; the legend words are Archivo", async ({
   browser,
   baseURL,
   db,
@@ -69,7 +69,7 @@ test("the phone footer's words are Archivo and its figures mono; the legend word
 });
 
 for (const width of [360, 1280]) {
-  test(`at ${width} the ended line is a sentence in Archivo beside a TextLink (module 310)`, async ({
+  test(`at ${width} the ended line is a sentence in Archivo beside a TextLink`, async ({
     browser,
     baseURL,
     db,
@@ -107,7 +107,7 @@ for (const width of [360, 1280]) {
   });
 }
 
-test("the eyebrow is the header's string eyebrow, in mono capitals (module 310)", async ({ browser, baseURL, person }) => {
+test("the eyebrow is the header's string eyebrow, in mono capitals", async ({ browser, baseURL, person }) => {
   await withPage(browser, baseURL, person.sessionFile, 360, async (page) => {
     await page.goto("/semana");
     const eyebrow = page.getByText("esta semana", { exact: true }).first();

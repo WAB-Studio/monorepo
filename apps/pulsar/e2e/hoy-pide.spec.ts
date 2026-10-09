@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// What Hoy's rows and goal lines say (`HoyEscritorio.dc.html`, module 92): the
+// What Hoy's rows and goal lines say (`HoyEscritorio.dc.html`): the
 // count under the date, each row's cadence, the hour a done one was written,
 // and the goal's place among its phases.
 

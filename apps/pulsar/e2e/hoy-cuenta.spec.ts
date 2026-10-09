@@ -6,7 +6,7 @@ import type postgres from "postgres";
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
-// `HoyCuenta.dc.html` (module 96): Hoy counts «hechos N de M» over the rows
+// `HoyCuenta.dc.html`: Hoy counts «hechos N de M» over the rows
 // the Semana counts, and a flexible met in its period stays as a quiet row.
 
 function plusDays(days: number): string {
@@ -176,7 +176,7 @@ test("an open goal that counts nothing draws no «hechos» line, and one counted
   }
 });
 
-// Boards `HoyDia` and `HoyAyerPrimerDia` (module 590): Hoy counts every row that
+// Boards `HoyDia` and `HoyAyerPrimerDia`: Hoy counts every row that
 // asks today, flexible and evidence rows included (RP-01), and the header's step
 // back says «ayer» in a word, absent before the first day with a goal.
 

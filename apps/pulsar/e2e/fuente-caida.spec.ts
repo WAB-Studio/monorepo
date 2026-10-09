@@ -154,7 +154,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
     baseURL,
     db,
   }) => {
-    // `MetaMesSinEvidencia.dc.html` (module 136): 5 declared pages of a
+    // `MetaMesSinEvidencia.dc.html`: 5 declared pages of a
     // 12-page month, the reading source unreadable.
     const seeded = await seed(db, person);
     const monthStart = `${seeded.today.slice(0, 7)}-01`;

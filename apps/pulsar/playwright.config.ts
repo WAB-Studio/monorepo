@@ -42,7 +42,7 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL,
-    // Module 20's storage state: a real, already-verified `/auth/confirm`
+    // The storage state: a real, already-verified `/auth/confirm`
     // redemption. No spec opens `/entrar` or types an address (RNP-09).
     storageState: sessionFile(),
   },

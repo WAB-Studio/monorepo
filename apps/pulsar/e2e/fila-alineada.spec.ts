@@ -5,7 +5,7 @@ import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
 // A split row (`onLeadingClick`) draws its mark and name where a plain row
-// does (module 259, RNP-07, RP-02): one-offs against commitments on Hoy, a
+// does (RNP-07, RP-02): one-offs against commitments on Hoy, a
 // not-done task against a done one in a month list, at 360px.
 
 const today = todayInZone();
