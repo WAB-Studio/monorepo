@@ -245,10 +245,14 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await toReview(page, template());
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 12 h` })).toHaveCount(1);
       await expect(page.getByRole("link", { name: backName, exact: true })).toBeVisible();
+      // RP-63: the goal's rhythm row is the one checkbox that says «12 h», as «12 h al mes»; no month's amount is.
+      const rhythm = messages.review.rhythmOf.replace("{amount}", "12 h");
       for (const checkbox of await page.getByRole("checkbox").all()) {
-        expect(await checkbox.evaluate((el) => (el as HTMLInputElement).labels?.[0]?.textContent ?? "")).not.toContain("12 h");
+        const label = await checkbox.evaluate((el) => (el as HTMLInputElement).labels?.[0]?.textContent ?? "");
+        if (label.startsWith(rhythm)) continue;
+        expect(label).not.toContain("12 h");
       }
-      await expect(page.getByRole("checkbox", { name: /12 h/ })).toHaveCount(0);
+      await expect(page.getByRole("checkbox", { name: /12 h/ })).toHaveCount(1);
     });
   });
 

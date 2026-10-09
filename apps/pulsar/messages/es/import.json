@@ -33,6 +33,8 @@
     "horizon": "horizonte",
     "horizonUntil": "hasta el {date}",
     "measure": "medida",
+    "rhythmOf": "{amount} al mes",
+    "rhythm": "ritmo · el plan reparte las tareas a este paso",
     "groups": {
       "phases": "fases",
       "months": "meses",
