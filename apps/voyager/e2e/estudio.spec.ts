@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
+import { DATABASE_VERSION } from "../lib/log/record";
 
 // The module 7 done criterion: `/registro` groups by word, orders by
 // frequency, folds case into one row, and links each row to its own
@@ -13,19 +14,40 @@ async function deleteTranslator(page: Page): Promise<void> {
   });
 }
 
-type SeedRow = { at: number; text: string; normalised: string; translation: string | null };
+type SeedRow = {
+  at: number;
+  text: string;
+  normalised: string;
+  translation: string | null;
+  // The headword the search reached; defaults to `normalised` (an exact hit).
+  headword?: string | null;
+  outcome?: "exact" | "inflected" | "unlisted" | "translated";
+  kind?: "word" | "phrase";
+};
 
 // Raw IndexedDB, mirroring `lib/log/record.ts`'s own shape — this runs
 // inside `page.evaluate`, a browser context no Node import reaches.
 async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
   await page.evaluate(
-    (rows) =>
+    ({ rows, version }) =>
       new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open("reading-log");
-        request.onupgradeneeded = () => {
-          const store = request.result.createObjectStore("lookups", { keyPath: "id", autoIncrement: true });
-          store.createIndex("at", "at");
-          store.createIndex("normalised", "normalised");
+        const request = indexedDB.open("reading-log", version);
+        request.onupgradeneeded = (event) => {
+          const database = request.result;
+          if (event.oldVersion < 1) {
+            const store = database.createObjectStore("lookups", { keyPath: "id", autoIncrement: true });
+            store.createIndex("at", "at");
+            store.createIndex("normalised", "normalised");
+          }
+          if (event.oldVersion < 2) {
+            database.createObjectStore("sync", { keyPath: "key" });
+            request.transaction!
+              .objectStore("lookups")
+              .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
+          }
+          if (event.oldVersion < 3) {
+            request.transaction!.objectStore("lookups").createIndex("headword", "headword");
+          }
         };
         request.onsuccess = () => {
           const db = request.result;
@@ -37,9 +59,9 @@ async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
               at: row.at,
               text: row.text,
               normalised: row.normalised,
-              kind: "word",
-              outcome: "exact",
-              headword: row.normalised,
+              kind: row.kind ?? "word",
+              outcome: row.outcome ?? "exact",
+              headword: row.headword === undefined ? row.normalised : row.headword,
               rule: null,
               senses: 1,
               translation: row.translation,
@@ -55,7 +77,7 @@ async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
         };
         request.onerror = () => reject(request.error);
       }),
-    rows,
+    { rows, version: DATABASE_VERSION },
   );
 }
 
@@ -123,4 +145,168 @@ test("a row's headword with no space to break on never scrolls the page sideways
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
   expect(scrollWidth).toBe(clientWidth);
+});
+
+// RL-56 / board `RegistroEstudioPorLema`. The forms line reads
+// «{lemma} · {forms}»: the board's two rows («linger · lingered, lingering»,
+// «left · leave») agree only on this — the line names every form searched
+// under the row, each once, and nothing else. Order inside it is not asserted.
+function formsOf(line: string): string[] {
+  return line
+    .split(/\s·\s|,\s*/)
+    .map((f) => f.trim())
+    .filter(Boolean);
+}
+
+async function rowText(page: Page, href: string): Promise<string> {
+  return page.locator(`a[href="${href}"]`).innerText();
+}
+
+test("a lemma and its inflected forms are one row: both forms under it, the count of all of them", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 6000, text: "linger", normalised: "linger", translation: "demorar" },
+    { at: now - 5000, text: "linger", normalised: "linger", translation: "demorar" },
+    { at: now - 4000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 3000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 2000, text: "lingering", normalised: "lingering", headword: "linger", outcome: "inflected", translation: "demorar" },
+  ]);
+  await page.reload();
+
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
+  await expect(page.locator('a[href="/registro/linger"]')).toBeVisible();
+  await expect(page.locator('a[href="/registro/lingered"]')).toHaveCount(0);
+
+  const text = await rowText(page, "/registro/linger");
+  expect(text).toMatch(/\b5\b/);
+  const forms = formsOf(text.split("\n").find((l) => l.includes("lingered")) ?? "");
+  expect(forms.sort()).toEqual(["linger", "lingered", "lingering"]);
+});
+
+test("a form searched under another lemma shows in that lemma's row: «left» and «leave» under leave", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 4000, text: "left", normalised: "left", headword: "leave", outcome: "inflected", translation: "dejar" },
+    { at: now - 3000, text: "left", normalised: "left", headword: "leave", outcome: "inflected", translation: "dejar" },
+    { at: now - 2000, text: "leave", normalised: "leave", translation: "dejar" },
+  ]);
+  await page.reload();
+
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
+  const text = await rowText(page, "/registro/leave");
+  expect(text).toMatch(/\b3\b/);
+  const line = text.split("\n").find((l) => l.includes("left")) ?? "";
+  expect(formsOf(line).sort()).toEqual(["left", "leave"]);
+});
+
+test("a lemma searched under one spelling only draws no forms line", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 2000, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
+    { at: now - 1000, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
+  ]);
+  await page.reload();
+
+  const text = await rowText(page, "/registro/lukewarm");
+  expect(text).toContain("tibio");
+  expect(text).not.toContain("·");
+});
+
+test("the row opens the lemma's page, /registro/linger, never a form's", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 2000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 1000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+  ]);
+  await page.reload();
+
+  // Only the inflected form was ever typed: the row is still the lemma's.
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
+  await page.locator('a[href="/registro/linger"]').click();
+  await expect(page).toHaveURL(/\/registro\/linger$/);
+});
+
+test("a miss and a phrase each keep their own row, beside a lemma's", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  const phrase = "I left my house yesterday morning";
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 5000, text: "linger", normalised: "linger", translation: "demorar" },
+    { at: now - 4000, text: "asdkjh", normalised: "asdkjh", headword: null, outcome: "unlisted", translation: null },
+    { at: now - 3000, text: phrase, normalised: phrase.toLowerCase(), headword: null, kind: "phrase", outcome: "translated", translation: "Dejé mi casa ayer por la mañana" },
+    { at: now - 2000, text: phrase, normalised: phrase.toLowerCase(), headword: null, kind: "phrase", outcome: "translated", translation: "Dejé mi casa ayer por la mañana" },
+  ]);
+  await page.reload();
+
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(3);
+  const rows = await page.locator('a[href^="/registro/"]').allInnerTexts();
+  const miss = rows.find((t) => t.includes("asdkjh"));
+  expect(miss).toMatch(/\b1\b/);
+  const phraseRow = rows.find((t) => t.includes(phrase));
+  expect(phraseRow).toMatch(/\b2\b/);
+  expect(phraseRow).toContain("Dejé mi casa");
+  // The lemma row does not swallow either of them.
+  const lemmaRow = rows.find((t) => t.includes("demorar") && !t.includes(phrase));
+  expect(lemmaRow).not.toContain("asdkjh");
+});
+
+test("a search with no result says «sin resultado» in its own row", async ({ page }) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: Date.now(), text: "asdkjh", normalised: "asdkjh", headword: null, outcome: "unlisted", translation: null },
+  ]);
+  await page.reload();
+
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
+  expect(await page.locator('a[href^="/registro/"]').innerText()).toContain("sin resultado");
+});
+
+test("rows order by the count of the whole lemma, ties broken by the most recent search", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    // walk: 3 searches over three forms, none of them 3 alone.
+    { at: now - 9000, text: "walk", normalised: "walk", translation: "caminar" },
+    { at: now - 8900, text: "walked", normalised: "walked", headword: "walk", outcome: "inflected", translation: "caminar" },
+    { at: now - 8800, text: "walking", normalised: "walking", headword: "walk", outcome: "inflected", translation: "caminar" },
+    // zeta: 2 searches of one spelling — more than any single walk form.
+    { at: now - 7000, text: "zeta", normalised: "zeta", translation: "zeta" },
+    { at: now - 6000, text: "zeta", normalised: "zeta", translation: "zeta" },
+    // alpha and beta tie at 2; beta was searched last.
+    { at: now - 5000, text: "alpha", normalised: "alpha", translation: "alfa" },
+    { at: now - 4000, text: "alpha", normalised: "alpha", translation: "alfa" },
+    { at: now - 3000, text: "beta", normalised: "beta", translation: "beta" },
+    { at: now - 1000, text: "beta", normalised: "beta", translation: "beta" },
+  ]);
+  await page.reload();
+
+  await expect(page.locator('a[href^="/registro/"]')).toHaveCount(4);
+  const hrefs = await page.locator('a[href^="/registro/"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+  expect(hrefs).toEqual(["/registro/walk", "/registro/beta", "/registro/zeta", "/registro/alpha"]);
+});
+
+test("the header counts every search and one word per lemma", async ({ page }) => {
+  await deleteTranslator(page);
+  const now = Date.now();
+  await page.goto("/registro");
+  await seedRows(page, [
+    { at: now - 4000, text: "linger", normalised: "linger", translation: "demorar" },
+    { at: now - 3000, text: "lingered", normalised: "lingered", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 2000, text: "lingering", normalised: "lingering", headword: "linger", outcome: "inflected", translation: "demorar" },
+    { at: now - 1000, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
+  ]);
+  await page.reload();
+
+  await expect(page.getByText("4 búsquedas · 2 palabras.")).toBeVisible();
 });
