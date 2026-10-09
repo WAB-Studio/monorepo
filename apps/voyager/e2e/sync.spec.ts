@@ -393,10 +393,10 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
       values
         (${randomUUID()}, ${readerId}, 'recovery_token', ${hash}, ${readerEmail}, now(), now())`;
 
-    // `/registro` never reads `sync`, so seeding it here cannot race the
-    // account screen's own mount effect the way seeding it on `/cuenta` would.
-    await page.goto("/registro");
-    await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
+    // Seeded from `/`: `/cuenta` and `/registro` both read `sync` on mount and
+    // would race this write.
+    await page.goto("/");
+    await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
 
     await seedLocalDatabase(page, {
       sync: {

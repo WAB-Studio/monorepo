@@ -2947,3 +2947,14 @@ Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, whic
   the first mutation, and the closing task sheet keeps its dialog in the DOM. Anchor on the new sheet's open animation
   (`getAnimations()` finished, 1 pending at the first mutation), never on its text or focus.
 
+
+## Seeding `sync` from `/registro` races its round on open
+
+Since 549 (#495), `/registro` mounts `<SyncOnOpen />`, which calls `syncNow()` on mount. A spec that opens `/registro` and then
+writes `sync` into IndexedDB races that round: the round reads the old state and writes a fresh one over the seed.
+
+- Measured 2026-10-09: 549 and 542 were each green alone. Once both were on `integracion`, `cuenta-copia.spec.ts:521` read a
+  new `deviceId` (run 37936876838) and `:477` uploaded the 2 seeded rows (run 37939348565). Different tests on different runs, one cause.
+- Seed `sync` from `/`, anchored on the search box, as `registro-copia.spec.ts` and `cuenta-copia.spec.ts` do. Never from
+  `/registro` or `/cuenta`: both read `sync` on mount.
+- A screen that starts reading `sync` on mount must grep `e2e/` for `objectStore("sync").put` and move every seed that opens it.
