@@ -108,8 +108,8 @@ function Keys({ rows, section, foldKey, onAsk, onRenew, busy }: {
   const line = (row: ConnectionRow) => {
     if (row.revokedAt) return t.rich("row.revokedMeta", { date: row.revokedAt.date, ...fig });
     if (row.expiredAt) {
-      const since = row.used ?? row.created;
-      return t.rich("row.expiredMeta", { date: row.expiredAt.date, used: since.date, ...fig });
+      if (!row.used) return t.rich("row.expiredUnused", { date: row.expiredAt.date, ...fig });
+      return t.rich("row.expiredMeta", { date: row.expiredAt.date, used: row.used.date, ...fig });
     }
     const created = stamp(row.created, false);
     const used = row.used ? stamp(row.used, true) : null;
@@ -150,7 +150,13 @@ function Keys({ rows, section, foldKey, onAsk, onRenew, busy }: {
             {!dead && row.returnHost ? <Text variant="sentence">{host(row)}</Text> : null}
             <Text variant="sentence">{line(row)}</Text>
             {renewable ? (
-              <Button variant="ghost" tone="accent" tap={44} onClick={() => onRenew(row)}>
+              <Button
+                variant="ghost"
+                tone="accent"
+                tap={44}
+                aria-label={t("row.renewKey", { name: row.name })}
+                onClick={() => onRenew(row)}
+              >
                 {t("row.renew")}
               </Button>
             ) : null}
