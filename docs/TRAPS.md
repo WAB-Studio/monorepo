@@ -2970,3 +2970,13 @@ server's. On a UTC server a reader in Bogotá sees every time five hours off.
 - Production runs on UTC too, so this is a defect the reader sees, not a test artefact.
 - Pass `timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone` from a client component, or set the provider's zone
   from the browser. Prove a date assertion with `TZ=UTC` on the server process.
+
+## A `pulsar-e2e` shard dies before its first test: port 54322 already in use
+
+The shard's `supabase start` fails with `failed to bind host port for 0.0.0.0:54322:172.18.0.2:5432/tcp: address already
+in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it red.
+
+- Seen 2026-10-09, run 37980310112, shard 1 of 4, on a branch whose other three shards were green. The log is in
+  `private/reportes/ci-37980310112-shard1-puerto-54322.log`.
+- It is the runner, not the branch. Read the shard's setup step before any spec: no `✘` line means nothing ran.
+- `gh run rerun <id> --failed` and read the rerun before merging.
