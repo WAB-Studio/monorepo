@@ -8,6 +8,7 @@
   "when": "{weekday} {day}",
   "whenFar": "{weekday} {day} de {month}",
   "markLabel": "Dar por hecha: {name}",
+  "markDone": "Marcar como hecho: {name}",
   "empty": "Nada espera, ni sin día ni para otro día.",
   "emptyToToday": "Volver a hoy",
   "done": "«{name}» quedó en «hechas hoy».",

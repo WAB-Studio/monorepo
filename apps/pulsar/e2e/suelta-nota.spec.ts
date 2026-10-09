@@ -107,7 +107,7 @@ test("Hoy draws the note's button on a one-off, pending or done, never its text;
       .locator("div")
       .filter({ has: page.getByRole("button", { name: `Escribir una nota en «${pendingName}»` }) })
       .last();
-    await ownRow.getByRole("button", { name: "Marcar como hecho", exact: true }).click();
+    await ownRow.getByRole("button", { name: `Marcar como hecho: ${pendingName}`, exact: true }).click();
     await expect
       .poll(async () => (await db`select 1 from goals.facts where one_off_id = ${pending.id}`).length)
       .toBe(1);
