@@ -1588,7 +1588,7 @@ async function checkAiDoor(): Promise<void> {
         [
           "P118",
           "access_tokens",
-          "INSERT(hint,name,token_hash,user_id) SELECT(created_at,expires_at,hint,id,kind,last_used_at,name,revoked_at,user_id) UPDATE(revoked_at)",
+          "INSERT(hint,name,token_hash,user_id) SELECT(created_at,expires_at,hint,id,kind,last_used_at,name,redirect_uri,revoked_at,user_id) UPDATE(revoked_at)",
         ],
         ["P119", "oauth_clients", "SELECT(client_name,id,redirect_uris)"],
         ["P120", "oauth_codes", "INSERT(client_id,code_challenge,code_hash,redirect_uri,resource,user_id)"],
@@ -2521,6 +2521,76 @@ async function checkAuditoria0015(): Promise<void> {
   await sql.end();
 }
 
+// 0016 (RP-60): who reads and who writes the address a connection returns to,
+// and who may call the lapse rule. Own transaction, forced rollback.
+async function checkConnectionHost0016(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.CONNECTION_HOST_MUTANT_SQL;
+  const callback = "https://claude.ai/api/mcp/auth_callback";
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into goals.access_tokens (user_id, kind, name, token_hash, expires_at, redirect_uri)
+        values (${subject}, 'oauth', 'Claude', ${sha256()}, now() + interval '1 hour', ${callback}) returning id`;
+      if (mutant) {
+        console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+        await tx.unsafe(mutant);
+      }
+
+      await enterUserContext(tx, subject);
+      const own = await attemptRows<{ redirect_uri: string }>(
+        tx,
+        (sp) => sp`select redirect_uri from goals.access_tokens where id = ${row.id}`,
+      );
+      assert(
+        "P218",
+        own.code === undefined && own.rows.length === 1 && own.rows[0].redirect_uri === callback,
+        `owner reads the address, sqlstate = ${own.code ?? "none"}, rows = ${own.rows.length}`,
+      );
+      const rewrite = await attempt(tx, (sp) => sp`update goals.access_tokens set redirect_uri = 'https://x.example.invalid' where id = ${row.id}`);
+      assert("P219", rewrite.code === "42501", `update redirect_uri, sqlstate = ${rewrite.code ?? "none"}`);
+      const forged = await attempt(
+        tx,
+        (sp) => sp`insert into goals.access_tokens (user_id, name, token_hash, hint, redirect_uri)
+          values (${subject}, 'llave', ${sha256()}, 'abcd', 'https://x.example.invalid')`,
+      );
+      assert("P220", forged.code === "42501", `insert with redirect_uri, sqlstate = ${forged.code ?? "none"}`);
+
+      await enterUserContext(tx, intruder);
+      const foreign = await attemptRows<{ redirect_uri: string }>(
+        tx,
+        (sp) => sp`select redirect_uri from goals.access_tokens where id = ${row.id}`,
+      );
+      assert("P221", foreign.code === undefined && foreign.rows.length === 0, `another person reads the address, rows = ${foreign.rows.length}`);
+
+      await tx`reset role`;
+      const [fn] = await tx<{ auth: boolean; anon: boolean; svc: boolean; pub: boolean }[]>`
+        select has_function_privilege('authenticated', p.oid, 'execute') as auth,
+          has_function_privilege('anon', p.oid, 'execute') as anon,
+          has_function_privilege('service_role', p.oid, 'execute') as svc,
+          exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0) as pub
+        from pg_proc p
+        where p.pronamespace = 'goals'::regnamespace and p.proname = 'access_token_lapses_at'`;
+      assert(
+        "P222",
+        !!fn && fn.auth && !fn.anon && !fn.svc && !fn.pub,
+        `access_token_lapses_at: authenticated = ${fn?.auth}, anon = ${fn?.anon}, service_role = ${fn?.svc}, public = ${fn?.pub}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2550,6 +2620,7 @@ async function main(): Promise<void> {
   await checkGoalAndOneOffPositionPerPerson();
   await checkRoadmapSchema();
   await checkAuditoria0015();
+  await checkConnectionHost0016();
 
   if (failed) process.exit(1);
 }

@@ -30,6 +30,8 @@ export const accessTokens = goalsSchema.table(
     // Null for a personal key, which lasts until revoked.
     expiresAt: timestamp({ withTimezone: true }),
     revokedAt: timestamp({ withTimezone: true }),
+    // Where the person approved the client to return; null for a personal key. Written only by the exchange.
+    redirectUri: text(),
   },
   (t) => [
     index("access_tokens_user_id_idx").on(t.userId),
