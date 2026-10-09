@@ -1589,3 +1589,8 @@ Taken by the user on the critic's questions. Each opens its module with a board 
   desconocido» when only the platform is unknown) and each row adds «Desde el {fecha}» from `created_at`.
 - **Function words in the per-word fallback (RL-37) come from a hand table.** About a hundred words with their common
   translation, read before the dictionary's order in that fallback only.
+- **The lemma rises under the form's first group.** For `left`, the «leave» block sits right below the first group of
+  the form, not at the end. «Form first» stands.
+- **`/registro` groups by lemma.** One row per lemma with the forms searched under it; RL-32 is retired for a successor.
+- **iPhone: measure first.** The user checks on a real iPhone whether the installed app keeps its storage apart from
+  Safari; if it does, sign-in moves to a six-digit code typed in the app (RL-22 retired for a successor).

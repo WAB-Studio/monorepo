@@ -1070,3 +1070,12 @@ Taken by the user on the critic's questions. No board drawn yet; each one opens 
   time; a goal in km or pages keeps its month amounts and no roadmap. A code narrowing RP-50.
 - **The template carries a rhythm.** `ritmo: 12 h` in `PLANTILLA.md`; the import writes the goal's rhythm, so an
   imported plan arrives armed. A code next to RP-37.
+- **Hoy counts every row that asks today**, flexible and evidence rows included, in «hechos N de M».
+- **Row metadata in plain days.** «mar y jue · 2 h»; «pide el número» goes.
+- **The key screen's sample sentence is generic:** «lee mis metas y dime qué sigue».
+- **Yesterday is a word.** «‹ ayer», hidden before the first day that has a goal.
+- **Tasks of a goal not measured in time are fixed to the month they are created in**; the person moves them by hand.
+- **Codes.** RP-62 narrows RP-50 (RP-50 stays); RP-64 opens for the host on each connection row and the folding of dead
+  keys (RP-60 and RP-38 stay). The 30 days count from when the key stopped entering (lapsed or revoked).
+- **Claude Desktop gets a copyable `claude_desktop_config.json`** running `npx mcp-remote` with the key in a header;
+  RP-38 stays true.
