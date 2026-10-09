@@ -92,6 +92,11 @@ const CALLER_IPS = [
   "203.0.113.206",
   "203.0.113.207",
   "203.0.113.208",
+  "203.0.113.209",
+  "203.0.113.210",
+  "203.0.113.211",
+  "203.0.113.212",
+  "203.0.113.213",
 ];
 const clients = new Set<string>(
   CALLER_IPS.flatMap((ip) => {
@@ -151,6 +156,19 @@ async function main() {
   const unlisted = await import("../app/api/word/unlisted/route");
   const notes = await import("../app/api/phrase/notes/route");
 
+  const { env } = await import("../lib/env");
+  // `env` parsed once above; a cap is switched off by writing the parsed object.
+  async function withCaps<T>(caps: Record<string, number | undefined>, run: () => Promise<T>): Promise<T> {
+    const live = env as unknown as Record<string, number | undefined>;
+    const before = Object.fromEntries(Object.keys(caps).map((name) => [name, live[name]]));
+    Object.assign(live, caps);
+    try {
+      return await run();
+    } finally {
+      Object.assign(live, before);
+    }
+  }
+
   const index = loadDictionaryIndex();
   assert("the dictionary index is parsed once per process", loadDictionaryIndex() === index, "same object twice");
 
@@ -164,6 +182,7 @@ async function main() {
   if (nonThin.length < 10 || thin.length < 4) throw new Error("check-budget: the asset no longer has the headwords it picks");
 
   const unlistedWords = ["quorblintic", "zestrovanic", "plimvarticon"];
+const switchWord = "krondelphic";
   const notesSource = "the grey heron waited";
   const notesTranslation = "la garza gris esperaba";
   const notesHash = phraseHash(notesSource, notesTranslation);
@@ -175,7 +194,7 @@ async function main() {
 
   async function clearFixtures(): Promise<void> {
     await sql`delete from reading.word_texts where headword = any(${headwords})`;
-    await sql`delete from reading.word_answers where word = any(${unlistedWords})`;
+    await sql`delete from reading.word_answers where word = any(${[...unlistedWords, switchWord]})`;
     await sql`delete from reading.phrase_notes where phrase_hash = ${notesHash}`;
     await sql`delete from reading.client_spend where day = current_date and client = any(${[...clients]})`;
   }
@@ -426,6 +445,90 @@ async function main() {
       "unlisted: the refused request left the caller's shared counter at the cap",
       (await clientCalls(unscopedKey(unlistedIp))) === UNLISTED_CLIENT_CAP,
       `client_spend=${await clientCalls(unscopedKey(unlistedIp))}`,
+    );
+
+    // --- Each cap switch, alone -------------------------------------------
+    const switchBody = { source: notesSource, translation: notesTranslation };
+    providerReply = modelSays({ nothing: true });
+
+    // unlisted: the day at the global cap, the caller well under its own.
+    await setDailyCalls(DAILY_CAP);
+    providerCalls = 0;
+    const unlistedDayFull = await unlisted.POST(
+      post("/api/word/unlisted", { word: switchWord }, "203.0.113.209"),
+    );
+    assert(
+      "unlisted: the day at WORD_TEXT_DAILY_CALL_CAP answers 204 without the model",
+      unlistedDayFull.status === 204 && providerCalls === 0 && (await dailyCalls()) === DAILY_CAP,
+      `status=${unlistedDayFull.status} providerCalls=${providerCalls} model_spend=${await dailyCalls()}`,
+    );
+
+    await setDailyCalls(0);
+    providerCalls = 0;
+    const unlistedNoGlobal = await withCaps({ WORD_TEXT_DAILY_CALL_CAP: undefined }, () =>
+      unlisted.POST(post("/api/word/unlisted", { word: switchWord }, "203.0.113.209")).catch(() => null),
+    );
+    assert(
+      "unlisted: WORD_TEXT_DAILY_CALL_CAP unset answers 204 without the model",
+      unlistedNoGlobal?.status === 204 && providerCalls === 0 && (await dailyCalls()) === 0,
+      `status=${unlistedNoGlobal?.status} providerCalls=${providerCalls} model_spend=${await dailyCalls()}`,
+    );
+
+    // notes: a per-caller ceiling of 2, the third call from one caller.
+    await setDailyCalls(0);
+    providerCalls = 0;
+    const notesClientIp = "203.0.113.210";
+    const notesClientStatuses: number[] = [];
+    await withCaps({ PHRASE_NOTES_DAILY_CLIENT_CAP: 2 }, async () => {
+      for (let i = 0; i < 3; i += 1) {
+        const response = await notes.POST(post("/api/phrase/notes", switchBody, notesClientIp));
+        notesClientStatuses.push(response.status);
+      }
+    });
+    assert(
+      "notes: a caller's third call at PHRASE_NOTES_DAILY_CLIENT_CAP=2 answers 204 without the model",
+      providerCalls === 2 &&
+        notesClientStatuses[2] === 204 &&
+        (await clientCalls(unscopedKey(notesClientIp))) === 2 &&
+        (await dailyCalls()) === 2,
+      `statuses=${notesClientStatuses.join()} providerCalls=${providerCalls} ` +
+        `client_spend=${await clientCalls(unscopedKey(notesClientIp))} model_spend=${await dailyCalls()}`,
+    );
+
+    // notes: each global cap unset, a fresh caller each time.
+    await setDailyCalls(0);
+    providerCalls = 0;
+    const notesNoOwn = await withCaps({ PHRASE_NOTES_DAILY_CALL_CAP: undefined }, () =>
+      notes.POST(post("/api/phrase/notes", switchBody, "203.0.113.211")).catch(() => null),
+    );
+    assert(
+      "notes: PHRASE_NOTES_DAILY_CALL_CAP unset answers 204 without the model",
+      notesNoOwn?.status === 204 && providerCalls === 0 && (await dailyCalls()) === 0,
+      `status=${notesNoOwn?.status} providerCalls=${providerCalls} model_spend=${await dailyCalls()}`,
+    );
+    const notesNoShared = await withCaps({ WORD_TEXT_DAILY_CALL_CAP: undefined }, () =>
+      notes.POST(post("/api/phrase/notes", switchBody, "203.0.113.212")).catch(() => null),
+    );
+    assert(
+      "notes: WORD_TEXT_DAILY_CALL_CAP unset answers 204 without the model",
+      notesNoShared?.status === 204 && providerCalls === 0 && (await dailyCalls()) === 0,
+      `status=${notesNoShared?.status} providerCalls=${providerCalls} model_spend=${await dailyCalls()}`,
+    );
+
+    // text: key set, WORD_TEXT_DAILY_CALL_CAP unset, a cold headword.
+    providerReply = plainAnswer;
+    providerCalls = 0;
+    const textNoCap = await withCaps({ WORD_TEXT_DAILY_CALL_CAP: undefined }, () =>
+      text
+        .POST(post("/api/word/text", { headword: nonThin[9], needDefinition: false }, "203.0.113.213"))
+        .catch(() => null),
+    );
+    const [{ count: textNoCapRows }] = await sql<{ count: number }[]>`
+      select count(*)::int as count from reading.word_texts where headword = ${nonThin[9]}`;
+    assert(
+      "text: WORD_TEXT_DAILY_CALL_CAP unset answers 204 without the model and writes no row",
+      textNoCap?.status === 204 && providerCalls === 0 && textNoCapRows === 0 && (await dailyCalls()) === 0,
+      `status=${textNoCap?.status} providerCalls=${providerCalls} rows=${textNoCapRows} model_spend=${await dailyCalls()}`,
     );
   } finally {
     await clearFixtures();
