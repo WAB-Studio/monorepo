@@ -124,7 +124,13 @@ for (const width of [390, 1280]) {
           const lead = [...document.querySelectorAll("main p")].find((p) =>
             p.textContent?.startsWith("Podrá leer"),
           )!;
+          const probe = document.createElement("span");
+          probe.style.fontFamily = "var(--font-mono)";
+          document.body.append(probe);
+          const mono = getComputedStyle(probe).fontFamily;
+          probe.remove();
           return {
+            mono,
             family: own.fontFamily,
             size: own.fontSize,
             color: own.color,
@@ -136,8 +142,10 @@ for (const width of [390, 1280]) {
             marginTop: own.marginTop,
           };
         });
-        expect(style.family).toMatch(/mono/i);
-        expect(style.hostFamily).toMatch(/mono/i);
+        // `/mono/` also matches the fallback `monospace`; DM Mono is the resolved `--font-mono`.
+        expect(style.mono).toMatch(/dm_?mono/i);
+        expect(style.family).toBe(style.mono);
+        expect(style.hostFamily).toBe(style.mono);
         expect(style.size).toBe("13px");
         expect(style.color).toBe(style.titleColor);
         expect(style.color).not.toBe(style.leadColor);

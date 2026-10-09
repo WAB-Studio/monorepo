@@ -55,11 +55,17 @@ for (const width of [360, 1280]) {
       }
       // The horizon line is a sentence: Archivo, not the figure face.
       const horizon = page.getByText(/semanas? · hasta el/);
-      const mono = await page.evaluate(
-        () => getComputedStyle(document.body).getPropertyValue("--font-mono").trim(),
-      );
+      // The custom property is raw text; only a probe resolves it the way the browser writes `fontFamily`.
+      const mono = await page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.fontFamily = "var(--font-mono)";
+        document.body.append(probe);
+        const resolved = getComputedStyle(probe).fontFamily;
+        probe.remove();
+        return resolved;
+      });
       const family = await horizon.evaluate((el) => getComputedStyle(el).fontFamily);
-      expect(mono.length).toBeGreaterThan(0);
+      expect(mono).toMatch(/mono/i);
       expect(family).not.toBe(mono);
 
       await page.getByRole("button", { name: "Renombrar" }).first().click();

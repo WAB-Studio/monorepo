@@ -9,6 +9,14 @@ import { test, expect, type Person } from "./fixtures";
 const NAME = "Claude Code";
 const KEY = /^pls_[A-Za-z0-9_-]{20,}$/;
 
+// 15:00Z lands on the same calendar day in any zone the specs run in.
+function daysAgo(days: number): Date {
+  const when = new Date();
+  when.setUTCDate(when.getUTCDate() - days);
+  when.setUTCHours(15, 0, 0, 0);
+  return when;
+}
+
 async function openScreen(browser: import("@playwright/test").Browser, baseURL: string, person: Person, width = 360) {
   const context = await browser.newContext({
     storageState: person.sessionFile,
@@ -195,12 +203,12 @@ test.describe("the connections screen (RP-38)", () => {
     browser,
     baseURL,
   }) => {
-    await seed(db, person, { kind: "personal", name: "Vieja viva", created: "2026-01-01T10:00:00Z" });
+    await seed(db, person, { kind: "personal", name: "Vieja viva", created: daysAgo(30).toISOString() });
     await seed(db, person, {
       kind: "personal",
       name: "Nueva revocada",
-      created: "2026-02-01T10:00:00Z",
-      revoked: "2026-02-02T10:00:00Z",
+      created: daysAgo(20).toISOString(),
+      revoked: daysAgo(19).toISOString(),
     });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
@@ -218,17 +226,22 @@ test.describe("the connections screen (RP-38)", () => {
     browser,
     baseURL,
   }) => {
+    const created = daysAgo(10);
+    const used = daysAgo(9);
     await seed(db, person, {
       kind: "oauth",
       name: "Claude",
-      created: "2026-03-01T10:00:00Z",
-      used: "2026-03-02T10:00:00Z",
+      created: created.toISOString(),
+      used: used.toISOString(),
     });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
       await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
       await expect(page.getByText("Claude", { exact: true })).toBeVisible();
-      await expect(page.getByText(/^conectada el 1 mar 2026 · usada el 2 mar 2026 \d\d:\d\d$/)).toBeVisible();
+      const stamp = (d: Date) => `${d.getUTCDate()} \\p{L}+ ${d.getUTCFullYear()}`;
+      await expect(
+        page.getByText(new RegExp(`^conectada el ${stamp(created)} · usada el ${stamp(used)} \\d\\d:\\d\\d$`, "u")),
+      ).toBeVisible();
       await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
 
       await confirmRevoke(page);
