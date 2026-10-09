@@ -22,14 +22,17 @@ export function Page({
   width,
   alone,
   middle,
+  print,
 }: {
   children?: ReactNode;
   width?: "full" | "column";
   alone?: boolean;
   middle?: boolean;
+  // `full`: on paper the column spans the sheet between its margins, whatever the screen's width.
+  print?: "full";
 }) {
   const cap = width === "full" ? styles.full : width === "column" ? `${styles.full} ${styles.column}` : undefined;
-  const className = [styles.page, cap, alone ? styles.alone : undefined, middle ? styles.middle : undefined]
+  const className = [styles.page, cap, alone ? styles.alone : undefined, middle ? styles.middle : undefined, print === "full" ? styles.printFull : undefined]
     .filter(Boolean)
     .join(" ");
   return <main className={className}>{children}</main>;

@@ -90,3 +90,15 @@
     min-inline-size: 160px;
   }
 }
+
+/* `print="full"`: paper is one column as wide as the sheet's margins leave;
+   the sheet's own `@page` margin is the gutter. */
+@media print {
+  .page.page.printFull {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+}

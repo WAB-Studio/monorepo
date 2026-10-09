@@ -19,6 +19,7 @@ import {
   Panel,
   PanelGrid,
   PrintBlock,
+  PrintGoal,
   PrintHidden,
   PrintOnly,
   PrintPage,
@@ -463,26 +464,25 @@ function GoalPart({
     }
   };
 
-  const [first, ...rest] = sections;
+  const spans = (section: GoalSection) => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
-    <Flex direction="column" gap="6">
-      <PrintBlock>
-        <Flex direction="column" gap="6">
-          <Flex direction="column" gap="3">
-            <Text asChild variant="name" rule>
-              <h2>{goal.name}</h2>
-            </Text>
-            <Text as="p" variant="sentence">
-              {measureLine}
-            </Text>
-          </Flex>
-          {first ? render(first) : null}
+    <PrintGoal>
+      <PrintBlock span="lead">
+        <Flex direction="column" gap="3">
+          <Text asChild variant="name" rule>
+            <h2>{goal.name}</h2>
+          </Text>
+          <Text as="p" variant="sentence">
+            {measureLine}
+          </Text>
         </Flex>
       </PrintBlock>
-      {rest.map((section) => (
-        <PrintBlock key={section}>{render(section)}</PrintBlock>
+      {sections.map((section) => (
+        <PrintBlock key={section} span={spans(section)}>
+          {render(section)}
+        </PrintBlock>
       ))}
-    </Flex>
+    </PrintGoal>
   );
 }
 
@@ -502,14 +502,12 @@ export async function ReportScreen({ report }: { report: Report }) {
 
   if (report.goals.length === 0) {
     return (
-      <Page width="full">
+      <Page width="full" print="full">
         <PrintPage>
-          <Flex direction="column" gap="6">
-            <ScreenHeader title={t("title")} back={back} eyebrow={t("eyebrowEmpty")} />
-            <Text as="p" variant="sentence" tone="secondary">
-              {t("empty")}
-            </Text>
-          </Flex>
+          <ScreenHeader title={t("title")} back={back} eyebrow={t("eyebrowEmpty")} />
+          <Text as="p" variant="sentence" tone="secondary">
+            {t("empty")}
+          </Text>
         </PrintPage>
       </Page>
     );
@@ -527,51 +525,49 @@ export async function ReportScreen({ report }: { report: Report }) {
       : t("goalCount", { total: report.goals.length });
 
   return (
-    <Page width="full">
+    <Page width="full" print="full">
       <PrintPage>
-        <Flex direction="column" gap="6">
-          <Flex direction="column" gap="3">
-            <ScreenHeader
-              title={t("title")}
-              back={back}
-              eyebrow={
-                <>
-                  <PrintHidden>
-                    <SectionLabel>
-                      {t("eyebrow", {
-                        date: dateWithWeekday.format(civilDateToDate(report.today)),
-                      })}
-                    </SectionLabel>
-                  </PrintHidden>
-                  <PrintOnly>
-                    <SectionLabel>
-                      {t("printHead", {
-                        brand: t("printBrand"),
-                        date: dateWithYear.format(civilDateToDate(report.today)),
-                      })}
-                    </SectionLabel>
-                  </PrintOnly>
-                </>
-              }
-              actions={<PrintButton label={t("download")} />}
-            />
-            <Text as="p" variant="sentence">
-              {count}
+        <Flex direction="column" gap="3">
+          <ScreenHeader
+            title={t("title")}
+            back={back}
+            eyebrow={
+              <>
+                <PrintHidden>
+                  <SectionLabel>
+                    {t("eyebrow", {
+                      date: dateWithWeekday.format(civilDateToDate(report.today)),
+                    })}
+                  </SectionLabel>
+                </PrintHidden>
+                <PrintOnly>
+                  <SectionLabel>
+                    {t("printHead", {
+                      brand: t("printBrand"),
+                      date: dateWithYear.format(civilDateToDate(report.today)),
+                    })}
+                  </SectionLabel>
+                </PrintOnly>
+              </>
+            }
+            actions={<PrintButton label={t("download")} />}
+          />
+          <Text as="p" variant="sentence">
+            {count}
+          </Text>
+          {declaredOnly ? (
+            <Text as="p" variant="sentence" tone="secondary">
+              {t("unreadable")}
             </Text>
-            {declaredOnly ? (
-              <Text as="p" variant="sentence" tone="secondary">
-                {t("unreadable")}
-              </Text>
-            ) : null}
-          </Flex>
-          <PanelGrid>
-            {goals.map((goal) => (
-              <Panel key={goal.id}>
-                <GoalPart goal={goal} declaredOnly={declaredOnly} today={report.today} t={t} />
-              </Panel>
-            ))}
-          </PanelGrid>
+          ) : null}
         </Flex>
+        <PanelGrid print="stack">
+          {goals.map((goal) => (
+            <Panel key={goal.id} print="plain">
+              <GoalPart goal={goal} declaredOnly={declaredOnly} today={report.today} t={t} />
+            </Panel>
+          ))}
+        </PanelGrid>
       </PrintPage>
     </Page>
   );

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import { test, expect, settled, type Person } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
+import { nextMonth } from "@/lib/plan/months";
 import {
   civilDateToDate,
   civilDateShort,
@@ -21,7 +22,7 @@ import exportMessages from "../messages/es/export.json";
 // Pages the two-goal seeded report takes on A4 with the carried notes
 // printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265; 317 spaced the sections: 11 to 10;
 // 379 printed the months alone and let a section run across pages: 10 to 6).
-const A4_PAGES = 6;
+const A4_PAGES = 4;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {
@@ -1244,6 +1245,14 @@ test.describe("the report's type and space (module 317)", () => {
         }, seeded.name);
         // The seeded goal's own «<meta> · por mes» section is among those measured.
         expect(gaps.filter((gap) => gap.own).length).toBeGreaterThan(0);
+        // The months table's cell padding is the screen's own (18): the compact paper rule must not reach it.
+        const cellPadding = await page.evaluate(() => {
+          const cell = document.querySelector("main table td");
+          if (!cell) return null;
+          const style = getComputedStyle(cell);
+          return [style.paddingTop, style.paddingBottom];
+        });
+        expect(cellPadding).toEqual(["18px", "18px"]);
         for (const gap of gaps) {
           if (gap.inner !== null) expect(gap.inner).toBe(12);
           if (gap.outer !== null) expect(gap.outer).toBe(32);
@@ -1460,6 +1469,268 @@ test.describe("a task split across months (module 578)", () => {
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+});
+
+// Module 579 (RP-49, RP-17), `ReporteImpresoCompacto.dc.html`: on A4 the report spends the whole printable width,
+// keeps a heading with what follows it, and three goals with no activity fit two pages.
+test.describe("the report on A4, compact (module 579)", () => {
+  const MONTH_NAMES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ];
+
+  type Planned = { goalId: string; name: string; months: string[] };
+
+  // A goal that opens this month and runs `months` months, a planned amount in each, one open task and no activity.
+  async function seedCompact(
+    db: postgres.Sql,
+    person: Person,
+    spec: { name: string; measure: string; unit: string; months: number; amount: number },
+  ): Promise<Planned> {
+    const monthStart = `${todayInZone().slice(0, 7)}-01`;
+    const starts: string[] = [];
+    let cursor = monthStart;
+    for (let i = 0; i < spec.months; i += 1) {
+      starts.push(cursor);
+      cursor = nextMonth(cursor);
+    }
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${spec.name}, ${cursor}::date, ${spec.measure}, ${spec.unit}, now())
+      returning id
+    `;
+    for (const month of starts) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${month}::date, ${spec.amount})
+      `;
+    }
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${person.id}, ${goal.id}, ${`Tarea abierta de ${spec.name}`}, ${monthStart}::date)
+    `;
+    const labels = starts.map(
+      (month) => `${MONTH_NAMES[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`,
+    );
+    return { goalId: goal.id, name: spec.name, months: labels };
+  }
+
+  // The board's three goals: 6 months of 12 h, 3 months of km, 2 months of searches.
+  async function seedBoard(db: postgres.Sql, person: Person, stamp: number): Promise<Planned[]> {
+    return [
+      await seedCompact(db, person, { name: `IA aplicada ${stamp}`, measure: "minutos", unit: "minutos", months: 6, amount: 720 }),
+      await seedCompact(db, person, { name: `Correr 10K ${stamp}`, measure: "km", unit: "km", months: 3, amount: 40 }),
+      await seedCompact(db, person, { name: `Leer en inglés ${stamp}`, measure: "búsquedas", unit: "searches", months: 2, amount: 30 }),
+    ];
+  }
+
+  async function savePdf(page: import("@playwright/test").Page, label: string): Promise<string> {
+    const dir = resolve(process.cwd(), "private/export-pdf");
+    mkdirSync(dir, { recursive: true });
+    const file = resolve(dir, `579-${label}-${Date.now()}.pdf`);
+    writeFileSync(file, await page.pdf({ format: "A4" }));
+    return file;
+  }
+
+  function pageCount(file: string): number {
+    return Number(/Pages:\s+(\d+)/.exec(execFileSync("pdfinfo", [file], { encoding: "utf8" }))![1]);
+  }
+
+  // One entry per page: its lines, trimmed, blanks dropped.
+  function pageLines(file: string): string[][] {
+    return Array.from({ length: pageCount(file) }, (_, index) =>
+      execFileSync("pdftotext", ["-layout", "-f", String(index + 1), "-l", String(index + 1), file, "-"], {
+        encoding: "utf8",
+      })
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== ""),
+    );
+  }
+
+  async function open(
+    browser: import("@playwright/test").Browser,
+    baseURL: string,
+    person: Person,
+  ) {
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL,
+      viewport: { width: 1280, height: 900 },
+    });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+    await page.emulateMedia({ media: "print" });
+    return { context, page };
+  }
+
+  test("three goals with no activity, as on the board, print on two A4 pages", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }, testInfo) => {
+    const goals = await seedBoard(db, person, Date.now());
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      for (const goal of goals) {
+        await expect(page.getByRole("heading", { name: goal.name, exact: true })).toHaveCount(1);
+      }
+      const file = await savePdf(page, "paginas");
+      const pages = pageCount(file);
+      testInfo.annotations.push({ type: "a4-pages", description: String(pages) });
+      expect(pages, `pages of the board's three goals (${file})`).toBeLessThanOrEqual(2);
+      // Fewer pages by dropping a goal would pass the count: every goal and every month must still print.
+      const text = pageLines(file).flat();
+      for (const goal of goals) {
+        expect(text, goal.name).toContain(goal.name);
+        for (const label of goal.months) expect(text.filter((line) => line.startsWith(label)).length, `${goal.name} ${label}`).toBeGreaterThanOrEqual(1);
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("in print each goal block and each table take 95 % of the printable width, with no rail column", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const goals = await seedBoard(db, person, Date.now());
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      const available = await page.evaluate(() => document.documentElement.clientWidth);
+      const widths = await page.evaluate((names) => {
+        const out: { what: string; width: number }[] = [];
+        for (const name of names) {
+          const heading = [...document.querySelectorAll("h2")].find((node) => node.textContent === name)!;
+          out.push({ what: `block of ${name}`, width: heading.closest("section")!.getBoundingClientRect().width });
+          const label = [...document.querySelectorAll("section")].find((node) =>
+            (node.textContent ?? "").startsWith(`${name} · por mes`),
+          );
+          const table = (label ?? heading.closest("section")!).querySelector("table");
+          out.push({ what: `table of ${name}`, width: table?.getBoundingClientRect().width ?? 0 });
+        }
+        return out;
+      }, goals.map((goal) => goal.name));
+      for (const { what, width } of widths) {
+        expect(width / available, `${what}: ${Math.round(width)} of ${available} px`).toBeGreaterThanOrEqual(0.95);
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
+    }
+  });
+
+  // Goals of different heights put the page foot in different places; each «por mes» label must land with its first row.
+  test("a «por mes» label is on the page of its first row, and no page ends on a heading, a label or a table head", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goals: Planned[] = [];
+    for (const [index, months] of [6, 3, 2, 14, 9, 12, 5, 8].entries()) {
+      goals.push(
+        await seedCompact(db, person, {
+          name: `Altura ${stamp} n${index}`,
+          measure: "minutos",
+          unit: "minutos",
+          months,
+          amount: 720,
+        }),
+      );
+    }
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      const file = await savePdf(page, "encabezado");
+      const pages = pageLines(file);
+      const monthRow = new RegExp(`^(${MONTH_NAMES.join("|")}) \\d{4}\\b`);
+      for (const goal of goals) {
+        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${goal.name} · por mes`.toLowerCase()));
+        expect(at, `${goal.name}: «por mes» label in the PDF`).toBeGreaterThanOrEqual(0);
+        const lines = pages[at];
+        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${goal.name} · por mes`.toLowerCase()) + 1);
+        expect(
+          after.some((line) => line.startsWith(goal.months[0]) || monthRow.test(line)),
+          `${goal.name}: label on page ${at + 1} of ${pages.length}, its first row is not there`,
+        ).toBe(true);
+      }
+      const orphan = new RegExp(
+        `^(${goals.map((goal) => goal.name).join("|")})( · por mes)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
+        "i",
+      );
+      for (const [index, lines] of pages.entries()) {
+        if (index === pages.length - 1) continue;
+        expect(lines.at(-1), `page ${index + 1} of ${pages.length} ends on «${lines.at(-1)}»`).not.toMatch(orphan);
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("a long table breaks between rows: every month row is whole on one page, none lost, and some table runs onto the next page", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goals: Planned[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      goals.push(
+        await seedCompact(db, person, {
+          name: `Larga ${stamp} n${index}`,
+          measure: "minutos",
+          unit: "minutos",
+          months: 14,
+          amount: 720,
+        }),
+      );
+    }
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      const file = await savePdf(page, "tabla-larga");
+      const pages = pageLines(file);
+      // Every line of the PDF with the page it is on, so a goal's rows are read between its label and the next goal.
+      const run = pages.flatMap((lines, index) => lines.map((line) => ({ line, page: index })));
+      const lowered = (goal: Planned) => `${goal.name} · por mes`.toLowerCase();
+      let split = 0;
+      for (const [position, goal] of goals.entries()) {
+        const from = run.findIndex((entry) => entry.line.toLowerCase() === lowered(goal));
+        expect(from, `${goal.name}: label in the PDF`).toBeGreaterThanOrEqual(0);
+        const next = goals[position + 1];
+        const until = next ? run.findIndex((entry) => entry.line === next.name) : run.length;
+        const span = run.slice(from, until < 0 ? run.length : until);
+        const where: number[] = [];
+        for (const label of goal.months) {
+          const found = span.filter((entry) => entry.line.startsWith(label));
+          expect(found.length, `${goal.name} ${label}: lines starting with it`).toBe(1);
+          // The label prints on a line of its own and its cells on the next line: a row cut in two leaves them on another page.
+          const at = span.indexOf(found[0]);
+          const cells = span.slice(at + 1, at + 2);
+          expect(cells.length, `${goal.name} ${label}: cells after its label`).toBe(1);
+          expect(
+            cells.map((cell) => cell.page),
+            `${goal.name} ${label}: label on page ${found[0].page + 1}, cells on ${cells.map((cell) => cell.page + 1)}`,
+          ).toEqual([found[0].page]);
+          where.push(found[0].page);
+        }
+        // The rows keep their order across pages.
+        expect([...where].sort((a, b) => a - b)).toEqual(where);
+        if (new Set(where).size > 1) split += 1;
+      }
+      expect(split, `tables of 14 rows that ran onto a second page (${pages.length} pages, ${file})`).toBeGreaterThanOrEqual(1);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
     }
   });
 });

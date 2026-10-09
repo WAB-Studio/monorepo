@@ -1,6 +1,18 @@
-/* On screen `.page` and `.block` draw nothing; everything is under print. */
+/* On screen `.page` is the screen's column; `.block` draws nothing. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
 .only {
   display: none;
+}
+
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
 @media print {
@@ -46,6 +58,31 @@
      label and its goal's heading stay with what follows. */
   .block h2,
   .block section > :first-child {
+    break-after: avoid;
+  }
+
+  /* Paper is one column as wide as the sheet's margins leave: the screen's
+     max width, its centring, the rail's room and the card chrome come off, and
+     the goals stack. Goals run on the page's own padding, which is `@page`. */
+  .page {
+    gap: 16px;
+    padding: 0;
+    max-width: none;
+    margin: 0;
+  }
+
+  .goal {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    row-gap: 12px;
+  }
+
+  .all {
+    grid-column: 1 / -1;
+  }
+
+  .lead {
     break-after: avoid;
   }
 

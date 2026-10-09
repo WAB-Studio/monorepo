@@ -10,8 +10,16 @@ export function PrintPage({ children }: { children?: ReactNode }) {
 }
 
 // A block the printer keeps whole where it fits: wrap a goal's section in one. It sets no style on screen.
-export function PrintBlock({ children }: { children?: ReactNode }) {
-  return <section className={styles.block}>{children}</section>;
+// `span` keeps the block across every column of a `PrintGoal`; `lead` also keeps it with the block after it.
+export function PrintBlock({ children, span }: { children?: ReactNode; span?: "all" | "lead" }) {
+  const className =
+    span === "lead" ? `${styles.block} ${styles.all} ${styles.lead}` : span === "all" ? `${styles.block} ${styles.all}` : styles.block;
+  return <section className={className}>{children}</section>;
+}
+
+// A goal's blocks: a column on screen, two columns on paper (`ReporteImpresoCompacto.dc.html`).
+export function PrintGoal({ children }: { children?: ReactNode }) {
+  return <div className={styles.goal}>{children}</div>;
 }
 
 // Gone on screen, shown in print: the head's brand and dated year.
