@@ -1834,7 +1834,9 @@ test.describe("the report's last day, its ink and its share (RP-49)", () => {
     const seeded = await seed(db, person);
     // Last month, from the estimates seeded here and in `seed` (a parent whose
     // only sub-task owes 45): 45 + 110 owed, 200 done, so 155 of 355 passed on.
-    const lastMonth = plusDays(-31).slice(0, 7);
+    const before = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
+    before.setUTCMonth(before.getUTCMonth() - 1);
+    const lastMonth = dateToCivilDate(before).slice(0, 7);
     await db`
       insert into goals.month_budgets (user_id, goal_id, month, amount)
       values (${person.id}, ${seeded.goalId}, ${`${lastMonth}-01`}::date, 600)
