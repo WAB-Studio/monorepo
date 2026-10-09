@@ -7,7 +7,8 @@ export type LookupOutcome =
   | "inflected" // reached through a lemma candidate
   | "miss" // the dictionary carries nothing for it
   | "translated" // a sentence, answered
-  | "untranslated"; // a sentence the translation failed on
+  | "untranslated" // a sentence the translation failed on
+  | "unlisted"; // a word with no entry, answered by the network
 
 export type LookupRecord = {
   id?: number; // autoIncrement, assigned by the store

@@ -1,4 +1,6 @@
-import { clampForRecord } from "./record-text";
+import { isRecordedOutcome } from "./outcome";
+import { countPending } from "./pending";
+import { pendingRowFrom } from "./record-text";
 import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
 import { LOOKUP_SCHEMA, type LookupOutcome, type LookupRecord, type SyncState } from "./types";
 
@@ -251,7 +253,6 @@ function notifyFlushed(): void {
 // settled candidate — hit or miss — ends up, never at the call that reports
 // it: `recordLookup` still has to run for a miss, so it can displace
 // whatever prefix was pending and let the chain keep extending past it.
-const LOGGED_OUTCOMES: ReadonlySet<LookupOutcome> = new Set(["exact", "inflected", "translated"]);
 
 // Relays to `localStorage` before either IndexedDB path is even tried: a
 // killed tab still lets its transaction commit (measured), but a reload, a
@@ -270,7 +271,7 @@ const LOGGED_OUTCOMES: ReadonlySet<LookupOutcome> = new Set(["exact", "inflected
 // never sit in `localStorage` waiting for a load that would resurrect it,
 // the same as it must never reach IndexedDB.
 function commit(row: LookupRecord): void {
-  if (!LOGGED_OUTCOMES.has(row.outcome)) return;
+  if (!isRecordedOutcome(row.outcome)) return;
   relayPendingRow(row);
   if (writeRowSync(row)) return;
   void writeRow(row).then(notifyFlushed);
@@ -316,12 +317,7 @@ function onSettleTimer(): void {
  * and when this ever reaches IndexedDB.
  */
 export function recordLookup(row: Omit<LookupRecord, "id" | "schema">): void {
-  latestCandidate = {
-    ...row,
-    text: clampForRecord(row.text),
-    normalised: clampForRecord(row.normalised),
-    schema: LOOKUP_SCHEMA,
-  };
+  latestCandidate = pendingRowFrom(row);
   if (settleTimer) clearTimeout(settleTimer);
   settleTimer = setTimeout(onSettleTimer, SETTLE_MS);
 }
@@ -491,10 +487,28 @@ export async function writeSyncState(next: Partial<SyncState>): Promise<void> {
   }
 }
 
-/** Starts the copy for this reader: keeps the cursors only for the same reader on a live device. */
+async function highestLocalId(): Promise<number | null> {
+  const database = await openDatabase();
+  return new Promise<number | null>((resolve, reject) => {
+    const request = database
+      .transaction(STORE_NAME, "readonly")
+      .objectStore(STORE_NAME)
+      .openCursor(null, "prev");
+    request.onsuccess = () => resolve(request.result ? (request.result.key as number) : null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/** How many of this device's own searches the copy has yet to upload. */
+export async function countPendingUpload(): Promise<number> {
+  const [rows, state] = await Promise.all([readAll(), readSyncState()]);
+  return countPending(rows, state.pushedThroughLocalId);
+}
+
+/** Starts the copy for this reader: keeps the cursors only for the same reader on a live device; another reader leaves stored rows behind. */
 export async function startCopyFor(readerId: string): Promise<SyncState> {
   const current = await readSyncState();
-  const next = syncStateForReader(current, readerId, () => crypto.randomUUID());
+  const next = syncStateForReader(current, readerId, () => crypto.randomUUID(), await highestLocalId());
   await writeSyncState(next);
   return next;
 }

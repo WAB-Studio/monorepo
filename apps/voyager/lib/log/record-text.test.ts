@@ -2,7 +2,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { clampForRecord, RECORD_TEXT_MAX } from "./record-text";
+import { clampForRecord, pendingRowFrom, RECORD_TEXT_MAX } from "./record-text";
+import { LOOKUP_SCHEMA, type LookupRecord } from "./types";
+
+const base: Omit<LookupRecord, "id" | "schema"> = {
+  at: 1,
+  text: "x",
+  normalised: "x",
+  kind: "word",
+  outcome: "exact",
+  headword: "x",
+  rule: null,
+  senses: 1,
+  translation: null,
+  dictionaryReady: true,
+  origin: null,
+};
 
 test("clampForRecord: 689 characters come back as 500", () => {
   assert.equal([...clampForRecord("a".repeat(689))].length, RECORD_TEXT_MAX);
@@ -18,4 +33,12 @@ test("clampForRecord: an emoji on the boundary is not split", () => {
 test("clampForRecord: a 120-character phrase is untouched", () => {
   const phrase = "ab ".repeat(40);
   assert.equal(clampForRecord(phrase), phrase);
+});
+
+test("pendingRowFrom: a 600-character text and headword key are cut to RECORD_TEXT_MAX", () => {
+  const row = pendingRowFrom({ ...base, text: "a".repeat(600), normalised: "b".repeat(600) });
+  assert.equal([...row.text].length, RECORD_TEXT_MAX);
+  assert.equal([...row.normalised].length, RECORD_TEXT_MAX);
+  assert.equal(row.schema, LOOKUP_SCHEMA);
+  assert.equal(row.id, undefined);
 });
