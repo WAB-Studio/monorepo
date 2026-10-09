@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import sources from "../messages/es/sources.json";
@@ -93,6 +93,11 @@ async function lookupCountOf(db: postgres.Sql, personId: string): Promise<number
   return row.count;
 }
 
+// What the row draws besides its name, whitespace folded: its one meta line.
+async function metaOf(row: Locator, name: string): Promise<string> {
+  return (await row.innerText()).replace(name, "").replace(/\s+/g, " ").trim();
+}
+
 async function factCount(db: postgres.Sql, commitmentId: string): Promise<number> {
   const [row] = await db<{ count: number }[]>`
     select count(*)::int as count from goals.facts where commitment_id = ${commitmentId}
@@ -162,6 +167,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await expect(row).toBeVisible();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
     await expect(row).not.toContainText("diccionario");
+    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas`);
     await expect(row).toBeDisabled();
     expect(await factCount(db, commitmentId)).toBe(0);
 
@@ -170,6 +176,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await page.reload();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
     await expect(row).not.toContainText("diccionario");
+    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas`);
 
     // The threshold itself, stamped the same evening: the evidence mark
     // (never the declared one), named, and still nothing to undo — the same
@@ -177,7 +184,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await insertLookup(db, personId, deviceId, 2, eveningInBogota(day));
     await page.reload();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
-    await expect(row).toContainText("diccionario");
+    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas · ${sources.readingLookups}`);
     await expect(row).not.toContainText("lo dijiste tú");
     await expect(row).not.toContainText("pide el número");
     await expect(row).toBeDisabled();

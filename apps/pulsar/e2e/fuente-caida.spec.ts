@@ -24,7 +24,7 @@ function markDayLabel(civilDay: string): string {
   return `${WEEKDAY_LONG[weekdayIndex]} ${Number(civilDay.slice(8, 10))}`;
 }
 
-type Seed = { goalId: string; goalName: string; tapName: string; today: string };
+type Seed = { goalId: string; goalName: string; tapName: string; evidenceName: string; today: string };
 
 // A goal with a measure, a tap commitment declared today and an evidence one
 // on `reading_lookups`. Nothing under `reading.*` is written.
@@ -47,11 +47,12 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
     values (${person.id}, ${goal.id}, ${tapName}, 'daily', 'tap', now() - interval '20 days')
     returning id
   `;
+  const evidenceName = `Leída por la fuente ${stamp}`;
   await db`
     insert into goals.commitments
       (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
     values (
-      ${person.id}, ${goal.id}, ${`Leída por la fuente ${stamp}`}, 'daily', 'evidence',
+      ${person.id}, ${goal.id}, ${evidenceName}, 'daily', 'evidence',
       (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
       now() - interval '20 days'
     )
@@ -60,7 +61,7 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
     insert into goals.facts (user_id, commitment_id, goal_id, day, written_at)
     values (${person.id}, ${tap.id}, ${goal.id}, ${today}, now())
   `;
-  return { goalId: goal.id, goalName, tapName, today };
+  return { goalId: goal.id, goalName, tapName, evidenceName, today };
 }
 
 async function settle(page: Page, content: string): Promise<void> {
@@ -81,6 +82,12 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       const row = page.locator("button", { hasText: seeded.tapName });
       await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "declared");
       await expect(page.getByText(FAILURE)).toHaveCount(0);
+
+      // The unreadable source still lets the row say what it asks (RP-08), and
+      // never names a source it could not read.
+      const evidence = page.locator("button", { hasText: seeded.evidenceName });
+      const meta = (await evidence.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
+      expect(meta).toBe("1 búsqueda");
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
