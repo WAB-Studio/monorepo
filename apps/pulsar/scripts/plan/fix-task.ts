@@ -255,3 +255,51 @@ test("fixTask: a task added to the plan with inPlan lands unfixed and can be fix
   const refused = await actions.createOneOff({ name: "RP-50 sin meta", day: null, inPlan: true });
   assert.deepEqual(refused, { ok: false, error: "month.errors.invalid" });
 });
+
+test("fixTask and editTask: a goal whose horizon is today has ended yesterday and refuses; one ending tomorrow does not (RP-51, RP-55)", async () => {
+  // The session person owns the fixture goal; the rows seeded below are theirs.
+  const [me] = await sql<{ id: string }[]>`select user_id as id from goals.goals where id = ${goalId}`;
+
+  const seeded: string[] = [];
+  try {
+    const goal = async (name: string, horizon: string): Promise<string> => {
+      const [row] = await sql<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${me.id}, ${name}, ${horizon}) returning id`;
+      seeded.push(row.id);
+      return row.id;
+    };
+    const task = async (id: string, name: string): Promise<string> => {
+      const [row] = await sql<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${me.id}, ${id}, ${name}, true) returning id`;
+      return row.id;
+    };
+    const nameOf = async (id: string) =>
+      (await sql<{ name: string }[]>`select name from goals.one_offs where id = ${id}`)[0].name;
+
+    const tomorrow = new Date(`${today}T12:00:00Z`);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const tomorrowDay = tomorrow.toISOString().slice(0, 10);
+
+    const ended = await goal("RP-51 fixture: termina hoy", today);
+    const toFix = await task(ended, "RP-51 horizonte hoy fijar");
+    const toEdit = await task(ended, "RP-55 horizonte hoy editar");
+    const closed = { ok: false, error: "month.errors.closed" };
+
+    assert.deepEqual(await fix({ oneOffId: toFix, month: thisMonth }), closed);
+    assert.deepEqual(await monthsOf(toFix), [null]);
+    assert.deepEqual(await actions.editTask({ oneOffId: toEdit, name: "otro nombre", month: thisMonth }), closed);
+    assert.deepEqual(await monthsOf(toEdit), [null]);
+    assert.equal(await nameOf(toEdit), "RP-55 horizonte hoy editar");
+
+    const open = await goal("RP-51 fixture: termina mañana", tomorrowDay);
+    const openTask = await task(open, "RP-51 horizonte mañana");
+    assert.deepEqual(await fix({ oneOffId: openTask, month: thisMonth }), { ok: true });
+    assert.deepEqual(await monthsOf(openTask), [`${thisMonth}-01`]);
+  } finally {
+    if (seeded.length > 0) await sql`delete from goals.goals where id in ${sql(seeded)}`;
+  }
+  const [{ count }] = await sql<{ count: number }[]>`
+    select count(*)::int as count from goals.goals where name like 'RP-51 fixture: termina %'`;
+  assert.equal(count, 0);
+});

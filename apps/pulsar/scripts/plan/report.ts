@@ -484,3 +484,83 @@ test("loadReport: a task cut at the month's edge reads its part here and the mon
   const first = byName.get("RP-49 ritmo: primera")!;
   assert.deepEqual([first.part, first.continuesIn], [null, null]);
 });
+
+async function ownerId(): Promise<string> {
+  const [owner] = await sql<{ user_id: string }[]>`select user_id from goals.goals where id = ${minutesGoalId}`;
+  return owner.user_id;
+}
+
+async function seedGoal(name: string, fields: { horizon: string; createdAt?: string; unit?: string }): Promise<string> {
+  const user = await ownerId();
+  const [row] = await sql<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at, measure_unit, measure_name)
+    values (${user}, ${name}, ${fields.horizon}, ${fields.createdAt ?? new Date().toISOString()}, ${fields.unit ?? null}, ${fields.unit ? "Tiempo" : null})
+    returning id`;
+  goalIds.push(row.id);
+  return row.id;
+}
+
+test("loadReport: a goal whose horizon is today has ended the day before; one ending tomorrow has not (RP-49)", async () => {
+  const { dayBefore } = await import("@/lib/day/weeks");
+  const tomorrow = new Date(`${today}T12:00:00Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowDay = tomorrow.toISOString().slice(0, 10);
+  const endsToday = await seedGoal("RP-49 fixture: horizonte hoy", { horizon: today });
+  const endsTomorrow = await seedGoal("RP-49 fixture: horizonte mañana", { horizon: tomorrowDay });
+
+  const report = await loadReport(today);
+  const byId = (id: string) => report.goals.find((goal) => goal.id === id)!;
+  assert.equal(byId(endsToday).endedOn, dayBefore(today));
+  assert.equal(byId(endsTomorrow).endedOn, null);
+});
+
+test("loadReport: the second part of a week cut by a month ends the week's last day and totals what that span holds (RP-17, RP-49)", async () => {
+  // Weeks run Monday to Sunday: week 2 of a goal opened on Saturday 2026-03-28 is 03-30 to 04-05, cut on 04-01.
+  const goalId = await seedGoal("RP-17 fixture: semana partida", {
+    horizon: "2026-06-01",
+    createdAt: "2026-03-28T12:00:00Z",
+    unit: "minutos",
+  });
+  const user = await ownerId();
+  for (const [name, day, estimate] of [
+    ["RP-17 semana: antes del corte", "2026-03-30", 20],
+    ["RP-17 semana: despues del corte", "2026-04-01", 7],
+    ["RP-17 semana: ultimo dia", "2026-04-05", 30],
+  ] as const) {
+    const [task] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+      values (${user}, ${goalId}, ${name}, '2026-04-01', ${estimate}) returning id`;
+    await sql`insert into goals.facts (user_id, goal_id, one_off_id, day) values (${user}, ${goalId}, ${task.id}, ${day})`;
+  }
+
+  const report = await loadReport("2026-04-06");
+  const entry = report.goals.find((goal) => goal.id === goalId)!;
+  assert.deepEqual(
+    entry.weekSplits.map(({ index, month, startsOn, endsOn, total }) => ({ index, month, startsOn, endsOn, total })),
+    [
+      { index: 2, month: "2026-03-01", startsOn: "2026-03-30", endsOn: "2026-03-31", total: 20 },
+      { index: 2, month: "2026-04-01", startsOn: "2026-04-01", endsOn: "2026-04-05", total: 37 },
+    ],
+  );
+});
+
+test("loadReport: a task fixed to last month and done this month is not carried as owed (RP-49)", async () => {
+  const goalId = await seedGoal("RP-49 fixture: arrastrada hecha", {
+    horizon: `${monthFrom(today, 2)}-01`,
+    createdAt: new Date(Date.now() - 70 * 86_400_000).toISOString(),
+    unit: "minutos",
+  });
+  const user = await ownerId();
+  const lastMonth = `${monthFrom(today, -1)}-01`;
+  const [finished] = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${user}, ${goalId}, 'RP-49 arrastrada: hecha', ${lastMonth}, 10) returning id`;
+  await sql`insert into goals.facts (user_id, goal_id, one_off_id, day) values (${user}, ${goalId}, ${finished.id}, ${today})`;
+  await sql`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${user}, ${goalId}, 'RP-49 arrastrada: pendiente', ${lastMonth}, 10)`;
+
+  const report = await loadReport(today);
+  const entry = report.goals.find((goal) => goal.id === goalId)!;
+  assert.deepEqual(entry.carried.map((item) => item.name), ["RP-49 arrastrada: pendiente"]);
+});
