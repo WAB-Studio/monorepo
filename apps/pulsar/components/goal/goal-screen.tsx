@@ -172,8 +172,10 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         planEnd.slice(0, 4) === today.slice(0, 4) ? "" : ` de ${planEnd.slice(0, 4)}`
       }`
     : null;
+  // A goal with no measure keeps its plan; one measured in something else has none.
+  const measuresOther = goal.measureUnit !== null && !isTimeUnit(goal.measureUnit);
   const planSection =
-    goal.roadmap.state === "empty" ? null : (
+    goal.roadmap.state === "empty" || measuresOther ? null : (
       <Section label={t("roadmap.meta.planLabel")}>
         <Row
           href={`/metas/${goal.id}/plan`}
