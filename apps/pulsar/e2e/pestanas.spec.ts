@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, settled, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RNP-16, RNP-17, RNP-18 (`ArmazonPestanas`, `ArmazonPestanasHoja`,
@@ -436,6 +436,7 @@ test.describe("pestañas y riel", () => {
     try {
       await page.goto("/");
       await loaded(page);
+      await settled(page);
       const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
       expect(scrollHeight).toBeGreaterThan(800 + 100);
       const nav = await navBox(page);

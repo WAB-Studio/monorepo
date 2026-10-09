@@ -3,8 +3,6 @@ import { createHash } from "node:crypto";
 // RFC 7636 §4.1: 43 to 128 characters of the unreserved set.
 const VERIFIER = /^[A-Za-z0-9\-._~]{43,128}$/;
 
-export const CHALLENGE_METHOD = "S256";
-
 export function verifierValid(verifier: string): boolean {
   return VERIFIER.test(verifier);
 }

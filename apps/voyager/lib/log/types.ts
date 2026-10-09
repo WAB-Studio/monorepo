@@ -35,4 +35,6 @@ export type SyncState = {
   pulledThroughCursor: string | null; // opaque server cursor already merged in, not a bare timestamp
   lastSyncedAt: number | null; // Date.now(), epoch ms
   enabled: boolean;
+  readerId: string | null; // the `sub` of the reader the copy ran for; null before this was recorded
+  retired: boolean; // the server retired this device: final, only a fresh deviceId copies again
 };

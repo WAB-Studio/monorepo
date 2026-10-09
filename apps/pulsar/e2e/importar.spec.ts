@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { appAlerts, test, expect } from "./fixtures";
+import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 
 // The page always carries Next's own empty `role="alert"` route announcer, so an
 // alert is the one with text in it.
@@ -17,7 +17,7 @@ const NO_KEY = messages.errors.noKey;
 // when its button is there.
 async function settled(page: Page) {
   await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
+  await pageSettled(page);
 }
 
 async function boxOf(locator: ReturnType<Page["locator"]>) {

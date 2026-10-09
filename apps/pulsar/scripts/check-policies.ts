@@ -2498,6 +2498,20 @@ async function checkAuditoria0015(): Promise<void> {
       );
       assert("P214", lookup.code === "42501", `authenticated reads a client by URL, sqlstate = ${lookup.code ?? "none"}`);
 
+      const [commitment] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${goal.id}, 'Tocar', 'daily', 'tap') returning id`;
+      for (const [code, back] of [["P215", 2], ["P216", 3]] as const) {
+        const written = await attempt(
+          tx,
+          (sp) => sp`insert into goals.facts (user_id, commitment_id, day) values (${subject}, ${commitment.id}, current_date - ${back}::int)`,
+        );
+        assert(code, written.code === undefined, `commitment fact ${back - 1} (one_off_id null), sqlstate = ${written.code ?? "none"}`);
+      }
+      const nulls = await tx<{ n: number }[]>`
+        select count(*)::int as n from goals.facts where user_id = ${subject} and one_off_id is null`;
+      assert("P217", nulls[0].n === 2, `facts with a null one_off_id = ${nulls[0].n}`);
+
       throw forcedRollback;
     })
     .catch((error: unknown) => {

@@ -444,6 +444,18 @@ test("fix_task refuses a month before the goal opened and one past its end, and 
   assert.equal(row.planned_month, null);
 });
 
+test("the intruder's fingerprint sees its facts: adding one moves the digest, removing it puts it back", async () => {
+  const before = await fingerprint();
+  const [fact] = await admin`
+    insert into goals.facts (user_id, one_off_id, day) values (${intruder.id}, ${intruderLoose}, current_date) returning id`;
+  try {
+    assert.notEqual(await fingerprint(), before, "a new fact of the intruder left the digest where it was");
+  } finally {
+    await admin`delete from goals.facts where id = ${fact.id}`;
+  }
+  assert.equal(await fingerprint(), before);
+});
+
 test("every tool on the intruder's target answers the act's not-found key and writes nothing", async () => {
   const cases: [string, Record<string, unknown>, string, string][] = [
     ["declare_fact", { commitment_id: intruderCommitment, quantity: 5 }, "day.errors.notFound", day.errors.notFound],

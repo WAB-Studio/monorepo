@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Split's columns and Panel space their children by a gap, never a margin
@@ -29,6 +29,7 @@ for (const width of widths) {
       const page = await context.newPage();
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
+      await expect(page.getByText("Todavía no hay nada que anotar.", { exact: true })).toBeVisible();
       const rects = await siblingRects(page, "Todavía no hay nada que anotar.");
       expect(rects.length).toBeGreaterThanOrEqual(4);
       const [title, body, first, second] = rects;
@@ -70,6 +71,7 @@ for (const width of widths) {
       for (const path of ["/", `/metas/${goal.id}`]) {
         await page.goto(path);
         await expect(page.locator("main")).toHaveCount(1);
+        await expect(page.locator("main")).toBeVisible();
         // Cards: the 1px-bordered, 14px-radius boxes, grouped by their column.
         const groups = await page.locator("main").evaluate((main) => {
           const cards = Array.from(main.querySelectorAll("section, div")).filter((el) => {
@@ -121,7 +123,7 @@ for (const width of widths) {
     try {
       const page = await context.newPage();
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/metas/${goal.id}`);
+      await visit(page, `/metas/${goal.id}`);
       const gap = await page.locator("main").evaluate((main) => {
         const part = (name: string) => main.querySelector(`[class*="split-module"][class$="__${name}"]`)!;
         return part("after").getBoundingClientRect().top - part("before").getBoundingClientRect().bottom;

@@ -59,10 +59,15 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // transaction — delete, insert, fallback select alike — runs only
       // after the winner's has fully landed. A one-off never conflicts on
       // `facts_commitment_day_unique` (it carries no `commitmentId`), so it
-      // takes no lock.
+      // takes no lock on that index; its own lock, below, serialises the
+      // read-then-insert so two marks leave one fact.
       if (commitmentId != null) {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${commitmentId}::text || ':' || ${day}, 0))`,
+        );
+      } else if (oneOffId != null) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${oneOffId}::text || ':once', 0))`,
         );
       }
 
@@ -134,6 +139,13 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           throw new NamedError(dayCheck.error.issues[0].message);
         }
 
+        // A one-off done twice keeps the fact it already has: adopted, never
+        // written again, whether or not the unique index exists.
+        const [done] = await tx.execute<{ id: string; day: string }>(sql`
+          select id, day::text as day from ${facts} where one_off_id = ${oneOffId}
+        `);
+        if (done) return { id: done.id, day: done.day };
+
         goalId = oneOff.goalId;
       }
 
@@ -186,26 +198,28 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // this statement, one lands and one conflicts, and `on conflict …
       // do nothing` turns the second into a no-op rather than a 500 — a
       // one-off's insert never carries a `commitmentId`, so it never matches
-      // that partial index and always returns a row here.
+      // that partial index. Without a target it covers the one-off's own
+      // index too (module 410), and is correct before that index exists.
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${facts}
           (user_id, commitment_id, one_off_id, goal_id, day, quantity, note)
         values
           (${person.id}, ${commitmentId ?? null}, ${oneOffId ?? null}, ${goalId},
            ${day}, ${quantity ?? null}, ${note ?? null})
-        on conflict (commitment_id, day) where commitment_id is not null do nothing
+        on conflict do nothing
         returning id
       `);
 
       if (inserted) return { id: inserted.id, day };
 
       // The index refused this insert: another device's tap for the same
-      // commitment and day landed first. Read back its id rather than fail —
+      // subject and day landed first. Read back its id rather than fail —
       // a second tap from another device is a no-op, never an error.
-      const [existing] = await tx.execute<{ id: string }>(sql`
-        select id from ${facts}
-        where commitment_id = ${commitmentId} and day = ${day}
-      `);
+      const [existing] = await tx.execute<{ id: string }>(
+        commitmentId != null
+          ? sql`select id from ${facts} where commitment_id = ${commitmentId} and day = ${day}`
+          : sql`select id from ${facts} where one_off_id = ${oneOffId}`,
+      );
       if (!existing) {
         // Unreachable: the conflict that just fired proves a row is there.
         throw new NamedError("day.errors.notFound");

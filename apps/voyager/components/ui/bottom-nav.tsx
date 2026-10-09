@@ -6,43 +6,17 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Heading, Link } from "@radix-ui/themes";
 
+import { readNavQuery, writeNavQuery } from "@/lib/nav/query-storage";
+
 import { TapTarget } from "./tap-target";
 import styles from "./bottom-nav.module.css";
 
 // The query name `search-screen.tsx` writes to the address bar on settle.
 const QUERY_PARAM = "q";
 
-// Carries the search box's last settled text past a trip away from `/`, so
-// Buscar retypes nothing. `search-screen.tsx` writes the URL with raw
-// `history.pushState`/`replaceState`, which next/navigation's own
-// `useSearchParams()` does not observe, and this component remounts on every
-// route change (`Page` mounts a fresh `BottomNav` per screen) so a React
-// state alone would not survive the trip either.
-const QUERY_STORAGE_KEY = "voyager:nav-query";
-
 function readAddressBarQuery(): string {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get(QUERY_PARAM) ?? "";
-}
-
-function readStoredQuery(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.sessionStorage.getItem(QUERY_STORAGE_KEY) ?? "";
-  } catch {
-    // Private browsing can refuse storage; Buscar falls back to a bare `/`.
-    return "";
-  }
-}
-
-function storeQuery(query: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (query) window.sessionStorage.setItem(QUERY_STORAGE_KEY, query);
-    else window.sessionStorage.removeItem(QUERY_STORAGE_KEY);
-  } catch {
-    // Nothing to recover: the next read falls back to "".
-  }
 }
 
 function searchHref(query: string): string {
@@ -132,7 +106,7 @@ export function BottomNav() {
   // `speechSupported` already does.
   const query = useSyncExternalStore(
     subscribeNever,
-    () => (pathname === "/" ? readAddressBarQuery() : readStoredQuery()),
+    () => (pathname === "/" ? readAddressBarQuery() : readNavQuery()),
     getServerQuery,
   );
 
@@ -140,7 +114,7 @@ export function BottomNav() {
   // reads: leaving `/` with a query already committed must still find it
   // from `/registro` or `/cuenta`, which never carry `q` themselves.
   useEffect(() => {
-    if (pathname === "/") storeQuery(query);
+    if (pathname === "/") writeNavQuery(query);
   }, [pathname, query]);
 
   // Chrome on Android reads no `interactiveWidget`: an open keyboard

@@ -14,6 +14,7 @@
     "undo": "desmarcar lo que ya hiciste"
   },
   "consentLead": "Podrá leer tus metas y anotar lo que hagas. Puedes revocarlo en Conexiones.",
+  "returnsTo": "al permitir, vuelves a <host>{address}</host>",
   "allow": "Permitir",
   "deny": "No permitir",
   "anonymousClient": "Una aplicación",

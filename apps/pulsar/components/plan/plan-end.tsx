@@ -83,14 +83,14 @@ export function AddTask({
   goalName,
   unit,
   months,
-  variant = "solid",
+  variant,
 }: {
   goalId: string;
   goalName: string;
   unit: string | null;
   months: string[];
   // Outline while the rhythm form's own solid act is on screen: one per screen.
-  variant?: "solid" | "outline";
+  variant: "solid" | "outline";
 }) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);

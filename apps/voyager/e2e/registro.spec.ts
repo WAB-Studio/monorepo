@@ -643,6 +643,8 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
         pulledThroughCursor: null,
         lastSyncedAt: null,
         enabled: true,
+        readerId: null,
+        retired: false,
       },
     });
 

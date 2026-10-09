@@ -193,7 +193,7 @@ test("readSince: a foreign row never goes back up — only local rows come back"
   currentStore.rows.set(1, { id: 1, text: "a" });
   currentStore.rows.set(2, { id: 2, text: "b", device: "other", deviceSeq: 1 });
   currentStore.rows.set(3, { id: 3, text: "c" });
-  const rows = await readSince(0, 10);
+  const { own: rows } = await readSince(0, 10);
   assert.deepEqual(rows.map((r) => r.id), [1, 3]);
 });
 
@@ -201,7 +201,7 @@ test("readSince: only rows above afterLocalId, exclusive", async () => {
   const { readSince } = await getMerge();
   currentStore = new FakeStore();
   for (const id of [1, 2, 3, 4]) currentStore.rows.set(id, { id, text: `row-${id}` });
-  const rows = await readSince(2, 10);
+  const { own: rows } = await readSince(2, 10);
   assert.deepEqual(rows.map((r) => r.id), [3, 4]);
 });
 
@@ -209,7 +209,7 @@ test("readSince: at most limit rows", async () => {
   const { readSince } = await getMerge();
   currentStore = new FakeStore();
   for (const id of [1, 2, 3, 4, 5]) currentStore.rows.set(id, { id, text: `row-${id}` });
-  const rows = await readSince(0, 2);
+  const { own: rows } = await readSince(0, 2);
   assert.deepEqual(rows.map((r) => r.id), [1, 2]);
 });
 
@@ -217,7 +217,7 @@ test("readSince: rows come back in key order, whatever order they were stored in
   const { readSince } = await getMerge();
   currentStore = new FakeStore();
   for (const id of [3, 1, 2]) currentStore.rows.set(id, { id, text: `row-${id}` });
-  const rows = await readSince(0, 10);
+  const { own: rows } = await readSince(0, 10);
   assert.deepEqual(rows.map((r) => r.id), [1, 2, 3]);
 });
 
@@ -286,4 +286,42 @@ test("mergeForeign never touches a pre-existing local row", async () => {
   currentStore.seq = 1; // the local row already claimed key 1
   await mergeForeign([foreignRow("dev-f", 0)]);
   assert.deepEqual(currentStore.rows.get(1), { id: 1, text: "local", normalised: "local" });
+});
+
+test("readSince: 10 own, 1200 foreign, 1 own — rounds that follow scannedThrough reach row 1211", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  for (let id = 1; id <= 10; id++) currentStore.rows.set(id, { id, text: `own-${id}` });
+  for (let id = 11; id <= 1210; id++) {
+    currentStore.rows.set(id, { id, text: `foreign-${id}`, device: "other", deviceSeq: id });
+  }
+  currentStore.rows.set(1211, { id: 1211, text: "late" });
+  let cursor = 0;
+  const sent: number[] = [];
+  for (let round = 0; round < 10; round++) {
+    const { own, scannedThrough } = await readSince(cursor, 500);
+    sent.push(...own.map((r) => r.id as number));
+    if (scannedThrough !== null) cursor = scannedThrough;
+  }
+  assert.equal(sent.includes(1211), true);
+  assert.equal(sent.length, 11);
+});
+
+test("readSince: a page of 500 foreign rows has no own rows and names the last id scanned", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  for (let id = 1; id <= 500; id++) {
+    currentStore.rows.set(id, { id, text: `f-${id}`, device: "other", deviceSeq: id });
+  }
+  const page = await readSince(0, 500);
+  assert.deepEqual(page.own, []);
+  assert.equal(page.scannedThrough, 500);
+});
+
+test("readSince: an empty page names no id", async () => {
+  const { readSince } = await getMerge();
+  currentStore = new FakeStore();
+  const page = await readSince(7, 500);
+  assert.equal(page.scannedThrough, null);
+  assert.equal(page.scanned, 0);
 });

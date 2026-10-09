@@ -268,5 +268,6 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
 
   // One settled word, never one request per keystroke.
   const decoration = requestsWhileTyping.filter((url) => url.includes("/api/word/"));
+  expect(decoration.length, "decoration never asked").toBeGreaterThanOrEqual(1);
   expect(decoration.length).toBeLessThanOrEqual(2);
 });

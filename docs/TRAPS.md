@@ -11,7 +11,10 @@ holds only what a person could not guess from the code.
 
 Measured 2026-09-10, module 8 (the photo credits in `/cuenta`).
 
-`/api/word/photo` stores and returns **bare licence codes** — `by`, `by-sa`, `cc0`, `pdm`. The
+**Superseded as to its subject:** `/api/word/photo` and the credits list were removed with RL-36 (retired
+2026-09-14). The lesson below stands; the route no longer exists.
+
+The route stored and returned **bare licence codes** — `by`, `by-sa`, `cc0`, `pdm`. The
 component was supposed to turn those into a name a reader recognises, using the
 `account.info.photoLicence` map module 3 had already shipped. It never did: it interpolated
 `credit.licence` verbatim, so a real row rendered «osde8info · by-sa» where the board says
@@ -842,32 +845,17 @@ shows green for the wrong reason — which is exactly the failure a negative con
 
 ### The voyager suite drives the real decoration routes, and pays for them
 
-Counted 2026-09-11 across `apps/voyager/e2e`: **11 of the 19 spec files search for words and
-intercept nothing.** Only `export`, `speak`, `sync`, `url` and `word` call
-`page.route("**/api/word/photo", ...)`; `log.spec.ts` (15 tests), `registro.spec.ts` (12),
-`palabra-historial.spec.ts` (13), `sin-entrada.spec.ts` (9) and seven more do not. That is **79
-tests** reaching `/api/word/photo` and `/api/word/text` for real, on every run.
+**Superseded 2026-10-08.** Measured 2026-09-11, when `/api/word/photo` still existed: 79 tests reached
+it and `/api/word/text` for real on every run. That route went with RL-36 (2026-09-14). The cost it
+named stays true for the routes that remain and is now guarded in `apps/voyager/e2e/fixtures.ts`:
 
-What each run therefore does:
-
-- **Writes rows to the shared Postgres**, which is the user's production database. Measured that
-  day: three separate purges of 5, 4 and 4 rows, plus their bucket objects, all left by suites.
-  `reading.word_photos` has no expiry, so nothing removes them on its own.
-- **Spends the model's daily cap.** `/api/word/text` calls `gpt-5-nano`. The only thing standing
-  between a suite run and a real bill is a human remembering `OPENAI_API_KEY=""` as a process
-  override — a convention, never a guard.
-- **Puts an unbounded network call inside timing-sensitive tests.** `log.spec.ts:377` races an 800 ms
-  settle window against a killed tab; Openverse's latency lands in the middle of it. That spec fails
-  in CI on branches that touch no part of the log, and passes on one that does, which is the shape
-  of a race and not of a regression.
-
-`url.spec.ts` is the warning written in the file itself: it **defines** `stubDecorationRoutes` and
-calls it in one of its five tests.
-
-**The stub belongs in the fixture, not in each spec.** A spec that wants the real route should opt
-in and say why, the way `foto.spec.ts` does — it drives the real route deliberately, with two
-headwords chosen so nothing is written: `dog` is already cached and `grudge` is refused by the
-guard before Postgres.
+- `test`/`expect` imported from `./fixtures` intercept `/api/word/text`, `/api/word/unlisted` and
+  `/api/phrase/notes` and answer them deterministically, tagging each stub with `x-e2e-word-stub`.
+  A watchdog fails a spec that reached a real one without `allowRealWordRoute(route, reason)`.
+- A spec that imports `@playwright/test` directly skips the guard: those three routes then write
+  rows to the shared Postgres and spend the model's daily cap.
+- An unbounded network call inside a timing-sensitive test is a race, not a regression; keep real
+  routes out of any spec that races a settle window.
 
 ### Every worktree shares one stash, so a lane can pop another lane's work
 
@@ -1790,7 +1778,7 @@ peticiones** en el proyecto, repartidas así.
 
 | modelo | peticiones | ¿lo llama este repo? |
 |---|---:|---|
-| `gpt-5-nano` | 368 | sí, es `apps/voyager/lib/word/model.ts:11` |
+| `gpt-5-nano` | 368 | sí; hoy `lib/word/model.ts` usa `gpt-5-mini` y `lib/phrase/notes-model.ts` `gpt-5-nano` (2026-10-08) |
 | `gpt-4o-mini-transcribe` | 36 | no |
 | `gpt-realtime-mini` | 12 | no |
 | `gpt-4.1-nano` / `gpt-4.1-mini` | 4 | no |
@@ -1800,8 +1788,9 @@ peticiones** en el proyecto, repartidas así.
 tiempo real: esas 53 peticiones son de otra parte, y el CSV no las distingue porque todo cae bajo un
 `project_id` y una `api_key_id`.
 
-Y el desajuste no se queda ahí. El repo tiene **un solo sitio** que llama al modelo —
-`apps/voyager/app/api/word/text/route.ts:102` — y pide cupo en `lib/word/spend.ts` **antes** de
+Y el desajuste no se queda ahí. Al medir (2026-09-11) el repo tenía **un solo sitio** que llamaba al
+modelo; a 2026-10-08 son **tres rutas** —`app/api/word/text`, `app/api/word/unlisted` y
+`app/api/phrase/notes`— y cada una pide cupo en `lib/word/spend.ts` (`claimDailyCall`) **antes** de
 llamar, así que ninguna llamada queda sin contar. El 2026-09-10 `reading.model_spend` marcó
 `calls=19` y el CSV marca **346 peticiones de `gpt-5-nano` ese día**. Las otras 327 no salieron de
 aquí.
@@ -2580,17 +2569,24 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
 
 ## `page.goto` returns with the loading fallback still standing
 
-Measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
-(`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a
-never-used lane. The failure's `error-context.md` showed `main` holding the `(app)/loading.tsx` skeleton
-beside the streamed page. The CI runner reaches the database slower, so `load` fires before the
-Suspense boundary swaps in the content; a box read straight after `goto` measures the skeleton or nothing.
-A fresh identity was not the cause.
+`load` fires with `(app)/loading.tsx` up; the real page sits in a hidden streamed `div` with no box. A box, a style or a
+count read straight after `goto`, `waitForURL` or `reload` measures the skeleton or nothing. `evaluate` waits for a node to
+attach, not to be visible.
 
-- Anchor every measuring spec on the settled page before its first box: a visible element of the
-  content and `await expect(page.locator("main")).toHaveCount(1)`.
-- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
-  from inside the repo) before guessing at a red the local suite does not show.
+- Footprint 1, measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
+  (`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a never-used lane. The
+  failure's `error-context.md` showed `main` holding the skeleton beside the streamed page. The runner reaches the database
+  slower, so the Suspense boundary swaps late. A fresh identity was not the cause.
+- Footprint 2, measured 2026-10-08 on CI run 37823517494, `[mobile] e2e/columnas-espacio.spec.ts:26`: `Expected: >= 4`,
+  `Received: 0` at `:33`; the 1024 twin passed 1.5 s earlier on the same shard. `siblingRects` ran `evaluate` right after
+  `goto` and the children were still zero-sized. Footprint: `private/ci-reds/425/columnas-espacio-footprint.txt` in the main
+  checkout. The same day: `metas-barrido:33`, `campo-chip:44-52`, `plan-ritmo:250` (`private/ci-reds/flakes-2026-10-08/`).
+- Do: call `settled(page)` from `e2e/fixtures.ts` before the first measure, or `visit(page, url)` for `goto` + `settled`.
+  `settled` is `expect(main).toHaveCount(1)`, then `toBeVisible()`, then `document.fonts.ready`. The count rule comes
+  first: a strict `main` locator throws on the two `main`s of the skeleton and the page.
+- Never retry, sleep or `waitForTimeout` to buy quiet. Save `private/playwright-results/` before rerunning.
+- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`, from inside the repo)
+  before guessing at a red the local suite does not show.
 
 ## A pulsar lane has no member identity, so `check:goal-actions` dies there
 
@@ -2865,6 +2861,29 @@ branch could pass until it was restored.
   assertions that pin RP-47's plan order. The e2e followed a DESIGN line RP-47 had superseded; it was the spec that was wrong.
   The e2e only failed from a Wednesday, the first weekday that draws two endings.
 
+## An advisory lock taken inside a statement does not refresh that statement's snapshot
+
+- `select pg_advisory_xact_lock(k)` in a CTE of the same `insert … select count(*)` waits for the lock, but the count reads
+  the snapshot taken when the statement began. The second of two racing uploads waits, then counts zero of the first's rows
+  and writes past the cap.
+- Count inside a `VOLATILE` plpgsql function that takes the lock first: under READ COMMITTED each statement in it takes a
+  fresh snapshot after the lock is granted. One round trip still.
+- Measured 2026-10-08: voyager `reading.sync_rows_today`; mutant «inline lock» left 4 rows for a cap of 2 (S22 in
+  `apps/voyager/scripts/check-sync.ts`).
+
+## A `using(true)` UPDATE policy hides behind the SELECT policy
+
+- An `UPDATE … WHERE col = x` or `… RETURNING` also needs the row visible under the SELECT policy, so a probe written that
+  way stays green when the UPDATE policy is `using(true)`.
+- Prove an UPDATE policy with an update that reads no column: no `WHERE`, no `RETURNING`, inside a savepoint.
+- Measured 2026-10-08: voyager S16 and G5 green under `devices_update_self using(true)`; G8 and the rewritten S16 red.
+
+## `gh api …/jobs/<id>/logs` refuses a log with terminal escapes
+
+- It exits with nothing unless given `--allow-escape-sequences`; a grep over its output then reads as «no failures».
+- `workflow_dispatch` reads the `ci.yml` of the ref it runs on: a throwaway mutation branch may cut it to the one job it
+  needs. Never merge such a branch.
+
 ## Un carril que cambia de rama sirve 404 en rutas que existen
 
 Un carril reutilizado guarda el `.next` del servidor que corrió la rama anterior. Con la rama nueva, `next dev`
@@ -2893,3 +2912,4 @@ Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, whic
   `Escape` may close only the inner step.
 - Never add a retry or a second `Escape` to buy quiet. Save `private/playwright-results/` first; the CI log is kept at
   `private/ci-431-e2e4.log` in the main checkout.
+

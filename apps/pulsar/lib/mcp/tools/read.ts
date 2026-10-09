@@ -1,6 +1,7 @@
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { pgCode } from "@/lib/db-error";
 import { errorOf } from "@/lib/mcp/errors";
 import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
@@ -39,8 +40,8 @@ async function run(ctx: ServerContext, load: () => Promise<Outcome>): Promise<Ca
   try {
     return answer(await actAs(person, load));
   } catch (error) {
-    // The cause stays in the server's log; the caller reads only the sentence.
-    console.error("mcp read tool failed:", error instanceof Error ? error.message : String(error));
+    // The name and the SQLSTATE only: a driver's message carries the query and its parameters (RNP-15).
+    console.error("mcp read tool failed:", error instanceof Error ? error.name : "unknown", pgCode(error) ?? "");
     return answer({ error: "mcp.errors.unknown" });
   }
 }

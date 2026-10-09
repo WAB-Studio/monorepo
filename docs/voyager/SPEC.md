@@ -66,7 +66,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   `grudge` draws SUSTANTIVO «rencor, manía, ojeriza» before VERBO, and `leave` draws VERBO «dejar,
   abandonar…» before SUSTANTIVO «permiso, excedencia…» — the two opposite orders this code's own
   text claims, out of one table. The table was already wired through `groupFor`
-  (`lib/dictionary/index-build.ts:101`) and credited at `/cuenta`; only the tick was missing.
+  (`lib/dictionary/index-build.ts:139`) and credited at `/cuenta`; only the tick was missing.
 
   **What it cannot do, measured the same day.** The order is a corpus's, so it is wrong wherever the
   reader's book disagrees with film subtitles. `creep` is scored `"nv"` and draws its noun group —
@@ -83,13 +83,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   **When the form's suffix pins a part of speech — only a verb takes `-ing` or `-ed`, only an
   adjective takes `-ly` — that group leads the headword's own, ahead of any frequency order.** It is
   answered from the device and touches the network on no keystroke.
-  - Measured 2026-09-10 by `apps/voyager/scripts/check-dictionary.ts`: **D7 back to 53/53** from the
-    34 that `#128` left, and **D12 new — 27 candidates carried a defect before the filter, 0 after**.
-    The filter is two rules, both driven against the shipped asset: a one-letter lemma is not a lemma
-    (`bed` → `b`), and a regular suffix rule loses to `IRREGULAR_FORMS` where the table governs that
-    category (`bed` → `be`, whose real past is `was`/`were`). Matched by rule family, not blindly:
-    `running` → `run` survives, because `-ing` has no irregular family to lose to even though `run`
-    is in the table for `ran`.
+  - Measured by `apps/voyager/scripts/check-dictionary.ts` (D7, D12), the figures and the two filter rules
+    are RL-40's: see its Measured sub-point under «Retired». D12 reads 23 candidates before the filter, 0 after.
   - Driven, not asserted: `bed` answers with its own entry and offers nothing; `left` offers `leave`,
     `faster` offers `fast`, `gone` offers `go`, `women` offers `woman`, `people` offers `person`.
     `word` offers nothing, so an answered query gains no clutter.
@@ -166,9 +161,6 @@ this gets built, and no schema, table or column is "prepared for" it.
   - Board: `PalabraPronunciacionOscuroMovil`, drawn 2026-09-20 and redrawn the same day to carry the
     example's foot line, the voice control and the headless block.
 
-- [ ] **RL-48** — A search that found nothing is recorded like any other the reader settled on, so the
-  record holds what the dictionary could not answer and not only what it could. The same settling rule
-  governs it: a word half-typed is never a row.
 - [x] **RL-49** — A sign-in link that does not let the reader in says which of the two things went
   wrong. A link that is genuinely spent or expired is named as such, and the reader is sent to ask
   for another. A verification that never completed — the auth gateway did not answer — is named as
@@ -242,6 +234,12 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 - [ ] **RL-08** — A sentence is translated by the device's own translator when the browser offers one and it is ready. Whether it does is asked of the browser at runtime, on every open, and never inferred from the browser's name or version.
 - [x] **RL-09** — When the device offers no translator, the sentence is translated over the network, and the answer says the translation came from the network. *This is a server surface and the sentence path's own exception to "no backend": one route handler that holds the provider's identity and any key it needs off the client and makes the provider a one-file change. Nothing on the word path passes through it, ever.*
+- [x] **RL-53** — When the provider's best pick for a sentence is unusable — empty, the quota warning, or an echo of
+  what was typed — the route does not give up on the reply: it reads the provider's other candidates (`matches`)
+  through the same gate and answers with the usable one of highest `match` score, whatever its position. Only when
+  none is usable does the route answer 502. A quota refusal (`responseStatus` not 200) stops before `matches` is
+  read. Measured live: MyMemory's best pick for «the cat sat on the mat» is empty while a lower entry answers it in
+  full.
 - [ ] **RL-10** — While the device's translator is downloading what it needs, the interface says so and the box stays usable.
 - [x] **RL-11** — When the device has a translator that is not yet installed, that sentence is translated over the network and a single control offers to install the translator. Activating that control is what starts the download; every sentence after it is translated on the device. A person who never activates it keeps getting network translations and is never blocked.
 
@@ -285,10 +283,12 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-25** — The reader sees the list of devices that have copied to their account: which one is
   in their hand, when each was last seen, and how many searches it has copied. They can retire any of
   them, their own included.
-- [ ] **RL-30** — With an account open on the device, the copy starts on its own and is never asked
-  about: it sends up what this device already had and brings down what the others recorded, with no
-  act from the reader and no switch that turns it off. Signing out is the only way to stop it. With
-  no account, nothing leaves the device.
+- [ ] **RL-52** *(successor of RL-30)* — With an account open on the device, nothing leaves it until the reader
+  confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
+  had and brings down what the others recorded, with no further act. Signing out stops it. A device the reader
+  retired stays retired: it offers no copy until the reader signs out and signs in, and then it copies as a new
+  device. The sign-in link works in any browser. With no account, nothing leaves the device. Decided by the user
+  2026-10-08.
 - [x] **RL-32** — The reader reads their record grouped by word: one row per word, with how many
   times it was searched, ordered by frequency, case-insensitive; and tapping a word opens every one
   of its searches with its date. This replaces the chronological list.
@@ -318,10 +318,11 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-46** — A sentence answered by translation also names the terms in it that are not obvious
   and says what they are. The app picks which terms earn a note; a note on every word is RL-31's
   answer, not this one.
-- [ ] **RL-31** — A string of more than one word that the dictionary has no entry for, and that is
-  not treated as a sentence, never gets silence: the app names what it did not find and offers,
-  underneath, the dictionary's own answer for each of its words. It answers from the device, and
-  touches the network on no keystroke.
+- [x] **RL-54** *(successor of RL-31)* — A string of two or more words that the dictionary has no entry for is
+  answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-37's answer. Only a string of
+  more than 60 words is not sent anywhere: the app names what it did not find and offers, underneath, the
+  dictionary's own answer for each of its words. That last answer comes from the device and touches the network on
+  no keystroke. Decided by the user 2026-10-08.
 - [x] **RL-37** — A sentence the app cannot translate gets the same answer a string it never tried
   to translate gets: the app names what it could not answer and offers, underneath, the dictionary's
   own answer for each of its words. This replaces the notice that only said the translation failed —
@@ -398,7 +399,7 @@ Dead codes. The number stays burned and the tick stays as it was.
   also inflects from is **offered below it, never instead of it**: `left` answers as «izquierda» and
   offers `leave` under it. Board: `PalabraConFlexion`.
   - Measured 2026-09-10 by `apps/voyager/scripts/check-dictionary.ts`: **D7 back to 53/53** from the
-    34 that `#128` left, and **D12 new — 27 candidates carried a defect before the filter, 0 after**.
+    34 that `#128` left, and **D12 new — 23 candidates carried a defect before the filter, 0 after** (written as 27 on 2026-09-10; re-measured 2026-10-08).
     The filter is two rules, both driven against the shipped asset: a one-letter lemma is not a lemma
     (`bed` → `b`), and a regular suffix rule loses to `IRREGULAR_FORMS` where the table governs that
     category (`bed` → `be`, whose real past is `was`/`were`). Matched by rule family, not blindly:
@@ -431,7 +432,7 @@ Dead codes. The number stays burned and the tick stays as it was.
   gone», «ido, ha muerto»; of `women`, «Femenil». RL-40 keeps the exact entry first and puts the
   inflection back underneath it._
   _Its D9 numbers above are what 2026-09-07 measured and are kept as that. Read today they differ —
-  generated 1881/2345 = 80.2%, blended 2248/2731 = 82.3%, irregular unchanged at 95.1% — and **that
+  generated 1880/2345 = 80.2%, blended 2247/2731 = 82.3%, irregular unchanged at 95.1% — and **that
   drift is not `#128`'s**: the three figures come out identical with and without its line. Whatever
   moved them is older and unfound. RL-40 takes no number from here; it measures its own._
 
@@ -472,6 +473,23 @@ Dead codes. The number stays burned and the tick stays as it was.
   to take it off the device — to a file, or to the copy held by the reader's account — and to bring
   back what the same reader's other devices recorded; never on the path that answers a lookup.
   _Retired 2026-09-09. Successor: RL-38._
+
+- [ ] **RL-48** — A search that found nothing is recorded like any other the reader settled on, so the
+  record holds what the dictionary could not answer and not only what it could. The same settling rule
+  governs it: a word half-typed is never a row.
+  _Retired 2026-10-08. Successor: none — superseded by RL-39, which the user kept: a search that found nothing leaves no row. Never built._
+
+- [ ] **RL-30** — With an account open on the device, the copy starts on its own and is never asked
+  about: it sends up what this device already had and brings down what the others recorded, with no
+  act from the reader and no switch that turns it off. Signing out is the only way to stop it. With
+  no account, nothing leaves the device.
+  _Retired 2026-10-08. Successor: RL-52. A copy that starts on its own cannot tell the reader's own sign-in from a link someone else opened for them; the copy now waits for one confirmation._
+
+- [ ] **RL-31** — A string of more than one word that the dictionary has no entry for, and that is
+  not treated as a sentence, never gets silence: the app names what it did not find and offers,
+  underneath, the dictionary's own answer for each of its words. It answers from the device, and
+  touches the network on no keystroke.
+  _Retired 2026-10-08. Successor: RL-54. With `PHRASE_MIN_TOKENS = 2` its branch was unreachable: any string of two or more words without an entry goes to the phrase route._
 
 ---
 

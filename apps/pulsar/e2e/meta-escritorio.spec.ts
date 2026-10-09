@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { civilDateInZone } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, settled as pageSettled } from "./fixtures";
 
 // RNP-17: the goal opens in two columns from 1024 — the commitments left, the
 // end, the figure and the phases right — and «Renombrar» and «Archivar» sit
@@ -34,7 +34,7 @@ async function seedGoal(db: postgres.Sql, personId: string, name: string): Promi
 async function settled(page: Page) {
   await expect(page.getByText("Compromiso ancho", { exact: true })).toBeVisible();
   await expect(page.getByText("Fase ancha", { exact: true })).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
+  await pageSettled(page);
 }
 
 async function boxOf(page: Page, text: string) {
