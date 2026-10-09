@@ -3,6 +3,7 @@ import { z } from "zod";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthsOfSpan } from "@/lib/plan/months";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
+import { setRhythmSchema } from "@/lib/validation/rhythm";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 
@@ -84,10 +85,15 @@ function draftSchema(withNote: boolean) {
     children: z.array(z.strictObject({ name: createOneOffSchema.shape.name, estimate, ...note })),
   });
 
+  // The rhythm is the template's alone (RP-63), as the note is: the model's schema leaves the key out.
+  const rhythm = (withNote ? { rhythm: setRhythmSchema.shape.amount.nullable().default(null) } : {}) as {
+    rhythm: z.ZodDefault<z.ZodNullable<typeof setRhythmSchema.shape.amount>>;
+  };
   const goal = z.strictObject({
     name: createGoalSchema.shape.name,
     horizon: createGoalSchema.shape.horizon,
     measure: measure.nullable(),
+    ...rhythm,
     phases: z.array(phase),
     months: z.array(month),
     commitments: z.array(commitment),

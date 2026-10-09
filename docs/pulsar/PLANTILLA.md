@@ -8,6 +8,7 @@ Un plan escrito así se lee en la app, sin IA y sin tope (RP-37). Cualquier otro
 - Las líneas en blanco se ignoran. Cada meta empieza en `# <nombre>`; un archivo trae de 1 a 12.
 - `horizonte: AAAA-MM-DD` es obligatorio y va justo después del nombre. Es el primer día después de la meta.
 - `medida: <nombre> · <unidad>` es opcional. Sin ella, la meta no lleva montos ni tiempo.
+- `ritmo: <monto>` es opcional y va justo después de `medida:`, solo si la medida es en minutos: `12 h`, `12 h 30 min` o `90 min`, y se guarda en minutos. En otro lugar, o con otra unidad, detiene la lectura. Una plantilla sin `ritmo:` se lee como antes.
 - Las secciones `## Fases`, `## Meses`, `## Compromisos` y `## Tareas` van en cualquier orden y son opcionales; cada una lista líneas que empiezan en `- `.
 - Fase: `- AAAA-MM-DD a AAAA-MM-DD · <objetivo>`.
 - Mes: `- AAAA-MM · <monto>`. Un mes no se repite.
@@ -28,6 +29,7 @@ pulsar · plantilla 1
 # IA aplicada
 horizonte: 2027-10-01
 medida: horas de estudio · minutos
+ritmo: 12 h
 
 ## Fases
 - 2026-10-01 a 2026-12-31 · Evals y harness

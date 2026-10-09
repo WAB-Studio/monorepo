@@ -11,6 +11,7 @@ function goal(over: Partial<ImportDraft["goals"][number]> = {}): ImportDraft["go
   return {
     name: "IA aplicada",
     horizon: "2027-10-01",
+    rhythm: null,
     measure: { name: "horas de estudio", unit: "minutos" },
     phases: [{ aim: "Evals", startsOn: "2026-10-01", endsOn: "2026-12-31" }],
     months: [{ month: "2026-10", amount: 720 }],

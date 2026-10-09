@@ -19,6 +19,7 @@ const FORMS = {
   goal: "# nombre",
   horizon: "horizonte: AAAA-MM-DD",
   measure: "medida: nombre · unidad",
+  rhythm: "ritmo: 12 h, justo después de medida:, solo con una medida en minutos",
   section: "## Fases, ## Meses, ## Compromisos o ## Tareas",
   phase: "- AAAA-MM-DD a AAAA-MM-DD · objetivo",
   month: "- AAAA-MM · monto",
@@ -82,11 +83,15 @@ export function parseTemplate(text: string): TemplateResult {
   // Where a `nota:` line may land: the task just read, or its latest sub-task.
   let noteOwner: { depth: 2 | 4; into: { note?: string | null } } | null = null;
   let needsHorizon: { line: number } | null = null;
+  // Whether the line just read was `medida:`, the only place `ritmo:` may follow.
+  let afterMeasure = false;
 
   for (let i = first + 1; i < lines.length; i++) {
     const line = lines[i];
     const n = i + 1;
     if (line.trim() === "") continue;
+    const followsMeasure = afterMeasure;
+    afterMeasure = false;
     const g = goals.length - 1;
     const goal = goals[g] as Goal | undefined;
     const at = `goals.${g}`;
@@ -94,7 +99,7 @@ export function parseTemplate(text: string): TemplateResult {
     if (line.startsWith("# ")) {
       if (needsHorizon) return fail(needsHorizon.line, FORMS.horizon);
       const name = line.slice(2).trim();
-      goals.push({ name, horizon: "", measure: null, phases: [], months: [], commitments: [], tasks: [] });
+      goals.push({ name, horizon: "", measure: null, rhythm: null, phases: [], months: [], commitments: [], tasks: [] });
       spots.set(`goals.${g + 1}`, { line: n, expected: FORMS.goal });
       needsHorizon = { line: n };
       section = null;
@@ -103,6 +108,15 @@ export function parseTemplate(text: string): TemplateResult {
       continue;
     }
     if (!goal) return fail(n, FORMS.goal);
+
+    if (line.startsWith("ritmo:")) {
+      const minutes = goal.measure !== null && isTimeUnit(goal.measure.unit) ? /^ritmo: (.+)$/.exec(line) : null;
+      const amount = followsMeasure && section === null && minutes ? parseTime(minutes[1]) : null;
+      if (amount === null) return fail(n, FORMS.rhythm);
+      goal.rhythm = amount;
+      spots.set(`${at}.rhythm`, { line: n, expected: FORMS.rhythm });
+      continue;
+    }
 
     const note = /^( {2}| {4})nota:(?: (.*))?$/.exec(line);
     if (note) {
@@ -127,6 +141,7 @@ export function parseTemplate(text: string): TemplateResult {
       if (measure) {
         goal.measure = { name: measure[1].trim(), unit: measure[2].trim() };
         spots.set(`${at}.measure`, { line: n, expected: FORMS.measure });
+        afterMeasure = true;
         continue;
       }
     }
