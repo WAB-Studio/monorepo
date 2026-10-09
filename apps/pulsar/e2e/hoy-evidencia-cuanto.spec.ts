@@ -194,3 +194,25 @@ test("at 360 the longest evidence line fits: a long name, a three-digit count, t
     await clean(db, person, seeded);
   }
 });
+
+// The goal's commitment list reads the same source unit as a bare noun and
+// draws its own number before it: the unit message must never carry one.
+test("the goal's commitment line reads «3 búsquedas · diccionario» for threshold 3", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const seeded = await seed(db, person, "meta", 3, 0);
+  const { context, page } = await open(browser, baseURL!, person, 390);
+  try {
+    await visit(page, `/metas/${seeded.goalId}`);
+    // The innermost span that holds both the figure and the source.
+    const line = page.locator("span", { hasText: SOURCE }).last();
+    await expect(line).toBeVisible();
+    expect((await line.innerText()).replace(/\s+/g, " ").trim()).toBe(`3 búsquedas · ${SOURCE}`);
+  } finally {
+    await context.close();
+    await clean(db, person, seeded);
+  }
+});

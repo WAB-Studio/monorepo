@@ -18,6 +18,8 @@ import { DayRow } from "./day-row";
 import { EmptyDay } from "./empty-day";
 import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
+import type { SourceKey } from "@/i18n/translator";
+import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { NewOneOff } from "./new-one-off";
 import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
@@ -93,6 +95,9 @@ function dayPhrase(key: DayPhraseKey, day: string, t: Translator, extra: Record<
  */
 export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const t = await getTranslations();
+  // «3 búsquedas»: the number and the source's noun, each through next-intl.
+  const evidenceAmount = (evidence: { labelKey: SourceKey }, count: number) =>
+    t("day.row.evidenceAmount", { count, unit: evidenceUnitWords({ labelKey: evidence.labelKey, unit: "" }, count, t) });
   const today = todayInZone();
   const day = requested ?? today;
   const past = day < today;
@@ -300,10 +305,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                       evidence={
                         commitment.evidence
                           ? {
-                              asks: t(commitment.evidence.unitKey, { count: commitment.evidence.threshold }),
+                              asks: evidenceAmount(commitment.evidence, commitment.evidence.threshold),
                               got:
                                 slot.satisfiedBy === "evidence"
-                                  ? t(commitment.evidence.unitKey, { count: slot.quantity ?? 0 })
+                                  ? evidenceAmount(commitment.evidence, slot.quantity ?? 0)
                                   : null,
                               source: slot.satisfiedBy === "evidence" ? t(commitment.evidence.labelKey) : null,
                             }

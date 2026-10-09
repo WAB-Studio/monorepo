@@ -117,7 +117,8 @@
   "row": {
     "saidByYou": "lo dijiste tú",
     "asksNumber": "pide el número",
-    "partialAmount": "{logged} de {target}"
+    "partialAmount": "{logged} de {target}",
+    "evidenceAmount": "{count} {unit}"
   },
   "monthLine": {
     "title": "este mes",
