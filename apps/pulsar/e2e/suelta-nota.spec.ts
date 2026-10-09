@@ -175,6 +175,13 @@ test("/sueltas draws two lines of the note under the name and its button; a row 
     await page.getByRole("button", { name: new RegExp(`^${bareName}`) }).first().click();
     await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     await expect(page.getByRole("dialog")).toContainText("¿Para cuándo?");
+    // Radix registers the sheet's Escape layer in an effect after its DOM and
+    // focus exist; the open animation is the first thing that ends after it.
+    // Focus alone is no anchor: the closing task sheet still holds it.
+    await page
+      .getByRole("dialog")
+      .filter({ hasText: "¿Para cuándo?" })
+      .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toBeHidden();
 

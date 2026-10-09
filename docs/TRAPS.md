@@ -2938,4 +2938,12 @@ Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, whic
   `Escape` may close only the inner step.
 - Never add a retry or a second `Escape` to buy quiet. Save `private/playwright-results/` first; the CI log is kept at
   `private/ci-431-e2e4.log` in the main checkout.
+- Cause (module 443): the spec pressed `Escape` before the sheet settled. «Darle un día» closes the task sheet and opens
+  the schedule sheet in one tick; `toContainText('¿Para cuándo?')` passes once the new DOM exists, but Radix registers the
+  Escape layer in an effect that runs after it. A key sent in that gap is swallowed (a `keydown` dispatched from a
+  MutationObserver on that text left the sheet `open` 5 of 5 times); it did not reproduce in 90 plain runs, even at 6x CPU throttle.
+- The gap is 1-5 ms after the DOM (a keydown from a MutationObserver was lost at 0 and 1 ms, lost once in 8 at 5 ms, kept at
+  10 ms and later), so no person reaches it; it is a test defect. Focus is no anchor: it is already inside the new sheet at
+  the first mutation, and the closing task sheet keeps its dialog in the DOM. Anchor on the new sheet's open animation
+  (`getAnimations()` finished, 1 pending at the first mutation), never on its text or focus.
 
