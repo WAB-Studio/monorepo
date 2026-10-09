@@ -2958,3 +2958,15 @@ writes `sync` into IndexedDB races that round: the round reads the old state and
 - Seed `sync` from `/`, anchored on the search box, as `registro-copia.spec.ts` and `cuenta-copia.spec.ts` do. Never from
   `/registro` or `/cuenta`: both read `sync` on mount.
 - A screen that starts reading `sync` on mount must grep `e2e/` for `objectStore("sync").put` and move every seed that opens it.
+
+## next-intl formats a time in the server's zone, not the reader's
+
+`useFormatter().dateTime` without a `timeZone` follows the zone the provider was given, and the provider takes the
+server's. On a UTC server a reader in Bogotá sees every time five hours off.
+
+- Measured 2026-10-09 (module 563, PR #517): `palabra-historial.spec.ts:943` expected «Hoy, 00:01» and CI rendered «05:01». It
+  passed locally because the server ran on Bogotá time; `TZ=UTC` on the `next start` process reproduced it, `TZ=UTC` on
+  Playwright alone did not.
+- Production runs on UTC too, so this is a defect the reader sees, not a test artefact.
+- Pass `timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone` from a client component, or set the provider's zone
+  from the browser. Prove a date assertion with `TZ=UTC` on the server process.
