@@ -669,10 +669,12 @@ test("RL-52: another reader on this device confirms under a new deviceId and upl
     await page.goto("/");
     await asset;
     await page.getByRole("textbox", { name: messages.search.label }).fill("apple");
-    await expect.poll(() => countLookups(page), { message: "apple recorded" }).toBe(3);
+    // The row is buffered when the answer lands; hiding before that flushes nothing.
+    await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
     const next = page.waitForRequest((r) => r.url().includes("/api/log/sync"));
     await hideTab(page);
     await next;
+    await expect.poll(() => countLookups(page), { message: "apple recorded" }).toBe(3);
     await page.waitForTimeout(500);
     const second = posts[1]!;
     expect(second.deviceId).toBe(first.deviceId);
