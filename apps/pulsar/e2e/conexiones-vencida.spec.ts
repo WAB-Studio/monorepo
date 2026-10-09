@@ -108,8 +108,72 @@ for (const width of [390, 1440]) {
       try {
         await openFolds(page);
         await expect(
-          rowOf(page, "Nunca usada").getByText("venció el 30 jul 2026 · sin uso desde el 1 may 2026", { exact: true }),
+          rowOf(page, "Nunca usada").getByText("venció el 30 jul 2026 · sin usar", { exact: true }),
         ).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("a key never used says «sin usar» and never claims a «sin uso desde» it has no date for", async ({
+      person,
+      db,
+      browser,
+      baseURL,
+    }) => {
+      await seed(db, person, { name: "Nunca usada", created: "2026-05-01T17:00:00Z" });
+      await seed(db, person, STALE);
+      const { context, page } = await openScreen(browser, baseURL!, person, width);
+      try {
+        await openFolds(page);
+        const never = rowOf(page, "Nunca usada");
+        await expect(never.getByText("venció el 30 jul 2026 · sin usar", { exact: true })).toBeVisible();
+        expect(await never.innerText()).not.toContain("sin uso desde");
+        // The used one keeps the approved phrase.
+        await expect(rowOf(page, STALE.name).getByText(STALE_WORDS, { exact: true })).toBeVisible();
+        await expect(page.getByText(/sin uso desde/)).toHaveCount(1);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("two lapsed keys each get a «crea otra» that shows the same words and is named after its key", async ({
+      person,
+      db,
+      browser,
+      baseURL,
+    }) => {
+      await seed(db, person, { name: "servidor de pruebas", created: ago(120) });
+      await seed(db, person, { name: "tablet", created: ago(300), used: ago(200) });
+      const { context, page } = await openScreen(browser, baseURL!, person, width);
+      try {
+        await openFolds(page);
+        for (const name of ["servidor de pruebas", "tablet"]) {
+          const button = page.getByRole("button", { name: `crea otra en lugar de ${name}`, exact: true });
+          await expect(button).toHaveCount(1);
+          await expect(button).toHaveText("crea otra");
+          await expect(rowOf(page, name).getByRole("button", { name: /^crea otra/ })).toHaveCount(1);
+        }
+        await expect(page.getByRole("button", { name: /^crea otra/ })).toHaveCount(2);
+        await expect(page.getByText("crea otra", { exact: true })).toHaveCount(2);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("a folded never-used lapsed key reads the same once the fold opens", async ({
+      person,
+      db,
+      browser,
+      baseURL,
+    }) => {
+      await seed(db, person, { name: "Plegada", created: "2026-05-01T17:00:00Z" });
+      const { context, page } = await openScreen(browser, baseURL!, person, width);
+      try {
+        await expect(page.getByText("Plegada", { exact: true })).toBeHidden();
+        await openFolds(page);
+        await expect(rowOf(page, "Plegada").getByText("venció el 30 jul 2026 · sin usar", { exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "crea otra en lugar de Plegada", exact: true })).toBeVisible();
       } finally {
         await context.close();
       }
@@ -199,7 +263,7 @@ for (const width of [390, 1440]) {
         await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
         await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
         const row = rowOf(page, "Claude");
-        await expect(row.getByText("venció el 1 sep 2026 · sin uso desde el 3 jun 2026", { exact: true })).toBeVisible();
+        await expect(row.getByText("venció el 1 sep 2026 · sin usar", { exact: true })).toBeVisible();
         await expect(row.getByRole("button", { name: /^Revocar/ })).toHaveCount(0);
         expect(await row.innerText()).not.toContain("conectada");
       } finally {
@@ -299,7 +363,7 @@ test("at 360 the expired rows do not overflow, long names included", async ({ pe
   try {
     await openFolds(page);
     await expect(page.getByText(STALE_WORDS, { exact: true })).toBeVisible();
-    await expect(page.getByText("venció el 1 sep 2026 · sin uso desde el 3 jun 2026", { exact: true })).toBeVisible();
+    await expect(page.getByText("venció el 1 sep 2026 · sin usar", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     for (const name of [long, "Claude"]) {
       const row = await rowOf(page, name).boundingBox();
