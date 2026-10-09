@@ -531,7 +531,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
         await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
         const panel = panelOf(page, seeded.fedName);
         await expect(
-          panel.getByText(new RegExp(`^mide searches · hasta el ${DATE} · solo lo que dijiste tú$`)),
+          panel.getByText(new RegExp(`^mide búsquedas · hasta el ${DATE} · solo lo que dijiste tú$`)),
         ).toBeVisible();
         await expect(panel.getByText("solo lo que dijiste tú", { exact: true })).toHaveCount(1);
       } finally {
@@ -1269,13 +1269,13 @@ test.describe("a readable source (module 578)", () => {
   }) => {
     const stamp = Date.now();
     const goals: string[] = [];
-    for (const [name, unit] of [
-      [`Leída ${stamp}`, "searches"],
-      [`Corrida ${stamp}`, "km"],
+    for (const [name, measure, unit] of [
+      [`Leída ${stamp}`, "búsquedas", "searches"],
+      [`Corrida ${stamp}`, "km", "km"],
     ]) {
       const [goal] = await db<{ id: string }[]>`
         insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-        values (${person.id}, ${name}, ${plusDays(60)}, ${unit}, ${unit}, now() - interval '10 days')
+        values (${person.id}, ${name}, ${plusDays(60)}, ${measure}, ${unit}, now() - interval '10 days')
         returning id
       `;
       goals.push(goal.id);
@@ -1297,7 +1297,7 @@ test.describe("a readable source (module 578)", () => {
       const date = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
       const panelOf = (name: string) =>
         page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
-      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide searches · hasta el ${date}$`))).toBeVisible();
+      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide búsquedas · hasta el ${date}$`))).toBeVisible();
       await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide km · hasta el ${date}$`))).toBeVisible();
       const body = (await page.locator("main").textContent()) ?? "";
       expect(body).not.toMatch(/diccionario|alimentada|solo lo que dijiste tú|No pudimos leer/i);
