@@ -1639,3 +1639,13 @@ module; until it lands, the screen and its approved board stay as built.
 - **564 is measured by the user on a real iPhone**; 565–568 wait for it.
 - **`CuentaCopiaFallidaCuotaHora` and `CuentaCopiaSinCopia` are approved as drawn** (user, 2026-10-09, canvas version 42).
   `CuentaCopiaFallidaCuotaHora` supersedes `CuentaCopiaFallidaCuota`, which moves to «Archivo».
+
+### Decisions of 2026-10-09, the boards of Part 2
+
+Taken by the user the same evening, on canvas version 43.
+
+- **The five boards of Part 2 are approved as drawn:** `RegistroFormasComasOscuroMovil` (680),
+  `SinEntradaLemaCompactoOscuroMovil`, `SinEntradaFuncionPlegadaOscuroMovil` (681), `PalabraHistorialRedSinFaltaOscuroMovil`
+  (682), `CuentaSinRedConSesionOscuroMovil` (683).
+- **A network word's saved translation leaves the subtitle** and stays in the body (682).
+- **Offline, `/cuenta` draws no «Cerrar sesión»**, nor «Reintentar» nor «Dispositivos» (683).
