@@ -2554,6 +2554,7 @@ async function runMonthLineCheck(): Promise<void> {
   const userId = person.id;
   const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   const goalIds: string[] = [];
+  const plainIds: string[] = [];
   const deviceId = "00000000-0000-4000-8000-0000000000e8";
 
   async function seedGoal(name: string): Promise<string> {
@@ -2670,9 +2671,11 @@ async function runMonthLineCheck(): Promise<void> {
       insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id)
       values (${userId}, ${estimated}, 'month-line child', null, ${parent.id})
     `;
-    await db`
+    const [plain] = await db<{ id: string }[]>`
       insert into goals.one_offs (user_id, goal_id, name) values (${userId}, null, 'month-line plain dayless')
+      returning id
     `;
+    plainIds.push(plain.id);
     const baseline = (await loadDay("2010-10-20")).daylessCount;
     const listed = (await listDaylessOneOffs()).filter((o) => o.name.startsWith("month-line"));
     assert(
@@ -2699,6 +2702,9 @@ async function runMonthLineCheck(): Promise<void> {
     reportRun("month-line", wireCalls.slice(start), true, overlap);
   } finally {
     await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
+    if (plainIds.length > 0) {
+      await db`delete from goals.one_offs where id in ${db(plainIds)} and user_id = ${userId}`;
+    }
     if (goalIds.length > 0) {
       await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
     }
