@@ -103,6 +103,7 @@
       "download": "Descargar el registro",
       "skeletonWord": "Palabra de ejemplo",
       "skeletonTranslation": "Su traducción de ejemplo",
+      "noResult": "sin resultado",
       "forms": "{lemma} · {forms}"
     },
     "word": {
@@ -115,7 +116,10 @@
       "emptyAction": "Buscarla",
       "skeletonAnswer": "Su respuesta de ejemplo",
       "phraseMissing": "No se guardó una traducción para esta frase.",
-      "lemmaSubtitle": "{translation} · {count, plural, one {# búsqueda} other {# búsquedas}} desde el {date}."
+      "lemmaSubtitle": "{translation} · {count, plural, one {# búsqueda} other {# búsquedas}} desde el {date}.",
+      "timeToday": "Hoy, {time}",
+      "timeYesterday": "Ayer, {time}",
+      "timeOther": "{date}, {time}"
     },
     "clear": {
       "trigger": "Vaciar el registro",
@@ -155,7 +159,6 @@
       "label": "Copia",
       "neverSynced": "Aún no ha habido una copia. La primera sale cuando cierres esta pestaña.",
       "failedTitle": "La copia no salió",
-      "failedBody": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
       "failedAction": "Reintentar",
       "noSessionTitle": "Tu registro vive solo en este dispositivo",
       "noSessionBody": "Con una cuenta lo llevas al teléfono y al portátil. Sin ella, nada sale de aquí.",
@@ -170,7 +173,6 @@
       "lastCopyMoment": "Última copia hace un momento",
       "momentSpan": "un momento",
       "syncingSearches": "{count, plural, =0 {Copiando tus búsquedas…} one {Copiando # búsqueda…} other {Copiando # búsquedas…}}",
-      "downloading": "Trayendo tus búsquedas…",
       "otherReader": "Las búsquedas de antes se quedan en este dispositivo. A tu cuenta sólo va lo que busques desde ahora.",
       "failedOfflineTitle": "La copia no salió",
       "failedOffline": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
@@ -189,7 +191,6 @@
       "licenceLabel": "Licencia",
       "licenceCredit": "Obra derivada de DBnary, bajo <cc>CC BY-SA 3.0</cc>. Esta app la distribuye bajo la misma licencia.",
       "frequencyLabel": "Orden de las acepciones",
-      "frequencyCredit": "El orden en que se muestran las acepciones de una palabra viene de <source>SUBTLEX-US con información gramatical</source>, bajo <cc>CC BY-NC-SA 4.0</cc>. Esta app distribuye esa tabla bajo la misma licencia, sin uso comercial.",
       "appLabel": "La app",
       "appVersion": "Diccionario de lectura · versión {version}",
       "licenceBody": "Obra derivada de DBnary. Esta app la distribuye bajo la misma licencia.",
