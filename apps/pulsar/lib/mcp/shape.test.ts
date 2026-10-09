@@ -340,6 +340,7 @@ test("the report shapes every figure as an amount and its months as YYYY-MM", ()
         horizon: "2027-01-01",
         endedOn: null,
         unit: "páginas",
+        measureFed: false,
         thisMonth: { planned: 750, reached: 120, underPace: true },
         toDate: { planned: 1350, reached: 570 },
         phases: [{ aim: "Arrancar", startsOn: "2026-08-17", endsOn: "2026-11-01", current: true }],
@@ -373,6 +374,7 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
     horizon: "2027-01-01",
     endedOn: null,
     unit: "minutos",
+    measureFed: false,
     thisMonth: { planned: 750, reached: 0, underPace: false },
     toDate: { planned: 0, reached: 0 },
     phases: [],
@@ -388,13 +390,16 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
       {
         ...base,
         tasks: [
-          { name: "Arrastrada", from: "2026-09-01", done: false, doneOn: null, estimate: 90, owes: 90, hasAmount: true, note: "Del mes pasado", children: [] },
+          { name: "Arrastrada", from: "2026-09-01", done: false, doneOn: null, estimate: 90, part: null, continuesIn: null, owes: 90, hasAmount: true, note: "Del mes pasado", children: [] },
           {
             name: "Madre",
             from: null,
             done: true,
             doneOn: "2026-10-03",
             estimate: null,
+            part: null,
+            continuesIn: null,
+           
             owes: 0,
             hasAmount: true,
             note: null,
@@ -405,7 +410,7 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
       {
         ...base,
         unit: null,
-        tasks: [{ name: "Sin medida", from: null, done: false, doneOn: null, estimate: null, owes: 0, hasAmount: false, note: null, children: [] }],
+        tasks: [{ name: "Sin medida", from: null, done: false, doneOn: null, estimate: null, part: null, continuesIn: null, owes: 0, hasAmount: false, note: null, children: [] }],
       },
     ],
   };

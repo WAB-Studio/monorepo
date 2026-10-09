@@ -13,6 +13,7 @@ import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { weekPlanned } from "@/lib/plan/week-planned";
 import {
   goalFigures,
+  matchingSourceKeys,
   type CommitmentRow,
   type FactRow,
   type GoalRow,
@@ -111,6 +112,7 @@ function hasAmountOf(item: PlanItem): boolean {
 // last child's day; `owes` counts what is undone today.
 function toReportTask(item: PlanItem): ReportTask {
   const leaf = item.children.length === 0;
+  const splits = item.from !== null || item.to !== null;
   const undone = item.children.filter((child) => child.doneOn === null);
   const doneOn = !item.done
     ? null
@@ -126,6 +128,8 @@ function toReportTask(item: PlanItem): ReportTask {
     done: item.done,
     doneOn,
     estimate: leaf ? item.task.estimate : null,
+    part: splits && hasAmountOf(item) ? item.part : null,
+    continuesIn: item.to,
     owes: leaf
       ? item.task.doneOn === null
         ? (item.task.estimate ?? 0)
@@ -201,6 +205,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       horizon: row.goal.horizon,
       endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
       unit: row.goal.measure_unit,
+      measureFed: matchingSourceKeys(row.goal, row.commitments).size > 0,
       thisMonth: {
         planned: figures.month?.planned ?? null,
         reached: figures.month?.reached ?? 0,

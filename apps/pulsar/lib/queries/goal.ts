@@ -321,7 +321,7 @@ function goalSpan(goalId: string): { from: SQL; to: SQL } {
 // `evidenceDaysForMeasure` both apply, by source key rather than by
 // commitment: two commitments naming the same source must not sum its rows
 // twice.
-function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<string> {
+export function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<string> {
   if (!goal.measure_unit) return new Set();
   return new Set(
     commitments
