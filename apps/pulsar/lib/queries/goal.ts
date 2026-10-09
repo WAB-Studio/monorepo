@@ -329,7 +329,7 @@ export function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]):
         (row) =>
           row.satisfaction === "evidence" &&
           row.source_key !== null &&
-          true,
+          row.source_unit === goal.measure_unit,
       )
       .map((row) => row.source_key as string),
   );
