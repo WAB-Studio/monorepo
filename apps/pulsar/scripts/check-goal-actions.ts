@@ -88,6 +88,7 @@ let fixTask: typeof import("@/app/actions/one-offs").fixTask;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
 let addPhase: typeof import("@/app/actions/plan").addPhase;
 let addCommitment: typeof import("@/app/actions/plan").addCommitment;
+let setRhythm: typeof import("@/app/actions/roadmap").setRhythm;
 let reopenGoal: typeof import("@/app/actions/plan").reopenGoal;
 let archiveGoal: typeof import("@/app/actions/plan").archiveGoal;
 let retireCommitment: typeof import("@/app/actions/plan").retireCommitment;
@@ -133,6 +134,7 @@ let fixtureGoalId: string;
 before(async () => {
   installStubs(loadCookies());
   ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal, archiveGoal, retireCommitment } = await import("@/app/actions/plan"));
+  ({ setRhythm } = await import("@/app/actions/roadmap"));
   ({ createOneOff, scheduleOneOff, deleteOneOff, fixTask } = await import("@/app/actions/one-offs"));
   ({ declareFact, undoFact } = await import("@/app/actions/facts"));
   ({ todayInZone } = await import("@/lib/zone"));
@@ -902,4 +904,47 @@ test("fixTask: a task nobody can see is notFound, a one-off that is no plan task
   } finally {
     await sql`delete from goals.one_offs where id = ${loose.oneOffId}`;
   }
+});
+
+test("addCommitment: hours written on a quantity commitment are stored as minutes, only where the goal counts time; a goal in km keeps its unit", async () => {
+  const fresh = await createGoal({ name: "RP-66 horas", horizon: shiftDay(today, 60) });
+  if (!fresh.ok) throw new Error(fresh.error);
+  const timed = await createGoal({ name: "RP-66 minutos", horizon: shiftDay(today, 60) });
+  if (!timed.ok) throw new Error(timed.error);
+  const km = await createGoal({ name: "RP-66 km", horizon: shiftDay(today, 60) });
+  if (!km.ok) throw new Error(km.error);
+  const quantity = (goalId: string, name: string, unit: string, targetQuantity: number) =>
+    addCommitment({ goalId, name, cadenceKind: "daily", satisfaction: "quantity", unit, targetQuantity });
+  const stored = async (commitmentId: string) => {
+    const [row] = await sql<{ unit: string; target: number }[]>`
+      select unit, target_quantity as target from goals.commitments where id = ${commitmentId}`;
+    return row;
+  };
+  const measureOf = async (goalId: string) => {
+    const [row] = await sql<{ measure_unit: string | null }[]>`select measure_unit from goals.goals where id = ${goalId}`;
+    return row.measure_unit;
+  };
+  try {
+    const first = await quantity(fresh.goalId, "estudio", "horas", 2);
+    if (!first.ok) throw new Error(first.error);
+    assert.deepEqual(await stored(first.commitmentId), { unit: "minutos", target: 120 });
+    assert.equal(await measureOf(fresh.goalId), "minutos");
+    assert.deepEqual(await setRhythm({ goalId: fresh.goalId, amount: 600 }), { ok: true });
+
+    const seed = await quantity(timed.goalId, "lectura", "minutos", 30);
+    if (!seed.ok) throw new Error(seed.error);
+    const hours = await quantity(timed.goalId, "repaso", "horas", 2);
+    if (!hours.ok) throw new Error(hours.error);
+    assert.deepEqual(await stored(hours.commitmentId), { unit: "minutos", target: 120 });
+
+    const run = await quantity(km.goalId, "correr", "km", 5);
+    if (!run.ok) throw new Error(run.error);
+    const ignored = await quantity(km.goalId, "otra", "horas", 2);
+    if (!ignored.ok) throw new Error(ignored.error);
+    assert.deepEqual(await stored(ignored.commitmentId), { unit: "km", target: 2 });
+  } finally {
+    await sql`delete from goals.goals where id in ${sql([fresh.goalId, timed.goalId, km.goalId])}`;
+  }
+  const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from goals.goals where user_id = ${personId} and name like 'RP-66 %'`;
+  assert.equal(n, 0);
 });

@@ -6,6 +6,7 @@ import { and, eq, isNull, max, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
+import { isHourUnit, isTimeUnit, storedMeasure } from "@/lib/units/time";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { isClosed } from "@/lib/validation/closed";
 import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
@@ -203,9 +204,19 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
 
       const cadenceN = "cadenceN" in data ? data.cadenceN : null;
       const cadenceWeekdays = "cadenceWeekdays" in data ? weekdaysArraySql(data.cadenceWeekdays) : sql`null`;
-      const targetQuantity = "targetQuantity" in data ? data.targetQuantity : null;
-      // A goal that already measures owns the unit: whatever was sent is ignored.
-      const unit = "unit" in data ? (goal.measureUnit ?? data.unit) : null;
+      // A goal that already measures owns the unit: whatever was sent is ignored,
+      // except that hours written onto a goal counted in minutes still become minutes.
+      let unit: string | null = null;
+      let targetQuantity: number | null = null;
+      if ("unit" in data && "targetQuantity" in data) {
+        const base = goal.measureUnit ?? data.unit;
+        if (isTimeUnit(base) && isHourUnit(data.unit) && !isHourUnit(base)) {
+          unit = base;
+          targetQuantity = data.targetQuantity * 60;
+        } else {
+          ({ unit, amount: targetQuantity } = storedMeasure(base, data.targetQuantity));
+        }
+      }
       const threshold = "threshold" in data ? data.threshold : null;
 
       const [inserted] = await tx.execute<{ id: string }>(sql`
@@ -222,7 +233,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       if (data.satisfaction === "quantity") {
         await tx
           .update(goals)
-          .set({ measureName: data.name, measureUnit: data.unit })
+          .set({ measureName: data.name, measureUnit: unit })
           .where(and(eq(goals.id, data.goalId), isNull(goals.measureName)));
       }
 
