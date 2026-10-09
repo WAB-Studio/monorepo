@@ -32,7 +32,7 @@
 
 /* Today's column, header to footer. */
 .today {
-  background: var(--pulsar-raised);
+  background: var(--pulsar-today);
 }
 
 .head.today {
@@ -51,7 +51,7 @@
 }
 
 .head.today {
-  background-image: linear-gradient(var(--pulsar-raised), var(--pulsar-raised));
+  background-image: linear-gradient(var(--pulsar-today), var(--pulsar-today));
   font-weight: 600;
 }
 

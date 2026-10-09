@@ -40,6 +40,7 @@ Light, the primary:
 | quiet (strokes and decoration only) | `#8A939E` |
 | accent | `#1C6E5A` |
 | accent, soft (the evidence mark's fill) | `#DCEAE5` |
+| today (Semana's today column from 1024; the phone keeps `raised`) | `#E3E8EE` |
 | scrim (behind a sheet) | `rgba(18, 23, 28, 0.34)` |
 
 Dark, the same design inverted:
@@ -56,6 +57,7 @@ Dark, the same design inverted:
 | quiet | `#5C666F` |
 | accent | `#4FBEA0` |
 | accent, soft | `#17332C` |
+| today | `#1E252C` |
 | scrim | `rgba(5, 7, 9, 0.62)` |
 
 - The scrim is darker than the dark ground on purpose: a sheet is `raised`, and it has to lift off

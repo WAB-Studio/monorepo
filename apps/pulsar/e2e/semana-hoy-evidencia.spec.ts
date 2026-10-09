@@ -94,6 +94,7 @@ async function tokens(page: Page) {
       soft: resolve("backgroundColor", "--pulsar-accent-soft"),
       quiet: resolve("color", "--pulsar-quiet"),
       raised: resolve("backgroundColor", "--pulsar-raised"),
+      today: resolve("backgroundColor", "--pulsar-today"),
     };
   });
 }
@@ -158,8 +159,8 @@ for (const scheme of ["light", "dark"] as const) {
         expect(seen.dot).not.toBe(seen.cell);
         // Today stays a fill the column draws, never removed to escape the clash.
         expect(alpha(seen.cell)).toBeGreaterThan(0);
-        // The board raises today's column, in each scheme its own token.
-        expect(seen.cell).toBe(token.raised);
+        // The desktop column is tinted, the phone's fold raises; each scheme its own token.
+        expect(seen.cell).toBe(width >= 1024 ? token.today : token.raised);
         // The board's treatment: soft fill and an accent stroke, not a new hue.
         expect(seen.dot).toBe(token.soft);
         expect(seen.ring).toContain(token.accent);

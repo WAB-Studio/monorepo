@@ -29,6 +29,7 @@ body {
   --pulsar-quiet: #8a939e;
   --pulsar-accent: #1c6e5a;
   --pulsar-accent-soft: #dceae5;
+  --pulsar-today: #e3e8ee;
   --pulsar-on-accent: #ffffff;
   --pulsar-scrim: rgba(18, 23, 28, 0.34);
 }
@@ -44,6 +45,7 @@ body {
   --pulsar-quiet: #5c666f;
   --pulsar-accent: #4fbea0;
   --pulsar-accent-soft: #17332c;
+  --pulsar-today: #1e252c;
   --pulsar-on-accent: #0f1317;
   /* Darker than the dark ground on purpose: a sheet is raised, and it has to
      lift off what is behind it on both faces. */
