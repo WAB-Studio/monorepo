@@ -16,6 +16,11 @@ test("a minted key is pls_ and 43 base64url characters", () => {
   assert.match(mintKey().key, /^pls_[A-Za-z0-9_-]{43}$/);
 });
 
+test("a minted key carries 32 random bytes after its prefix", () => {
+  const { key } = mintKey();
+  assert.equal(Buffer.from(key.slice("pls_".length), "base64url").length, 32);
+});
+
 test("two mints differ", () => {
   assert.notEqual(mintKey().key, mintKey().key);
 });

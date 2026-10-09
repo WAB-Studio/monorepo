@@ -78,6 +78,7 @@ async function approve(verifier: string): Promise<string> {
   assert.ok(result.ok, `approve: ${JSON.stringify(result)}`);
   const code = new URL(result.redirectTo).searchParams.get("code");
   assert.ok(code, "the redirect carries no code");
+  assert.match(code, /^plc_[A-Za-z0-9_-]{43}$/);
   secrets.push(code);
 
   return code;
@@ -235,13 +236,15 @@ test("register, approve, exchange, list, refresh, revoke", async () => {
   assert.equal(exchanged.body.expires_in, ACCESS_TOKEN_SECONDS);
   assert.equal(exchanged.headers.get("pragma"), "no-cache");
   const first = remember(exchanged.body);
-  assert.match(first.access, /^plo_/);
-  assert.match(first.refresh, /^plr_/);
+  assert.match(first.access, /^plo_[A-Za-z0-9_-]{43}$/);
+  assert.match(first.refresh, /^plr_[A-Za-z0-9_-]{43}$/);
   assert.equal(await listStatus(first.access), 200);
 
   const refreshed = await form({ grant_type: "refresh_token", refresh_token: first.refresh, client_id: clientId });
   assert.equal(refreshed.status, 200, JSON.stringify(refreshed.body));
   const second = remember(refreshed.body);
+  assert.match(second.access, /^plo_[A-Za-z0-9_-]{43}$/);
+  assert.match(second.refresh, /^plr_[A-Za-z0-9_-]{43}$/);
   assert.notEqual(second.access, first.access);
   assert.equal(await listStatus(first.access), 401, "the old access token still lists");
   assert.equal(await listStatus(second.access), 200);
