@@ -120,6 +120,13 @@
       "when": 1791519277000,
       "tag": "0016_conexion_dominio",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791522866335,
+      "tag": "0017_suelta_otro_dia",
+      "breakpoints": true
     }
   ]
 }

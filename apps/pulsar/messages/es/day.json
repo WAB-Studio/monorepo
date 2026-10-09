@@ -155,7 +155,6 @@
     "oneOffNameTooLong": "Es muy largo. Escribe máximo 120 caracteres.",
     "oneOffDayInvalid": "Ese día no es válido.",
     "oneOffDayPast": "Ese día ya pasó. Elige hoy o uno por venir.",
-    "oneOffAlreadyDated": "Esa ya tiene un día. Recarga la página.",
     "oneOffHasFact": "Eso ya se hizo, y lo hecho no se borra.",
     "dayInvalid": "Ese día no es válido.",
     "dayFuture": "Ese día todavía no llega.",

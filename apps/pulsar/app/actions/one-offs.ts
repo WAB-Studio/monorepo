@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { facts, goals, oneOffs } from "@/db/schema";
 import { getPerson, withGoalsDb } from "@/lib/session";
@@ -181,10 +181,10 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
 }
 
 /**
- * Gives a one-off a day, or moves one dated after today (RP-59). The row is
- * read first only to name the refusal; the enforcement is
- * `day is null or day > today` in the UPDATE and `one_offs_update_self`, so a fact landing between the two statements still
- * writes nothing — 0 rows is reported as `oneOffHasFact`.
+ * Gives a one-off a day, or moves one, dated or not, while it has no fact
+ * (RP-59, RP-61). The row is read first only to name the refusal; the
+ * enforcement is `not exists (fact)` in the UPDATE, so a fact landing between
+ * the two statements still writes nothing — 0 rows is reported as `oneOffHasFact`.
  */
 export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<ScheduleOneOffResult> {
   const parsed = scheduleOneOffSchema.safeParse(input);
@@ -194,7 +194,6 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
   const { oneOffId, day } = parsed.data;
-  const today = todayInZone();
 
   try {
     await withGoalsDb(async (tx) => {
@@ -211,7 +210,7 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
       if (!row) throw new NamedError("day.errors.notFound");
       // A parent never takes a day (`one_offs_update_self`'s check); this names it.
       if (row.hasChildren) throw new NamedError("month.errors.parentIsDoneByChildren");
-      if (row.day != null && row.day <= today) throw new NamedError("day.errors.oneOffAlreadyDated");
+      if (row.day === day) return;
 
       const [existingFact] = await tx
         .select({ id: facts.id })
@@ -226,7 +225,7 @@ export async function scheduleOneOff(input: ScheduleOneOffInput): Promise<Schedu
           and(
             eq(oneOffs.id, oneOffId),
             eq(oneOffs.userId, person.id),
-            or(isNull(oneOffs.day), gt(oneOffs.day, today)),
+            sql`not exists (select 1 from ${facts} where ${facts.oneOffId} = ${oneOffs.id})`,
           ),
         )
         .returning({ id: oneOffs.id });
