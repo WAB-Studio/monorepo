@@ -36,7 +36,7 @@ export const lookups = reading.table(
     normalised: text().notNull(),
     kind: text({ enum: ["word", "phrase"] }).notNull(),
     outcome: text({
-      enum: ["exact", "inflected", "miss", "translated", "untranslated"],
+      enum: ["exact", "inflected", "miss", "translated", "untranslated", "unlisted"],
     }).notNull(),
     headword: text(),
     rule: text(),

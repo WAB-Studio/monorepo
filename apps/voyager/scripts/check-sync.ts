@@ -23,7 +23,7 @@ import postgres from "postgres";
 
 import type { Transaction } from "../lib/session";
 import { deviceLabel } from "../lib/sync/device-label";
-import { decodeCursor, syncRequestSchema, type SyncRow } from "../lib/sync/protocol";
+import { decodeCursor, syncRequestSchema, syncRowSchema, type SyncRow } from "../lib/sync/protocol";
 
 assertSuiteDatabase();
 
@@ -668,6 +668,14 @@ async function main() {
     const atEnd = last && decodeCursor(`${last.received_at}Z|${last.device_id}|${last.local_id}`);
     const afterLast = atEnd ? await asReader((reader) => downloadRows(reader, atEnd, viewer)) : undefined;
     assert("S28", afterLast?.length === 0, `rows after a cursor on the last row = ${afterLast?.length ?? "no cursor"}`);
+
+    // S29: a word the network answered travels like any other row.
+    const unlistedDevice = randomUUID();
+    const [unlistedRow] = rowsOf(unlistedDevice, [1]).map((row) => syncRowSchema.parse({ ...row, outcome: "unlisted" }));
+    await asReader((reader) => writeUpload(reader, late, unlistedDevice, "chrome:android", [unlistedRow]));
+    const sent = await asReader((reader) => downloadRows(reader, null, viewer));
+    const back = sent.find((row) => row.device_id === unlistedDevice);
+    assert("S29", back?.outcome === "unlisted", `outcome of the row another device downloads = ${back?.outcome ?? "none"}`);
   } finally {
     await lateDb`delete from harness.identities where user_id = ${late}`;
     await lateDb`delete from auth.users where id = ${late}`;
