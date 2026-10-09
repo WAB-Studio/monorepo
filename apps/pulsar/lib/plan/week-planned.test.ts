@@ -190,3 +190,30 @@ test("a leap February at one minute a day plans exactly seven minutes for a week
   });
   assert.equal(leap, 7);
 });
+
+test("a week over two 31-day months sums to the exact whole minute, not one short", () => {
+  // 5 days of July at 1 min / 31 d plus 2 days of August at 13 min / 31 d is exactly 1.
+  const fiveAndTwo = weekPlanned({
+    weekStart: "2026-07-27",
+    weekEnd: "2026-08-02",
+    budgets: [
+      { month: "2026-07-01", amount: 1 },
+      { month: "2026-08-01", amount: 13 },
+    ],
+    openedOn: FAR_PAST,
+    horizon: FAR_FUTURE,
+  });
+  assert.equal(fiveAndTwo, 1);
+  // 3 days of July at 3 min plus 4 of August at 21 is exactly 3.
+  const threeAndFour = weekPlanned({
+    weekStart: "2026-07-29",
+    weekEnd: "2026-08-04",
+    budgets: [
+      { month: "2026-07-01", amount: 3 },
+      { month: "2026-08-01", amount: 21 },
+    ],
+    openedOn: FAR_PAST,
+    horizon: FAR_FUTURE,
+  });
+  assert.equal(threeAndFour, 3);
+});

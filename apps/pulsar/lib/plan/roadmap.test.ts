@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { amountOf, fillPlan, type PlanInput, type PlanItem, type PlanTask, type Roadmap } from "./roadmap";
+import { amountOf, doneDayOf, fillPlan, type PlanInput, type PlanItem, type PlanTask, type Roadmap } from "./roadmap";
 
 const SEP = "2026-09-01";
 const OCT = "2026-10-01";
@@ -384,4 +384,38 @@ test("a task carried from an earlier month lists before the month's own tasks, w
     task("late", { estimate: 5, plannedMonth: SEP, doneOn: "2026-10-05" }),
   ]);
   assert.deepEqual(ids(roadmap, OCT), ["late", "own"]);
+});
+
+test("a mother whose children were done on the 3rd and the 9th is done on the 9th", () => {
+  const mother = task("mother");
+  const kids = [
+    task("a", { parentId: "mother", estimate: 1, doneOn: "2026-10-09" }),
+    task("b", { parentId: "mother", estimate: 1, doneOn: "2026-10-03" }),
+  ];
+  assert.equal(doneDayOf(mother, kids), "2026-10-09");
+  assert.equal(doneDayOf(mother, kids.slice().reverse()), "2026-10-09");
+});
+
+test("a task created today and not pinned is in today's plan", () => {
+  const roadmap = plan([task("fresh", { estimate: 2, createdOn: TODAY })]);
+  assert.deepEqual(ids(roadmap, OCT), ["fresh"]);
+});
+
+test("a task done exactly on the reading day is still done", () => {
+  const roadmap = plan([task("t", { estimate: 2, doneOn: "2026-10-10" })], { doneBy: "2026-10-10" });
+  assert.equal(partIn(roadmap, OCT, "t").done, true);
+});
+
+test("a plan needing 121 months places its last hour in the 121st month", () => {
+  const roadmap = plan([task("long", { estimate: 121 })], { rhythm: 1 });
+  assert.deepEqual(roadmap.unplaced, []);
+  assert.equal(roadmap.months.length, 121);
+  assert.deepEqual(parts(roadmap, "long").at(-1), ["2036-10-01", 1]);
+});
+
+test("a fixed task with no hours in a month of amount 0 ends on the month's last day", () => {
+  const roadmap = plan([task("empty", { plannedMonth: NOV })], {
+    budgets: [{ month: NOV, amount: 0 }],
+  });
+  assert.equal(partIn(roadmap, NOV, "empty").endsOn, "2026-11-30");
 });
