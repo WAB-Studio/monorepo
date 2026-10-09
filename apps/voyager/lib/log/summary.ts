@@ -121,15 +121,31 @@ export type WordHistoryRow = {
 type FoundRow = WordHistoryRow & { id: number };
 
 /**
- * Every search for one `normalised` word (RL-32's other half), most recent
- * first, in one read transaction bounded to that key alone — never a scan of
- * the whole store. `total` counts every match, unaffected by `limit`.
+ * The lemma a written form answers to, read off the form's own rows: the
+ * `headword` of the most recent one, or the form itself when that row has
+ * none or the form was never searched. One cursor bounded to the form.
  */
-export async function readWordHistory(
-  normalised: string,
-  limit?: number,
-): Promise<{ rows: WordHistoryRow[]; total: number }> {
-  return readHistory([NORMALISED_INDEX], normalised, limit);
+export async function readLemmaKey(normalised: string): Promise<string> {
+  const database = await openLogDatabase();
+  const transaction = database.transaction(STORE_NAME, "readonly");
+  const request = transaction.objectStore(STORE_NAME).index(NORMALISED_INDEX).openCursor(IDBKeyRange.only(normalised));
+  return new Promise<string>((resolve, reject) => {
+    let latest: LookupRecord | undefined;
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(latest?.headword ?? normalised);
+        return;
+      }
+      const record = readRecord(cursor.value);
+      // Same tiebreak as `readHistory`: the higher autoincrement `id` is the later search.
+      if (!latest || record.at > latest.at || (record.at === latest.at && (record.id ?? 0) > (latest.id ?? 0))) {
+        latest = record;
+      }
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+  });
 }
 
 /**

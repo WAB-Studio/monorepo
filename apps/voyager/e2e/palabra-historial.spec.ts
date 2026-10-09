@@ -46,6 +46,9 @@ type SeedRow = {
   outcome?: LookupOutcome | "unlisted";
   // "word" unless said otherwise: every seeded row until RL-34 was one.
   kind?: "word" | "phrase";
+  // The lemma a form answered to (`record.ts`'s `headword` index); defaults
+  // to the written text, null for a word with no entry.
+  headword?: string | null;
   // Set on a row standing in for one another device already merged in
   // (`merge.ts`'s own shape); absent on a row this "device" wrote itself.
   device?: string;
@@ -56,11 +59,22 @@ async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
   await page.evaluate(
     (rows) =>
       new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open("reading-log");
+        // DATABASE_VERSION 3, `record.ts`'s own shape: seeding an older
+        // version would leave the app to upgrade it on open.
+        const request = indexedDB.open("reading-log", 3);
         request.onupgradeneeded = () => {
-          const store = request.result.createObjectStore("lookups", { keyPath: "id", autoIncrement: true });
+          const db = request.result;
+          const store = db.createObjectStore("lookups", {
+            keyPath: "id",
+            autoIncrement: true,
+          });
           store.createIndex("at", "at");
           store.createIndex("normalised", "normalised");
+          db.createObjectStore("sync", { keyPath: "key" });
+          store.createIndex("foreign", ["device", "deviceSeq"], {
+            unique: true,
+          });
+          store.createIndex("headword", "headword");
         };
         request.onsuccess = () => {
           const db = request.result;
@@ -75,7 +89,12 @@ async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
               normalised: row.normalised,
               kind,
               outcome: row.outcome ?? "exact",
-              headword: kind === "word" ? row.text : null,
+              headword:
+                row.headword !== undefined
+                  ? row.headword
+                  : kind === "word"
+                    ? row.text
+                    : null,
               rule: null,
               senses: kind === "word" ? 1 : 0,
               translation: row.translation,
@@ -126,10 +145,30 @@ test("a word's history lists every one of its searches with its date, and no oth
   const now = Date.now();
   await page.goto("/registro");
   await seedRows(page, [
-    { at: now - 3 * DAY_MS, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
-    { at: now - 2 * DAY_MS, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
-    { at: now - 1 * DAY_MS, text: "lukewarm", normalised: "lukewarm", translation: "tibio" },
-    { at: now - 5 * DAY_MS, text: "Word", normalised: "word", translation: "palabra" },
+    {
+      at: now - 3 * DAY_MS,
+      text: "lukewarm",
+      normalised: "lukewarm",
+      translation: "tibio",
+    },
+    {
+      at: now - 2 * DAY_MS,
+      text: "lukewarm",
+      normalised: "lukewarm",
+      translation: "tibio",
+    },
+    {
+      at: now - 1 * DAY_MS,
+      text: "lukewarm",
+      normalised: "lukewarm",
+      translation: "tibio",
+    },
+    {
+      at: now - 5 * DAY_MS,
+      text: "Word",
+      normalised: "word",
+      translation: "palabra",
+    },
   ]);
 
   await page.goto("/registro/lukewarm");
@@ -137,18 +176,24 @@ test("a word's history lists every one of its searches with its date, and no oth
   await expect(page.getByText(/3 búsquedas/)).toBeVisible();
 
   // Three rows: one `Exacta` label per search, none of them the other word's.
-  await expect(page.getByText(messages.log.outcome.exact, { exact: true })).toHaveCount(3);
+  await expect(
+    page.getByText(messages.log.outcome.exact, { exact: true }),
+  ).toHaveCount(3);
   await expect(page.getByText("Word", { exact: true })).toHaveCount(0);
   await expect(page.getByText("palabra", { exact: true })).toHaveCount(0);
 
   // This screen answers with the dictionary too now: exactly one Worker,
   // the same single mount the search box gets — never one per row rendered.
-  const workers = await page.evaluate(() => (window as unknown as { __workersBuilt: number }).__workersBuilt);
+  const workers = await page.evaluate(
+    () => (window as unknown as { __workersBuilt: number }).__workersBuilt,
+  );
   expect(workers).toBe(1);
 
   await page.goto("/registro/word");
   await expect(page.getByRole("heading", { name: "Word" })).toBeVisible();
-  await expect(page.getByText(messages.log.outcome.exact, { exact: true })).toHaveCount(1);
+  await expect(
+    page.getByText(messages.log.outcome.exact, { exact: true }),
+  ).toHaveCount(1);
 });
 
 // RL-32's other half, `readWordHistory`, filters `lookups` on `normalised`
@@ -167,7 +212,13 @@ test("a word's history interleaves two devices' rows by their own `at`, not by d
   await page.goto("/registro");
   await seedRows(page, [
     // id 1, at -3d, local
-    { at: now - 3 * DAY_MS, text: "twilight", normalised: "twilight", translation: "crepúsculo", outcome: "inflected" },
+    {
+      at: now - 3 * DAY_MS,
+      text: "twilight",
+      normalised: "twilight",
+      translation: "crepúsculo",
+      outcome: "inflected",
+    },
     // id 2, at -1d, foreign (device-a)
     {
       at: now - 1 * DAY_MS,
@@ -179,7 +230,13 @@ test("a word's history interleaves two devices' rows by their own `at`, not by d
       deviceSeq: 1,
     },
     // id 3, at -4d, local
-    { at: now - 4 * DAY_MS, text: "twilight", normalised: "twilight", translation: "crepúsculo", outcome: "miss" },
+    {
+      at: now - 4 * DAY_MS,
+      text: "twilight",
+      normalised: "twilight",
+      translation: "crepúsculo",
+      outcome: "miss",
+    },
     // id 4, at -2d, foreign (device-b)
     {
       at: now - 2 * DAY_MS,
@@ -215,25 +272,40 @@ test("a word's history interleaves two devices' rows by their own `at`, not by d
   ]);
 });
 
-test("from /registro, tapping the lukewarm row reaches /registro/lukewarm", async ({ page }) => {
+test("from /registro, tapping the lukewarm row reaches /registro/lukewarm", async ({
+  page,
+}) => {
   await deleteTranslator(page);
 
   await page.goto("/registro");
-  await seedRows(page, [{ at: Date.now(), text: "lukewarm", normalised: "lukewarm", translation: "tibio" }]);
+  await seedRows(page, [
+    {
+      at: Date.now(),
+      text: "lukewarm",
+      normalised: "lukewarm",
+      translation: "tibio",
+    },
+  ]);
   await page.reload();
 
   await page.locator('a[href="/registro/lukewarm"]').click();
   await expect(page).toHaveURL(/\/registro\/lukewarm$/);
 });
 
-test("a word never searched draws its own empty state, never a failure or a blank screen", async ({ page }) => {
+test("a word never searched draws its own empty state, never a failure or a blank screen", async ({
+  page,
+}) => {
   await deleteTranslator(page);
   await deleteLogDatabase(page);
 
   await page.goto("/registro/zzqqxv");
   await expect(page.getByRole("heading", { name: "zzqqxv" })).toBeVisible();
-  await expect(page.getByText(messages.log.word.emptyBody.replace("{word}", "zzqqxv"))).toBeVisible();
-  await expect(page.getByRole("button", { name: messages.log.word.emptyAction })).toBeVisible();
+  await expect(
+    page.getByText(messages.log.word.emptyBody.replace("{word}", "zzqqxv")),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: messages.log.word.emptyAction }),
+  ).toBeVisible();
   await expect(page.getByText(messages.log.listFailed)).toHaveCount(0);
 });
 
@@ -241,21 +313,36 @@ test("a word never searched draws its own empty state, never a failure or a blan
 // `study.emptyTitle`, "Todavía no has buscado nada" — false the moment the
 // record holds even one row for some other word, which this seeds on
 // purpose so a regression back to the borrowed copy fails loudly.
-test("a word never searched keeps its own empty copy even when the record holds other words", async ({ page }) => {
+test("a word never searched keeps its own empty copy even when the record holds other words", async ({
+  page,
+}) => {
   await deleteTranslator(page);
 
   await page.goto("/registro");
-  await seedRows(page, [{ at: Date.now(), text: "lukewarm", normalised: "lukewarm", translation: "tibio" }]);
+  await seedRows(page, [
+    {
+      at: Date.now(),
+      text: "lukewarm",
+      normalised: "lukewarm",
+      translation: "tibio",
+    },
+  ]);
 
   await page.goto("/registro/zzqqxv");
   await expect(page.getByRole("heading", { name: "zzqqxv" })).toBeVisible();
-  await expect(page.getByText(messages.log.word.emptyBody.replace("{word}", "zzqqxv"))).toBeVisible();
+  await expect(
+    page.getByText(messages.log.word.emptyBody.replace("{word}", "zzqqxv")),
+  ).toBeVisible();
   await expect(page.getByText(messages.log.study.emptyTitle)).toHaveCount(0);
 
   // "Buscarla" hands the word straight to the search box.
-  await page.getByRole("button", { name: messages.log.word.emptyAction }).click();
+  await page
+    .getByRole("button", { name: messages.log.word.emptyAction })
+    .click();
   await expect(page).toHaveURL(/\/\?q=zzqqxv$/);
-  await expect(page.getByRole("textbox", { name: messages.search.label })).toHaveValue("zzqqxv");
+  await expect(
+    page.getByRole("textbox", { name: messages.search.label }),
+  ).toHaveValue("zzqqxv");
 });
 
 // The dictionary's own longest headword, no space anywhere in it — the same
@@ -265,7 +352,8 @@ test("a word never searched keeps its own empty copy even when the record holds 
 // `overflow-wrap: anywhere`) rather than truncating, so it carries none of
 // `history-list.tsx`'s `Grid`+`Box`+`truncate` shape — proved here, not
 // assumed from reading the component.
-const LONGEST_HEADWORD = "Taumatawhakatangihangakoauauotamateaturipukakapikimaungahoronukupokaiwhenuakitanatahu";
+const LONGEST_HEADWORD =
+  "Taumatawhakatangihangakoauauotamateaturipukakapikimaungahoronukupokaiwhenuakitanatahu";
 
 test("a word's own headword with no space to break on never scrolls /registro/[palabra] sideways, at 360px", async ({
   page,
@@ -274,14 +362,25 @@ test("a word's own headword with no space to break on never scrolls /registro/[p
 
   await page.goto("/registro");
   await seedRows(page, [
-    { at: Date.now(), text: LONGEST_HEADWORD, normalised: LONGEST_HEADWORD.toLowerCase(), translation: "tibio" },
+    {
+      at: Date.now(),
+      text: LONGEST_HEADWORD,
+      normalised: LONGEST_HEADWORD.toLowerCase(),
+      translation: "tibio",
+    },
   ]);
   await page.goto(`/registro/${LONGEST_HEADWORD.toLowerCase()}`);
 
-  await expect(page.getByRole("heading", { name: LONGEST_HEADWORD })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: LONGEST_HEADWORD }),
+  ).toBeVisible();
 
-  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-  const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  const scrollWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  const clientWidth = await page.evaluate(
+    () => document.documentElement.clientWidth,
+  );
   expect(scrollWidth).toBe(clientWidth);
 });
 
@@ -290,13 +389,25 @@ test("a word's own headword with no space to break on never scrolls /registro/[p
 // multi-word `normalised` used to render and to query IndexedDB as its own
 // raw, still-encoded self, so a real record for "give up" never matched
 // and the reader read a lie about a word they had searched twice.
-test("a multi-word normalised decodes off its own URL segment, and still finds its own rows", async ({ page }) => {
+test("a multi-word normalised decodes off its own URL segment, and still finds its own rows", async ({
+  page,
+}) => {
   await deleteTranslator(page);
 
   await page.goto("/registro");
   await seedRows(page, [
-    { at: Date.now() - DAY_MS, text: "give up", normalised: "give up", translation: "rendirse" },
-    { at: Date.now(), text: "give up", normalised: "give up", translation: "rendirse" },
+    {
+      at: Date.now() - DAY_MS,
+      text: "give up",
+      normalised: "give up",
+      translation: "rendirse",
+    },
+    {
+      at: Date.now(),
+      text: "give up",
+      normalised: "give up",
+      translation: "rendirse",
+    },
   ]);
 
   await page.goto("/registro/give%20up");
@@ -316,9 +427,13 @@ test("a multi-word normalised never searched names itself right, and Buscarla fi
 
   await page.goto("/registro/give%20up");
   await expect(page.getByRole("heading", { name: "give up" })).toBeVisible();
-  await expect(page.getByText(messages.log.word.emptyBody.replace("{word}", "give up"))).toBeVisible();
+  await expect(
+    page.getByText(messages.log.word.emptyBody.replace("{word}", "give up")),
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: messages.log.word.emptyAction }).click();
+  await page
+    .getByRole("button", { name: messages.log.word.emptyAction })
+    .click();
   await page.waitForURL(/\/\?q=/);
   expect(page.url()).toMatch(/\/\?q=give(\+|%20)up$/);
   await expect(page.getByRole("heading", { name: "give up" })).toBeVisible();
@@ -326,7 +441,9 @@ test("a multi-word normalised never searched names itself right, and Buscarla fi
 
 // Same defect, no space in sight: an accented `normalised` must decode too,
 // not merely split on `%20`.
-test("an accented normalised decodes off its own URL segment", async ({ page }) => {
+test("an accented normalised decodes off its own URL segment", async ({
+  page,
+}) => {
   await deleteTranslator(page);
   await deleteLogDatabase(page);
 
@@ -339,15 +456,23 @@ test("an accented normalised decodes off its own URL segment", async ({ page }) 
 // every one of the three places that read `normalised` — the heading, the
 // empty state's own body copy, and the query "Buscarla" hands the search
 // box — never landing on `100%25` in one and `100%` in another.
-test("a percent-encoded percent sign decodes once, the same way everywhere", async ({ page }) => {
+test("a percent-encoded percent sign decodes once, the same way everywhere", async ({
+  page,
+}) => {
   await deleteTranslator(page);
   await deleteLogDatabase(page);
 
   await page.goto("/registro/100%25");
-  await expect(page.getByRole("heading", { name: "100%", exact: true })).toBeVisible();
-  await expect(page.getByText(messages.log.word.emptyBody.replace("{word}", "100%"))).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "100%", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(messages.log.word.emptyBody.replace("{word}", "100%")),
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: messages.log.word.emptyAction }).click();
+  await page
+    .getByRole("button", { name: messages.log.word.emptyAction })
+    .click();
   await page.waitForURL(/\/\?q=/);
   expect(page.url()).toMatch(/\/\?q=100%25$/);
 });
@@ -355,14 +480,20 @@ test("a percent-encoded percent sign decodes once, the same way everywhere", asy
 // The regression that matters most: a single-word `normalised` carries no
 // percent escape, so decoding it is a no-op — 75% of the dictionary's own
 // entries take this path and must read exactly as they did before the fix.
-test("a single-word normalised with nothing to decode is unchanged", async ({ page }) => {
+test("a single-word normalised with nothing to decode is unchanged", async ({
+  page,
+}) => {
   await deleteTranslator(page);
   await page.goto("/registro");
-  await seedRows(page, [{ at: Date.now(), text: "book", normalised: "book", translation: "libro" }]);
+  await seedRows(page, [
+    { at: Date.now(), text: "book", normalised: "book", translation: "libro" },
+  ]);
 
   await page.goto("/registro/book");
   await expect(page.getByRole("heading", { name: "book" })).toBeVisible();
-  await expect(page.getByText(messages.log.outcome.exact, { exact: true })).toHaveCount(1);
+  await expect(
+    page.getByText(messages.log.outcome.exact, { exact: true }),
+  ).toHaveCount(1);
 });
 
 // The module's own done criterion: entering a word from the record answers
@@ -372,10 +503,14 @@ test("a single-word normalised with nothing to decode is unchanged", async ({ pa
 // holds, read straight from `public/dictionary` rather than trusted from a
 // seeded row, so a change to the payload would fail this test loudly
 // rather than pass on a fixture that no longer matches it.
-test("/registro/bed answers with the same senses, translations and IPA /?q=bed does", async ({ page }) => {
+test("/registro/bed answers with the same senses, translations and IPA /?q=bed does", async ({
+  page,
+}) => {
   await deleteTranslator(page);
   await page.goto("/registro");
-  await seedRows(page, [{ at: Date.now(), text: "bed", normalised: "bed", translation: "cama" }]);
+  await seedRows(page, [
+    { at: Date.now(), text: "bed", normalised: "bed", translation: "cama" },
+  ]);
 
   await page.goto("/registro/bed");
   await expect(page.getByRole("heading", { name: "bed" })).toBeVisible();
@@ -387,15 +522,21 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   // one-gloss-per-line markup; this is the line that actually holds the
   // verb sense's two glosses joined (docs/voyager/DESIGN.md "The
   // translations are one line, separated by commas").
-  await expect(page.getByText("encamarse, irse a la cama", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("encamarse, irse a la cama", { exact: true }),
+  ).toBeVisible();
   // The one heading on the page is the word itself: `SenseList`'s own copy
   // of "bed" stays suppressed, or this locator would be ambiguous.
   await expect(page.getByRole("heading", { name: "bed" })).toHaveCount(1);
   // RNL-03's own board, at this project's 360px: two full senses, an IPA
   // and a translation list are more prose than the record ever drew here
   // before, and the first thing more prose does is overflow.
-  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-  const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  const scrollWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  const clientWidth = await page.evaluate(
+    () => document.documentElement.clientWidth,
+  );
   expect(scrollWidth).toBe(clientWidth);
 
   await page.goto("/?q=bed");
@@ -404,7 +545,9 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   await expect(glossLocator(page, "cama")).toBeVisible();
   await expect(glossLocator(page, "lecho")).toBeVisible();
   await expect(glossLocator(page, "encamarse")).toBeVisible();
-  await expect(page.getByText("encamarse, irse a la cama", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("encamarse, irse a la cama", { exact: true }),
+  ).toBeVisible();
 });
 
 // RNL-09: the dictionary is a local asset once installed, so re-entering a
@@ -419,7 +562,9 @@ test("opening /registro/bed, with the dictionary already on the device, reaches 
   await expect(glossLocator(page, "cama")).toBeVisible();
 
   await page.goto("/registro");
-  await seedRows(page, [{ at: Date.now(), text: "bed", normalised: "bed", translation: "cama" }]);
+  await seedRows(page, [
+    { at: Date.now(), text: "bed", normalised: "bed", translation: "cama" },
+  ]);
 
   const assetPath = manifest.asset.path;
   let assetRequests = 0;
@@ -433,7 +578,10 @@ test("opening /registro/bed, with the dictionary already on the device, reaches 
   await page.goto("/registro/bed");
   await expect(glossLocator(page, "lecho")).toBeVisible();
 
-  expect(assetRequests, "the dictionary asset is read off the device, never fetched again").toBe(0);
+  expect(
+    assetRequests,
+    "the dictionary asset is read off the device, never fetched again",
+  ).toBe(0);
   expect(apiRequests, "no server route fires on this screen").toBe(0);
 });
 
@@ -464,7 +612,9 @@ test("a phrase's history draws its own stored translation, never the dictionary'
   await page.goto(`/registro/${encodeURIComponent(phrase)}`);
   await expect(page.getByRole("heading", { name: phrase })).toBeVisible();
   await expect(page.getByText(/2 búsquedas/)).toBeVisible();
-  await expect(page.getByText("me guarda rencor", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("me guarda rencor", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
 });
 
@@ -480,7 +630,14 @@ test("a phrase that never translated shows its own missing-translation copy, not
   const phrase = "this sentence never translated";
   await page.goto("/registro");
   await seedRows(page, [
-    { at: Date.now(), text: phrase, normalised: phrase, translation: null, kind: "phrase", outcome: "untranslated" },
+    {
+      at: Date.now(),
+      text: phrase,
+      normalised: phrase,
+      translation: null,
+      kind: "phrase",
+      outcome: "untranslated",
+    },
   ]);
 
   await page.goto(`/registro/${encodeURIComponent(phrase)}`);
@@ -492,38 +649,301 @@ test("a phrase that never translated shows its own missing-translation copy, not
 // RL-55: a word the dictionary has no entry for and the network answered is
 // a row of its own. Its history names that origin, «De la red», never the
 // dictionary's «Sin entrada» (miss) and never a blank label.
-test("a word the network answered names its search «De la red» in the word's history", async ({ page }) => {
+test("a word the network answered names its search «De la red» in the word's history", async ({
+  page,
+}) => {
   await deleteTranslator(page);
 
   await page.goto("/registro");
   await seedRows(page, [
-    { at: Date.now() - DAY_MS, text: "whereat", normalised: "whereat", translation: "a lo cual", outcome: "unlisted" },
-    { at: Date.now(), text: "whereat", normalised: "whereat", translation: "a lo cual", outcome: "miss" },
+    {
+      at: Date.now() - DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: "a lo cual",
+      outcome: "unlisted",
+    },
+    {
+      at: Date.now(),
+      text: "whereat",
+      normalised: "whereat",
+      translation: "a lo cual",
+      outcome: "miss",
+    },
   ]);
 
   await page.goto("/registro/whereat");
   await expect(page.getByRole("heading", { name: "whereat" })).toBeVisible();
   await expect(page.getByText(/2 búsquedas/)).toBeVisible();
-  await expect(page.getByText(messages.log.outcome.unlisted, { exact: true })).toHaveCount(1);
-  await expect(page.getByText(messages.log.outcome.miss, { exact: true })).toHaveCount(1);
+  await expect(
+    page.getByText(messages.log.outcome.unlisted, { exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText(messages.log.outcome.miss, { exact: true }),
+  ).toHaveCount(1);
   expect(messages.log.outcome.unlisted).toBe("De la red");
 });
 
 // Order is by `at`, and the network label sits on the row it belongs to.
-test("a network row keeps its own place among a word's other outcomes", async ({ page }) => {
+test("a network row keeps its own place among a word's other outcomes", async ({
+  page,
+}) => {
   await deleteTranslator(page);
 
   await page.goto("/registro");
   await seedRows(page, [
-    { at: Date.now() - 2 * DAY_MS, text: "whereat", normalised: "whereat", translation: null, outcome: "miss" },
-    { at: Date.now() - 1 * DAY_MS, text: "whereat", normalised: "whereat", translation: "a lo cual", outcome: "unlisted" },
+    {
+      at: Date.now() - 2 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: null,
+      outcome: "miss",
+    },
+    {
+      at: Date.now() - 1 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: "a lo cual",
+      outcome: "unlisted",
+    },
   ]);
 
   await page.goto("/registro/whereat");
   await expect(page.getByText(/2 búsquedas/)).toBeVisible();
-  const labelPattern = new RegExp(`^(${messages.log.outcome.unlisted}|${messages.log.outcome.miss})$`);
+  const labelPattern = new RegExp(
+    `^(${messages.log.outcome.unlisted}|${messages.log.outcome.miss})$`,
+  );
   expect(await page.getByText(labelPattern).allTextContents()).toEqual([
     messages.log.outcome.unlisted,
     messages.log.outcome.miss,
   ]);
+});
+
+// Module 563 · RL-56: `/registro/<lemma>` joins every form of the word.
+function seedLinger(base: number): SeedRow[] {
+  return [
+    {
+      at: base - 2 * DAY_MS,
+      text: "linger",
+      normalised: "linger",
+      translation: "demorar",
+      outcome: "exact",
+      headword: "linger",
+    },
+    {
+      at: base - 1 * DAY_MS,
+      text: "lingered",
+      normalised: "lingered",
+      translation: "demorar",
+      outcome: "inflected",
+      headword: "linger",
+    },
+  ];
+}
+
+test("a lemma's history lists the lookups of all its forms, each with its written form and result", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, seedLinger(Date.now()));
+
+  await page.goto("/registro/linger");
+  await expect(
+    page.getByRole("heading", { name: "linger", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/· 2 búsquedas desde el /)).toBeVisible();
+  // The form that is not the lemma is written on its own row.
+  await expect(page.getByText("lingered", { exact: true })).toHaveCount(1);
+  await expect(
+    page.getByText(messages.log.outcome.inflected, { exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText(messages.log.outcome.exact, { exact: true }),
+  ).toHaveCount(1);
+  // Newest first: the inflected form was searched after the exact one.
+  const labelPattern = new RegExp(
+    `^(${messages.log.outcome.exact}|${messages.log.outcome.inflected})$`,
+  );
+  expect(await page.getByText(labelPattern).allTextContents()).toEqual([
+    messages.log.outcome.inflected,
+    messages.log.outcome.exact,
+  ]);
+});
+
+test("a form's own URL opens its lemma's page with the same rows", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, seedLinger(Date.now()));
+
+  await page.goto("/registro/lingered");
+  await expect(
+    page.getByRole("heading", { name: "linger", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "lingered", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText(/· 2 búsquedas desde el /)).toBeVisible();
+  await expect(
+    page.getByText(messages.log.outcome.inflected, { exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText(messages.log.outcome.exact, { exact: true }),
+  ).toHaveCount(1);
+});
+
+test("a word with no entry that the network answered carries the latest network translation in its subtitle", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  // Inserted newest-`at` first: insertion order and `at` order disagree.
+  await seedRows(page, [
+    {
+      at: Date.now() - 1 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: "¿en dónde?, adónde",
+      outcome: "unlisted",
+      headword: null,
+    },
+    {
+      at: Date.now() - 3 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: "a lo cual",
+      outcome: "unlisted",
+      headword: null,
+    },
+  ]);
+
+  await page.goto("/registro/whereat");
+  await expect(
+    page.getByRole("heading", { name: "whereat", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/^¿en dónde\?, adónde · 2 búsquedas desde el /),
+  ).toBeVisible();
+  await expect(
+    page.getByText(messages.log.outcome.unlisted, { exact: true }),
+  ).toHaveCount(2);
+});
+
+test("the network translation in the subtitle is the latest unlisted row's, not the latest row's", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    {
+      at: Date.now() - 3 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: "¿en dónde?, adónde",
+      outcome: "unlisted",
+      headword: null,
+    },
+    {
+      at: Date.now() - 1 * DAY_MS,
+      text: "whereat",
+      normalised: "whereat",
+      translation: null,
+      outcome: "miss",
+      headword: null,
+    },
+  ]);
+
+  await page.goto("/registro/whereat");
+  await expect(
+    page.getByText(/^¿en dónde\?, adónde · 2 búsquedas desde el /),
+  ).toBeVisible();
+});
+
+test("a lemma none of whose forms was searched draws the empty state, even with other words recorded", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    {
+      at: Date.now(),
+      text: "lukewarm",
+      normalised: "lukewarm",
+      translation: "tibio",
+    },
+    {
+      at: Date.now(),
+      text: "lingerie",
+      normalised: "lingerie",
+      translation: "lencería",
+      headword: "lingerie",
+    },
+  ]);
+
+  await page.goto("/registro/linger");
+  await expect(
+    page.getByText(messages.log.word.emptyBody.replace("{word}", "linger")),
+  ).toBeVisible();
+  await expect(page.getByText(/búsquedas? desde el /)).toHaveCount(0);
+  await expect(
+    page.getByText(messages.log.outcome.exact, { exact: true }),
+  ).toHaveCount(0);
+});
+
+test.describe("dates", () => {
+  test.use({ timezoneId: "America/Bogota", locale: "es-CO" });
+
+  test("a form's row reads Hoy, Ayer or the short date, with its time", async ({
+    page,
+  }) => {
+    await deleteTranslator(page);
+    // Bogota is UTC-5 with no DST, so a wall time maps to a fixed UTC offset.
+    const bogota = (y: number, m: number, d: number, h: number, min: number) =>
+      Date.UTC(y, m, d, h + 5, min);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Bogota",
+    })
+      .format(new Date())
+      .split("-")
+      .map(Number);
+    const [y, m, d] = [parts[0], parts[1] - 1, parts[2]];
+
+    await page.goto("/registro");
+    await seedRows(page, [
+      {
+        at: bogota(y, m, d, 0, 1),
+        text: "lingering",
+        normalised: "lingering",
+        translation: "demorar",
+        outcome: "inflected",
+        headword: "linger",
+      },
+      {
+        at: bogota(y, m, d - 1, 22, 3),
+        text: "linger",
+        normalised: "linger",
+        translation: "demorar",
+        outcome: "exact",
+        headword: "linger",
+      },
+      {
+        at: bogota(2026, 9, 6, 18, 41),
+        text: "lingered",
+        normalised: "lingered",
+        translation: "demorar",
+        outcome: "inflected",
+        headword: "linger",
+      },
+    ]);
+
+    await page.goto("/registro/linger");
+    await expect(page.getByText(/· 3 búsquedas desde el /)).toBeVisible();
+    await expect(page.getByText(/^Hoy, 0?0:01$/)).toHaveCount(1);
+    await expect(page.getByText("Ayer, 22:03", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("6 oct, 18:41", { exact: true })).toHaveCount(
+      1,
+    );
+  });
 });

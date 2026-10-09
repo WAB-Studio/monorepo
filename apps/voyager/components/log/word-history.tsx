@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { readWordHistory, type WordHistoryRow } from "@/lib/log/summary";
+import { readLemmaHistory, readLemmaKey, type WordHistoryRow } from "@/lib/log/summary";
 import type { LookupOutcome } from "@/lib/log/types";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
@@ -33,8 +33,8 @@ import {
 
 type ViewState =
   | { kind: "loading" }
-  | { kind: "empty" }
-  | { kind: "ready"; rows: WordHistoryRow[]; total: number }
+  | { kind: "empty"; key: string }
+  | { kind: "ready"; key: string; rows: WordHistoryRow[]; total: number }
   | { kind: "failed" };
 
 type OutcomeKey = "exact" | "inflected" | "translated" | "miss" | "unlisted";
@@ -97,10 +97,13 @@ export function WordHistory({ normalised }: { normalised: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    readWordHistory(normalised)
-      .then(({ rows, total }) => {
+    // The URL word may be a form: its lemma comes off its own stored rows,
+    // never off a lookup.
+    readLemmaKey(normalised)
+      .then(async (key) => {
+        const { rows, total } = await readLemmaHistory(key);
         if (cancelled) return;
-        setState(rows.length === 0 ? { kind: "empty" } : { kind: "ready", rows, total });
+        setState(rows.length === 0 ? { kind: "empty", key } : { kind: "ready", key, rows, total });
       })
       .catch(() => {
         if (!cancelled) setState({ kind: "failed" });
@@ -110,9 +113,12 @@ export function WordHistory({ normalised }: { normalised: string }) {
     };
   }, [normalised, attempt]);
 
+  const lookupKey = state.kind === "ready" ? state.key : null;
+
   useEffect(() => {
+    if (lookupKey === null) return;
     let cancelled = false;
-    lookup(normalised)
+    lookup(lookupKey)
       .then((result) => {
         if (!cancelled) setAnswer(result);
       })
@@ -125,7 +131,7 @@ export function WordHistory({ normalised }: { normalised: string }) {
     return () => {
       cancelled = true;
     };
-  }, [normalised, lookup]);
+  }, [lookupKey, lookup]);
 
   if (state.kind === "loading") {
     return <WordHistorySkeleton />;
@@ -181,6 +187,7 @@ export function WordHistory({ normalised }: { normalised: string }) {
     );
   }
 
+  const { key } = state;
   const latest = state.rows[0];
   const earliest = state.rows[state.rows.length - 1];
   // Every row for one `normalised` shares its `kind` — it is fixed at
@@ -192,17 +199,44 @@ export function WordHistory({ normalised }: { normalised: string }) {
     ? (state.rows.find((row) => row.translation !== null)?.translation ?? null)
     : null;
 
+  // A word the dictionary lacks and the network answered has no stored
+  // gloss of its own but the latest network one; a lemma keeps the latest
+  // row's.
+  const gloss = isPhrase
+    ? null
+    : (state.rows.find((row) => row.outcome === "unlisted") ?? state.rows[0]).translation;
+  // The provider formats in the server's zone; the reader's is the browser's.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const subtitleValues = {
+    count: state.total,
+    date: format.dateTime(new Date(earliest.at), { day: "numeric", month: "long", timeZone }),
+  };
+  // The lemma heads the page, in the casing a row wrote it when one did.
+  const heading = key.toLowerCase() === latest.text.toLowerCase() ? latest.text : key;
+
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dayOf = (value: Date) => format.dateTime(value, { year: "numeric", month: "numeric", day: "numeric", timeZone });
+  const rowTime = (at: number): string => {
+    const moment = new Date(at);
+    const time = format.dateTime(moment, { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone });
+    const day = dayOf(moment);
+    if (day === dayOf(today)) return t("word.timeToday", { time });
+    if (day === dayOf(yesterday)) return t("word.timeYesterday", { time });
+    return t("word.timeOther", { date: format.dateTime(moment, { day: "numeric", month: "short", timeZone }), time });
+  };
+
   return (
     <Flex direction="column" gap="5">
       <BackLink label={t("word.back")} />
 
       <Flex direction="column" gap="1">
-        <Headword>{latest.text}</Headword>
+        <Headword>{heading}</Headword>
         <Text size="2" muted>
-          {t("word.subtitle", {
-            count: state.total,
-            date: format.dateTime(new Date(earliest.at), { dateStyle: "medium" }),
-          })}
+          {gloss === null
+            ? t("word.subtitle", subtitleValues)
+            : t("word.lemmaSubtitle", { ...subtitleValues, translation: gloss })}
         </Text>
       </Flex>
 
@@ -248,9 +282,12 @@ export function WordHistory({ normalised }: { normalised: string }) {
           <Flex direction="column" gap="3" key={`${row.at}-${index}`}>
             {index > 0 && <Separator size="4" />}
             <Grid columns="1fr auto" gap="3" align="center">
-              <Text size="2" muted>
-                {format.dateTime(new Date(row.at), { dateStyle: "medium", timeStyle: "short" })}
-              </Text>
+              <Flex direction="column" gap="1" minWidth="0">
+                <Text size="2">{row.text}</Text>
+                <Text size="2" muted>
+                  {rowTime(row.at)}
+                </Text>
+              </Flex>
               <MetaLabel>{t(`outcome.${outcomeKey(row.outcome)}`)}</MetaLabel>
             </Grid>
           </Flex>
