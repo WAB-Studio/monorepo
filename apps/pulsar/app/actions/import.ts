@@ -9,6 +9,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { commitments, goals, monthBudgets, oneOffs, phases } from "@/db/schema";
 import { draftRefusals, importDraftSchema, withCutPhases } from "@/lib/import/draft";
 import { getPerson, withGoalsDb } from "@/lib/session";
+import { isTimeUnit } from "@/lib/units/time";
 import { monthStart } from "@/lib/validation/budget";
 import { todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -44,7 +45,8 @@ function weekdaysSql(days: number[] | null): SQL {
  * `returning` chain, and each table takes one multi-row insert. Raw SQL
  * naming the granted columns only (docs/TRAPS.md, "Drizzle's insert builder
  * names every column"); `goals` takes its INSERT grant and its measure
- * columns' UPDATE grant as two statements for the same reason.
+ * columns' UPDATE grant as two statements for the same reason. The same
+ * update arms the rhythm (RP-63): `plan_seen` as `setRhythm`'s first rhythm.
  */
 export async function confirmImport(input: unknown): Promise<ConfirmImportResult> {
   const parsed = importDraftSchema.safeParse(input);
@@ -61,6 +63,10 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
 
   const [refusal] = draftRefusals(draft, today);
   if (refusal) return { ok: false, error: messageKey(refusal.key), at: refusal.path };
+
+  // RP-63: a rhythm is minutes, so it needs a time measure; a forged draft can carry one without.
+  const untimed = draft.goals.findIndex((goal) => goal.rhythm !== null && (goal.measure === null || !isTimeUnit(goal.measure.unit)));
+  if (untimed >= 0) return { ok: false, error: "roadmap.errors.rhythmNotTime", at: `goals.${untimed}.rhythm` };
 
   const person = await getPerson();
   if (!person) return { ok: false, error: "import.errors.signedOut" };
@@ -92,7 +98,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     goalIndex += 1;
     goalRows.push(sql`${goalId}::uuid, ${person.id}::uuid, ${goal.name}, ${goal.horizon}::date, ${basePosition(goals)} + ${goalIndex}::integer`);
     if (goal.measure !== null) {
-      measureRows.push(sql`${goalId}::uuid, ${goal.measure.name}, ${goal.measure.unit}`);
+      measureRows.push(sql`${goalId}::uuid, ${goal.measure.name}, ${goal.measure.unit}, ${goal.rhythm}::integer`);
     }
     for (const phase of goal.phases) {
       phaseRows.push(sql`${person.id}::uuid, ${goalId}::uuid, ${phase.aim}, ${phase.startsOn}::date, ${phase.endsOn}::date`);
@@ -127,8 +133,10 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     `);
     if (measureRows.length > 0) {
       await tx.execute(sql`
-        update ${goals} set measure_name = m.name, measure_unit = m.unit
-        from (values ${rows(measureRows)}) as m(id, name, unit)
+        update ${goals} set measure_name = m.name, measure_unit = m.unit, rhythm = m.rhythm,
+          plan_seen = case when m.rhythm is null then plan_seen
+            else (date_trunc('month', ${today}::date) - interval '1 month')::date end
+        from (values ${rows(measureRows)}) as m(id, name, unit, rhythm)
         where ${goals}.id = m.id
       `);
     }
