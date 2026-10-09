@@ -40,7 +40,13 @@ export function ScheduleSheet({
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [choice, setChoice] = useState<DayChoiceValue>(
-    current ? { kind: "other", date: current.day } : DEFAULT_DAY_CHOICE,
+    !current
+      ? DEFAULT_DAY_CHOICE
+      : current.day > todayInZone()
+        ? { kind: "other", date: current.day }
+        : current.day === todayInZone()
+          ? { kind: "tomorrow", date: current.day }
+          : { kind: "today", date: current.day },
   );
   const [error, setError] = useState<MessageKey | null>(null);
 
@@ -85,9 +91,9 @@ export function ScheduleSheet({
           setError(null);
         }}
         allowNone={false}
-        // Moving a task of today (or one carried over) offers no «hoy»;
-        // `/sueltas` moves a later one and still does.
-        allowToday={!current || current.day > todayInZone()}
+        // A task of today has no «hoy» to move to; a carried one does, and
+        // a later one (`/sueltas`) keeps it.
+        allowToday={!current || current.day !== todayInZone()}
         min={todayInZone()}
         error={dateError}
       />
