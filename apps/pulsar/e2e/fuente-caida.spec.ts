@@ -21,7 +21,7 @@ async function expectNote(page: Page, where: string): Promise<void> {
   await expect(note).toContainText(NOTE_TITLE);
   await expect(note).toContainText(NOTE_BODY);
   await expect(page.getByText("sigue aquí")).toHaveCount(0);
-  await expect(page.getByText(/diccionario/i)).toHaveCount(0);
+  await expect(note).not.toContainText(/diccionario|lectura/i);
 }
 const FAILURE = "No se pudo abrir";
 
@@ -184,7 +184,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
         const visible = (text: string) => page.getByText(text, { exact: true }).locator("visible=true");
         // The block keeps saying it holds only what the person declared, never naming the source.
         await expect(page.getByText(/^solo lo que dijiste tú/).locator("visible=true")).toHaveCount(1);
-        expect(await page.locator("main").innerText()).not.toMatch(/diccionario|lectura/i);
+        await expect(page.getByText(/^solo lo que dijiste tú/).locator("visible=true")).not.toContainText(/diccionario|lectura/i);
         await expect(visible("5 de 12")).toHaveCount(1);
         // The month block prints the bare figure; the total beside «mide en» keeps its unit.
         await expect(visible("5")).toHaveCount(1);

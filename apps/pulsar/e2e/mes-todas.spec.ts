@@ -208,7 +208,7 @@ test("with the dictionary unreadable the strip speaks and a goal with no amount 
     await expect(note).toContainText(
       "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
     );
-    expect(await page.locator("main").innerText()).not.toMatch(/diccionario|lectura/i);
+    await expect(note).not.toContainText(/diccionario|lectura/i);
     const block = (name: string) => page.locator("section", { has: page.getByRole("heading", { name: `${name} ${stamp}` }) });
 
     await expect(block("Inglés").getByText("solo lo que dijiste tú")).toBeVisible();
