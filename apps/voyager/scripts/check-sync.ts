@@ -542,6 +542,139 @@ async function main() {
     await race.end();
   }
 
+  // S23-S28 need statements that do not share one `now()`, so their reader is a
+  // committed row this block deletes at the end (the cascade takes its devices
+  // and lookups with it). Setup runs as the connection's own role; every call
+  // under test runs under the reader's settled one.
+  const late = randomUUID();
+  const lateEmail = `harness-reader-${late}@example.invalid`;
+  const lateDb = postgres(process.env.DATABASE_URL!, { prepare: false, max: 3, connection: { search_path: "reading, public" } });
+  const asReader = <T>(work: (reader: Transaction) => Promise<T>): Promise<T> =>
+    lateDb.begin(async (tx) => {
+      await enterUserContext(tx, late);
+      return work(readerTx(tx));
+    }) as Promise<T>;
+  try {
+    const run = await openRun("rls", lateDb);
+    await lateDb.begin(async (tx) => {
+      await tx`insert into auth.users (id, email) values (${late}, ${lateEmail})`;
+      await tx`insert into harness.identities (user_id, run_id, email, disposition)
+        values (${late}, ${run}, ${lateEmail}, 'ephemeral')`;
+    });
+
+    // S23: the list runs from the most recent device to the oldest.
+    const [oldest, middle, newest] = [randomUUID(), randomUUID(), randomUUID()];
+    await lateDb`insert into reading.devices (user_id, device_id, label, last_seen_at) values
+      (${late}, ${middle}, 'chrome:android', '2020-01-01T00:00:00Z'),
+      (${late}, ${newest}, 'chrome:android', '2030-01-01T00:00:00Z'),
+      (${late}, ${oldest}, 'chrome:android', '2010-01-01T00:00:00Z')`;
+    const listedOrder = (await asReader((reader) => listDevices(reader, late))).map((device) => device.deviceId);
+    assert(
+      "S23",
+      listedOrder.join() === [newest, middle, oldest].join(),
+      `listed newest-first = ${listedOrder.join() === [newest, middle, oldest].join()}, count = ${listedOrder.length}`,
+    );
+
+    // S24: a device that copied nothing counts 0, not null.
+    const listedNone = (await asReader((reader) => listDevices(reader, late))).find((device) => device.deviceId === middle);
+    assert("S24", listedNone?.lookups === 0, `lookups of a device with no searches = ${String(listedNone?.lookups)}`);
+
+    // S25: two retirements in two transactions; the second neither throws nor moves the instant.
+    const retiredTwice = randomUUID();
+    await lateDb`insert into reading.devices (user_id, device_id, label) values (${late}, ${retiredTwice}, 'chrome:android')`;
+    const retiredAt = async () =>
+      (await lateDb<{ at: string }[]>`select retired_at::text as at from reading.devices where user_id = ${late} and device_id = ${retiredTwice}`)[0]?.at;
+    await asReader((reader) => retireDevice(reader, late, retiredTwice));
+    const firstInstant = await retiredAt();
+    let secondRetire = "not run" as number | string;
+    await asReader((reader) => retireDevice(reader, late, retiredTwice)).then(
+      (result) => {
+        secondRetire = result.lookups;
+      },
+      (error: unknown) => {
+        secondRetire = `sqlstate ${pgCode(error) ?? String(error)}`;
+      },
+    );
+    const secondInstant = await retiredAt();
+    assert(
+      "S25",
+      firstInstant !== undefined && secondRetire === 0 && secondInstant === firstInstant,
+      `second retirement = ${secondRetire}, retired_at kept = ${secondInstant === firstInstant}`,
+    );
+
+    // S26: a round whose statement began before the device was retired, and
+    // reaches the seal after the retirement commits, leaves the device alone.
+    // The retirement holds the row's lock open; the round waits on it.
+    const sealed = randomUUID();
+    await lateDb`insert into reading.devices (user_id, device_id, label, last_seen_at)
+      values (${late}, ${sealed}, 'chrome:android', '2000-01-01T00:00:00Z')`;
+    let retirementHolds!: () => void;
+    const retirementWrote = new Promise<void>((resolve) => (retirementHolds = resolve));
+    let releaseRetirement!: () => void;
+    const retirementReleased = new Promise<void>((resolve) => (releaseRetirement = resolve));
+    const retirement = lateDb.begin(async (tx) => {
+      await enterUserContext(tx, late);
+      await retireDevice(readerTx(tx), late, sealed);
+      retirementHolds();
+      await retirementReleased;
+    });
+    retirement.catch(() => retirementHolds());
+    await retirementWrote;
+
+    let roundDone = false;
+    const round = asReader((reader) => writeUpload(reader, late, sealed, "firefox:linux", [])).then(
+      () => "done",
+      (error: unknown) => `sqlstate ${pgCode(error) ?? String(error)}`,
+    ).finally(() => {
+      roundDone = true;
+    });
+    let roundWaited = false;
+    for (let attempt = 0; attempt < 100 && !roundWaited && !roundDone; attempt += 1) {
+      const [{ count }] = await lateDb<{ count: string }[]>`
+        select count(*)::text as count from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock' and wait_event = 'transactionid'
+          and query like '%sealed as%' and query like '%sync_rows_today%'`;
+      roundWaited = count !== "0";
+      if (!roundWaited) await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    releaseRetirement();
+    await retirement;
+    const roundResult = await round;
+    const [afterRound] = await lateDb<{ label: string; seen_year: number; retired: boolean }[]>`
+      select label, extract(year from last_seen_at)::int as seen_year, retired_at is not null as retired
+      from reading.devices where user_id = ${late} and device_id = ${sealed}`;
+    assert(
+      "S26",
+      roundWaited && afterRound.retired && afterRound.label === "chrome:android" && afterRound.seen_year === 2000,
+      `round waited on the retirement = ${roundWaited}, round -> ${roundResult}, label = ${afterRound.label}, last seen year = ${afterRound.seen_year}`,
+    );
+
+    // S27/S28: three rows that share one `received_at`, written against the
+    // order they must come back in.
+    const [lowDevice, highDevice] = [randomUUID(), randomUUID()].sort();
+    const viewer = randomUUID();
+    await asReader(async (reader) => {
+      await writeUpload(reader, late, highDevice, "chrome:android", rowsOf(highDevice, [2, 1]));
+      await writeUpload(reader, late, lowDevice, "chrome:android", rowsOf(lowDevice, [1]));
+    });
+    await lateDb`update reading.lookups set received_at = '2031-01-01T00:00:00Z'
+      where user_id = ${late} and device_id in (${lowDevice}, ${highDevice})`;
+    const downloaded = await asReader((reader) => downloadRows(reader, null, viewer));
+    const keys = downloaded.map((row) => `${row.device_id}:${row.local_id}`);
+    const expectedKeys = [`${lowDevice}:1`, `${highDevice}:1`, `${highDevice}:2`];
+    assert("S27", keys.join() === expectedKeys.join(), `order = ${keys.map((key) => key.slice(0, 4) + key.slice(36)).join()}`);
+
+    const last = downloaded[downloaded.length - 1];
+    const atEnd = last && decodeCursor(`${last.received_at}Z|${last.device_id}|${last.local_id}`);
+    const afterLast = atEnd ? await asReader((reader) => downloadRows(reader, atEnd, viewer)) : undefined;
+    assert("S28", afterLast?.length === 0, `rows after a cursor on the last row = ${afterLast?.length ?? "no cursor"}`);
+  } finally {
+    await lateDb`delete from harness.identities where user_id = ${late}`;
+    await lateDb`delete from auth.users where id = ${late}`;
+    await closeRun(lateDb);
+    await lateDb.end();
+  }
+
   await sql.end();
   if (failed) process.exit(1);
 }
