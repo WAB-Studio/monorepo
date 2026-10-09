@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
@@ -298,11 +298,15 @@ function PosSegments({
   senses,
   compact,
   ipaHeaded,
+  interlude,
   t,
 }: {
   senses: readonly Sense[];
   compact: boolean;
   ipaHeaded: boolean;
+  // Drawn right under the first segment (RL-58): the group the entry opens
+  // with stays above it, every other segment below.
+  interlude?: ReactNode;
   t: ReturnType<typeof useTranslations>;
 }) {
   const segments = segmentByPos(senses);
@@ -313,6 +317,7 @@ function PosSegments({
         <Flex direction="column" gap="3" key={index}>
           {index > 0 && <Separator size="4" />}
           <PosSegment segment={segment} compact={compact} ipaHeaded={ipaHeaded} t={t} />
+          {index === 0 && interlude}
         </Flex>
       ))}
     </Flex>
@@ -335,16 +340,19 @@ function PosSegments({
 function SenseGroup({
   senses,
   compact,
+  interlude,
   t,
 }: {
   senses: readonly Sense[];
   compact: boolean;
+  // Lands under the first category of the first pronunciation block.
+  interlude?: ReactNode;
   t: ReturnType<typeof useTranslations>;
 }) {
   const blocks = compact ? null : pronunciationBlocks(senses);
 
   if (blocks === null) {
-    return <PosSegments senses={senses} compact={compact} ipaHeaded={false} t={t} />;
+    return <PosSegments senses={senses} compact={compact} ipaHeaded={false} interlude={interlude} t={t} />;
   }
 
   return (
@@ -363,7 +371,13 @@ function SenseGroup({
               {block.ipa}
             </Text>
           )}
-          <PosSegments senses={block.senses} compact={compact} ipaHeaded t={t} />
+          <PosSegments
+            senses={block.senses}
+            compact={compact}
+            ipaHeaded
+            interlude={index === 0 ? interlude : undefined}
+            t={t}
+          />
         </Flex>
       ))}
     </Flex>
@@ -417,6 +431,46 @@ export type SenseListVariant = "full" | "compact";
 
 // A headword's full answer: its own senses first, then every inflected form
 // that reached one, each carrying its own senses in turn (RL-04, RL-40).
+// docs/voyager/DESIGN.md "PalabraConFlexion": the entry answers; this offers,
+// never replaces. The 2px rule marks where the entry pauses and the offer
+// begins, and each hit sits in its own indented rail — a smaller heading and
+// a muted label are the only things that rank it under the entry, no colour a
+// plain reading wouldn't already have.
+function ViaInflectionOffer({
+  answer,
+  compact,
+  wordHref,
+  t,
+}: {
+  answer: WordAnswer;
+  compact: boolean;
+  wordHref?: string;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <Flex direction="column" gap="4">
+      <Separator size="4" weight="heavy" />
+      {answer.viaInflection.map((hit, index) => (
+        <Flex direction="column" gap="3" key={`${hit.surface}-${hit.lemma}`}>
+          {index > 0 && <Separator size="4" />}
+          <Box rail>
+            <Flex direction="column" gap="3">
+              <Flex direction="column" gap="1">
+                <PosLabel muted>{t("viaInflectionWithEntry", { surface: hit.surface, lemma: hit.lemma })}</PosLabel>
+                <Flex align="center" gap="1">
+                  <BlockHeading word={hit.lemma} wordHref={wordHref} headwordSize="offer" />
+                  {!compact && <SpeakButton headword={hit.lemma} ipa={leadPronunciation(hit.group.senses)} t={t} />}
+                </Flex>
+              </Flex>
+              <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+            </Flex>
+          </Box>
+        </Flex>
+      ))}
+    </Flex>
+  );
+}
+
 export function SenseList({
   answer,
   variant = "full",
@@ -457,6 +511,14 @@ export function SenseList({
   // `SinEntradaFrase` carries its translations alone").
   const exactLead = !compact && answer.exact !== null ? leadPronunciation(answer.exact.senses) : null;
 
+  // RL-58: on the full variant the lemma block rises under the form's first
+  // group instead of closing the entry; compact keeps it at the end.
+  const offerInside = !compact && answer.exact !== null && answer.viaInflection.length > 0;
+  const offerAbove = !offerInside;
+  const offer = offerInside ? (
+    <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
+  ) : null;
+
   const hasAnswer = answer.exact !== null || answer.viaInflection.length > 0;
   if (!hasAnswer) {
     return (
@@ -486,7 +548,12 @@ export function SenseList({
             {showExactHeadword && <BlockHeading word={answer.exact.headword} wordHref={wordHref} />}
             {!compact && <SpeakButton headword={answer.exact.headword} ipa={exactLead} t={t} />}
           </Flex>
-          <SenseGroup senses={answer.exact.senses} compact={compact} t={t} />
+          <SenseGroup
+            senses={answer.exact.senses}
+            compact={compact}
+            interlude={offerInside ? offer : undefined}
+            t={t}
+          />
           {!compact && generated && <GeneratedText state={generated} />}
           {/* RL-51: the example is decoration resolved from the spelling
               alone (RL-42), so it lands under whichever block the entry
@@ -507,34 +574,7 @@ export function SenseList({
 
       {answer.viaInflection.length > 0 &&
         (answer.exact !== null ? (
-          // docs/voyager/DESIGN.md "PalabraConFlexion": the entry above
-          // answers; this offers, never replaces. The 2px rule marks where
-          // the entry ends and the offer begins, and each hit sits in its
-          // own indented rail — a smaller heading and a muted label are the
-          // only things that rank it under the entry, no colour a plain
-          // reading wouldn't already have.
-          <Flex direction="column" gap="4">
-            <Separator size="4" weight="heavy" />
-            {answer.viaInflection.map((hit, index) => (
-              <Flex direction="column" gap="3" key={`${hit.surface}-${hit.lemma}`}>
-                {index > 0 && <Separator size="4" />}
-                <Box rail>
-                  <Flex direction="column" gap="3">
-                    <Flex direction="column" gap="1">
-                      <PosLabel muted>
-                        {t("viaInflectionWithEntry", { surface: hit.surface, lemma: hit.lemma })}
-                      </PosLabel>
-                      <Flex align="center" gap="1">
-                        <BlockHeading word={hit.lemma} wordHref={wordHref} headwordSize="offer" />
-                        {!compact && <SpeakButton headword={hit.lemma} ipa={leadPronunciation(hit.group.senses)} t={t} />}
-                      </Flex>
-                    </Flex>
-                    <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
-                  </Flex>
-                </Box>
-              </Flex>
-            ))}
-          </Flex>
+          offerAbove && <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
         ) : (
           // RL-47: the form is only a form — the top of the screen is a
           // different word wearing the same spelling, so the form the
