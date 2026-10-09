@@ -1079,3 +1079,14 @@ Taken by the user on the critic's questions. No board drawn yet; each one opens 
   keys (RP-60 and RP-38 stay). The 30 days count from when the key stopped entering (lapsed or revoked).
 - **Claude Desktop gets a copyable `claude_desktop_config.json`** running `npx mcp-remote` with the key in a header;
   RP-38 stays true.
+
+## Decisions of 2026-10-09, the boards of the product critic
+
+- **The 19 boards are approved as drawn** (user, 2026-10-09, canvas version 84): `ConexionesConDominio`,
+  `ConexionesPlegadas`, `ConexionesPlegadasAbiertas`, `ConexionesVencidaCreaOtra`, `ConexionesCreadaDesktop` (446, 448);
+  `PermisoPalabras`, `FuenteCaidaPalabras` (580); `HoyDia` (574, 590, 591); `HoyAyerPrimerDia` (590); `HoySueltaMover`,
+  `HoySueltaMoverDia` (575); `SemanaHoyEvidencia`, `SemanaHoyEvidenciaOscuro` (576); `ReporteFuenteCaida`,
+  `ReporteTareaParte` (578); `ReporteImpresoCompacto` (579); `MetaSinPlan`, `MetaSinPlanTareas` (583);
+  `ImportarRevisarRitmo` (586). Each board's own note carries its words and what it takes for granted.
+- **`ReporteTareaParte` says only «sigue en».** The plan always starts in the current month, so a month's report never
+  receives a part carried from before; there is no «viene de».

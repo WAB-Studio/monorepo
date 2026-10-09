@@ -1608,3 +1608,10 @@ Taken by the user on the critic's questions. Each opens its module with a board 
 - **Boards that do not exist:** no light face and no 1280 face of the new `/cuenta`, `/registro` and word boards (light
   is the token inversion; 1280 is the same column wider, except signed-out); no board for pulling on open while
   unconfirmed, retired or signed out (nothing is drawn: the pull does not run).
+
+### Decisions of 2026-10-09
+
+- **The function-word table is approved** (user, 2026-10-09, `private/reportes/558-tabla.md`), with two glosses changed:
+  will reads «-ré, -rá (futuro)» and would «-ría (condicional)».
+- **`/cuenta` keeps the lines its boards did not write** (user, 2026-10-09): «Copiando tus búsquedas…», «Visto por última
+  vez: hace un momento» and the two licence paragraphs.
