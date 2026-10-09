@@ -175,6 +175,25 @@ test("a word's history lists every one of its searches with its date, and no oth
   await expect(page.getByRole("heading", { name: "lukewarm" })).toBeVisible();
   await expect(page.getByText(/3 búsquedas/)).toBeVisible();
 
+  // Each row reads its own day beside its time: yesterday's by word, the
+  // two older ones by short date. `Intl` is the oracle, not the component.
+  const expected = await page.evaluate((now) => {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const clock = (at: number) =>
+      new Intl.DateTimeFormat("es", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: zone }).format(at);
+    const short = (at: number) =>
+      new Intl.DateTimeFormat("es", { day: "numeric", month: "short", timeZone: zone }).format(at);
+    const day = 24 * 60 * 60 * 1000;
+    return [
+      `Ayer, ${clock(now - day)}`,
+      `${short(now - 2 * day)}, ${clock(now - 2 * day)}`,
+      `${short(now - 3 * day)}, ${clock(now - 3 * day)}`,
+    ];
+  }, now);
+  for (const text of expected) {
+    await expect(page.getByText(text, { exact: true })).toHaveCount(1);
+  }
+
   // Three rows: one `Exacta` label per search, none of them the other word's.
   await expect(
     page.getByText(messages.log.outcome.exact, { exact: true }),
@@ -892,8 +911,112 @@ test("a lemma none of whose forms was searched draws the empty state, even with 
   ).toHaveCount(0);
 });
 
+test("a lemma's subtitle carries the translation of its most recent row, not its oldest", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  // Inserted oldest first, none unlisted: only `at` says which is latest.
+  await seedRows(page, [
+    {
+      at: Date.now() - 2 * DAY_MS,
+      text: "linger",
+      normalised: "linger",
+      translation: "demorar",
+      outcome: "exact",
+      headword: "linger",
+    },
+    {
+      at: Date.now() - 1 * DAY_MS,
+      text: "lingered",
+      normalised: "lingered",
+      translation: "tardar",
+      outcome: "inflected",
+      headword: "linger",
+    },
+  ]);
+
+  await page.goto("/registro/linger");
+  await expect(page.getByText(/^tardar · 2 búsquedas desde el /)).toBeVisible();
+  await expect(page.getByText(/^demorar · /)).toHaveCount(0);
+});
+
+test("the heading keeps the casing a row wrote when it spells the key, and is the key otherwise", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    {
+      at: Date.now() - 1 * DAY_MS,
+      text: "Lingered",
+      normalised: "lingered",
+      translation: null,
+      outcome: "miss",
+      headword: null,
+    },
+    {
+      at: Date.now() - 2 * DAY_MS,
+      text: "Wherever",
+      normalised: "wherever",
+      translation: "dondequiera",
+      outcome: "inflected",
+      headword: "whereve",
+    },
+  ]);
+
+  // The key is `lingered` and the latest row spelled it «Lingered».
+  await page.goto("/registro/lingered");
+  await expect(page.getByRole("heading", { name: "Lingered", exact: true })).toBeVisible();
+
+  // The key is `whereve`; the row wrote «Wherever», a different word.
+  await page.goto("/registro/wherever");
+  await expect(page.getByRole("heading", { name: "whereve", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Wherever", exact: true })).toHaveCount(0);
+});
+
+test("a form's URL draws its lemma's senses, never the «es una forma de» notice", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, seedLinger(Date.now()));
+
+  await page.goto("/registro/lingered");
+  await expect(
+    page.getByRole("heading", { name: "linger", exact: true }),
+  ).toBeVisible();
+  // A translation `linger` has and a lookup of `lingered` alone would
+  // reach only through the inflection notice.
+  await expect(glossLocator(page, "persistir")).toBeVisible();
+  await expect(page.getByText(/es una forma de/)).toHaveCount(0);
+});
+
 test.describe("dates", () => {
   test.use({ timezoneId: "America/Bogota", locale: "es-CO" });
+
+  test("the subtitle's date is the reader's day, not the server's", async ({
+    page,
+  }) => {
+    await deleteTranslator(page);
+    // 21:00 in Bogota (UTC-5, no DST) is already the next day in UTC.
+    await page.goto("/registro");
+    await seedRows(page, [
+      {
+        at: Date.UTC(2026, 2, 15, 2, 0),
+        text: "whereat",
+        normalised: "whereat",
+        translation: null,
+        outcome: "miss",
+        headword: null,
+      },
+    ]);
+
+    await page.goto("/registro/whereat");
+    await expect(
+      page.getByText("1 búsqueda desde el 14 de marzo.", { exact: true }),
+    ).toBeVisible();
+  });
 
   test("a form's row reads Hoy, Ayer or the short date, with its time", async ({
     page,
