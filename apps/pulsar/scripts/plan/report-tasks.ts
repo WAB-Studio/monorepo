@@ -163,3 +163,37 @@ test("loadReport: goals read in plan order, not creation order", async () => {
   const index = (id: string) => report.goals.findIndex((entry) => entry.id === id);
   assert.ok(index(goalIds[1]) >= 0 && index(goalIds[1]) < index(goalIds[0]));
 });
+
+test("loadReport: a task with no estimate says no part, beside one cut by the month's rhythm that does (RP-49)", async () => {
+  const plan = await import("@/app/actions/plan");
+  const made = await plan.createGoal({ name: "RP-49 fixture: sin estimado", horizon: `${monthFrom(today, 3)}-01` });
+  if (!made.ok) throw new Error(`createGoal: ${made.error}`);
+  goalIds.push(made.goalId);
+  const goalId = made.goalId;
+  await sql`update goals.goals set measure_unit = 'minutos', measure_name = 'Tiempo', rhythm = 20 where id = ${goalId}`;
+  async function task(name: string, position: number, extra: { parent?: string; estimate?: number; month?: boolean } = {}) {
+    const [row] = await sql<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate, in_plan, planned_month, position)
+      values (${userId}, ${goalId}, ${name}, ${extra.parent ?? null}, ${extra.estimate ?? null},
+              ${extra.parent ? false : true}, ${extra.month ? `${today.slice(0, 7)}-01` : null}, ${position})
+      returning id`;
+    return row.id;
+  }
+  await task("RP-49 sin monto: cortada", 1, { estimate: 30 });
+  const mother = await task("RP-49 sin monto: madre", 2, { month: true });
+  await task("RP-49 sin monto: hija uno", 3, { parent: mother });
+  await task("RP-49 sin monto: hija dos", 4, { parent: mother });
+  await task("RP-49 sin monto: suelta", 5, { month: true });
+
+  const report = await loadReport(today);
+  const tasks = report.goals.find((entry) => entry.id === goalId)?.tasks ?? [];
+  const byName = new Map(tasks.map((item) => [item.name, item]));
+  const cut = byName.get("RP-49 sin monto: cortada")!;
+  assert.deepEqual([cut.part, cut.continuesIn], [20, `${monthFrom(today, 1)}-01`]);
+  for (const name of ["RP-49 sin monto: madre", "RP-49 sin monto: suelta"]) {
+    const item = byName.get(name);
+    assert.ok(item, `${name} is listed`);
+    assert.equal(item.hasAmount, false, name);
+    assert.equal(item.part, null, name);
+  }
+});
