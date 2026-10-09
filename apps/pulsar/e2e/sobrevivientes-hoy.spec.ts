@@ -129,7 +129,7 @@ test("a row's second line reads cadence, amount, count, hour, in that order", as
     `;
     await page.goto(`/dia/${yesterday}`);
     await settled(page);
-    await expect(page.getByText(/^5 min · 07:40 · lo dijiste tú · anotado el /)).toBeVisible();
+    await expect(page.getByText(/^todos los días · 5 min · 07:40 · lo dijiste tú · anotado el /)).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;

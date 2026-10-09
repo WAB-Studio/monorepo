@@ -72,11 +72,11 @@ test("Hoy says «lo dijiste tú» on a marked row and nothing more on an unmarke
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByText("Marcada", { exact: true })).toBeVisible();
 
-    await expect(page.getByText("07:40 · lo dijiste tú", { exact: true })).toBeVisible();
-    await expect(page.getByText("10 min · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("todos los días · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("todos los días · 10 min · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Sin número/ }).getByText("3 min", { exact: true })).toBeVisible();
     // Logged under its target: what it holds, never a second ask.
-    await expect(page.getByText("1 de 3 min · 09:22 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("todos los días · 1 de 3 min · 09:22 · lo dijiste tú", { exact: true })).toBeVisible();
     // No row says «pide el número» any more (`HoyDia`).
     await expect(page.getByText("pide el número")).toHaveCount(0);
     await expect(page.getByText("lo dijiste tú")).toHaveCount(3);

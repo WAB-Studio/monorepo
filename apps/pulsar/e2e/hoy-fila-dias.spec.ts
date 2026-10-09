@@ -51,6 +51,11 @@ for (const width of [360, 1440]) {
     await commit(twoName, two, "quantity", 120, "minutos");
     await commit(threeName, three, "quantity", 5, "km");
     await commit(allName, [1, 2, 3, 4, 5, 6, 7], "tap", null, null);
+    const dailyName = `Diaria ${width} ${stamp}`;
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${person.id}, ${goal.id}, ${dailyName}, 'daily', 'tap', now() - interval '30 days')
+    `;
 
     const context = await browser.newContext({
       storageState: person.sessionFile,
@@ -67,6 +72,7 @@ for (const width of [360, 1440]) {
       await expect(row(twoName)).toContainText(`${sentence(two)} · 2 h`);
       await expect(row(threeName)).toContainText(`${sentence(three)} · 5 km`);
       await expect(row(allName)).toContainText("todos los días");
+      await expect(row(dailyName)).toContainText("todos los días");
       // The commitment's own line holds no initials.
       await expect(row(twoName)).not.toContainText(/\b[LMXJVSD], [LMXJVSD]\b/);
 
