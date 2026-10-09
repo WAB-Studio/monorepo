@@ -20,8 +20,8 @@ function translate(key: string, values: Record<string, string | number> = {}): s
   return catalogue[key].replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]));
 }
 
-test("a daily cadence and every 1 day say nothing", () => {
-  assert.equal(cadencePhrase(translate, { kind: "daily" }, names), null);
+test("a daily cadence reads «todos los días»; every 1 day says nothing", () => {
+  assert.equal(cadencePhrase(translate, { kind: "daily" }, names), "todos los días");
   assert.equal(cadencePhrase(translate, { kind: "every_n_days", n: 1, anchor: "2026-09-01" }, names), null);
 });
 
