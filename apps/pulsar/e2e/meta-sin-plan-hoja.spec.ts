@@ -56,13 +56,12 @@ for (const width of [390, 1440]) {
         await expect(sheet).toContainText(`tarea · ${goalName}`);
         await expect(sheet.getByText("Mes", { exact: true })).toBeVisible();
         for (const month of [thisMonth, later, last]) {
-          await expect(sheet.getByRole("button", { name: label(month), exact: true })).toBeVisible();
+          await expect(sheet.getByRole("radio", { name: label(month), exact: true })).toBeVisible();
         }
-        await expect(sheet.getByRole("button", { name: label(thisMonth), exact: true })).toHaveAttribute("aria-pressed", "true");
-        await expect(sheet.getByRole("button", { name: label(later), exact: true })).toHaveAttribute("aria-pressed", "false");
+        await expect(sheet.getByRole("radio", { name: label(thisMonth), exact: true })).toHaveAttribute("aria-checked", "true");
+        await expect(sheet.getByRole("radio", { name: label(later), exact: true })).toHaveAttribute("aria-checked", "false");
         await expect(sheet.getByText("Lo pone el plan")).toHaveCount(0);
         await expect(sheet.getByText("Fijarla en")).toHaveCount(0);
-        await expect(sheet.getByRole("radio")).toHaveCount(0);
       } finally {
         await context.close();
       }
@@ -84,8 +83,8 @@ for (const width of [390, 1440]) {
       const { goalId, taskId, name } = await seed(db, person.id, "km");
       const { context, page, sheet } = await open(browser, baseURL!, person.sessionFile, goalId, name);
       try {
-        await sheet.getByRole("button", { name: label(later), exact: true }).click();
-        await expect(sheet.getByRole("button", { name: label(later), exact: true })).toHaveAttribute("aria-pressed", "true");
+        await sheet.getByRole("radio", { name: label(later), exact: true }).click();
+        await expect(sheet.getByRole("radio", { name: label(later), exact: true })).toHaveAttribute("aria-checked", "true");
         await sheet.getByRole("button", { name: "Guardar" }).click();
         await expect(sheet).toBeHidden();
         const [saved] = await db<{ planned_month: string | null }[]>`
@@ -123,7 +122,7 @@ test("at 390 a km goal's open sheet does not overflow horizontally", async ({ pe
     await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
     await page.getByRole("button", { name: new RegExp(`^${name}`) }).click();
     const sheet = page.getByRole("dialog", { name });
-    await expect(sheet.getByRole("button", { name: label(last), exact: true })).toBeVisible();
+    await expect(sheet.getByRole("radio", { name: label(last), exact: true })).toBeVisible();
     await sheet.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)));
     const [page_, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     expect(page_).toBeLessThanOrEqual(inner);

@@ -167,7 +167,7 @@ export function TaskSheet({
       if (typeof value === "string") return refuse(value);
       amount = value;
     }
-    const fixes = asksMonth && pin ? month : null;
+    const fixes = asksMonth && (pin || !timed) ? month : null;
 
     if (mode === "create") {
       const parsed = createOneOffSchema.safeParse({
@@ -277,29 +277,33 @@ export function TaskSheet({
           {asksMonth ? (
             <Flex direction="column" gap="2" role="radiogroup" aria-label={t("roadmap.fijar.month")}>
               <Text variant="name">{t("roadmap.fijar.month")}</Text>
-              <Row
-                role="radio"
-                aria-checked={!pin}
-                leading={<Mark state={pin ? "empty" : "declared"} />}
-                name={t("roadmap.fijar.planPicks")}
-                trailing={
-                  plans !== null ? (
-                    <Text variant="meta" tone="muted">
-                      {t(mode === "create" ? "roadmap.fijar.goesTo" : "roadmap.fijar.today", { month: plans })}
-                    </Text>
-                  ) : undefined
-                }
-                onClick={() => setPin(false)}
-              />
-              <Row
-                role="radio"
-                aria-checked={pin}
-                leading={<Mark state={pin ? "declared" : "empty"} />}
-                name={t("roadmap.fijar.pinIn")}
-                rule={false}
-                onClick={() => setPin(true)}
-              />
-              {pin ? (
+              {timed ? (
+                <>
+                  <Row
+                    role="radio"
+                    aria-checked={!pin}
+                    leading={<Mark state={pin ? "empty" : "declared"} />}
+                    name={t("roadmap.fijar.planPicks")}
+                    trailing={
+                      plans !== null ? (
+                        <Text variant="meta" tone="muted">
+                          {t(mode === "create" ? "roadmap.fijar.goesTo" : "roadmap.fijar.today", { month: plans })}
+                        </Text>
+                      ) : undefined
+                    }
+                    onClick={() => setPin(false)}
+                  />
+                  <Row
+                    role="radio"
+                    aria-checked={pin}
+                    leading={<Mark state={pin ? "declared" : "empty"} />}
+                    name={t("roadmap.fijar.pinIn")}
+                    rule={false}
+                    onClick={() => setPin(true)}
+                  />
+                </>
+              ) : null}
+              {pin || !timed ? (
                 <ChipRow>
                   {offered.map((value) => (
                     <Chip key={value} radio selected={month === value} onClick={() => setMonth(value)}>
@@ -314,7 +318,7 @@ export function TaskSheet({
                 </Text>
               ) : null}
               <Text as="p" variant="sentence">
-                {t("roadmap.fijar.pinHint")}
+                {t(timed ? "roadmap.fijar.pinHint" : "roadmap.fijar.pinHintUntimed")}
               </Text>
             </Flex>
           ) : null}
