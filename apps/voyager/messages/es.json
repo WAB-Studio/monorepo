@@ -87,7 +87,8 @@
       "exact": "Exacta",
       "inflected": "Flexionada",
       "translated": "Traducida",
-      "miss": "Sin resultado"
+      "miss": "Sin resultado",
+      "unlisted": "De la red"
     },
     "listFailed": "No se pudo cargar el registro",
     "retry": "Reintentar",
@@ -101,7 +102,8 @@
       "failedAction": "Reintentar",
       "download": "Descargar el registro",
       "skeletonWord": "Palabra de ejemplo",
-      "skeletonTranslation": "Su traducción de ejemplo"
+      "skeletonTranslation": "Su traducción de ejemplo",
+      "forms": "{lemma} · {forms}"
     },
     "word": {
       "back": "Registro",
@@ -112,7 +114,8 @@
       "emptyBody": "No has buscado «{word}» todavía.",
       "emptyAction": "Buscarla",
       "skeletonAnswer": "Su respuesta de ejemplo",
-      "phraseMissing": "No se guardó una traducción para esta frase."
+      "phraseMissing": "No se guardó una traducción para esta frase.",
+      "lemmaSubtitle": "{translation} · {count, plural, one {# búsqueda} other {# búsquedas}} desde el {date}."
     },
     "clear": {
       "trigger": "Vaciar el registro",
@@ -165,7 +168,17 @@
       "confirmAction": "Empezar a copiar",
       "failedBodyFirst": "Tus palabras siguen en este dispositivo.",
       "retiredTitle": "Este dispositivo ya no copia",
-      "retiredBody": "Lo retiraste de tu cuenta y tu registro se quedó completo aquí. Para copiarlo de nuevo, cierra sesión y vuelve a entrar."
+      "retiredBody": "Lo retiraste de tu cuenta y tu registro se quedó completo aquí. Para copiarlo de nuevo, cierra sesión y vuelve a entrar.",
+      "lastCopy": "Última copia hace {time}",
+      "lastCopyMoment": "Última copia hace un momento",
+      "syncingSearches": "{count, plural, =0 {Copiando tus búsquedas…} one {Copiando # búsqueda…} other {Copiando # búsquedas…}}",
+      "downloading": "Trayendo tus búsquedas…",
+      "otherReader": "Las búsquedas de antes se quedan en este dispositivo. A tu cuenta sólo va lo que busques desde ahora.",
+      "failedOfflineTitle": "La copia no salió",
+      "failedOffline": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
+      "failedQuotaTitle": "Hoy ya no se copia más",
+      "failedQuotaBody": "Copiaste el máximo de hoy. Mañana sigue sola; tus palabras siguen en este dispositivo.",
+      "failedServer": "Falló de nuestro lado. Tus palabras siguen en este dispositivo."
     },
     "info": {
       "tabs": {
@@ -174,13 +187,18 @@
       },
       "dictionaryLabel": "El diccionario",
       "dictionaryName": "FreeDict eng–spa",
-      "dictionaryStats": "{entries} entradas · {edition} · {size} en este dispositivo.",
+      "dictionaryStats": "{entries, number} entradas · {edition} · {size} en este dispositivo.",
       "licenceLabel": "Licencia",
       "licenceCredit": "Obra derivada de DBnary, bajo <cc>CC BY-SA 3.0</cc>. Esta app la distribuye bajo la misma licencia.",
       "frequencyLabel": "Orden de las acepciones",
       "frequencyCredit": "El orden en que se muestran las acepciones de una palabra viene de <source>SUBTLEX-US con información gramatical</source>, bajo <cc>CC BY-NC-SA 4.0</cc>. Esta app distribuye esa tabla bajo la misma licencia, sin uso comercial.",
       "appLabel": "La app",
-      "appVersion": "Diccionario de lectura · versión {version}"
+      "appVersion": "Diccionario de lectura · versión {version}",
+      "licenceBody": "Obra derivada de DBnary. Esta app la distribuye bajo la misma licencia.",
+      "licenceName": "CC BY-SA 3.0",
+      "frequencyBody": "El orden en que se muestran las acepciones de una palabra viene de una tabla de frecuencias. Esta app distribuye esa tabla bajo la misma licencia, sin uso comercial.",
+      "frequencySource": "SUBTLEX-US con información gramatical",
+      "frequencyLicence": "CC BY-NC-SA 4.0"
     },
     "devices": {
       "title": "Dispositivos",
@@ -216,7 +234,12 @@
         "windows": "Windows",
         "macos": "macOS",
         "linux": "Linux"
-      }
+      },
+      "loadFailed": "No pude cargar tus dispositivos",
+      "lastSeenMoment": "Visto por última vez: hace un momento",
+      "labelBrowserOnly": "{browser} en otro sistema",
+      "labelPlatformOnly": "Navegador desconocido en {platform}",
+      "since": "Desde el {date}"
     }
   },
   "error": {
