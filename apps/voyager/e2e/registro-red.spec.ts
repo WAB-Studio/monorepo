@@ -200,3 +200,88 @@ test("corte: translations joined past 120 characters are stored cut, never longe
   expect(joined.startsWith(stored)).toBe(true);
   expect(stored).not.toMatch(/[,\s]$/u);
 });
+
+test("bajo su búsqueda: an answer for coccidiosis that arrives after the box moved to another word leaves no unlisted row", async ({
+  page,
+  stubUnlisted,
+}) => {
+  await deleteTranslator(page);
+  await stubUnlisted(BODY);
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let calls = 0;
+  // The first request (coccidiosis) is held; any later one is refused with a
+  // 204, so a row under the second word could only come from the held answer.
+  await page.route(
+    (url) => isUnlistedPost(url.toString()),
+    async (route) => {
+      calls += 1;
+      if (calls === 1) {
+        await gate;
+        await route.fallback();
+      } else {
+        await route.fulfill({ status: 204, headers: { "x-e2e-word-stub": "1" } });
+      }
+    },
+  );
+  await openReady(page);
+
+  const box = page.getByRole("textbox", { name: messages.search.label });
+  await box.fill("coccidiosis");
+  await expect.poll(() => calls, { timeout: 10000 }).toBe(1);
+  await box.fill("whereat");
+  await expect.poll(() => calls, { timeout: 10000 }).toBe(2);
+  await page.waitForTimeout(400);
+
+  release();
+  await page.waitForTimeout(1500);
+  await settle(page, box);
+
+  const rows = await readLogRows(page);
+  expect(rows.filter((row) => row.outcome === "unlisted")).toHaveLength(0);
+});
+
+test("una vez: a focus change and a colour-scheme change after the answer was recorded leave one row", async ({
+  page,
+  stubUnlisted,
+}) => {
+  await deleteTranslator(page);
+  await stubUnlisted(BODY);
+  await openReady(page);
+
+  const box = page.getByRole("textbox", { name: messages.search.label });
+  await box.fill("whereat");
+  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 10000 });
+
+  await box.blur();
+  await box.focus();
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.waitForTimeout(500);
+  await settle(page, box);
+
+  const rows = (await readLogRows(page)).filter((row) => row.normalised === "whereat");
+  expect(rows).toHaveLength(1);
+  expect(rows[0].outcome).toBe("unlisted");
+});
+
+test("bajo su búsqueda: returning to a word whose answer the tab holds records each row under the text it was typed, headword included", async ({
+  page,
+  stubUnlisted,
+}) => {
+  await deleteTranslator(page);
+  await stubUnlisted(BODY);
+  await openReady(page);
+
+  const box = page.getByRole("textbox", { name: messages.search.label });
+  for (const word of ["whereat", "coccidiosis", "whereat"]) {
+    await box.fill(word);
+    await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 10000 });
+    await settle(page, box);
+  }
+
+  const unlisted = (await readLogRows(page)).filter((row) => row.outcome === "unlisted");
+  expect(unlisted.map((row) => row.text)).toEqual(["whereat", "coccidiosis", "whereat"]);
+  for (const row of unlisted) expect(row.headword).toBe(row.normalised);
+});
