@@ -474,7 +474,7 @@ test("RL-52, RL-24: after a retirement, signing out and in again offers the copy
   });
 });
 
-test("RL-52: another reader on this device confirms under a new deviceId and cursors reset to null", async ({
+test("RL-52: another reader on this device confirms under a new deviceId and uploads nothing searched before", async ({
   page,
 }) => {
   test.setTimeout(45_000);
@@ -509,12 +509,13 @@ test("RL-52: another reader on this device confirms under a new deviceId and cur
     const first = posts[0]!;
     expect(first.deviceId).not.toBe(deviceOfA);
     expect(first.since).toBeNull();
-    // B's copy starts from the first local row, not from where A stopped.
-    expect(first.rows, `first POST: ${JSON.stringify(first)}`).toHaveLength(2);
+    // A's two rows stay on the device: B's copy starts past them.
+    expect(first.rows, `first POST: ${JSON.stringify(first)}`).toHaveLength(0);
 
     const row = await readSync(page);
     expect(row?.readerId).toBe(reader.id);
     expect(row?.deviceId).toBe(first.deviceId);
+    expect(row?.pushedThroughLocalId).toBe(2);
   });
 });
 
