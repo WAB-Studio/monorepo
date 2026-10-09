@@ -283,29 +283,33 @@ test("a paused prefix never leaves the page blank", async ({ page }) => {
   expect(textLength).toBeGreaterThan(0);
 });
 
-// Counts definition blocks (docs/voyager/DESIGN.md "The English definition
-// draws open, always") bounded by document order to two headings — never
-// the whole page — so a second headword's own senses (an inflected form's
-// `viaInflection` group) never inflate the count of the one being measured.
-async function countDefinitionsBetween(
+// The definitions drawn after `ownHeading` that sit outside `otherHeading`'s
+// block — the offer's rail, found as the nearest ancestor of that heading
+// with a left rule. The offered lemma block can sit under the entry's first
+// group (RL-58), so the entry's own definitions are no longer one span.
+async function countOwnDefinitions(
   page: Page,
-  afterHeading: string,
-  beforeHeading: string | null,
+  ownHeading: string,
+  otherHeading: string,
   label: string,
 ): Promise<number> {
   return page.evaluate(
-    ({ afterHeading, beforeHeading, label }) => {
+    ({ ownHeading, otherHeading, label }) => {
       const headings = Array.from(document.querySelectorAll("h1"));
-      const after = headings.find((h) => h.textContent === afterHeading);
-      const before = beforeHeading ? headings.find((h) => h.textContent === beforeHeading) : undefined;
-      if (!after) return -1;
+      const own = headings.find((h) => h.textContent === ownHeading);
+      const other = headings.find((h) => h.textContent === otherHeading);
+      if (!own || !other) return -1;
+      let otherBlock: Element | null = other;
+      while (otherBlock && parseFloat(getComputedStyle(otherBlock).borderInlineStartWidth) === 0) {
+        otherBlock = otherBlock.parentElement;
+      }
+      if (!otherBlock) return -1;
       return Array.from(document.querySelectorAll("[data-definition-block]"))
         .filter((b) => b.textContent?.includes(label))
-        .filter((b) => Boolean(after.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING))
-        .filter((b) => !before || Boolean(b.compareDocumentPosition(before) & Node.DOCUMENT_POSITION_FOLLOWING))
-        .length;
+        .filter((b) => Boolean(own.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING))
+        .filter((b) => !otherBlock.contains(b)).length;
     },
-    { afterHeading, beforeHeading, label },
+    { ownHeading, otherHeading, label },
   );
 }
 
@@ -423,9 +427,9 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("left");
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
-  // RL-40 offers `leave` beneath `left`'s own entry — its own senses carry
-  // no definition at all, so bounding the count to `left`'s own block below
-  // proves the period-only filter without depending on that separately.
+  // RL-40 offers `leave` within `left`'s entry — its own senses carry no
+  // definition at all, but the count below leaves its block out anyway, so
+  // the period-only filter does not depend on that.
   await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
   await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
 
@@ -433,7 +437,7 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   // never had one), adv ("On the left side."), n ("The left side or
   // direction.") and v ("."). Only the two real ones draw; the bare period
   // is filtered to no definition, same as adj's null.
-  const definitions = await countDefinitionsBetween(page, "left", "leave", messages.word.definitionEnglish);
+  const definitions = await countOwnDefinitions(page, "left", "leave", messages.word.definitionEnglish);
   expect(definitions).toBe(2);
 });
 
