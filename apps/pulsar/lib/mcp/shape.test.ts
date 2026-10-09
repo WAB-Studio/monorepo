@@ -390,7 +390,7 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
       {
         ...base,
         tasks: [
-          { name: "Arrastrada", from: "2026-09-01", done: false, doneOn: null, estimate: 90, part: null, continuesIn: null, cameFrom: null, owes: 90, hasAmount: true, note: "Del mes pasado", children: [] },
+          { name: "Arrastrada", from: "2026-09-01", done: false, doneOn: null, estimate: 90, part: null, continuesIn: null, owes: 90, hasAmount: true, note: "Del mes pasado", children: [] },
           {
             name: "Madre",
             from: null,
@@ -399,7 +399,7 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
             estimate: null,
             part: null,
             continuesIn: null,
-            cameFrom: null,
+           
             owes: 0,
             hasAmount: true,
             note: null,
@@ -410,7 +410,7 @@ test("the report's tasks keep their order, months as YYYY-MM, notes, and minutes
       {
         ...base,
         unit: null,
-        tasks: [{ name: "Sin medida", from: null, done: false, doneOn: null, estimate: null, part: null, continuesIn: null, cameFrom: null, owes: 0, hasAmount: false, note: null, children: [] }],
+        tasks: [{ name: "Sin medida", from: null, done: false, doneOn: null, estimate: null, part: null, continuesIn: null, owes: 0, hasAmount: false, note: null, children: [] }],
       },
     ],
   };

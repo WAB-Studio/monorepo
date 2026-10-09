@@ -20,7 +20,6 @@ export type ReportTask = {
   // does not split across months or carries no amount.
   part: number | null;
   continuesIn: string | null;
-  cameFrom: string | null;
   owes: number;
   hasAmount: boolean;
   note: string | null;

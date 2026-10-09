@@ -130,7 +130,6 @@ function toReportTask(item: PlanItem): ReportTask {
     estimate: leaf ? item.task.estimate : null,
     part: splits && hasAmountOf(item) ? item.part : null,
     continuesIn: item.to,
-    cameFrom: item.from,
     owes: leaf
       ? item.task.doneOn === null
         ? (item.task.estimate ?? 0)

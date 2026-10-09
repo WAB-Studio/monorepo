@@ -481,7 +481,6 @@ test("loadReport: a task cut at the month's edge reads its part here and the mon
   assert.equal(third.estimate, 8);
   assert.equal(third.part, 4);
   assert.equal(third.continuesIn, `${monthFrom(today, 1)}-01`);
-  assert.equal(third.cameFrom, null);
   const first = byName.get("RP-49 ritmo: primera")!;
-  assert.deepEqual([first.part, first.continuesIn, first.cameFrom], [null, null, null]);
+  assert.deepEqual([first.part, first.continuesIn], [null, null]);
 });
