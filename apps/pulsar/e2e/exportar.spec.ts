@@ -1734,3 +1734,143 @@ test.describe("the report on A4, compact", () => {
     }
   });
 });
+
+// RP-49 (test-critic #4, #5, #6): the last day counts as ended, paper is black
+// everywhere, and «N % pasó a» is the share the seeded numbers give.
+test.describe("the report's last day, its ink and its share (RP-49)", () => {
+  const longDay = (day: string) =>
+    new Intl.DateTimeFormat("es-CO", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(civilDateToDate(day));
+
+  test("a goal whose horizon is today is ended: counted in the head and named with yesterday", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const name = `Meta de hoy ${Date.now()}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${name}, ${todayInZone()}, 'páginas', 'páginas', now() - interval '100 days')
+      returning id
+    `;
+    const seeded = await seed(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText("2 metas · 1 terminada", { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(`terminada el ${longDay(plusDays(-1))}`, { exact: true }),
+      ).toBeVisible();
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[goal.id, seeded.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("on paper every visible text node in main computes pure black", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seed(db, person);
+    const ended = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${`Meta cerrada ${Date.now()}`}, ${plusDays(-2)}, 'páginas', 'páginas', now() - interval '100 days')
+      returning id
+    `;
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.addInitScript(() => localStorage.setItem("theme", "dark"));
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const offenders = await page.evaluate(() => {
+        const found: string[] = [];
+        const walker = document.createTreeWalker(
+          document.querySelector("main")!,
+          NodeFilter.SHOW_TEXT,
+        );
+        let seen = 0;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = (node.textContent ?? "").trim();
+          const el = node.parentElement;
+          if (!text || !el || el.getClientRects().length === 0) continue;
+          const style = getComputedStyle(el);
+          if (style.visibility === "hidden" || style.display === "none") continue;
+          seen += 1;
+          if (style.color !== "rgb(0, 0, 0)") found.push(`${text.slice(0, 40)} → ${style.color}`);
+        }
+        if (seen < 20) found.push(`only ${seen} text nodes reached`);
+        return found;
+      });
+      expect(offenders).toEqual([]);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[seeded.goalId, ...ended.map((g) => g.id)]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("the closed month says the share that passed on, rounded down from the seeded estimates", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seed(db, person);
+    const monthStart = `${todayInZone().slice(0, 7)}-01`;
+    // Last month, from the estimates seeded here and in `seed` (a parent whose
+    // only sub-task owes 45): 45 + 110 owed, 200 done, so 155 of 355 passed on.
+    const lastMonth = plusDays(-31).slice(0, 7);
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${seeded.goalId}, ${`${lastMonth}-01`}::date, 600)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${seeded.goalId}, ${`Debida ${Date.now()}`}, 110, ${`${lastMonth}-01`}::date)
+    `;
+    const [finished] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${seeded.goalId}, ${`Hecha antes ${Date.now()}`}, 200, ${`${lastMonth}-01`}::date)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${seeded.goalId}, ${finished.id}, ${`${lastMonth}-10`}::date)
+    `;
+    const expected = Math.floor(((45 + 110) * 100) / (45 + 110 + 200));
+    expect(expected).toBe(43);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      const closed = page
+        .locator("table tbody tr", { hasText: /\d+ % pasó a \p{L}+/u })
+        .first();
+      await expect(closed).toBeVisible();
+      await expect(closed).toContainText(`${expected} % pasó a`);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+});
