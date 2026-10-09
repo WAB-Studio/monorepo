@@ -366,3 +366,26 @@ test("each act is one statement beside its settle", async () => {
     2,
   );
 });
+
+test("setRhythm: the first rhythm marks last month seen (RP-50)", async () => {
+  const goalId = await goal(owner, "visto", true);
+  goalIds.push(goalId);
+  assert.equal(await seenOf(goalId), null);
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount: 600 })), { ok: true });
+  assert.equal(await seenOf(goalId), `${monthFrom(today, -1)}-01`);
+});
+
+test("setRhythm: the first rhythm returns a pinned mother to the plan and leaves her child's row alone (RP-51)", async () => {
+  const goalId = await goal(owner, "madre fijada", true);
+  goalIds.push(goalId);
+  const mother = await task(owner, goalId, "madre", monthFrom(today, 1));
+  const [child] = await admin<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, parent_id)
+    values (${owner.id}, ${goalId}, 'hija', ${mother}) returning id`;
+  const rowOf = async () =>
+    (await admin`select * from goals.one_offs where id = ${child.id}`)[0];
+  const before = await rowOf();
+  assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount: 600 })), { ok: true });
+  assert.equal(await monthOfTask(mother), null);
+  assert.deepEqual(await rowOf(), before);
+});
