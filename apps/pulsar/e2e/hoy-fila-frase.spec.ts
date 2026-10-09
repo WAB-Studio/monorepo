@@ -50,7 +50,7 @@ for (const width of [390, 1440]) {
 
       const fonts = async (name: string) =>
         page.getByRole("button", { name: new RegExp(`^${name}`) }).evaluate((row) => {
-          const sentence = [...row.querySelectorAll("span")].find((el) => /lo dijiste tú/.test(el.textContent ?? "") && el.children.length > 0 && /^\d/.test(el.textContent ?? ""))!;
+          const sentence = [...row.querySelectorAll("span")].find((el) => /lo dijiste tú/.test(el.textContent ?? "") && el.children.length > 0 && /^(todos los días · )?\d/.test(el.textContent ?? ""))!;
           const family = (el: Element) => getComputedStyle(el).fontFamily;
           return {
             text: sentence.textContent,
@@ -60,13 +60,13 @@ for (const width of [390, 1440]) {
         });
 
       const km = await fonts(distance);
-      expect(km.text).toMatch(/^7 de 90 kilómetros · \d\d:\d\d · lo dijiste tú$/);
+      expect(km.text).toMatch(/^todos los días · 7 de 90 kilómetros · \d\d:\d\d · lo dijiste tú$/);
       expect(km.sentence).not.toMatch(/mono/i);
       expect(km.figures.map((f) => f.text)).toEqual(["7", "90 kilómetros", expect.stringMatching(/^\d\d:\d\d$/)]);
       for (const figure of km.figures) expect(figure.family).toMatch(/mono/i);
 
       const min = await fonts(minutes);
-      expect(min.text).toMatch(/^5 de 10 min · \d\d:\d\d · lo dijiste tú$/);
+      expect(min.text).toMatch(/^todos los días · 5 de 10 min · \d\d:\d\d · lo dijiste tú$/);
       expect(min.sentence).not.toMatch(/mono/i);
       expect(min.figures.map((f) => f.text)).toEqual(["5", "10 min", expect.stringMatching(/^\d\d:\d\d$/)]);
       for (const figure of min.figures) expect(figure.family).toMatch(/mono/i);

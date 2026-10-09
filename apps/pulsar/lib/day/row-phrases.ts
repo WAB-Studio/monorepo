@@ -5,23 +5,22 @@ import { isTimeUnit } from "@/lib/units/time";
 type Translate = (key: MessageKey, values?: Record<string, string | number>) => string;
 
 export type CadenceNames = {
-  // Monday first, one letter each: a weekdays cadence of several days.
+  // Monday first, three letters each: a weekdays cadence of several days.
   weekdayShort: string[];
   // Monday first, «martes», «sábados»: read after «solo los».
   weekdayPlural: string[];
 };
 
-// The cadence as a row's second line says it, or null where the row says
-// nothing: a daily commitment is the default and stays quiet
-// (`HoyEscritorio.dc.html`).
+// The cadence as a row's second line says it (`HoyDia`): days as a sentence,
+// «lun, mié y vie». Null only for «every 1 day», which a daily cadence already says.
 export function cadencePhrase(translate: Translate, cadence: Cadence, names: CadenceNames): string | null {
   switch (cadence.kind) {
     case "daily":
-      return null;
+      return translate("day.cadence.everyDay");
     case "weekdays":
       return cadence.days.length === 1
         ? translate("day.cadence.onlyWeekday", { weekday: names.weekdayPlural[cadence.days[0] - 1] })
-        : cadence.days.map((day) => names.weekdayShort[day - 1]).join(", ");
+        : daysSentence(translate, cadence.days.map((day) => names.weekdayShort[day - 1]));
     case "times_per_week":
       return translate("day.cadence.timesPerWeek", { count: cadence.count });
     case "every_n_days":
@@ -29,6 +28,11 @@ export function cadencePhrase(translate: Translate, cadence: Cadence, names: Cad
     case "times_per_month":
       return translate("day.cadence.timesPerMonth", { count: cadence.count });
   }
+}
+
+function daysSentence(translate: Translate, names: string[]): string {
+  if (names.length === 7) return translate("day.cadence.everyDay");
+  return translate("day.cadence.daysJoin", { list: names.slice(0, -1).join(", "), last: names[names.length - 1] });
 }
 
 // A goal's phase line: «fase 2 de 3 · desbloquear la boca»; a goal with one
@@ -152,8 +156,7 @@ export function partialPair(logged: string, target: string, unit: string | null)
 
 /**
  * A row's second line as parts, joined with « · ». «lo dijiste tú» marks a
- * done `tap` or `quantity` row after its hour; «pide el número» marks a
- * `quantity` row with nothing logged, after its target. A quantity row logged
+ * done `tap` or `quantity` row after its hour; A quantity row logged
  * under its target reads «1 de 3 min · 09:22 · lo dijiste tú», its mark still
  * empty. Evidence and quiet rows say neither (`HoyEscritorio.dc.html`). The
  * target of a `quantity` row, what it logged and the hour are figures.
@@ -167,7 +170,6 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPar
   const loud = !quiet && kind !== "evidence";
   const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;
   const said = loud && (done || partial) ? translate("day.row.saidByYou") : null;
-  const asks = loud && !done && !partial && kind === "quantity" ? translate("day.row.asksNumber") : null;
 
   const amount: RowMetaPart[] | undefined = partial
     ? partialParts(translate("day.row.partialAmount", { logged: LOGGED, target: TARGET }), partial)
@@ -177,7 +179,6 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPar
   const pieceParts: (RowMetaPart[] | null | undefined)[] = [
     pieces.cadenceText ? [{ text: pieces.cadenceText }] : null,
     amount,
-    asks ? [{ text: asks }] : null,
     status ? [{ text: status }] : null,
     pieces.writtenTime ? [{ figure: pieces.writtenTime }] : null,
     said ? [{ text: said }] : null,
