@@ -9,8 +9,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// Six defects seen in real captures of the roadmap and the UX review
-// (private/capturas, boards r2-roadmap and w3-ux). Each test states what the
+// Each test states what the
 // board owes the person, at the width the capture was taken.
 
 // `page` carries the suite's seeded person; these tests seed the disposable one.

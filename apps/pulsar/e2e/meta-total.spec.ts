@@ -7,7 +7,7 @@ import { test, expect, type Person } from "./fixtures";
 
 // RP-14, RP-28: the figure beside «mide en minutos» is the goal's total since
 // it opened, and a quiet line under it says so: «en total, desde el 1 de
-// enero» (`MetaTotal`, board words of wave 4). The date is DM Mono inside an
+// enero» (`MetaTotal`). The date is DM Mono inside an
 // Archivo sentence; the year shows only when it is not the current one. «0 min»
 // stays at zero, and a goal with no measure draws neither figure nor line.
 

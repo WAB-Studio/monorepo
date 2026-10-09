@@ -5,7 +5,7 @@ import { addWeeksToCivilDate, civilDateToDate, dateToCivilDate, todayInZone, wee
 
 import { test, expect } from "./fixtures";
 
-// Assertions the mutator's survivors of «la crítica» slice (2026-09-28) asked
+// Assertions the mutator's survivors asked
 // for, written from the contract. Every row is seeded under this identity and
 // deleted by id in `finally`.
 // Paths by day: none; the goals open 6 and 3 days before today, in any week.

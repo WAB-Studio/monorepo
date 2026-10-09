@@ -1,8 +1,8 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// RP-16, RP-44 on Semana's phone: a goal with no row that week draws no header
-// (365 decision 2); the table and the fold show the same groups.
+// RP-16, RP-44 on Semana's phone: a goal with no row that week draws no header;
+// the table and the fold show the same groups.
 
 function shift(day: string, by: number): string {
   const date = civilDateToDate(day);

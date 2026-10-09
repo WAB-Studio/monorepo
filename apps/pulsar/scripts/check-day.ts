@@ -607,7 +607,7 @@ const CADENCE_ZONE_WEDNESDAY = "2019-11-06";
  * Proves `lib/day/cadence.ts`'s own `asksOn`, never `lib/queries/week.ts`'s
  * SQL filter: retired mid-week, this commitment is `>= weekStart` regardless
  * of which zone `retired_at::date` renders in, so it always rides into
- * `deriveWeek`'s raw commitments set — the earlier fix does not touch this
+ * `deriveWeek`'s raw commitments set — the SQL filter does not touch this
  * case at all. What used to decide Thursday–Sunday was `asksOn`'s own bare
  * `day > plan.retiredAt` — a civil-date string compared lexically against a
  * full ISO instant, which a Thursday date string reads as "not yet retired"
@@ -1149,7 +1149,7 @@ async function runReplaceRaceCheck(): Promise<void> {
 }
 
 /**
- * Proves RP-19 widened 2026-09-28: `loadDay(today).oneOffs` carries a
+ * Proves RP-19 widened: `loadDay(today).oneOffs` carries a
  * one-off dated three days back, still undone, with its own `day`; drops one
  * dated three days back whose fact was written on a day other than today —
  * "done leaves the list for good", true on any day the fact was written, not
@@ -2465,8 +2465,7 @@ async function runEndedThisWeekCheck(): Promise<void> {
   }
 }
 
-// What the mutator found nobody pinning on `loadDay`. Fixed 2012
-// days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
+// `loadDay` on fixed 2012 days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
 // before it.
 async function runSurvivorsOf92To94Check(): Promise<void> {
   const { loadDay } = await import("@/lib/queries/day");

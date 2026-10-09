@@ -62,7 +62,7 @@ async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): P
 
 // Inserted over the owner connection (`MIGRATION_DATABASE_URL`, RLS bypassed
 // the same way every other probe in this suite writes), under the spec's own
-// signed-in identity — decided by the user 2026-09-28: a registered harness
+// signed-in identity — a registered harness
 // identity may own its own `reading.lookups` rows. One device, one local id
 // per row: `lookups`' own primary key is `(user_id, device_id, local_id)`,
 // never a surrogate `id` column.

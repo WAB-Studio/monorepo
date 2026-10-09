@@ -3,7 +3,7 @@ import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
 
-// 408, `HoyTareaDeMeta` and its two states (boards approved 2026-10-07; RP-19, RP-20,
+// 408, `HoyTareaDeMeta` and its two states (RP-19, RP-20,
 // RP-50): the field in a goal's group is a task of that goal. Its words are the
 // boards', typed here as written, never read back from the catalogue.
 

@@ -725,12 +725,10 @@ async function checkOneOffDeleteGrant(): Promise<void> {
   await sql.end();
 }
 
-// An independent validator drove a bare `DELETE` under
-// a settled session, no server action in the way, and an own one-off that
-// carried a fact went — the invariant lived in `deleteOneOff`'s own check
-// alone, never in the grant layer. `one_offs_delete_self`'s own `USING`
-// (migration 0002) is what closes that: this drives the very same bare
-// statement the validator did, never `deleteOneOff`, so a regression in any
+// The invariant "an own one-off that carries a fact is not deleted" lives in
+// `deleteOneOff`'s own check, not in the grant layer. `one_offs_delete_self`'s
+// `USING` (migration 0002) is what closes that for a bare `DELETE` under a
+// settled session: this drives that statement, never `deleteOneOff`, so a regression in any
 // future writer is caught here too, not only in this app's own action.
 async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });

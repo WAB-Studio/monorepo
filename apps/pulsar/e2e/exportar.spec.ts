@@ -20,8 +20,8 @@ import exportMessages from "../messages/es/export.json";
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
 // Pages the two-goal seeded report takes on A4 with the carried notes
-// printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (317 spaced the sections: 11 to 10;
-// 379 printed the months alone and let a section run across pages: 10 to 6).
+// printed and the month's tasks, measured by `pdfinfo`
+// (spaced sections and the months printed alone keep a section from running across pages).
 const A4_PAGES = 4;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
@@ -1317,7 +1317,7 @@ test.describe("a readable source", () => {
   });
 });
 
-// `ReporteTareaParte` (RP-54, user decision 2026-10-09): a task the
+// `ReporteTareaParte` (RP-54): a task the
 // plan splits shows the part that falls in this month and «sigue en <mes> ·
 // <total> en total» under its name. There is no «viene de».
 test.describe("a task split across months", () => {

@@ -336,7 +336,7 @@ for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
   });
 }
 
-// What the critic measured at 1024 and 1280. A person of the
+// At 1024 and 1280, a person of the
 // spec's own for each: `layout` is a wide open plan, `closed` holds no open
 // goal at all, so neither depends on a sibling's rows.
 const LAYOUT_GOAL = `Meta de medición amplia con un nombre largo ${stamp}`;

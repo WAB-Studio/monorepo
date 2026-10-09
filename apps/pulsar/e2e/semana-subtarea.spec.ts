@@ -153,7 +153,7 @@ test("a sub-task done last week, read from «‹», names its parent (RP-44)", a
 });
 
 for (const width of [1440, 390]) {
-  test(`at ${width}, «de <parent>» is a muted Archivo sentence, not DM Mono (decision 2 of 393)`, async ({
+  test(`at ${width}, «de <parent>» is a muted Archivo sentence, not DM Mono`, async ({
     browser,
     baseURL,
     db,
