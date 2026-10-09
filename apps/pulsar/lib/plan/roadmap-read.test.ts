@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { dayBefore } from "@/lib/day/weeks";
+
 import { carryShare } from "./carry";
-import type { PlanInput, PlanTask } from "./roadmap";
+import { fillPlan, type PlanInput, type PlanTask } from "./roadmap";
 import { doneIn, openMonthsOf, planMonthList, planMonthOf, planMoved, planShare, rhythmToMeet } from "./roadmap-read";
 
 const SEP = "2026-09-01";
@@ -260,4 +262,19 @@ test("planMoved: closedDone counts a done sub-task under an undone parent, never
     task("c", { estimate: 12 }),
   ];
   assert.equal(planMoved({ ...input(tasks), seen: null })?.closedDone, 6);
+});
+
+test("planShare: what was carried never passes what the month planned, task by task (RP-50)", () => {
+  // September's room is 8 h: the 6 h task sits whole, the 4 h one has 2 h in September and 2 h in October.
+  const tasks = [task("six", { estimate: 6 }), task("four", { estimate: 4 })];
+  const share = planShare(input(tasks, { rhythm: 8, today: "2026-10-15" }), SEP);
+  assert.deepEqual(share, { carried: 8, planned: 8 });
+});
+
+test("rhythmToMeet: a plan that ends on the goal's last day asks for no faster rhythm (RP-52, RP-53)", () => {
+  const tasks = [task("all-october", { estimate: 12 })];
+  const fits = input(tasks, { rhythm: 12, horizon: NOV, today: "2026-10-02" });
+  assert.equal(dayBefore(fits.horizon), "2026-10-31");
+  assert.equal(fillPlan(fits).end, "2026-10-31");
+  assert.equal(rhythmToMeet(fits, 12), null);
 });
