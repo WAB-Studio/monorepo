@@ -17,6 +17,37 @@ try {
   // No .env.local: fall back to whatever the shell already set.
 }
 
+// The dictionary's own store holds a manifest once the install has landed.
+// Look before opening: opening a database that does not exist yet creates it
+// empty at version 1, and the worker's own open then never builds its stores.
+async function dictionaryInstalled(page: import("@playwright/test").Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    const known = await indexedDB.databases();
+    if (!known.some((db) => db.name === "reading-dictionary")) return false;
+    return new Promise<boolean>((resolve) => {
+      const open = indexedDB.open("reading-dictionary");
+      open.onerror = () => resolve(false);
+      open.onsuccess = () => {
+        const db = open.result;
+        if (!db.objectStoreNames.contains("meta")) {
+          db.close();
+          resolve(false);
+          return;
+        }
+        const count = db.transaction("meta", "readonly").objectStore("meta").count();
+        count.onsuccess = () => {
+          db.close();
+          resolve(count.result > 0);
+        };
+        count.onerror = () => {
+          db.close();
+          resolve(false);
+        };
+      };
+    });
+  });
+}
+
 test("the app opens with no connection, from its own cache, never the browser's", async ({ page, context }) => {
   // Chromium's built-in `Translator` hangs `availability()` forever
   // (docs/TRAPS.md).
@@ -29,6 +60,8 @@ test("the app opens with no connection, from its own cache, never the browser's"
   // without a second navigation — but only once the worker is actually active.
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  // The dictionary on the device is what an offline answer is made of.
+  await expect.poll(() => dictionaryInstalled(page)).toBe(true);
 
   await context.setOffline(true);
   await page.reload();
@@ -37,8 +70,11 @@ test("the app opens with no connection, from its own cache, never the browser's"
   await expect(searchBox).toBeVisible();
 
   // RL-16: the box, not a network error page — Chromium's own offline page
-  // never carries this input.
+  // never carries this input — and an answer, not an eternal install message.
   await expect(searchBox).toBeEditable();
+  await searchBox.fill("apple");
+  await expect(page.getByText("manzana, poma", { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.install.failed, { exact: true })).toHaveCount(0);
 
   // The 8.2 MB payload has its own store; the shell's cache must never hold
   // a second copy of it.
@@ -317,6 +353,11 @@ for (const [first, second] of [
     // client bundle of `/` really loaded and hydrated.
     await searchBox.fill("apple");
     await expect(searchBox).toHaveValue("apple");
+    // These visits never boot the dictionary (RNL-08), so nothing is installed
+    // and no translation can exist. The Worker still loads from the precache
+    // and says so, rather than leaving the install message up forever.
+    await expect(page.getByText(messages.install.failed, { exact: true })).toBeVisible();
+    await expect(page.getByText(messages.install.preparing, { exact: true })).toHaveCount(0);
     await expect(page.getByText(messages.error.title, { exact: true })).toHaveCount(0);
     expect(problems.filter((line) => /ChunkLoadError|Loading chunk|Failed to load chunk/i.test(line))).toEqual([]);
   });

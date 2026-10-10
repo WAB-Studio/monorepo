@@ -3027,3 +3027,15 @@ in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it r
   `context.route` to model «the page never fetched them» also aborts the worker's precache, and no precache can pass it.
 - Measured 2026-10-09, module 651: two `offline.spec.ts` tests red on every run with a correct `sw.js`, green 10/10 once
   switched to `page.route`, still red 6/6 on the old `sw.js`.
+
+### A cached Response hands a Turbopack Worker no bootstrap config
+
+`apps/voyager/public/sw.js` `cacheFirst` returned the stored `Response` as is. A stored response has no URL
+fragment, and Turbopack carries the Worker's bootstrap config in the Worker URL's `#params=…`; the Worker
+takes its location from the response, so it logs "Missing worker bootstrap config" and dies, online too.
+Return `new Response(cached.body, {status, headers})` instead. The worker chunk is named inside another chunk,
+never in the HTML, so `precacheChunks` must scan fetched JS for `turbopack-worker-*` and its deps; a first
+visit to `/registro` alone otherwise never installed the dictionary offline (RNL-08).
+- Surface it: `worker.onerror` in `use-dictionary.ts` sets the failed state, so offline `/` says «No se pudo
+  instalar el diccionario» and not «Instalando…» forever.
+- Measured 2026-10-09, module 691: `sin-red-una-visita.spec.ts` 10/10 green with the three changes, red with any one removed.

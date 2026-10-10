@@ -64,6 +64,8 @@ export function useDictionary(): UseDictionaryResult {
       }
     };
 
+    worker.onerror = () => setStatus({ state: "failed", reason: "network" });
+
     const boot: WorkerRequest = { id: nextIdRef.current++, kind: "boot" };
     worker.postMessage(boot);
 
