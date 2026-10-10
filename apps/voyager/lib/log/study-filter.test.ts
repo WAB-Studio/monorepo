@@ -87,11 +87,23 @@ test("filterStudyRows: no match returns an empty list", () => {
   assert.deepEqual(filterStudyRows(rows, "zzz"), []);
 });
 
-test("filterStudyRows: 50 filters over 800 rows take under 50 ms", () => {
-  const many = Array.from({ length: 800 }, (_, i) =>
-    row(`word${i}`, { forms: [`word${i}`, `forma${i}`], lastTranslation: `palabra ${i}` }),
-  );
-  const start = performance.now();
+test("filterStudyRows: display matches when no other field holds the text", () => {
+  const shown = row("run", { display: "ran", forms: ["x"], lastTranslation: "y" });
+  assert.deepEqual(keys(filterStudyRows([shown, ...rows], "ran")), ["run"]);
+});
+
+test("filterStudyRows: 50 filters over 800 rows read each row once", () => {
+  let reads = 0;
+  const many = Array.from({ length: 800 }, (_, i) => {
+    const base = row(`word${i}`, { forms: [`word${i}`, `forma${i}`], lastTranslation: `palabra ${i}` });
+    const forms = base.forms;
+    return Object.defineProperty(base, "forms", {
+      get() {
+        reads++;
+        return forms;
+      },
+    });
+  });
   for (let i = 0; i < 50; i++) filterStudyRows(many, `Palábra ${i}`);
-  assert.ok(performance.now() - start < 50);
+  assert.equal(reads, 800);
 });
