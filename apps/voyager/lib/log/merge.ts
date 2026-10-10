@@ -11,7 +11,8 @@ const STORE_NAME = "lookups";
 // a batch this size never ties the store up long enough to delay
 // `recordLookup`'s own `add`.
 const BATCH_SIZE = 500;
-// Measured in 695: chunks this size keep every main-thread task under the p95 budget.
+// A main-thread task issues at most this many `add`s or reads: a task of
+// 500 averaged 7 ms, long enough to hold a search behind it.
 const CHUNK = 50;
 
 /** A row another device recorded, on its way into this one's copy (RL-24). */
@@ -88,9 +89,9 @@ function mergeBatch(database: IDBDatabase, batch: ForeignRow[]): Promise<number>
 }
 
 /**
- * Merges foreign rows in batches of `BATCH_SIZE`, never one transaction for
- * the whole set — that would tie up `lookups` for its entire duration and
- * delay `recordLookup`'s own writes. Idempotent per row via the `foreign`
+ * Merges foreign rows in batches of `BATCH_SIZE`, `CHUNK` rows per task,
+ * never one transaction for the whole set — that would tie up `lookups` for
+ * its entire duration and delay `recordLookup`'s own writes. Idempotent per row via the `foreign`
  * index, not all-or-nothing per call (RL-13's guarantee does not apply
  * here): a batch that lands stays landed, and an interrupted merge resumes
  * from wherever the cursor last advanced. Returns how many rows actually
