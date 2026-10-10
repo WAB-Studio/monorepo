@@ -271,8 +271,12 @@ test("a goal measured in «páginas» reads its plain number on the goal and in 
 
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText(`750 ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
 
     await page.goto(`/metas/${goalId}/revision`);
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
     await expect(page.locator("li[data-current]")).toContainText(`750${unit}`);
 
     await page.setViewportSize({ width: 1280, height: 900 });
