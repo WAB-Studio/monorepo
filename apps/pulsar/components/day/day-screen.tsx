@@ -308,7 +308,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                           ? {
                               asks:
                                 evidence === "unreadable"
-                                  ? t("day.row.unreadSource")
+                                  ? t("day.row.unreadSourceAsks", { asks: evidenceAmount(commitment.evidence, commitment.evidence.threshold) })
                                   : evidenceAmount(commitment.evidence, commitment.evidence.threshold),
                               got:
                                 slot.satisfiedBy === "evidence"
