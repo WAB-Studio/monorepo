@@ -8,7 +8,7 @@
 # this transcript was 7.03 bytes a token, and it drifts with how much of a turn
 # is tool output. Only a transcript with no usage line falls back to bytes.
 #
-# Threshold: HANDOFF_TOKENS, default 400000. Fires once. Never blocks.
+# Threshold: HANDOFF_TOKENS, default 300000. Fires once. Never blocks.
 
 input=$(cat)
 
@@ -16,7 +16,7 @@ python3 - "$input" <<'PY'
 import json, os, sys
 from pathlib import Path
 
-LIMIT = int(os.environ.get("HANDOFF_TOKENS", "400000"))
+LIMIT = int(os.environ.get("HANDOFF_TOKENS", "300000"))
 
 try:
     d = json.loads(sys.argv[1])
@@ -67,12 +67,13 @@ print(json.dumps({
     "hookSpecificOutput": {
         # Required by the schema; the output is rejected whole without it.
         "hookEventName": "Stop",
-        "systemMessage": f"Contexto {k}k tokens ({how}): toca cerrar handoff.",
+        "systemMessage": f"Contexto {k}k tokens ({how}): no se despacha nada nuevo; se cierra cuando terminen los carriles.",
         "additionalContext": (
             f"The window is at {k}k tokens, {how}, past the {LIMIT // 1000}k mark the user set "
-            "for closing a session. Close now, forced: **stop every subagent still running (TaskStop), never wait for one** — then run the `handoff` skill to "
-            "close: push every branch, verify no Claude attribution, write private/handoffs/, "
-            "and tell the user the path so they can open a new chat. Do not start new work."
+            "for draining a session. **Dispatch no new agent and start no new work. Never TaskStop a running "
+            "agent**: let each finish, then merge or record what it returns. Stop only one that has made no "
+            "progress for 30 minutes. When no agent runs, run the `handoff` skill to close: push every branch, "
+            "verify no Claude attribution, write private/handoffs/, and tell the user the path."
             + ("" if measured else " The figure is an estimate; report it as approximate.")
         ),
     }
