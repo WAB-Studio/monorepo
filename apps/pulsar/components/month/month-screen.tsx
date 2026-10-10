@@ -12,7 +12,7 @@ import { nextMonth } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
-import { formatQuantity, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
@@ -254,7 +254,7 @@ export async function MonthDetail({
       {empty && open && !closed ? (
         <Section as="div" label={t("month.list.tasks")}>
           <Text as="p" variant="sentence">
-            {t(unit ? "month.list.empty" : "month.list.emptyNoMeasure", { month: capitalised(name) })}
+            {t(isTimeUnit(unit) ? "month.list.empty" : "month.list.emptyNoMeasure", { month: capitalised(name) })}
           </Text>
           <Button asChild block>
             <Link href={addHref}>{t("month.list.emptyAction")}</Link>
