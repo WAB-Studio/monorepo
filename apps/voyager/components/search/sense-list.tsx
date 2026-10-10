@@ -528,11 +528,13 @@ export function SenseList({
     return (
       <Flex direction="column" gap="3">
         <Flex direction="column" gap="1">
-          <Text size="3">{tSearch("notFound")}</Text>
+          {/* RL-44: a resolved network answer is the answer; the line that
+              says the dictionary lacks the word stands only until then. */}
+          {networkAnswer?.kind !== "resolved" && <Text size="3">{tSearch("notFound")}</Text>}
           {/* RL-28 replaces the hint below with a correction the moment one
               exists — "revisa la ortografía" tells the reader nothing a tap
               wouldn't have already fixed for them. */}
-          {answer.correction.length === 0 && (
+          {answer.correction.length === 0 && networkAnswer?.kind !== "resolved" && networkAnswer?.kind !== "pending" && (
             <Text size="2" color="gray">
               {tSearch("notFoundHint")}
             </Text>
@@ -596,7 +598,9 @@ export function SenseList({
                 )}
                 {!compact && <SpeakButton headword={answer.viaInflection[0].surface} ipa={null} t={t} />}
               </Flex>
-              {!compact && networkAnswer && (
+              {/* A failed fetch says nothing about a form the dictionary
+                  already answered (RL-35, RL-58). */}
+              {!compact && networkAnswer && networkAnswer.kind !== "failed" && (
                 <NetworkAnswer state={networkAnswer} surface={answer.viaInflection[0].surface} />
               )}
             </Flex>
