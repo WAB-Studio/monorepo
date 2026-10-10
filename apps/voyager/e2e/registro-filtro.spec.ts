@@ -350,3 +350,13 @@ test("the forms line of «linger» reads at 14px", async ({ page }) => {
   await expect(line).toBeVisible();
   expect(await line.evaluate((el) => getComputedStyle(el).fontSize)).toBe("14px");
 });
+
+test("a list opened at /registro?filtro=ling: into a row and back with «← Registro» keeps «ling»", async ({ page }) => {
+  await open800(page, "/registro?filtro=ling");
+  await expect(rows(page)).toHaveCount(2);
+  await page.locator('a[href="/registro/linger"]').click();
+  await expect(page).toHaveURL(/\/registro\/linger$/);
+  await page.getByRole("link", { name: /← Registro/ }).click();
+  await expect(field(page)).toHaveValue("ling");
+  await expect(rows(page)).toHaveCount(2);
+});

@@ -32,12 +32,7 @@ import {
 type ListState =
   | { kind: "loading" }
   | { kind: "empty" }
-  | {
-      kind: "ready";
-      rows: StudyRow[];
-      totalLookups: number;
-      totalWords: number;
-    }
+  | { kind: "ready"; rows: StudyRow[]; totalLookups: number; totalWords: number }
   | { kind: "failed" };
 
 const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow; first: boolean }) {
@@ -54,7 +49,7 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
     <Flex direction="column" gap="3">
       {!first && <Separator size="4" />}
       <Link asChild underline="none">
-        <NextLink href={`/registro/${encodeURIComponent(row.key)}`}>
+        <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
           <TapTarget size={44} direction="column" align="stretch" width="100%">
             {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
               the word; the desktop's third track puts word, translation and
@@ -76,10 +71,7 @@ const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow;
               the way module 3's original code had it as the grid item
               directly (docs/voyager/DESIGN.md "What the data forces"). */}
             <Grid
-              columns={{
-                initial: "minmax(0, 1fr) auto",
-                md: "minmax(0, 1fr) minmax(0, 1fr) auto",
-              }}
+              columns={{ initial: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 1fr) auto" }}
               gap="3"
               align="center"
             >
@@ -148,6 +140,8 @@ export function HistoryList() {
   // state below is what paints, so a key never waits on the router.
   const initialFilter = useSearchParams().get("filtro") ?? "";
   const [query, setQuery] = useState(initialFilter);
+  // A page opened with the filter already in the address must also feed the back link.
+  useEffect(() => rememberFilter(initialFilter), [initialFilter]);
   const [state, setState] = useState<ListState>({ kind: "loading" });
   // Bumped by the failed state's own retry, since the read runs in an
   // effect and a click cannot call it directly.
@@ -175,12 +169,7 @@ export function HistoryList() {
           setState(
             study.rows.length === 0
               ? { kind: "empty" }
-              : {
-                  kind: "ready",
-                  rows: study.rows,
-                  totalLookups,
-                  totalWords: study.total,
-                },
+              : { kind: "ready", rows: study.rows, totalLookups, totalWords: study.total },
           );
         })
         .catch(() => {
@@ -326,19 +315,13 @@ export function HistoryList() {
         </TextField.Root>
         {filtering && visible.length > 0 && (
           <Text size="2" muted>
-            {t("study.filterCount", {
-              shown: visible.length,
-              total: state.totalWords,
-            })}
+            {t("study.filterCount", { shown: visible.length, total: state.totalWords })}
           </Text>
         )}
       </Flex>
 
       <Text size="2" muted>
-        {t("study.header", {
-          lookups: state.totalLookups,
-          words: state.totalWords,
-        })}
+        {t("study.header", { lookups: state.totalLookups, words: state.totalWords })}
       </Text>
 
       {visible.length === 0 ? (
