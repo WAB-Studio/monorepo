@@ -110,3 +110,16 @@ test("cutTranslation: a separator that starts at 120 keeps the whole first trans
   const first = `${"a".repeat(60)} ${"a".repeat(LIMIT - 61)}`;
   assert.equal(cutTranslation(`${first}, bbbb`), first);
 });
+
+test("cutTranslation: 121 characters with no break is cut to the 120 the wire schema allows", () => {
+  const cut = cutTranslation("x".repeat(121));
+  assert.ok(cut.length <= LIMIT, `got ${cut.length}`);
+  assert.equal(cut, "x".repeat(LIMIT));
+});
+
+test("cutTranslation: a space at index 121 is past the cap and never the cut", () => {
+  const text = `${"x".repeat(121)} ${"y".repeat(10)}`;
+  const cut = cutTranslation(text);
+  assert.ok(cut.length <= LIMIT, `got ${cut.length}`);
+  assert.equal(cut, "x".repeat(LIMIT));
+});
