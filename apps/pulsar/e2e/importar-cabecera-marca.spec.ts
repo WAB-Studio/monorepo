@@ -70,6 +70,11 @@ async function selectionSeen(box: Locator) {
     twin.remove();
     return {
       picked: el.value.slice(el.selectionStart, el.selectionEnd),
+      // The line's rectangle in viewport coordinates, from the box's own rectangle.
+      top: el.getBoundingClientRect().top + el.clientTop + top - el.scrollTop,
+      bottom: el.getBoundingClientRect().top + el.clientTop + top + height - el.scrollTop,
+      boxTop: el.getBoundingClientRect().top,
+      innerHeight: window.innerHeight,
       inView: top >= el.scrollTop - 1 && top + height <= el.scrollTop + el.clientHeight + 1,
       scrolls: el.scrollHeight > el.clientHeight,
     };
@@ -222,6 +227,41 @@ for (const size of SIZES) {
           expect(seen.scrolls).toBe(true);
           expect(seen.picked).toBe(written);
           expect(seen.inView, `${written} in view`).toBe(true);
+        }
+      });
+    });
+
+    test("tapping a row of a long error list brings the line into the screen, not only into the box, and keeps it there when the keyboard shrinks the screen", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        const long = "objetivo largo ".repeat(10).trim();
+        const bad = Array.from({ length: 9 }, (_, i) => `- ${M1} · ${i + 2} h · Comprar zapatillas ${i + 1}`);
+        const text = [
+          ...HEAD, "", "## Tareas",
+          ...bad.flatMap((line, i) => [line, `- ${M2} · Valida ${i} ${long}`]),
+        ].join("\n");
+        await paste(page, text);
+        const alert = alertOf(page);
+        await expect(rowsOf(alert).first()).toBeVisible();
+        expect(await rowsOf(alert).count()).toBeGreaterThanOrEqual(8);
+        const box = page.getByLabel(messages.textLabel);
+        const visible = async (what: string) => {
+          await expect
+            .poll(async () => {
+              const s = await selectionSeen(box);
+              return s.top >= 0 && s.bottom <= s.innerHeight && s.boxTop >= 0 && s.inView;
+            }, { message: what })
+            .toBe(true);
+        };
+        const rows = await rowsOf(alert).count();
+        for (const index of [rows - 1, 0, Math.floor(rows / 2)]) {
+          await alert.scrollIntoViewIfNeeded();
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          await rowsOf(alert).nth(index).click();
+          await expect(box).toBeFocused();
+          await visible(`row ${index} in the screen`);
+          await page.setViewportSize({ width: size.viewport.width, height: 500 });
+          await visible(`row ${index} in the screen with the keyboard up`);
+          await page.setViewportSize(size.viewport);
         }
       });
     });

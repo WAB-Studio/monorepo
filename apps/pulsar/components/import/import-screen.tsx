@@ -54,6 +54,23 @@ function spanOffset(area: HTMLTextAreaElement, start: number, end: number) {
   return offset;
 }
 
+// Room kept clear above the box and for the fixed bottom nav below the line.
+const SCREEN_TOP = 16;
+const SCREEN_BOTTOM = 96;
+
+// Scrolls the page so the box starts on screen and the selected line ends above the nav.
+function revealSelection(area: HTMLTextAreaElement) {
+  const { top, height } = spanOffset(area, area.selectionStart, area.selectionEnd);
+  const rect = area.getBoundingClientRect();
+  const lineBottom = rect.top + area.clientTop + top + height - area.scrollTop;
+  const screen = window.visualViewport?.height ?? window.innerHeight;
+  let by = rect.top - SCREEN_TOP;
+  if (lineBottom - by > screen - SCREEN_BOTTOM) by = lineBottom - (screen - SCREEN_BOTTOM);
+  if (Math.abs(by) < 1) return;
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollBy({ top: by, behavior: calm ? "auto" : "smooth" });
+}
+
 // Selects line `n` (1-based) of the box without its newline and scrolls it into view.
 function selectLine(area: HTMLTextAreaElement, n: number) {
   const lines = area.value.split("\n");
@@ -64,6 +81,7 @@ function selectLine(area: HTMLTextAreaElement, n: number) {
   else if (top + height > area.scrollTop + area.clientHeight) area.scrollTop = top + height - area.clientHeight;
   area.focus({ preventScroll: true });
   area.setSelectionRange(start, end);
+  revealSelection(area);
 }
 
 // What each failure draws: where its box sits and what it offers next.
@@ -104,6 +122,19 @@ export function ImportScreen() {
   useLayoutEffect(() => {
     const early = box.current?.value ?? "";
     if (early !== "") setTyped(early);
+  }, []);
+  // A keyboard rising shrinks the screen; the selected line follows it.
+  useEffect(() => {
+    const follow = () => {
+      if (box.current && document.activeElement === box.current) revealSelection(box.current);
+    };
+    const screen = window.visualViewport;
+    window.addEventListener("resize", follow);
+    screen?.addEventListener("resize", follow);
+    return () => {
+      window.removeEventListener("resize", follow);
+      screen?.removeEventListener("resize", follow);
+    };
   }, []);
   const text = typed ?? stored;
   const [busy, setBusy] = useState(false);
