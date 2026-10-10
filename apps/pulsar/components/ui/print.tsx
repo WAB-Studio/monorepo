@@ -9,12 +9,27 @@ export function PrintPage({ children }: { children?: ReactNode }) {
   return <div className={styles.page}>{children}</div>;
 }
 
-// A block the printer keeps whole where it fits: wrap a goal's section in one. It sets no style on screen.
+// A block on paper. It sets no style on screen.
 // `span` keeps the block across every column of a `PrintGoal`; `lead` also keeps it with the block after it.
-export function PrintBlock({ children, span }: { children?: ReactNode; span?: "all" | "lead" }) {
-  const className =
-    span === "lead" ? `${styles.block} ${styles.all} ${styles.lead}` : span === "all" ? `${styles.block} ${styles.all}` : styles.block;
-  return <section className={className}>{children}</section>;
+// `whole` keeps it on one page; a block taller than a page still breaks.
+// `only` takes the block off the screen altogether, gap included.
+export function PrintBlock({
+  children,
+  span,
+  whole,
+  only,
+}: {
+  children?: ReactNode;
+  span?: "all" | "lead";
+  whole?: boolean;
+  only?: boolean;
+}) {
+  const classes = [styles.block];
+  if (span) classes.push(styles.all);
+  if (span === "lead") classes.push(styles.lead);
+  if (whole) classes.push(styles.whole);
+  if (only) classes.push(styles.blockOnly);
+  return <section className={classes.join(" ")}>{children}</section>;
 }
 
 // A goal's blocks: a column on screen, two columns on paper (`ReporteImpresoCompacto.dc.html`).

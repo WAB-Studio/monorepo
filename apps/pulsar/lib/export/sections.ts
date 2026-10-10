@@ -16,13 +16,17 @@ export function goalSections(goal: GoalReport): Section[] {
   if (measured) sections.push("month", "toDate");
   if (goal.phases.length > 0) sections.push("phases");
   if (goal.tasks.length > 0) sections.push("tasks");
-  if (measured) sections.push("months");
+  if (measured || goal.months.some((month) => month.tasks !== undefined && printsOnPaper(month))) {
+    sections.push("months");
+  }
   return sections;
 }
 
 // A month that has not started and has no planned amount prints nothing; a
 // past or current month always prints, and a planned 0 is still an amount (RP-70).
+// A goal that measures nothing prints a month that has started or holds a task (RP-71).
 export function printsOnPaper(month: GoalReport["months"][number]): boolean {
+  if (month.tasks !== undefined) return month.past || month.current || month.tasks.total > 0;
   return month.past || month.current || month.planned !== null;
 }
 

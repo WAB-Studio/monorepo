@@ -9,6 +9,10 @@
   display: none;
 }
 
+.blockOnly {
+  display: none;
+}
+
 .goal {
   display: flex;
   flex-direction: column;
@@ -86,7 +90,15 @@
     break-after: avoid;
   }
 
+  .whole {
+    break-inside: avoid;
+  }
+
   .only {
+    display: block;
+  }
+
+  .blockOnly {
     display: block;
   }
 
