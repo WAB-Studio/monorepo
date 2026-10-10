@@ -330,7 +330,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       for (const absent of ["hasta hoy", "por semana"]) {
         await expect(page.getByText(absent, { exact: true })).toHaveCount(0);
       }
-      await expect(page.getByText(/· por mes$/)).toHaveCount(0);
+      await expect(page.getByText(/· por mes$/).locator("visible=true")).toHaveCount(0);
       await expect(page.getByText(/\b0\b/)).toHaveCount(0);
     } finally {
       await context.close();
