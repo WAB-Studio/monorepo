@@ -424,3 +424,95 @@ test("a decimal month amount says amounts are whole numbers, whatever the separa
     assert.deepEqual(error, { line: 6, expected: "import.errors.form.monthWhole", unit: "km" }, amount);
   }
 });
+
+// RP-72: one reading lists every line that cannot be read, in the text's order.
+// `errors` is the list; each entry carries its line, a catalogue key in `expected`, and the goal's `unit` when the sentence names one.
+type Mistake = { line: number; expected: string; unit?: string };
+function mistakesOf(text: string): Mistake[] {
+  const result = parseTemplate(text) as unknown as { matched: boolean; errors?: Mistake[] };
+  assert.ok(result.matched && Array.isArray(result.errors), JSON.stringify(result));
+  return result.errors;
+}
+const said = (m: Mistake) => sentenceOf(m.expected).replaceAll("{unit}", m.unit ?? "");
+
+const BOARD = [
+  "pulsar · plantilla 1",
+  "",
+  "# Correr 10K",
+  "horizonte: 2026-12-17",
+  "medida: distancia · km",
+  "",
+  "## Meses",
+  "- 2026-10 · 40 km",
+  "- 2026-11 · 8 h",
+  "",
+  "## Compromisos",
+  "- Fondo · sábado · 8 km",
+  "- Series · martes · 30 min",
+  "",
+  "## Tareas",
+  "- 2026-10 · 2 h · Comprar zapatillas",
+  "- 2026-11 · Inscribirme a la carrera",
+];
+const at = (written: string) => BOARD.indexOf(written) + 1;
+
+test("RP-72 row 1: every unreadable line comes back at once, in the text's order, with its number and its sentence", () => {
+  const found = mistakesOf(BOARD.join("\n"));
+  assert.deepEqual(found.map((m) => m.line), [at("- 2026-11 · 8 h"), at("- Series · martes · 30 min"), at("- 2026-10 · 2 h · Comprar zapatillas")]);
+  assert.deepEqual(found.map(said), [
+    "Esa unidad no es km. Escribe el monto en km, como «- AAAA-MM · 8 km».",
+    "Esa unidad no es km. Escribe la cantidad en km, como «- nombre · cadencia · 8 km».",
+    "Una meta que no mide tiempo no lleva cifra en sus tareas.",
+  ]);
+});
+
+test("RP-72 row 1: the list keeps the text's order when a later kind of line breaks first", () => {
+  const text = BOARD.join("\n").replace("- 2026-10 · 40 km", "- 2026-10 · 40 min");
+  assert.deepEqual(mistakesOf(text).map((m) => m.line), [8, 9, 13, 16]);
+});
+
+test("RP-72 row 1: a plan with one broken line lists exactly that one", () => {
+  const text = BOARD.join("\n").replace("- 2026-11 · 8 h", "- 2026-11 · 8 km").replace("- Series · martes · 30 min", "- Series · martes · 3 km").replace("- 2026-10 · 2 h · Comprar", "- 2026-10 · Comprar");
+  assert.deepEqual(mistakesOf(text.replace("- 2026-10 · 40 km", "- 2026-10 · 40 min")).map((m) => m.line), [8]);
+});
+
+test("RP-72 row 3: in a goal measured in km, a commitment written «8 km» is accepted and keeps 8 and km", () => {
+  const text = BOARD.join("\n").replace("- 2026-11 · 8 h", "- 2026-11 · 8 km").replace("- Series · martes · 30 min", "- Series · martes · 3 km").replace("- 2026-10 · 2 h · Comprar", "- 2026-10 · Comprar");
+  const goal = draftOf(text);
+  const fondo = goal.commitments.find((c) => c.name === "Fondo");
+  assert.equal(fondo?.targetQuantity, 8);
+  assert.equal(fondo?.unit, "km");
+  assert.equal(fondo?.satisfaction, "quantity");
+});
+
+test("RP-72 row 4: a commitment in another unit than the km goal's gets the sentence that names km", () => {
+  const text = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\nmedida: distancia · km\n## Compromisos\n- Series · martes · 30 min\n";
+  const [only, ...rest] = mistakesOf(text);
+  assert.equal(rest.length, 0);
+  assert.equal(only.line, 6);
+  assert.equal(only.unit, "km");
+  assert.equal(said(only), "Esa unidad no es km. Escribe la cantidad en km, como «- nombre · cadencia · 8 km».");
+});
+
+test("RP-72 row 5: in a goal measured in time, a month or a commitment written in km names the goal's unit", () => {
+  const head = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\nmedida: horas de estudio · minutos\n";
+  const [month] = mistakesOf(`${head}## Meses\n- 2026-10 · 8 km\n`);
+  assert.equal(month.line, 6);
+  assert.equal(month.unit, "minutos");
+  assert.equal(said(month), "Esa unidad no es minutos. Escribe el monto en minutos, como «- AAAA-MM · 8 minutos».");
+  const [commitment] = mistakesOf(`${head}## Compromisos\n- x · cada día · 8 km\n`);
+  assert.equal(commitment.line, 6);
+  assert.equal(commitment.unit, "minutos");
+  assert.equal(said(commitment), "Esa unidad no es minutos. Escribe la cantidad en minutos, como «- nombre · cadencia · 8 minutos».");
+});
+
+test("RP-72 row 6: a plan with no mistakes still reads into a draft", () => {
+  const result = parseTemplate(EXAMPLE);
+  assert.ok(result.matched && "draft" in result);
+});
+
+test("RP-72 row 6: a missing «# nombre» is still reported, first, with the goal sentence", () => {
+  const found = mistakesOf("pulsar · plantilla 1\nhorizonte: 2027-10-01\n");
+  assert.equal(found[0].line, 2);
+  assert.match(said(found[0]), /^Falta el nombre de la meta/);
+});
