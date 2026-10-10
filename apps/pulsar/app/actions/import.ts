@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { sql, type SQL } from "drizzle-orm";
 
 import { commitments, goals, monthBudgets, oneOffs, phases } from "@/db/schema";
-import { draftRefusals, importDraftSchema, withCutPhases } from "@/lib/import/draft";
+import { draftRefusals, importDraftSchema, inMinutes, strayEstimates, withCutPhases } from "@/lib/import/draft";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { isTimeUnit } from "@/lib/units/time";
 import { monthStart } from "@/lib/validation/budget";
@@ -58,11 +58,16 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
   }
   // RP-37: a phase that starts before the goal opens begins today, one wholly
   // before it is dropped, so the refusals and the rows see the cut draft.
+  // RP-65: a draft in hours is judged, and written, in minutes.
   const today = todayInZone();
-  const draft = withCutPhases(parsed.data, today);
+  const draft = withCutPhases(inMinutes(parsed.data), today);
 
   const [refusal] = draftRefusals(draft, today);
   if (refusal) return { ok: false, error: messageKey(refusal.key), at: refusal.path };
+
+  // RP-66: the review drops a figure a goal not measured in time cannot keep; a draft that still carries one is forged.
+  const [stray] = strayEstimates(draft).filter((entry) => entry.key === "import.notices.estimateDroppedNotTime");
+  if (stray) return { ok: false, error: "import.errors.estimateNotTime", at: stray.path };
 
   // RP-63: a rhythm is minutes, so it needs a time measure; a forged draft can carry one without.
   const untimed = draft.goals.findIndex((goal) => goal.rhythm !== null && (goal.measure === null || !isTimeUnit(goal.measure.unit)));
@@ -114,11 +119,15 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
         ${commitment.satisfaction}, ${commitment.targetQuantity}::integer, ${commitment.unit}::text,
         ${basePosition(commitments)} + ${commitmentIndex}::integer`);
     }
-    for (const task of goal.tasks) {
+    // RP-67: with a rhythm the month only orders the tasks; Array.sort is stable, so a month keeps reading order.
+    const ordered = goal.rhythm === null ? goal.tasks : [...goal.tasks].sort((a, b) => a.month.localeCompare(b.month));
+    for (const task of ordered) {
       const taskId = randomUUID();
       taskIndex += 1;
       const parentIndex = taskIndex;
-      parentRows.push(sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${monthStart(task.month)}::date, ${task.estimate}::integer, ${task.note ?? null}::text, ${basePosition(oneOffs)} + ${parentIndex}::integer`);
+      // `in_plan` is named: the trigger sets it only for a row with a month or a parent.
+      const plannedMonth = goal.rhythm === null ? sql`${monthStart(task.month)}::date` : sql`null::date`;
+      parentRows.push(sql`${taskId}::uuid, ${person.id}::uuid, ${goalId}::uuid, ${task.name}, ${plannedMonth}, ${goal.rhythm !== null}::boolean, ${task.estimate}::integer, ${task.note ?? null}::text, ${basePosition(oneOffs)} + ${parentIndex}::integer`);
       for (const [place, child] of task.children.entries()) {
         taskIndex += 1;
         // The parent's own row already holds base + parentIndex.
@@ -161,7 +170,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     // Parents before children: the child's policy reads its parent back.
     if (parentRows.length > 0) {
       await tx.execute(sql`
-        insert into ${oneOffs} (id, user_id, goal_id, name, planned_month, estimate, note, position)
+        insert into ${oneOffs} (id, user_id, goal_id, name, planned_month, in_plan, estimate, note, position)
         values ${rows(parentRows)}
       `);
     }
