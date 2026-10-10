@@ -30,6 +30,10 @@ for (const viewport of [
       await page.addInitScript(() => {
         delete (window as unknown as { Translator?: unknown }).Translator;
       });
+      // Next answers a tap from an RSC payload it prefetched while online, which
+      // Chromium's HTTP cache can hand back offline. A device that never
+      // prefetched it falls back to a full navigation, the one the worker answers.
+      await page.route(/[?&]_rsc=/, (route) => route.abort());
     });
 
     async function controlled(page: Page): Promise<void> {
@@ -183,6 +187,21 @@ for (const viewport of [
       return found;
     }
 
+    // The tap landed on the word's own page: the address has committed, and
+    // the list it left (which also carries the saved translation) is gone.
+    async function expectWordPage(page: Page, word: string, href: string): Promise<void> {
+      await expect(page).toHaveURL(new RegExp(`${href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+      notBrowserError(page);
+      await expect(page.getByRole("link", { name: `← ${messages.log.word.back}`, exact: true })).toBeVisible();
+      // The saved translation, in the subtitle: only the row holds it.
+      await expect(page.getByText(MARK(word)).first()).toBeVisible();
+      // The form as it was typed, among the searches listed below.
+      await expect(page.getByText(word, { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByText(messages.log.word.emptyBody.replace("{word}", decodeURIComponent(href.split("/").pop()!))),
+      ).toHaveCount(0);
+    }
+
     test("offline, «Información» on /cuenta opens the information, never the browser's offline page", async ({
       page,
     }) => {
@@ -224,14 +243,7 @@ for (const viewport of [
         await expect(rowLinks(page)).toHaveCount(WORDS.length);
         await page.locator(`a[href="${href}"]`).click();
 
-        await expect(page).toHaveURL(new RegExp(`${href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
-        notBrowserError(page);
-        // The saved translation, in the subtitle: only the row holds it.
-        await expect(page.getByText(MARK(word)).first()).toBeVisible();
-        // The form as it was typed, among the searches listed below.
-        await expect(page.getByText(word, { exact: true }).first()).toBeVisible();
-        await expect(page.getByText(messages.log.word.emptyBody.replace("{word}", decodeURIComponent(href.split("/").pop()!)))).toHaveCount(0);
-        await expect(page.getByRole("link", { name: new RegExp(messages.log.word.back) })).toBeVisible();
+        await expectWordPage(page, word, href);
       }
     });
 
@@ -245,9 +257,7 @@ for (const viewport of [
 
       await page.goto("/registro");
       await page.locator(`a[href="${opened.href}"]`).click();
-      await expect(page.getByText(MARK(opened.word)).first()).toBeVisible();
-      await expect(page.getByText(opened.word, { exact: true }).first()).toBeVisible();
-      notBrowserError(page);
+      await expectWordPage(page, opened.word, opened.href);
     });
 
     test("offline, a word page for a word not in the record says so", async ({ page }) => {
