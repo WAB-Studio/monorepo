@@ -26,6 +26,7 @@ const FORMS = {
   phase: "import.errors.form.phase",
   month: "import.errors.form.month",
   monthUnit: "import.errors.form.monthUnit",
+  monthWhole: "import.errors.form.monthWhole",
   commitment: "import.errors.form.commitment",
   task: "import.errors.form.task",
   child: "import.errors.form.child",
@@ -201,7 +202,8 @@ export function parseTemplate(text: string): TemplateResult {
         ? parseAmount(parts[1], timeUnit) ?? (unit === null ? null : parseUnitAmount(parts[1], unit))
         : null;
       if (amount === null) {
-        // A number with another unit after it is a unit mistake, not a malformed line.
+        // A decimal is a whole-number mistake; a number with another unit after it is a unit mistake.
+        if (unit !== null && parts.length === 2 && /^\d+[.,]\d/.test(parts[1])) return fail(n, FORMS.monthWhole, unit);
         const wrongUnit = unit !== null && parts.length === 2 && /^\d+\s*\S/.test(parts[1]);
         return wrongUnit ? fail(n, FORMS.monthUnit, unit) : fail(n, FORMS.month);
       }

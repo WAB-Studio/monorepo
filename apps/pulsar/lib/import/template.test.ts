@@ -406,3 +406,21 @@ test("a month's amount tolerates spacing and case around the goal's unit", () =>
     assert.equal(draftOf(`${KM}- 2026-10 · ${amount}\n`).months[0].amount, 8, JSON.stringify(amount));
   }
 });
+
+test("a month with a unit and no number is the generic month error, never an amount of 0", () => {
+  for (const amount of ["km", " km"]) {
+    assert.equal(errorOf(`${KM}- 2026-10 · ${amount}\n`).expected, "import.errors.form.month", JSON.stringify(amount));
+  }
+});
+
+test("a month's wrong unit stuck to the number says the unit, like the spaced one", () => {
+  assert.deepEqual(errorOf(`${KM}- 2026-10 · 8h\n`), errorOf(`${KM}- 2026-10 · 8 h\n`));
+  assert.equal(errorOf(`${KM}- 2026-10 · 8h\n`).expected, "import.errors.form.monthUnit");
+});
+
+test("a decimal month amount says amounts are whole numbers, whatever the separator or unit", () => {
+  for (const amount of ["8.5 km", "8,5 km", "8.5", "8,5"]) {
+    const error = errorOf(`${KM}- 2026-10 · ${amount}\n`);
+    assert.deepEqual(error, { line: 6, expected: "import.errors.form.monthWhole", unit: "km" }, amount);
+  }
+});

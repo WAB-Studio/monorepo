@@ -111,4 +111,18 @@ test.describe("a month's amount in the goal's unit (km)", () => {
       await expect(page).toHaveURL(/\/metas\/importar$/);
     });
   });
+
+  test("«8,5 km» is refused with the whole-number message", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await page.goto("/metas/importar");
+      await page.getByLabel(messages.textLabel).fill(kmPlan("8,5 km"));
+      await page.getByRole("button", { name: "Leer el plan" }).click();
+      const line = `- ${shift(0).year}-${shift(0).month} · 8,5 km`;
+      const expected = messages.errors.templateLine
+        .replace("{line}", "6")
+        .replace("{text}", line)
+        .replace("{expected}", messages.errors.form.monthWhole.replaceAll("{unit}", "km"));
+      await expect(page.getByText(expected, { exact: true })).toBeVisible();
+    });
+  });
 });
