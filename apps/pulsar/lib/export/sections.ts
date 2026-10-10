@@ -30,6 +30,14 @@ export function printsOnPaper(month: GoalReport["months"][number]): boolean {
   return month.past || month.current || month.planned !== null;
 }
 
+// A «por mes» table of this many printed rows or more flows across pages
+// instead of keeping to one (`ReporteImpresoTablaLarga.dc.html`).
+export const LONG_TABLE_ROWS = 20;
+
+export function isLongTable(months: GoalReport["months"]): boolean {
+  return months.filter(printsOnPaper).length >= LONG_TABLE_ROWS;
+}
+
 // A week as one month holds it: the whole week, or its days in that month.
 export type MonthWeek = Pick<ReviewWeek, "index" | "startsOn" | "endsOn" | "total" | "current">;
 
