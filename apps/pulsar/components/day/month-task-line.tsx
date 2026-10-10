@@ -105,7 +105,7 @@ export function MonthTaskLine({
                 : t("day.monthLine.next")}
           </Text>
         </Flex>
-        {estimate !== null || unit !== "" ? (
+        {isTimeUnit(unit) ? (
           <Flex flexShrink="0" pt="2">
             <Text variant="meta" tone="muted" wrap="nowrap">
               {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
