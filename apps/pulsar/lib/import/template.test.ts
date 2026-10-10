@@ -376,3 +376,11 @@ test("a bare integer amount under a measure in hours stops the reading", () => {
   assert.ok(result.matched && "error" in result);
   assert.equal(result.error.line, 6);
 });
+
+test("ritmo: under a measure that is not time says the rhythm needs a time measure, not that its amount is wrong", () => {
+  // «10 h» is a well-formed time: the amount is not the fault, the measure is.
+  for (const unit of ["km", "páginas"]) {
+    const { expected } = errorOf(`${RHYTHM_HEAD}medida: carrera · ${unit}\nritmo: 10 h\n`);
+    assert.equal(sentenceOf(expected), "El ritmo solo va con una medida en tiempo.");
+  }
+});
