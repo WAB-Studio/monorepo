@@ -1138,6 +1138,22 @@ module; until it lands, the screen and its approved board stay as built.
   chips ending in «sin día»; RP-61 moves a one-off «to any day from today on», so the chip stays out and the step offers
   «hoy», «mañana», «otro día». A one-off on today opens on «mañana»; a carried one opens on «hoy».
 
+## Decisions of 2026-10-10, after the train-5 critic
+
+Taken by the user the same evening, on the critic's four questions.
+
+- **(1) A broken header cuts the reading and says so.** A header line the reader cannot take (a measure without its
+  unit) shows that one error, with its own message, and «Arréglala y vuelve a leer: las líneas de abajo no se pudieron
+  leer.» The lines below are not judged. All-at-once (RP-72) holds for everything after a sound header.
+- **(2) A first line that starts with «pulsar ·» and is not «pulsar · plantilla 1» is refused here, never sent to the
+  model.** The message names the line: «La primera línea va como «pulsar · plantilla 1».» Text that does not start with
+  «pulsar ·» still goes to the AI reading.
+- **(3) Label, table and months-left-out line stay together only when the table fits a page.** A table of 20 rows or more
+  starts on the page it reaches and flows; its label stays glued to its first rows. Refines decision (2) of the train-4
+  critic for long tables only.
+- **(4) Tapping an error selects its line in the box.** After a reading with errors, focus goes to the list; each error is
+  a control that selects its line in the textarea and scrolls it into view. No line-number gutter.
+
 ## Decisions of 2026-10-10, after the train-4 critic
 
 Taken by the user the same evening, on the critic's four questions.
