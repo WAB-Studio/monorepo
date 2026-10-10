@@ -1676,3 +1676,15 @@ Taken by the orchestrator, 2026-10-09, for modules 695–704.
   palabras» under the field, the × clears it), `RegistroFiltroNingunaOscuroMovil` («Ninguna palabra con «zzz»» in place of
   the list). «Buscar en el registro» is the field's placeholder and its accessible name. Boards that do not exist: the
   field while loading, empty or failed (it is not drawn there), light and 1280 (token inversion, the same column wider).
+
+### Decisions of 2026-10-10, after the part-3 critic
+
+Taken by the user («2. b 3. b»).
+
+- **The network's answer to a form (`went` → «fue, se fue» and its example) is not stored.** The log keeps the lemma
+  with the dictionary's translations; the `/registro` filter does not find «fue». Reopen when it is missed while reading.
+- **With the dictionary not installed, a search does not ask the network.** It says the word will have no answer until
+  the reader retries; RL-44 keeps the network to words with no entry.
+- **The spelling hint never shows before the network has answered** a word with no entry (orchestrator, same day): it
+  did for ~600 ms during the debounce, against decision (b) of part 3.
+

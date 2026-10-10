@@ -1138,6 +1138,24 @@ module; until it lands, the screen and its approved board stay as built.
   chips ending in «sin día»; RP-61 moves a one-off «to any day from today on», so the chip stays out and the step offers
   «hoy», «mañana», «otro día». A one-off on today opens on «mañana»; a carried one opens on «hoy».
 
+## Decisions of 2026-10-10, after the part-3 critic
+
+Taken by the user («1. b 2. b 3. b 4. a»); questions 2 and 3 are voyager's.
+
+- **(1b) The paper names a goal's measure with both its name and its unit:** «mide Práctica, en horas y minutos»,
+  «mide distancia, en km». The goal screen keeps «mide en horas y minutos».
+- **(4a) The paper says which months it leaves out.** A line under the goal's «por mes» table names the months not
+  printed (not started, no amount), e.g. «diciembre y enero: sin monto»; the table's count counts printed months only.
+  It refines RP-70 (2026-10-09): the months still do not print, but the paper no longer hides that they exist. Board
+  `ReporteImpresoMesesFuera` approved as drawn by the user 2026-10-10; RP-70 retired for **RP-71**.
+- **Taken by the orchestrator, the same day, no board (they fix what boards already draw):**
+  - A weekdays cadence reads Monday first and joins with «y» on every screen (goal, import review, Hoy).
+  - A km goal's month block carries its unit («34 km de 120 km»); «N tareas» never splits from its number.
+  - A month with no planned amount shows «sin monto planeado» alone; a month that is not the current one never says
+    «este mes».
+  - The import accepts a month amount written with the goal's own unit («- 2026-10 · 8 km»), and names the unit when
+    another is written.
+
 ## Decisions of 2026-10-09, the boards of Part 2
 
 Taken by the user the same evening («1. si 2. b 3. a 4. a 5. a 6. a»), on canvas version 94.
