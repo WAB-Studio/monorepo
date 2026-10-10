@@ -270,5 +270,35 @@ for (const viewport of [
       await expect(page.getByText(messages.log.word.emptyBody.replace("{word}", "zzqqxv693"))).toBeVisible();
       notBrowserError(page);
     });
+
+    test("offline, the tab links mark the tab the cached page is showing", async ({ page }) => {
+      await page.goto("/cuenta");
+      await controlled(page);
+      await goOffline(page);
+
+      const account = page.getByRole("main").getByRole("link", { name: messages.account.info.tabs.account, exact: true });
+      const info = page.getByRole("main").getByRole("link", { name: messages.account.info.tabs.info, exact: true });
+      await page.goto("/cuenta?tab=info");
+      await expect(info).toHaveAttribute("aria-current", "page");
+      await expect(account).not.toHaveAttribute("aria-current", "page");
+
+      await account.click();
+      await expect(page).toHaveURL(/\/cuenta$/);
+      await expect(account).toHaveAttribute("aria-current", "page");
+      await expect(info).not.toHaveAttribute("aria-current", "page");
+    });
+
+    test("the generic word shell is fetched with no session cookie", async ({ page, context, baseURL }) => {
+      await context.addCookies([{ name: "sb-session-probe", value: "reader", url: baseURL! }]);
+      const carried: boolean[] = [];
+      await context.route("**/registro/_", async (route) => {
+        carried.push("cookie" in (await route.request().allHeaders()));
+        await route.continue();
+      });
+      await page.goto("/");
+      await controlled(page);
+      await expect.poll(() => carried.length).toBeGreaterThan(0);
+      expect(carried.every((has) => !has)).toBe(true);
+    });
   });
 }

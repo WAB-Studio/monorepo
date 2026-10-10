@@ -242,6 +242,11 @@ this gets built, and no schema, table or column is "prepared for" it.
 #### The shell
 
 - [ ] **RL-16** — The app opens with no connection and shows its box, and it can be launched from the phone's home screen without a browser around it. This holds from the second time it is opened onwards: the first open needs the network to deliver the app itself.
+- [ ] **RL-61** — With no connection, everything the reader's record points at opens from the device
+  once the app has been opened a second time: «Información» on `/cuenta` as well as its account tab, and any
+  row of `/registro` on its word's page, including a word the reader never opened online. The page shows
+  what the device saved for that word. A word that is not in the record says so, in the same page; no
+  address inside the app ever lands on the browser's offline page.
 - [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
   sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that

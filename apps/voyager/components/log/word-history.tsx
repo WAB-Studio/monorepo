@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import NextLink from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { readLemmaHistory, readLemmaKey, type WordHistoryRow } from "@/lib/log/summary";
@@ -82,7 +82,13 @@ function WordHistorySkeleton() {
   );
 }
 
-export function WordHistory({ normalised }: { normalised: string }) {
+export function WordHistory({ normalised: served }: { normalised: string }) {
+  const pathname = usePathname();
+  const last = pathname.split("/").pop() ?? served;
+  let normalised = last;
+  try {
+    normalised = decodeURIComponent(last);
+  } catch {}
   const t = useTranslations("log");
   const tWord = useTranslations("word");
   const format = useFormatter();
