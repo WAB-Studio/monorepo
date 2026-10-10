@@ -95,7 +95,9 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(box(page, /^Tutor/)).toBeChecked();
       await expect(box(page, /Elegir tutor/)).toBeChecked();
       await expect(box(page, /Sesiones 1–4/)).toBeChecked();
-      await expect(page.getByText(`${word(first)} · la suma de lo marcado`, { exact: true })).toBeVisible();
+      // The template carries a rhythm, so the month only orders the plan: the line is the sum alone.
+      await expect(page.getByText("la suma de lo marcado", { exact: true })).toBeVisible();
+      await expect(page.getByText(`${word(first)} · la suma de lo marcado`, { exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Crear 1 meta" })).toBeVisible();
       await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveCount(0);
     });
