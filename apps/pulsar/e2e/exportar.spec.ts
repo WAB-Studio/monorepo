@@ -1719,7 +1719,8 @@ test.describe("the report on A4, compact", () => {
           name: `Larga ${stamp} n${index}`,
           measure: "minutos",
           unit: "minutos",
-          months: 14,
+          // The first goal alone is taller than an A4 page, so its split is real whatever `whole` keeps together.
+          months: index === 0 ? 60 : 14,
           amount: 720,
         }),
       );
@@ -1756,7 +1757,7 @@ test.describe("the report on A4, compact", () => {
         expect([...where].sort((a, b) => a - b)).toEqual(where);
         if (new Set(where).size > 1) split += 1;
       }
-      expect(split, `tables of 14 rows that ran onto a second page (${pages.length} pages, ${file})`).toBeGreaterThanOrEqual(1);
+      expect(split, `tables that ran onto a second page (${pages.length} pages, ${file})`).toBeGreaterThanOrEqual(1);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
