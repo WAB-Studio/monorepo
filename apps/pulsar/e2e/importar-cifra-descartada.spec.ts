@@ -15,33 +15,39 @@ const first = `${year}-${String(month).padStart(2, "0")}`;
 const horizon = `${year + 1}-${String(month).padStart(2, "0")}-01`;
 const monthWord = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("es", { month: "long", timeZone: "UTC" });
 
-const text = [
-  "pulsar · plantilla 1",
-  "",
-  "# Correr",
-  `horizonte: ${horizon}`,
-  "medida: distancia · km",
-  "",
-  "## Tareas",
-  `- ${first} · 5 · Salir a correr`,
-  `- ${first} · Plan semanal`,
-  "  - 2 · Rodaje largo",
-  "",
-  "# Trámites",
-  `horizonte: ${horizon}`,
-  "",
-  "## Tareas",
-  `- ${first} · 2 · Comprar tenis`,
-  `- ${first} · Papeles`,
-  "  - 1 · Pedir cita",
-].join("\n");
+// The template refuses a figure on a task of a goal that is not measured in time (RP-72), so
+// this draft reaches the review as the model's would: through the tab's storage.
+const goal = (name: string, measure: { name: string; unit: string } | null, tasks: { name: string; estimate: number | null; children: { name: string; estimate: number | null }[] }[]) => ({
+  name,
+  horizon,
+  measure,
+  rhythm: null,
+  phases: [],
+  months: [],
+  commitments: [],
+  tasks: tasks.map((task) => ({ month: first, ...task })),
+});
+const draft = {
+  goals: [
+    goal("Correr", { name: "distancia", unit: "km" }, [
+      { name: "Salir a correr", estimate: 5, children: [] },
+      { name: "Plan semanal", estimate: null, children: [{ name: "Rodaje largo", estimate: 2 }] },
+    ]),
+    goal("Trámites", null, [
+      { name: "Comprar tenis", estimate: 2, children: [] },
+      { name: "Papeles", estimate: null, children: [{ name: "Pedir cita", estimate: 1 }] },
+    ]),
+  ],
+};
 
 async function toReview(page: Page) {
   await page.goto("/metas/importar");
   await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
-  await page.getByLabel(messages.textLabel).fill(text);
-  await page.getByRole("button", { name: "Leer el plan" }).click();
-  await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+  await page.evaluate(
+    (stored) => sessionStorage.setItem("pulsar.import-draft", JSON.stringify(stored)),
+    { via: "model", draft, source: null, sourceName: null, unmarked: null },
+  );
+  await page.goto("/metas/importar/revisar");
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
   await pageSettled(page);
 }

@@ -127,7 +127,7 @@ test.describe("one reading lists every mistake (RP-72)", () => {
       const whole = (await alert.textContent()) ?? "";
       expect(whole).not.toContain(messages.errors.form.month);
       expect(whole).not.toContain(messages.errors.form.commitment);
-      expect(whole.match(/Esa unidad no es minutos\./g)).toHaveLength(2);
+      expect(whole.match(/Esa unidad no es de tiempo\./g)).toHaveLength(2);
       expect(whole).toContain(`Línea 6: «- ${M1} · 8 km»`);
       expect(whole).toContain("Línea 8: «- Lectura · cada día · 8 km»");
     });

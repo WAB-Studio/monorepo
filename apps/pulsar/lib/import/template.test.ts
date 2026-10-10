@@ -398,7 +398,7 @@ test("a month amount in another unit than the goal's stops saying which unit to 
   const error = errorOf(`${KM}- 2026-10 · 8 h\n`);
   assert.deepEqual(error, { line: 6, expected: "import.errors.form.monthUnit", unit: "km" });
   assert.equal(errorOf(`${KM}- 2026-10 · ocho\n`).expected, "import.errors.form.month");
-  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 8 km\n`).expected, "import.errors.form.month");
+  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 8 km\n`).expected, "import.errors.form.monthTime");
 });
 
 test("a month's amount tolerates spacing and case around the goal's unit", () => {
@@ -499,11 +499,11 @@ test("RP-72 row 5: in a goal measured in time, a month or a commitment written i
   const [month] = mistakesOf(`${head}## Meses\n- 2026-10 · 8 km\n`);
   assert.equal(month.line, 6);
   assert.equal(month.unit, "minutos");
-  assert.equal(said(month), "Esa unidad no es minutos. Escribe el monto en minutos, como «- AAAA-MM · 8 minutos».");
+  assert.equal(said(month), "Esa unidad no es de tiempo. Escribe el monto en horas o minutos, como «- AAAA-MM · 12 h».");
   const [commitment] = mistakesOf(`${head}## Compromisos\n- x · cada día · 8 km\n`);
   assert.equal(commitment.line, 6);
   assert.equal(commitment.unit, "minutos");
-  assert.equal(said(commitment), "Esa unidad no es minutos. Escribe la cantidad en minutos, como «- nombre · cadencia · 8 minutos».");
+  assert.equal(said(commitment), "Esa unidad no es de tiempo. Escribe la cantidad en horas o minutos, como «- nombre · cadencia · 30 min».");
 });
 
 test("RP-72 row 6: a plan with no mistakes still reads into a draft", () => {
