@@ -43,7 +43,7 @@ export function Consent({
   }
 
   return (
-    <Page alone middle>
+    <Page alone middle snug>
       <ScreenHeader
         title={t("title", { client })}
         eyebrow={t("eyebrow")}
