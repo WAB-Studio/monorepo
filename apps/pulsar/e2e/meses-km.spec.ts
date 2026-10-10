@@ -304,6 +304,7 @@ test("km goal, a future month with no tasks and no amount: «sin monto planeado�
     const page = await context.newPage();
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto(`/metas/${goalId}/meses/${seg(followingMonth)}`);
+    await expect(page.locator("main").first()).toContainText("sin monto planeado");
     const body = (await page.locator("main").first().innerText()).replace(/\s+/g, " ");
     expect(body).toContain("sin monto planeado");
     expect(body).not.toMatch(/planeado\s*·?\s*0 km/i);
@@ -313,7 +314,53 @@ test("km goal, a future month with no tasks and no amount: «sin monto planeado�
 
     // The current month keeps its text.
     await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
+    await expect(page.locator("main").first()).toContainText("Escribe las que quieras hacer este mes.");
     expect((await page.locator("main").first().innerText()).replace(/\s+/g, " ")).toContain("Escribe las que quieras hacer este mes.");
+  } finally {
+    await context.close();
+  }
+});
+
+async function seedBareGoal(db: Db, personId: string, name: string) {
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, ${name}, ${horizon}::date, (${lastMonth}::date + 14) + time '12:00' at time zone 'UTC')
+    returning id
+  `;
+  await seedTask(db, personId, goal.id, `Uno ${name}`, thisMonth, null);
+  await seedTask(db, personId, goal.id, `Dos ${name}`, thisMonth, null);
+  return goal.id;
+}
+
+test("goal with no measure: a «Por mes» row never splits «2 tareas» (RP-69)", async ({ person, browser, baseURL, db }) => {
+  const goalId = await seedBareGoal(db, person.id, `Meta sin medida ${Date.now()}`);
+  const context = await open(browser, baseURL, person.sessionFile);
+  try {
+    const page = await context.newPage();
+    const row = await rows(page, goalId, 390);
+    const line = row(thisMonth);
+    await expect(line).toContainText(/2\s+tareas/);
+    expect(await line.innerText()).toContain("2\u00a0tareas");
+  } finally {
+    await context.close();
+  }
+});
+
+test("goal with no measure: the goal screen's «2 tareas · 0 hechas» never splits the number from its word (RP-69)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedBareGoal(db, person.id, `Meta sin medida detalle ${Date.now()}`);
+  const context = await open(browser, baseURL, person.sessionFile);
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto(`/metas/${goalId}`);
+    const line = page.locator("main p", { hasText: /2\s+tareas\s+·/ }).first();
+    await expect(line).toBeVisible();
+    expect(await line.innerText()).toContain("2\u00a0tareas · ");
   } finally {
     await context.close();
   }
