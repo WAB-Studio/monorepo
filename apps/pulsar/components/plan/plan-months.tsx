@@ -8,7 +8,7 @@ import { Figure } from "@/components/ui/figure";
 import { monthName } from "@/lib/plan/month-name";
 import { monthOf } from "@/lib/plan/months";
 import type { PlanItem, PlanMonth } from "@/lib/plan/roadmap";
-import { doneIn, openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
+import { doneIn, openMonthsOf, planMonthList, planMonthOf } from "@/lib/plan/roadmap-read";
 import type { GoalView } from "@/lib/queries/goal";
 import { formatQuantity, type TimeWords } from "@/lib/units/time";
 
@@ -122,7 +122,11 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
   function figureOf(month: PlanMonth, current: boolean) {
     if (!unit || month.amount === null) return null;
     return current
-      ? t.rich("roadmap.plan.monthDone", { done: say(doneIn(goal.plan, month.month)), amount: say(month.amount), ...fig })
+      ? t.rich("roadmap.plan.monthDone", {
+          done: planMonthList(goal.plan, month.month).filter((item) => item.done).length,
+          total: planMonthList(goal.plan, month.month).length,
+          ...fig,
+        })
       : t.rich("roadmap.plan.monthPlanned", { filled: say(month.filled), amount: say(month.amount), ...fig });
   }
 

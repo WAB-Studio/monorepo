@@ -1,7 +1,7 @@
 {
   "plan": {
     "title": "El plan",
-    "monthDone": "<fig>{done}</fig> de <fig>{amount}</fig> en tareas hechas",
+    "monthDone": "<fig>{done}</fig> de <fig>{total}</fig> {total, plural, one {tarea hecha} other {tareas hechas}}",
     "monthPlanned": "<fig>{filled}</fig> planeadas de <fig>{amount}</fig>",
     "finish": "A este ritmo terminas el {date}, {days, plural, one {# día} other {# días}} antes de tu final.",
     "finishOnEnd": "A este ritmo terminas el {date}, el día de tu final.",
