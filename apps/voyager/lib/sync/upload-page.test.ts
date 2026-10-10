@@ -53,3 +53,29 @@ test("planUploadRound: foreign rows are skipped", () => {
 test("planUploadRound: an empty page has no rows", () => {
   assert.deepEqual(planUploadRound([], DEVICE), { rows: [] });
 });
+
+test("planUploadRound: the wire row carries definition and both examples, and the request parses", () => {
+  const { rows } = planUploadRound(
+    [row(1, { outcome: "unlisted", definition: "to wait", exampleEn: "I linger.", exampleEs: "Me quedo." })],
+    DEVICE,
+  );
+  assert.equal(rows[0].definition, "to wait");
+  assert.equal(rows[0].exampleEn, "I linger.");
+  assert.equal(rows[0].exampleEs, "Me quedo.");
+  assert.doesNotThrow(() => syncRequestSchema.parse({ deviceId: DEVICE, rows, since: null }));
+});
+
+test("planUploadRound: a row without answer fields goes up with null", () => {
+  const { rows } = planUploadRound([row(1)], DEVICE);
+  assert.equal(rows[0].definition, null);
+  assert.equal(rows[0].exampleEn, null);
+  assert.equal(rows[0].exampleEs, null);
+});
+
+test("planUploadRound: an answer field recorded longer than the wire admits goes up cut", () => {
+  const long = "a".repeat(600);
+  const { rows } = planUploadRound([row(1, { definition: long, exampleEn: long, exampleEs: long })], DEVICE);
+  assert.equal(rows[0].definition!.length, 500);
+  assert.equal(rows[0].exampleEn!.length, 500);
+  assert.equal(rows[0].exampleEs!.length, 500);
+});
