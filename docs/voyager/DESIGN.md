@@ -1668,7 +1668,11 @@ Taken by the orchestrator, 2026-10-09, for modules 695–704.
 - **(c) `/cuenta` offline with a session reloads itself when the connection returns**, so «Sin conexión desde hace X» is
   never shown with a connection.
 - **(d) The hour of the quota does not break.** Its spaces are non-breaking («7:00 p. m.» stays whole at 390 px).
-- **(e) The forms line on `/registro` is 14 px (`Text size="2"`), muted.** The board of 704 governs instead if the user
-  asks for one (open question to the user, not yet answered).
+- **(e) The forms line on `/registro` is 14 px (`Text size="2"`), muted**, as the 704 boards draw it.
 - **(f) The filter on `/registro` is a field above the list, visible whenever the list has rows** (RL-63).
 - **(g) Boards that do not exist:** none for 700–702; they draw blocks already drawn or remove lines.
+- **(h) The `/registro` filter is drawn first and approved as drawn** (user, 2026-10-09, canvas version 46):
+  `RegistroFiltroOscuroMovil` (empty field, the whole list), `RegistroFiltroFiltrandoOscuroMovil` («ling»: «2 de 312
+  palabras» under the field, the × clears it), `RegistroFiltroNingunaOscuroMovil` («Ninguna palabra con «zzz»» in place of
+  the list). «Buscar en el registro» is the field's placeholder and its accessible name. Boards that do not exist: the
+  field while loading, empty or failed (it is not drawn there), light and 1280 (token inversion, the same column wider).
