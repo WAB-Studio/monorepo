@@ -21,6 +21,7 @@
     "db:migrate": "node --env-file=.env.local ../../node_modules/drizzle-kit/bin.cjs migrate",
     "check:sync": "node --import tsx --env-file=.env.local scripts/check-sync.ts",
     "check:translate": "node --import tsx --env-file=.env.local scripts/check-translate.ts",
+    "check:translate-model": "node --import tsx --env-file=.env.local scripts/check-translate-model.ts",
     "check:decoration": "node --import tsx --env-file=.env.local scripts/check-decoration.ts",
     "check:grants": "node --import tsx --env-file=.env.local scripts/check-grants.ts",
     "check:admission": "node --import tsx --env-file=.env.local scripts/check-admission.ts",
