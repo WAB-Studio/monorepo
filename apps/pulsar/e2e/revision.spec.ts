@@ -117,9 +117,10 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     `;
 
     // The goal's own figure: 750 minutes in hours and minutes, and no
-    // «minutos» after them; «mide en minutos» above it stays as it was.
+    // «minutos» after them; its measure line reads «mide en horas y minutos».
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toHaveCount(0);
     // The total comes first; the month block under it may repeat it (RP-28).
     await expect(page.getByText("12 h 30 min", { exact: true }).first()).toBeVisible();
 
@@ -129,8 +130,9 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     // the goal, the measure's unit on its mono line.
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Por semana");
-    const measureLine = page.getByText(`mide en ${unit}`, { exact: true });
+    const measureLine = page.getByText("mide en horas y minutos", { exact: true });
     await expect(measureLine).toBeVisible();
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toHaveCount(0);
     // A sentence is Archivo, never mono (`SistemaTipo`).
     expect.soft(await measureLine.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
     await expect(page.getByLabel(`Volver a ${goalName}`)).toHaveAttribute("href", `/metas/${goalId}`);
@@ -163,6 +165,8 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     // `RevisionEscritorio.dc.html`: the same rows, a real `<table>`, widened
     // past the kit's usual 640px cap.
     await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toHaveCount(0);
     const table = page.getByRole("table");
     await expect(table).toBeVisible();
     const rows = table.getByRole("row");
