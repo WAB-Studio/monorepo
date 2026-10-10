@@ -8,16 +8,18 @@ import styles from "./section.module.css";
 // screen never spaces sections with a margin.
 export function Section({
   label,
+  printSuffix,
   as: Tag = "section",
   children,
 }: {
   label?: ReactNode;
+  printSuffix?: string;
   as?: "section" | "div";
   children?: ReactNode;
 }) {
   return (
     <Tag className={styles.section}>
-      {label ? <SectionLabel>{label}</SectionLabel> : null}
+      {label ? <SectionLabel printSuffix={printSuffix}>{label}</SectionLabel> : null}
       {children}
     </Tag>
   );

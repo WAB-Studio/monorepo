@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useFormatter } from "next-intl";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
@@ -9,8 +10,9 @@ import {
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
+import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
-import { formatQuantity } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate } from "@/lib/zone";
 import {
   Figure,
@@ -194,6 +196,27 @@ function TaskLine({
   );
 }
 
+// «mide Práctica, en horas y minutos»: the unit in the words the goal's own screen uses.
+function MeasureLine({
+  name,
+  unit,
+  date,
+  declared,
+  t,
+}: {
+  name: string | null;
+  unit: string;
+  date: string;
+  declared: boolean;
+  t: Translator<"export">;
+}) {
+  const words = useTimeWords();
+  const unitWords = isTimeUnit(unit) ? t("timeUnit") : (words.unit?.(unit, 2) ?? unit);
+  const key = declared ? "measuresDeclared" : "measures";
+  const measure = distinctMeasureName(name, unit, [words.unit?.(unit, 1) ?? unit, words.unit?.(unit, 2) ?? unit]);
+  return measure === null ? t(`${key}Unnamed`, { unit: unitWords, date }) : t(key, { measure, unit: unitWords, date });
+}
+
 function GoalPart({
   goal,
   declaredOnly,
@@ -206,6 +229,7 @@ function GoalPart({
   t: Translator<"export">;
 }) {
   const unit = goal.unit;
+  const format = useFormatter();
 
   if (goal.endedOn !== null) {
     return (
@@ -243,13 +267,18 @@ function GoalPart({
   const until = dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
   const thisMonth = monthOnly.format(civilDateToDate(today));
 
-  const measure = goal.measureName ?? unit;
   const measureLine =
-    unit === null || measure === null
-      ? t("noMeasure", { date: until })
-      : declaredOnly && goal.measureFed
-        ? t("measuresDeclared", { measure, date: until })
-        : t("measures", { measure, date: until });
+    unit === null ? (
+      t("noMeasure", { date: until })
+    ) : (
+      <MeasureLine
+        name={goal.measureName}
+        unit={unit}
+        date={until}
+        declared={declaredOnly && goal.measureFed}
+        t={t}
+      />
+    );
 
   const render = (section: GoalSection) => {
     switch (section) {
@@ -393,6 +422,11 @@ function GoalPart({
             printed: printsOnPaper(month),
           };
         });
+        const out = goal.months.filter((m) => !printsOnPaper(m));
+        const outNames = format.list(
+          out.map((m) => monthOnly.format(civilDateToDate(m.month))),
+          { type: "conjunction" },
+        );
         const current = goal.months.findIndex((m) => m.current);
         const week = goal.weeks.find((w) => w.current);
         const weekPlanned = goal.weekPlanned ?? null;
@@ -407,7 +441,10 @@ function GoalPart({
         }));
         return (
           <Flex direction="column" gap="6">
-            <Section label={t("byMonth", { goal: goal.name })}>
+            <Section
+              label={t("byMonth", { goal: goal.name })}
+              printSuffix={t("monthsCaption", { count: goal.months.length - out.length })}
+            >
               <Table
                 caption={t(declaredOnly ? "monthsCaptionDeclared" : "monthsCaption", {
                   count: goal.months.length,
@@ -425,6 +462,13 @@ function GoalPart({
                 wrapDetail
                 current={current === -1 ? undefined : current}
               />
+              {out.length > 0 ? (
+                <PrintOnly>
+                  <Text as="p" variant="line">
+                    {t("monthsOut", { months: outNames })}
+                  </Text>
+                </PrintOnly>
+              ) : null}
             </Section>
             {goal.weeks.length > 0 ? (
               <PrintHidden>

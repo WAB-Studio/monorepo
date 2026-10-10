@@ -9,3 +9,9 @@
   text-transform: uppercase;
   color: var(--pulsar-muted);
 }
+
+@media print {
+  .label[data-print-suffix]::after {
+    content: attr(data-print-suffix);
+  }
+}
