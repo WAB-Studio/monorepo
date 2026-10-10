@@ -3060,3 +3060,11 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
   expects already present, never runs its upgrade, and never builds its stores: the box answers nothing.
 - Measured 2026-10-09, the voyager offline modules. Check `indexedDB.databases()` first and open only a database that
   exists.
+
+## A column added to a table granted column by column is refused until it is granted
+
+- `reading.lookups` grants INSERT to `authenticated` column by column (`apps/voyager/db/migrations/0000_*.sql:75-78`). A
+  migration that adds a column must name it in a new `GRANT INSERT (…)`, or every insert that carries it fails with 42501.
+- A probe run as the migration's superuser passes; only an insert `set local role authenticated` sees it.
+- Measured 2026-10-09, module 697: 0005 added three columns, its validator passed, and 698's `check:sync` hit 42501 on the
+  first upload. Fixed by 0006. Prove a new column as the role that writes it.
