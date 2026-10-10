@@ -73,6 +73,8 @@ function SignedOutForm() {
   const t = useTranslations("account");
   const [email, setEmail] = useState("");
   const [state, setState] = useState<EmailFormState>({ kind: "idle" });
+  const [held, setHeld] = useState<{ at: number | null; now: number } | null>(null);
+  const format = useFormatter();
 
   // Half of RNL-09 this component has to hold by hand: `signOut` redirects
   // to `/registro`, so this never mounts on the way out of a session. It
@@ -82,6 +84,11 @@ function SignedOutForm() {
     let cancelled = false;
     (async () => {
       const current = await readSyncState();
+      // Offline, the sign-in screen is the precached shell's, not the reader's state.
+      if (!navigator.onLine && current.enabled && current.readerId !== null && !current.retired) {
+        if (!cancelled) setHeld({ at: current.lastSyncedAt, now: Date.now() });
+        return;
+      }
       if (!cancelled && current.enabled) await writeSyncState({ enabled: false });
     })();
     return () => {
@@ -108,6 +115,20 @@ function SignedOutForm() {
     }
     if (timer) clearTimeout(timer);
     setState(result.ok ? { kind: "sent" } : { kind: "failed", error: result.error });
+  }
+
+  if (held) {
+    const gone = held.at === null ? null : elapsed(held.at, held.now);
+    return (
+      <Flex direction="column" gap="1">
+        <MetaLabel>{t("copy.label")}</MetaLabel>
+        <Text size="2">
+          {gone === null
+            ? t("copy.offlineNoCopy")
+            : t("copy.failedOffline", { time: bareSpan(gone, format, "un momento") })}
+        </Text>
+      </Flex>
+    );
   }
 
   return (
