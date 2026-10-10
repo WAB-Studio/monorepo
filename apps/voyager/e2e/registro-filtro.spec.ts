@@ -293,18 +293,24 @@ test("at 360px the field is at least 44px tall and nothing scrolls sideways, fil
   expect(await overflow()).toBe(0);
 });
 
-test("each key of «ling» over 800 rows paints the filtered list in under 100 ms and never re-reads the store", async ({
+test("each key of «ling» over 800 rows paints the filtered list in under 100 ms and never reads the lookups store again", async ({
   page,
 }) => {
   await deleteTranslator(page);
   await page.addInitScript(() => {
-    const w = window as unknown as { __opens: number };
-    w.__opens = 0;
-    const real = IDBFactory.prototype.open;
-    IDBFactory.prototype.open = function (...args: Parameters<typeof real>) {
-      w.__opens += 1;
-      return real.apply(this, args);
-    };
+    const w = window as unknown as { __reads: number };
+    w.__reads = 0;
+    // Counts every transaction opened on `lookups`, whatever connection carries it.
+    const real = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (
+      this: IDBDatabase,
+      stores: string | string[],
+      ...rest: [IDBTransactionMode?, IDBTransactionOptions?]
+    ) {
+      const names = Array.isArray(stores) ? stores : [stores];
+      if (names.includes("lookups")) w.__reads += 1;
+      return real.call(this, stores, ...rest);
+    } as typeof real;
   });
   await page.goto("/registro");
   await seedRows(page, corpus());
@@ -312,7 +318,7 @@ test("each key of «ling» over 800 rows paints the filtered list in under 100 m
   await expect(page.getByText(HEADER)).toBeVisible();
   await expect(field(page)).toBeVisible();
 
-  const opensBefore = await page.evaluate(() => (window as unknown as { __opens: number }).__opens);
+  const readsBefore = await page.evaluate(() => (window as unknown as { __reads: number }).__reads);
   const result = await page.evaluate(async () => {
     const input = document.querySelector("input")!;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
@@ -325,14 +331,16 @@ test("each key of «ling» over 800 rows paints the filtered list in under 100 m
       await frame();
       times.push(performance.now() - start);
     }
+    // A re-read starts behind awaits; give it time to open its transaction.
+    await new Promise((r) => setTimeout(r, 300));
     return {
       times,
       shown: document.querySelectorAll('a[href^="/registro/"]').length,
-      opens: (window as unknown as { __opens: number }).__opens,
+      reads: (window as unknown as { __reads: number }).__reads,
     };
   });
   expect(result.shown).toBe(2);
-  expect(result.opens - opensBefore, "typing re-read IndexedDB").toBe(0);
+  expect(result.reads - readsBefore, "typing read the lookups store again").toBe(0);
   for (const ms of result.times) expect(ms).toBeLessThan(100);
 });
 
