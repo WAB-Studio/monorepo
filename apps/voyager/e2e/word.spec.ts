@@ -452,10 +452,10 @@ test("the English definition draws open with no interaction, and stays inside th
   await page.waitForTimeout(1000);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("her");
-  await expect(page.getByRole("heading", { name: "her", exact: true })).toBeVisible({ timeout: 5000 });
+  await searchBox.fill("bitter");
+  await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible({ timeout: 5000 });
 
-  const englishText = "The form of she used after a preposition, as the object of a verb";
+  const englishText = "(usually in the plural bitters) A liquid or powder, made from bitter herbs, used in mixed drinks or as a tonic.";
 
   // Open on arrival, nothing tapped: the label and its prose both show.
   await expect(page.getByText(messages.word.definitionEnglish).first()).toBeVisible();

@@ -124,6 +124,8 @@ test("RL-51: a sense carrying no IPA still answers, under a block with no head",
   await deleteTranslator(page);
   await loadDictionary(page);
   await answer(page, "can");
+  // RL-59: `can` is a table word, so the dictionary's blocks sit folded.
+  await page.locator("main").getByRole("button", { name: messages.search.noEntry.showDictionary }).click();
 
   const heads = await blockHeads(page);
   expect(heads.filter((head) => head === "")).toHaveLength(1);
