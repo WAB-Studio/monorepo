@@ -28,15 +28,6 @@ export type SyncOutcome =
 
 // The row's own device, not this one's: it already crossed the wire once.
 function toForeignRow(row: SyncResponse["rows"][number]): ForeignRow {
-  const { deviceId, localId, recordSchema, receivedAt: _receivedAt, ...rest } = row;
-  return {
-    ...rest,
-    schema: recordSchema,
-    device: deviceId,
-    deviceSeq: localId,
-  } as ForeignRow;
-}
-function unusedOld(row: SyncResponse["rows"][number]): ForeignRow {
   return {
     schema: row.recordSchema,
     at: row.at,
@@ -58,8 +49,6 @@ function unusedOld(row: SyncResponse["rows"][number]): ForeignRow {
 // `deviceId` travels on every round, `rows` empty or not: a pull-only round
 // still has to seal this device's own row in `reading.devices` (module 31,
 // RL-25), and the route has nothing else top-level to read it off.
-const yieldToLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
 async function postBatch(
   deviceId: string,
   rows: SyncRow[],
@@ -107,7 +96,6 @@ async function runSync(): Promise<SyncOutcome> {
 
       // The merge is awaited in full before either cursor moves: a batch
       // that only half lands must be read again next time, not skipped.
-      await yieldToLoop();
       pulled += await mergeForeign(response.rows.map(toForeignRow));
 
       // The upload cursor follows what was scanned, not what was sent: a page
@@ -116,7 +104,6 @@ async function runSync(): Promise<SyncOutcome> {
       pushed += rows.length;
       pulledThroughCursor = response.cursor;
       await writeSyncState({ pushedThroughLocalId, pulledThroughCursor, lastSyncedAt: Date.now() });
-      await yieldToLoop();
 
       // Stop only once neither side has a next page waiting: a short scanned
       // page alone no longer ends the call, or a large foreign backlog would

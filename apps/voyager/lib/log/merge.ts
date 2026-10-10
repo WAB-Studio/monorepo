@@ -11,7 +11,6 @@ const STORE_NAME = "lookups";
 // a batch this size never ties the store up long enough to delay
 // `recordLookup`'s own `add`.
 const BATCH_SIZE = 500;
-const CHUNK = 50;
 
 /** A row another device recorded, on its way into this one's copy (RL-24). */
 export type ForeignRow = Omit<LookupRecord, "id" | "device" | "deviceSeq"> & {
@@ -31,24 +30,19 @@ export async function readSince(
   const database = await openLogDatabase();
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, "readonly");
-    const store = transaction.objectStore(STORE_NAME);
-    const page: LookupRecord[] = [];
-    const next = (after: number, open: boolean) => {
-      const request = store.getAll(IDBKeyRange.lowerBound(after, open), Math.min(CHUNK, limit - page.length));
-      request.onsuccess = () => {
-        const got = request.result as LookupRecord[];
-        page.push(...got);
-        if (got.length === CHUNK && page.length < limit) return next(got[got.length - 1].id!, true);
-        resolve({
-          own: page.filter((row) => row.device == null),
-          scannedThrough: page.length > 0 ? page[page.length - 1].id! : null,
-          scanned: page.length,
-        });
-      };
-      request.onerror = () => reject(request.error);
+    const request = transaction
+      .objectStore(STORE_NAME)
+      .getAll(IDBKeyRange.lowerBound(afterLocalId, true), limit);
+    request.onsuccess = () => {
+      const page = request.result as LookupRecord[];
+      resolve({
+        // A foreign row never goes back up: it already has a device of its own.
+        own: page.filter((row) => row.device == null),
+        scannedThrough: page.length > 0 ? page[page.length - 1].id! : null,
+        scanned: page.length,
+      });
     };
-    if (limit <= 0) return resolve({ own: [], scannedThrough: null, scanned: 0 });
-    next(afterLocalId, true);
+    request.onerror = () => reject(request.error);
   });
 }
 
@@ -60,25 +54,22 @@ function mergeBatch(database: IDBDatabase, batch: ForeignRow[]): Promise<number>
     const transaction = database.transaction(STORE_NAME, "readwrite");
     const store = transaction.objectStore(STORE_NAME);
     let inserted = 0;
-    const addChunk = (from: number) => {
-      const slice = batch.slice(from, from + CHUNK);
-      slice.forEach((row, index) => {
-        const request = store.add(row);
-        const last = index === slice.length - 1 && from + CHUNK < batch.length;
-        request.onsuccess = () => {
-          inserted += 1;
-          if (last) addChunk(from + CHUNK);
-        };
-        request.onerror = (event) => {
-          if (request.error?.name === "ConstraintError") {
-            event.preventDefault();
-            if (last) addChunk(from + CHUNK);
-          }
-        };
-      });
-    };
-    addChunk(0);
+    for (const row of batch) {
+      const request = store.add(row);
+      request.onsuccess = () => {
+        inserted += 1;
+      };
+      request.onerror = (event) => {
+        if (request.error?.name === "ConstraintError") {
+          // Already merged: cancel the default abort, keep the transaction open.
+          event.preventDefault();
+        }
+      };
+    }
     transaction.oncomplete = () => resolve(inserted);
+    // A row's own `preventDefault()` above only cancels the abort; the
+    // "error" event still bubbles here, with the transaction unharmed. Only
+    // an unhandled error — one no row's own `onerror` swallowed — aborts it.
     transaction.onabort = () => reject(transaction.error);
   });
 }
