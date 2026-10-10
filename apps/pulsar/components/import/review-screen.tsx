@@ -13,6 +13,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, splitMinutes } from "@/lib/units/time";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
+import { setRhythmSchema } from "@/lib/validation/rhythm";
 import { shortMonth } from "@/lib/dates/short-month";
 import { civilDateToDate } from "@/lib/zone";
 import { useTimeWords } from "@/components/ui/figure";
@@ -43,6 +44,7 @@ type Commitment = Goal["commitments"][number];
 
 const WHOLE = /^\d+$/;
 const monthAmount = setMonthBudgetSchema.shape.amount;
+const rhythmAmount = setRhythmSchema.shape.amount;
 const taskEstimate = createOneOffSchema.shape.estimate.nonoptional();
 
 // What the person has unmarked, by item path ("goals.0.months.1"). A parent's
@@ -99,13 +101,14 @@ function withAmount(draft: ImportDraft, path: string, amount: number): ImportDra
   const next = structuredClone(draft);
   const parts = path.split(".");
   const goal = next.goals[Number(parts[1])];
-  if (parts[2] === "months") goal.months[Number(parts[3])].amount = amount;
+  if (parts[2] === "rhythm") goal.rhythm = amount;
+  else if (parts[2] === "months") goal.months[Number(parts[3])].amount = amount;
   else if (parts[4] === "children") goal.tasks[Number(parts[3])].children[Number(parts[5])].estimate = amount;
   else goal.tasks[Number(parts[3])].estimate = amount;
   return next;
 }
 
-type Editing = { path: string; title: string; unit: string; amount: number; schema: "month" | "task" };
+type Editing = { path: string; title: string; unit: string; amount: number; schema: "month" | "task" | "rhythm" };
 
 /**
  * `/metas/importar/revisar` (RP-37): the draft grouped by goal, every item
@@ -405,6 +408,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         const notes = [...cutNotes, ...dropNotes];
         const months = goal.months.map((entry, m) => ({ entry, path: `${at}.months.${m}` })).filter((item) => ok(item.path));
         const commitments = goal.commitments.map((commitment, c) => ({ commitment, path: `${at}.commitments.${c}` })).filter((item) => ok(item.path));
+        const planned = goalOn && on(`${at}.rhythm`) && goal.rhythm !== null && unit !== null && isTimeUnit(unit);
         const tasks = goal.tasks.map((task, i) => ({ task, path: `${at}.tasks.${i}` })).filter((item) => ok(item.path));
         return (
           <Panel key={at} stacked label={goal.name}>
@@ -449,8 +453,20 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                     checked={goalOn && on(`${at}.rhythm`)}
                     disabled={!goalOn}
                     onCheckedChange={(value) => toggle(`${at}.rhythm`, value)}
-                    name={t("import.review.rhythmOf", { amount: formatQuantity(goal.rhythm, goal.measure.unit, words) })}
-                    meta={t("import.review.rhythm")}
+                    name={t("import.review.rhythmName")}
+                    boxLabel={t("import.review.rhythmOf", { amount: formatQuantity(goal.rhythm, goal.measure.unit, words) })}
+                    meta={t("import.review.rhythmMeta")}
+                    amount={figure(goal.rhythm, goal.measure.unit)}
+                    amountLabel={t("import.review.rhythmAmountOf", { amount: formatQuantity(goal.rhythm, goal.measure.unit, words) })}
+                    onAmount={() =>
+                      setEditing({
+                        path: `${at}.rhythm`,
+                        title: t("import.review.edit.rhythmEyebrow", { goal: goal.name }),
+                        unit: goal.measure!.unit,
+                        amount: goal.rhythm!,
+                        schema: "rhythm",
+                      })
+                    }
                   />
                 ) : null}
               </Section>
@@ -537,11 +553,18 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                             name={task.name}
                             note={task.note}
                             meta={
-                              task.children.length > 0
+                              planned
+                                ? t("import.review.toPlan", { month: monthWord(task.month) })
+                                : task.children.length > 0
                                 ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
                                 : strays.has(path)
                                   ? `${monthWord(task.month)} · ${t("import.notices.estimateDropped")}`
                                   : monthWord(task.month)
+                            }
+                            metaMore={
+                              planned && task.children.length > 0
+                                ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
+                                : undefined
                             }
                             {...(task.children.length === 0 && task.estimate !== null
                               ? amountProps(path, task.name, unit ?? "", task.estimate, "task")
@@ -649,7 +672,7 @@ function AmountSheet({
     } else {
       typed = WHOLE.test(single.trim()) ? Number(single.trim()) : Number.NaN;
     }
-    const parsed = (editing.schema === "month" ? monthAmount : taskEstimate).safeParse(typed);
+    const parsed = ({ month: monthAmount, task: taskEstimate, rhythm: rhythmAmount })[editing.schema].safeParse(typed);
     if (!parsed.success) {
       setError(t(messageKey(parsed.error.issues[0].message)));
       return;
@@ -664,7 +687,7 @@ function AmountSheet({
         if (!open) onClose();
       }}
       label={editing.title}
-      title={t("import.review.edit.title")}
+      title={t(editing.schema === "rhythm" ? "import.review.edit.rhythmTitle" : "import.review.edit.title")}
     >
       {timed ? (
         <Flex gap="3">

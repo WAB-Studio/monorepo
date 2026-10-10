@@ -236,7 +236,8 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
     test(`@${width}: touching «12 h», writing 10 h and creating stores rhythm = 600 and puts the tasks in the plan`, async ({ person, browser, baseURL, db }) => {
       await asPerson({ person, browser, baseURL }, { width, height: 900 }, async (page) => {
         try {
-          await toReview(page, template());
+          // The current month's own budget would beat the rhythm on the plan link (RP-50): drop it.
+          await toReview(page, template().replace(`\n- ${shift(0).year}-${shift(0).month} · 12 h`, ""));
           await rhythmButton(page, "12 h").click();
           await expect(page.getByRole("heading", { name: "Cambiar el ritmo" })).toBeVisible();
           await expect(page.getByText("ritmo al mes · IA aplicada", { exact: true })).toBeVisible();
@@ -302,6 +303,17 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
       for (const task of ["Leer AI Engineering cap. 1–4", "Tutor"]) {
         await expect(card.locator("label").filter({ hasText: task }).first().getByText(line, { exact: true })).toBeVisible();
       }
+    });
+  });
+
+  test("unchecking the rhythm fixes the tasks to their month again: no «va al plan»", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
+      await toReview(page, template());
+      const card = goalCard(page, "IA aplicada");
+      await rhythmBox(page).click();
+      await expect(rhythmBox(page)).not.toBeChecked();
+      await expect(card.locator("label").filter({ hasText: "Leer AI Engineering" }).first().getByText(monthName(0), { exact: true })).toBeVisible();
+      await expect(card.getByText(/va al plan/)).toHaveCount(0);
     });
   });
 });
