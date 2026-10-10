@@ -23,7 +23,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   the contract, never from the implementation, and shows every one of them red under a named mutation.
 - Dispatch the `tester` before the `worker` on every module that draws or changes a screen. It writes the
   plan's Done table red; the worker makes it green. Decided by the user 2026-10-06, after four modules in
-  one evening went worker → validator → worker over clauses nobody had tested.
+  one evening went worker → validator → worker over clauses nobody had tested. Except a module that only
+  changes words on an existing line: see `## Verification`.
 - Dispatch the `mutator` before closing a slice, once the validator is green. It breaks the lines the
   branch itself changed and reports what no suite noticed. A survivor is a regression that ships in
   silence.
@@ -267,8 +268,12 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
     the pull request — never locally.** A red there is fixed on the branch before it merges. A chosen
     list missed `deshacer.spec.ts` and `cifra-unidad.spec.ts` on 2026-09-30; CI is what caught them.
 - Have the worker save every check's output to a file under the lane's `private/` and name the paths.
-  The validator reads those logs, re-runs only the module's own tests and mutations, and asks of each
-  assertion whether it can fail. It never re-runs a suite the worker already logged green.
+  The validator reads those logs, re-runs only the module's own tests, and asks of each assertion
+  whether it can fail. It never re-runs a suite the worker logged green, nor a mutation the worker
+  logged red: it checks that log ran the right code. Decided by the user 2026-10-10.
+- Give a module that only changes words on a line that already exists one agent for tests and code:
+  it writes the Done table red first, then makes it green. Keep the separate `tester` for any new
+  form. Decided by the user 2026-10-10.
 - Run at most two whole suites at once against the remote pool: a third exhausts it (`EMAXCONNSESSION`,
   15 clients). CI and the lanes run on local stacks and do not count.
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
