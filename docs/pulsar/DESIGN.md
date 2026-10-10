@@ -676,7 +676,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   progress says only its progress; a flexible met in its period stays as a quiet row «cumplida esta
   semana», and can be marked again. Board `HoyCuenta.dc.html`. Decided 2026-09-29 by the coordinator,
   on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
-- **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed
+- **The goal's measure line reads «mide en {unidad}»** (in time, «mide en horas y minutos»: see below), and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.
 - **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
   says «pide el número» after its target.** «Anki · 10 min · 07:40 · lo dijiste tú», «Monólogo

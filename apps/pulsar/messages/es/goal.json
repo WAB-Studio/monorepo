@@ -13,6 +13,7 @@
     "archivedOverline": "meta · archivada el <fig>{date}</fig>",
     "horizonUntil": "{weeks, plural, one {# semana} other {# semanas}} · hasta el {date}",
     "measures": "mide en {unit}",
+    "measuresTime": "mide en horas y minutos",
     "measureSince": "en total, desde el <fig>{date}</fig>",
     "measureSinceYear": "{date} de {year}",
     "moveHorizon": "mover el final",
@@ -30,6 +31,7 @@
     "reopen": "Reabrir",
     "reviewLink": "Ver por semana",
     "monthsLink": "Ver por mes",
+    "monthTasks": "{done} de {total} {total, plural, one {tarea hecha} other {tareas hechas}}",
     "monthNoPlan": "sin monto planeado",
     "monthInLieu": "en lugar del ritmo",
     "monthPlanLink": "Planear {month}",
@@ -41,6 +43,7 @@
   "review": {
     "title": "Por semana",
     "measure": "mide en {unit}",
+    "measureTime": "mide en horas y minutos",
     "caption": "por semana",
     "columns": {
       "week": "semana",
