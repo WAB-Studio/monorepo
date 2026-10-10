@@ -26,7 +26,7 @@ for (const width of [390, 1440]) {
   test.describe(`at ${width}`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test("the current month reads the hours done, not the measure's reached; the next reads the hours planned", async ({ page, db, personId }) => {
+    test("the current month counts the tasks done, not the hours nor the measure's reached; the next reads the hours planned", async ({ page, db, personId }) => {
       const [goal] = await db<{ id: string }[]>`
         insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
         values (${personId}, ${`Meta cifras ${Date.now()}`}, ${`${Number(thisYear) + 1}-${today.slice(5, 7)}-01`}::date, 'minutos', 'minutos', 720)
@@ -56,12 +56,13 @@ for (const width of [390, 1440]) {
 
         await page.goto(`/metas/${goalId}/plan`);
         const current = section(page, say(roadmap.plan.currentMonth, { month: name(m0) }));
-        await expect(current.getByText(say(roadmap.plan.monthDone, { done: "5 h", amount: "12 h" }), { exact: true })).toBeVisible();
+        await expect(current.getByText("2 de 4 tareas hechas", { exact: true })).toBeVisible();
         // The reached total (12 h) is never the done figure, in the new words or the old.
-        await expect(page.getByText(say(roadmap.plan.monthDone, { done: "12 h", amount: "12 h" }), { exact: true })).toHaveCount(0);
+        await expect(page.getByText(/^12 de \d+ tareas? hechas?$/)).toHaveCount(0);
+        await expect(page.getByText(/en tareas hechas/)).toHaveCount(0);
         await expect(page.getByText(/12 h hechas/)).toHaveCount(0);
         // Figures in DM Mono, the words between them in Archivo.
-        const line = current.getByText(say(roadmap.plan.monthDone, { done: "5 h", amount: "12 h" }), { exact: true });
+        const line = current.getByText("2 de 4 tareas hechas", { exact: true });
         const family = (locator: import("@playwright/test").Locator) => locator.evaluate((el) => getComputedStyle(el).fontFamily);
         expect(await family(line)).not.toMatch(/mono/i);
         const figures = line.locator("> span");

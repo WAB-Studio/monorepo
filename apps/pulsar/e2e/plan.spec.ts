@@ -98,7 +98,7 @@ for (const width of [390, 1440]) {
         const first = section(page, `${name(m0)} · en curso`);
         await expect.soft(first.getByText(`Empieza aquí con 7 h y sigue en ${name(m1)}.`)).toBeVisible();
         await expect.soft(first.getByText("7 de 30 h", { exact: true })).toBeVisible();
-        await expect.soft(first.getByText(say(roadmap.plan.monthDone, { done: "0 min", amount: "12 h" }), { exact: true })).toBeVisible();
+        await expect.soft(first.getByText("0 de 2 tareas hechas", { exact: true })).toBeVisible();
         const middle = section(page, name(m1));
         await expect.soft(middle.getByText(`Viene de ${name(m0)} y sigue en ${name(m2)}.`)).toBeVisible();
         await expect.soft(middle.getByText("12 de 30 h", { exact: true })).toBeVisible();

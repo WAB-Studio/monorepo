@@ -31,7 +31,7 @@ const m0 = monthOf(today);
 const lastMonth = monthOf(dayBefore(m0));
 const horizon = [1, 2, 3, 4, 5, 6].reduce((month) => nextMonth(month), m0);
 const stamp = Date.now();
-const monthDone = roadmap.plan.monthDone.replace(/<\/?fig>/g, "").replace("{done}", "5 h").replace("{amount}", "12 h");
+const monthDone = "2 de 3 tareas hechas";
 const escaped = monthDone.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 type Db = import("postgres").Sql;
