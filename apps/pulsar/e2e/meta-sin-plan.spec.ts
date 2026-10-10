@@ -267,7 +267,10 @@ for (const width of [360, 390, 1440]) {
         await markDone(db, personId, goalId, first.id);
         await page.goto(`/metas/${goalId}`);
         await expect(tasksLine(page, 0, 1)).toBeVisible();
-        await expect(anyTasksLine(page)).toHaveCount(0);
+        await expect(anyTasksLine(page)).toHaveCount(1);
+        // The mother's sub-tasks are not counted as tasks of their own.
+        await expect(page.getByText("1 de 2 tareas hechas")).toHaveCount(0);
+        await expect(page.getByText("2 de 2 tareas hechas")).toHaveCount(0);
       } finally {
         await db`delete from goals.facts where goal_id = ${goalId} and user_id = ${personId}`;
         await drop(db, personId, goalId);
@@ -312,6 +315,8 @@ for (const width of [360, 390, 1440]) {
       personId,
     }) => {
       const goalId = await seedGoal(db, personId, { unit: "minutos", tasks: 5, budget: 240 });
+      // Pinned to the month, so a line that wrongly drew would have items to count.
+      await db`update goals.one_offs set planned_month = ${monthStart}::date where goal_id = ${goalId} and user_id = ${personId}`;
       try {
         await page.goto(`/metas/${goalId}`);
         await expect(page.getByText(PLAN_LABEL).locator("visible=true")).toBeVisible();
