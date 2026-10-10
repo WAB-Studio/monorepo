@@ -54,6 +54,12 @@ test("seven weekdays read «todos los días»", () => {
   assert.equal(days([1, 2, 3, 4, 5, 6, 7]), "todos los días");
 });
 
+test("six weekdays read as a list, never «todos los días»", () => {
+  assert.equal(days([1, 2, 3, 4, 5, 6]), "lun, mar, mié, jue, vie y sáb");
+  assert.equal(days([6, 2, 5, 1, 4, 3]), "lun, mar, mié, jue, vie y sáb");
+  assert.equal(days([7, 6, 5, 4, 3, 2]), "mar, mié, jue, vie, sáb y dom");
+});
+
 test("a weekly, monthly and every-n-days cadence name their count", () => {
   assert.equal(cadencePhrase(translate, { kind: "times_per_week", count: 3 }, names), "3 veces por semana");
   assert.equal(cadencePhrase(translate, { kind: "times_per_month", count: 4 }, names), "4 veces al mes");
