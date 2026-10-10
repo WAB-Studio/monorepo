@@ -33,7 +33,6 @@
     "planned": "planeado",
     "status": "estado"
   },
-  "owes": "falta {owes}",
   "of": "de {planned}",
   "fromMonth": "de {month}",
   "carriedTo": "{percent} % pasó a {month}",

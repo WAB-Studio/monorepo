@@ -420,6 +420,7 @@ function GoalPart({
                 unit={unit as string}
                 nowrapLabel
                 stackInCard
+                wrapDetail
                 current={current === -1 ? undefined : current}
               />
             </Section>

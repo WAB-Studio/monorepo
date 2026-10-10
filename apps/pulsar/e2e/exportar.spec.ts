@@ -717,7 +717,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
           .and(page.locator(":visible"))
           .locator("xpath=ancestor::*[count(.//*[@role='img'])=3][last()]"),
       ).toContainText("1 de 2", { useInnerText: true });
-      await expect(page.getByText(exportMessages.owes.replace("{owes}", "0"))).toHaveCount(0);
+      await expect(page.getByText(/\bfalta\b/)).toHaveCount(0);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
