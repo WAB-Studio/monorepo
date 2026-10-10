@@ -511,8 +511,9 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     networkWord !== null && networkAnswer.kind === "resolved"
       ? cutTranslation(networkAnswer.answer.translations.join(", "))
       : null;
+  const unlistedAnswer = networkAnswer.kind === "resolved" ? networkAnswer.answer : null;
   const unlistedPayload = useMemo<LogPayload | null>(() => {
-    if (networkWord === null || unlistedTranslation === null) return null;
+    if (networkWord === null || unlistedTranslation === null || unlistedAnswer === null) return null;
     if (!logPayload || logPayload.kind !== "word" || logPayload.outcome !== "miss") return null;
     // A network answer for an earlier word never labels the word now on screen.
     if (logPayload.normalised !== networkWord) return null;
@@ -524,8 +525,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       senses: 0,
       translation: unlistedTranslation,
       origin: null,
+      definition: unlistedAnswer.definition,
+      exampleEn: unlistedAnswer.example.en,
+      exampleEs: unlistedAnswer.example.es,
     };
-  }, [logPayload, networkWord, unlistedTranslation]);
+  }, [logPayload, networkWord, unlistedTranslation, unlistedAnswer]);
   const recordable = unlistedPayload ?? logPayload;
   // The same payload object re-running the effect must not record the lookup twice.
   const recordedRef = useRef<LogPayload | null>(null);

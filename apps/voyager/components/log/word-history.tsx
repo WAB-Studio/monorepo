@@ -10,6 +10,7 @@ import { recalledFilter } from "@/lib/log/study-filter";
 import type { LookupOutcome } from "@/lib/log/types";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { NetworkAnswer } from "@/components/search/network-answer";
 import { InstallStatus } from "@/components/search/install-status";
 import { SenseList } from "@/components/search/sense-list";
 import {
@@ -212,7 +213,12 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
   // gloss of its own but the latest network one; a lemma keeps the latest
   // row's.
   const unlistedRow = isPhrase ? undefined : state.rows.find((row) => row.outcome === "unlisted");
-  const networkOnly = unlistedRow !== undefined && answer !== null && answer.exact === null && answer.viaInflection.length === 0;
+  // A dictionary that could not install leaves nothing to contradict the
+  // row: the answer the reader saw is still the one worth showing.
+  const networkOnly =
+    unlistedRow !== undefined &&
+    ((dictionaryStatus.state === "failed" && unlistedRow.translation !== null) ||
+      (answer !== null && answer.exact === null && answer.viaInflection.length === 0));
   const gloss = isPhrase
     ? null
     : networkOnly ? null : (unlistedRow ?? state.rows[0]).translation;
@@ -268,15 +274,29 @@ export function WordHistory({ normalised: served }: { normalised: string }) {
             {t("word.phraseMissing")}
           </Text>
         )
-      ) : dictionaryStatus.state !== "ready" ? (
-        <InstallStatus status={dictionaryStatus} onRetry={retryDictionary} query="" hasBox={false} />
       ) : networkOnly ? (
-        unlistedRow!.translation === null ? null : (
+        unlistedRow!.translation === null ? null : unlistedRow!.exampleEn !== null && unlistedRow!.exampleEs !== null ? (
+          <NetworkAnswer
+            surface={key}
+            state={{
+              kind: "resolved",
+              answer: {
+                translations: [unlistedRow!.translation],
+                definition: unlistedRow!.definition,
+                example: { en: unlistedRow!.exampleEn, es: unlistedRow!.exampleEs },
+                lemma: null,
+                rule: null,
+              },
+            }}
+          />
+        ) : (
           <Flex direction="column" gap="1">
             <Text variant="definitionLabel" muted>{tWord("networkTranslations")}</Text>
             <Text variant="translation">{unlistedRow!.translation}</Text>
           </Flex>
         )
+      ) : dictionaryStatus.state !== "ready" ? (
+        <InstallStatus status={dictionaryStatus} onRetry={retryDictionary} query="" hasBox={false} />
       ) : answer ? (
         <SenseList answer={answer} showExactHeadword={false} />
       ) : (

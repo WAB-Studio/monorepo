@@ -186,6 +186,35 @@ test("readWordStudy: a schema-1 row with no translation field reads as null, not
   assert.equal(rows[0].lastTranslation, null);
 });
 
+// --- the network's answer on the row (RL-62) ---
+
+test("historia de lema: a schema-2 row reads with definition and both examples as null", async () => {
+  currentRows = [row(1, "linger")];
+  const { readLemmaHistory } = await getSummary();
+  const { rows } = await readLemmaHistory("linger");
+  assert.equal(rows[0].definition, null);
+  assert.equal(rows[0].exampleEn, null);
+  assert.equal(rows[0].exampleEs, null);
+});
+
+test("historia de lema: an unlisted row returns its definition and both examples", async () => {
+  currentRows = [
+    row(1, "blorpt", {
+      schema: 3,
+      headword: null,
+      outcome: "unlisted" as Row["outcome"],
+      definition: "a made-up word",
+      exampleEn: "He said blorpt.",
+      exampleEs: "Dijo blorpt.",
+    }),
+  ];
+  const { readLemmaHistory } = await getSummary();
+  const { rows } = await readLemmaHistory("blorpt");
+  assert.equal(rows[0].definition, "a made-up word");
+  assert.equal(rows[0].exampleEn, "He said blorpt.");
+  assert.equal(rows[0].exampleEs, "Dijo blorpt.");
+});
+
 // --- properties: the grouping is order-independent, and the parts sum to the total ---
 
 test("property: readWordStudy's grouping does not depend on the order the rows were stored in", async () => {

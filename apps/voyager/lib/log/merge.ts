@@ -11,6 +11,9 @@ const STORE_NAME = "lookups";
 // a batch this size never ties the store up long enough to delay
 // `recordLookup`'s own `add`.
 const BATCH_SIZE = 500;
+// A main-thread task issues at most this many `add`s or reads: a task of
+// 500 averaged 7 ms, long enough to hold a search behind it.
+const CHUNK = 50;
 
 /** A row another device recorded, on its way into this one's copy (RL-24). */
 export type ForeignRow = Omit<LookupRecord, "id" | "device" | "deviceSeq"> & {
@@ -30,19 +33,24 @@ export async function readSince(
   const database = await openLogDatabase();
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, "readonly");
-    const request = transaction
-      .objectStore(STORE_NAME)
-      .getAll(IDBKeyRange.lowerBound(afterLocalId, true), limit);
-    request.onsuccess = () => {
-      const page = request.result as LookupRecord[];
-      resolve({
-        // A foreign row never goes back up: it already has a device of its own.
-        own: page.filter((row) => row.device == null),
-        scannedThrough: page.length > 0 ? page[page.length - 1].id! : null,
-        scanned: page.length,
-      });
+    const store = transaction.objectStore(STORE_NAME);
+    const page: LookupRecord[] = [];
+    const next = (after: number, open: boolean) => {
+      const request = store.getAll(IDBKeyRange.lowerBound(after, open), Math.min(CHUNK, limit - page.length));
+      request.onsuccess = () => {
+        const got = request.result as LookupRecord[];
+        page.push(...got);
+        if (got.length === CHUNK && page.length < limit) return next(got[got.length - 1].id!, true);
+        resolve({
+          own: page.filter((row) => row.device == null),
+          scannedThrough: page.length > 0 ? page[page.length - 1].id! : null,
+          scanned: page.length,
+        });
+      };
+      request.onerror = () => reject(request.error);
     };
-    request.onerror = () => reject(request.error);
+    if (limit <= 0) return resolve({ own: [], scannedThrough: null, scanned: 0 });
+    next(afterLocalId, true);
   });
 }
 
@@ -54,18 +62,24 @@ function mergeBatch(database: IDBDatabase, batch: ForeignRow[]): Promise<number>
     const transaction = database.transaction(STORE_NAME, "readwrite");
     const store = transaction.objectStore(STORE_NAME);
     let inserted = 0;
-    for (const row of batch) {
-      const request = store.add(row);
-      request.onsuccess = () => {
-        inserted += 1;
-      };
-      request.onerror = (event) => {
-        if (request.error?.name === "ConstraintError") {
-          // Already merged: cancel the default abort, keep the transaction open.
-          event.preventDefault();
-        }
-      };
-    }
+    const addChunk = (from: number) => {
+      const slice = batch.slice(from, from + CHUNK);
+      slice.forEach((row, index) => {
+        const request = store.add(row);
+        const last = index === slice.length - 1 && from + CHUNK < batch.length;
+        request.onsuccess = () => {
+          inserted += 1;
+          if (last) addChunk(from + CHUNK);
+        };
+        request.onerror = (event) => {
+          if (request.error?.name === "ConstraintError") {
+            event.preventDefault();
+            if (last) addChunk(from + CHUNK);
+          }
+        };
+      });
+    };
+    addChunk(0);
     transaction.oncomplete = () => resolve(inserted);
     // A row's own `preventDefault()` above only cancels the abort; the
     // "error" event still bubbles here, with the transaction unharmed. Only
@@ -75,9 +89,9 @@ function mergeBatch(database: IDBDatabase, batch: ForeignRow[]): Promise<number>
 }
 
 /**
- * Merges foreign rows in batches of `BATCH_SIZE`, never one transaction for
- * the whole set — that would tie up `lookups` for its entire duration and
- * delay `recordLookup`'s own writes. Idempotent per row via the `foreign`
+ * Merges foreign rows in batches of `BATCH_SIZE`, `CHUNK` rows per task,
+ * never one transaction for the whole set — that would tie up `lookups` for
+ * its entire duration and delay `recordLookup`'s own writes. Idempotent per row via the `foreign`
  * index, not all-or-nothing per call (RL-13's guarantee does not apply
  * here): a batch that lands stays landed, and an interrupted merge resumes
  * from wherever the cursor last advanced. Returns how many rows actually

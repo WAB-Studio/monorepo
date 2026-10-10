@@ -42,3 +42,22 @@ test("pendingRowFrom: a 600-character text and headword key are cut to RECORD_TE
   assert.equal(row.schema, LOOKUP_SCHEMA);
   assert.equal(row.id, undefined);
 });
+
+test("pendingRowFrom: definition and both examples are cut to RECORD_TEXT_MAX without splitting a pair", () => {
+  const long = "a".repeat(499) + "😀" + "b".repeat(50);
+  const row = pendingRowFrom({ ...base, definition: long, exampleEn: "c".repeat(600), exampleEs: long });
+  assert.equal(row.definition, "a".repeat(499) + "😀");
+  assert.equal([...row.exampleEn!].length, RECORD_TEXT_MAX);
+  assert.equal(row.exampleEs, "a".repeat(499) + "😀");
+  assert.equal(row.exampleEs!.isWellFormed(), true);
+});
+
+test("pendingRowFrom: absent or null answer fields stay as they came", () => {
+  assert.equal(pendingRowFrom(base).definition, undefined);
+  assert.equal(pendingRowFrom({ ...base, definition: null }).definition, null);
+});
+
+test("pendingRowFrom: the row is written at schema 3", () => {
+  assert.equal(pendingRowFrom(base).schema, 3);
+  assert.equal(LOOKUP_SCHEMA, 3);
+});

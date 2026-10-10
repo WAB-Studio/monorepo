@@ -9,14 +9,20 @@ const STORE_NAME = "lookups";
 const NORMALISED_INDEX = "normalised";
 const HEADWORD_INDEX = "headword";
 
-// A row minted under schema 1 has no `translation` key at all — the field
-// landed at schema 2 (`types.ts`'s own history) — so IndexedDB hands the
-// cursor `undefined` where `LookupRecord` promises `string | null`. Both
+// A row minted before a field existed has no such key (`translation` under
+// schema 1, the network's answer under 1 and 2), so IndexedDB hands the
+// cursor `undefined` where a reader wants `string | null`. Both
 // readers below cast a raw cursor value through this, once, at the point a
 // row enters the module, rather than each folding `?? null` on its own.
 function readRecord(value: unknown): LookupRecord {
   const record = value as LookupRecord;
-  return record.translation === undefined ? { ...record, translation: null } : record;
+  return {
+    ...record,
+    translation: record.translation ?? null,
+    definition: record.definition ?? null,
+    exampleEn: record.exampleEn ?? null,
+    exampleEs: record.exampleEs ?? null,
+  };
 }
 
 export type StudyRow = {
@@ -113,6 +119,9 @@ export type WordHistoryRow = {
   text: string;
   outcome: LookupOutcome;
   translation: string | null;
+  definition: string | null;
+  exampleEn: string | null;
+  exampleEs: string | null;
   // A sentence's own row: its answer is `translation` above, never a
   // dictionary headword — RL-34's own distinction, the caller's to read.
   kind: LookupRecord["kind"];
@@ -187,6 +196,9 @@ async function readHistory(
               text: record.text,
               outcome: record.outcome,
               translation: record.translation,
+              definition: record.definition!,
+              exampleEn: record.exampleEn!,
+              exampleEs: record.exampleEs!,
               kind: record.kind,
             });
             cursor.continue();
@@ -208,6 +220,9 @@ async function readHistory(
       text: row.text,
       outcome: row.outcome,
       translation: row.translation,
+      definition: row.definition,
+      exampleEn: row.exampleEn,
+      exampleEs: row.exampleEs,
       kind: row.kind,
     })),
     total: found.length,
