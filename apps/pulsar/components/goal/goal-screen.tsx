@@ -165,6 +165,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const monthNames = t.raw("day.monthLong") as string[];
   const planEnd = goal.roadmap.end;
   const planAmount = amountOf(monthKey, goal.plan);
+  const monthOwn = goal.plan.rhythm !== null && goal.plan.budgets.some((budget) => budget.month === monthKey);
   const planItems = planMonthList(goal.plan, monthKey);
   const planDone = planItems.filter((item) => item.done).length;
   // The end carries its year only when it is not this one, as `endLabel` does.
@@ -244,6 +245,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             )}
           </Text>
         )}
+        {monthOwn ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {t("goal.detail.monthInLieu")}
+          </Text>
+        ) : null}
         {planned !== null && planned > 0 ? (
           <>
             <Progress percent={percent} />

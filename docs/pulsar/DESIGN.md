@@ -1150,3 +1150,16 @@ Taken by the user the same evening («1. si 2. b 3. a 4. a 5. a 6. a»), on canv
 - **The connector address shows on the main `/conexiones` screen only**, not again after a key is created (672).
 - **The report's month state moves under the month's name** («cerrado · 25 % pasó a octubre», «en curso»), since the third
   column now carries the plan (675).
+
+## Decisions of 2026-10-09, after the critic of Part 2
+
+Taken by the user the same night («todo lo que recomendaste»).
+
+- **Under a rhythm, a task's written month only orders the tasks** (686). The review says «va al plan», never «desde {month}»,
+  and a parent's second line drops the month («la suma de lo marcado»). This replaces «va al plan · desde octubre» above.
+- **A month amount coexists with the rhythm, and says so** (687): under a rhythm, a month with its own amount reads «en lugar del
+  ritmo», in the review and on the goal's month block.
+- **`/plan`'s month header counts tasks** (688): «1 de 3 tareas hechas», as the goal does since 676.
+- **The rhythm runs from 1 min to 744 h a month** (orchestrator, 689), and its error says so in hours.
+- **No boards drawn for 686–689 before the code:** the user chose to review every app at the end. The canvas gets the built
+  screens at slice close.

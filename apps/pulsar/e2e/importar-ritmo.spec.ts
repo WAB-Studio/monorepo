@@ -295,14 +295,32 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
     });
   });
 
-  test("with ritmo: each task row says «va al plan · desde <month>»", async ({ person, browser, baseURL }) => {
+  for (const width of [360, 1440]) {
+    test(`@${width}: with ritmo each task row says «va al plan», no month; a parent adds «la suma de lo marcado», no month`, async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, { width, height: 1200 }, async (page) => {
+        await toReview(page, template());
+        const card = goalCard(page, "IA aplicada");
+        const row = (task: string) => card.locator("label").filter({ hasText: task }).first();
+        for (const task of ["Leer AI Engineering cap. 1–4", "Tutor"]) {
+          await expect(row(task).getByText("va al plan", { exact: true })).toBeVisible();
+          // The month only orders the plan: no row promises it.
+          await expect(row(task).getByText(/desde|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre/i)).toHaveCount(0);
+        }
+        await expect(row("Tutor").getByText("la suma de lo marcado", { exact: true })).toBeVisible();
+        await expect(row("Leer AI Engineering cap. 1–4").getByText("la suma de lo marcado")).toHaveCount(0);
+        // The sentence is whole, not «<month> · la suma de lo marcado».
+        await expect(card.getByText(new RegExp(`${monthName(0)} · la suma de lo marcado`))).toHaveCount(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      });
+    });
+  }
+
+  test("without ritmo the parent keeps «<month> · la suma de lo marcado» and the leaf its month", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, { width: 390, height: 1200 }, async (page) => {
-      await toReview(page, template());
+      await toReview(page, template(null));
       const card = goalCard(page, "IA aplicada");
-      const line = `va al plan · desde ${monthName(0)}`;
-      for (const task of ["Leer AI Engineering cap. 1–4", "Tutor"]) {
-        await expect(card.locator("label").filter({ hasText: task }).first().getByText(line, { exact: true })).toBeVisible();
-      }
+      await expect(card.getByText(`${monthName(0)} · la suma de lo marcado`, { exact: true })).toBeVisible();
+      await expect(card.locator("label").filter({ hasText: "Leer AI Engineering" }).first().getByText(monthName(0), { exact: true })).toBeVisible();
     });
   });
 

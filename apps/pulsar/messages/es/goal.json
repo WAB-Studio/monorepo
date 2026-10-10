@@ -31,6 +31,7 @@
     "reviewLink": "Ver por semana",
     "monthsLink": "Ver por mes",
     "monthNoPlan": "sin monto planeado",
+    "monthInLieu": "en lugar del ritmo",
     "monthPlanLink": "Planear {month}",
     "monthProgress": "llevas {percent} % · faltan {days, plural, one {# día} other {# días}}",
     "monthPace": "día {day} ·",

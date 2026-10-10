@@ -198,17 +198,17 @@ test("setRhythm: a goal measured in km is refused and keeps no rhythm; minutes a
   assert.equal(await rhythmOf(upper), 60);
 });
 
-test("setRhythm: 0 and 1 000 001 are refused, 1 and 1 000 000 land", async () => {
+test("setRhythm: 0 and 44 641 are refused, 1 and 44 640 land", async () => {
   const goalId = await goal(owner, "rango", true);
   goalIds.push(goalId);
-  for (const amount of [0, 1_000_001, 1.5, -3]) {
+  for (const amount of [0, 44_641, 1.5, -3]) {
     assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount })), {
       ok: false,
       error: "roadmap.errors.rhythmRange",
     });
     assert.equal(await rhythmOf(goalId), null);
   }
-  for (const amount of [1, 1_000_000]) {
+  for (const amount of [1, 44_640]) {
     assert.deepEqual(await as(owner, () => roadmap.setRhythm({ goalId, amount })), { ok: true });
     assert.equal(await rhythmOf(goalId), amount);
   }
