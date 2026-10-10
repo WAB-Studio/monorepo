@@ -1,7 +1,11 @@
+import { randomUUID } from "node:crypto";
+
 import { expect, STUB_HEADER, test } from "./fixtures";
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 
 import messages from "../messages/es.json";
+import { DATABASE_VERSION } from "../lib/log/record";
+import type { LookupRecord, SyncState } from "../lib/log/types";
 import manifest from "../public/dictionary/manifest.json";
 
 // RL-55: a word the dictionary has no entry for is recorded when, and only
@@ -284,4 +288,275 @@ test("bajo su búsqueda: returning to a word whose answer the tab holds records 
   const unlisted = (await readLogRows(page)).filter((row) => row.outcome === "unlisted");
   expect(unlisted.map((row) => row.text)).toEqual(["whereat", "coccidiosis", "whereat"]);
   for (const row of unlisted) expect(row.headword).toBe(row.normalised);
+});
+
+
+// ---- Module 700 · RL-62, RL-61: the whole answer is kept and read back ----
+// A word the network answered keeps its translation, definition and example on
+// the row; its /registro page paints them as the resolved network block, with
+// or without a connection, and asks the network for nothing.
+
+type Seed = Omit<LookupRecord, "id">;
+
+const DOOM = {
+  translation: "deslizar sin parar por malas noticias",
+  definition: "Compulsively scrolling through bad news.",
+  exampleEn: "He lost an hour doomscrolling before bed.",
+  exampleEs: "Perdió una hora deslizando antes de dormir.",
+};
+
+function unlistedSeed(over: Partial<Seed> = {}): Seed {
+  return {
+    schema: 3,
+    at: Date.now(),
+    text: "doomscrolling",
+    normalised: "doomscrolling",
+    kind: "word",
+    outcome: "unlisted",
+    headword: "doomscrolling",
+    rule: null,
+    senses: 0,
+    translation: DOOM.translation,
+    definition: DOOM.definition,
+    exampleEn: DOOM.exampleEn,
+    exampleEs: DOOM.exampleEs,
+    dictionaryReady: true,
+    origin: null,
+    ...over,
+  };
+}
+
+function copyOn(): SyncState {
+  return {
+    deviceId: randomUUID(),
+    pushedThroughLocalId: null,
+    pulledThroughCursor: null,
+    lastSyncedAt: null,
+    enabled: true,
+    readerId: randomUUID(),
+    retired: false,
+  };
+}
+
+// Seeds from the home screen, once the dictionary is installed: /registro
+// itself mints the sync row and would race the write.
+async function seedFromHome(page: Page, rows: { sync?: SyncState; lookups?: Seed[] }): Promise<void> {
+  await openReady(page);
+  await page.evaluate(
+    ({ version, sync, lookups }) =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("reading-log", version);
+        request.onupgradeneeded = (event) => {
+          const database = request.result;
+          if (event.oldVersion < 1) {
+            const store = database.createObjectStore("lookups", { keyPath: "id", autoIncrement: true });
+            store.createIndex("at", "at");
+            store.createIndex("normalised", "normalised");
+          }
+          if (event.oldVersion < 2) {
+            database.createObjectStore("sync", { keyPath: "key" });
+            request.transaction!
+              .objectStore("lookups")
+              .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
+          }
+          if (event.oldVersion < 3) {
+            request.transaction!.objectStore("lookups").createIndex("headword", "headword");
+          }
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction(["lookups", "sync"], "readwrite");
+          if (sync) tx.objectStore("sync").put({ ...sync, key: "state" });
+          for (const row of lookups ?? []) tx.objectStore("lookups").add(row);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+        request.onerror = () => reject(request.error);
+      }),
+    { version: DATABASE_VERSION, sync: rows.sync ?? null, lookups: rows.lookups ?? [] },
+  );
+}
+
+async function expectWholeAnswer(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { name: "doomscrolling", exact: true })).toBeVisible();
+  await expect(page.getByText(DOOM.translation, { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.word.definitionEnglish, { exact: true })).toBeVisible();
+  await expect(page.getByText(DOOM.definition, { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.word.example, { exact: true })).toBeVisible();
+  await expect(page.getByText(DOOM.exampleEn, { exact: true })).toBeVisible();
+  await expect(page.getByText(DOOM.exampleEs, { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+}
+
+test("700 hecho, con red: searching doomscrolling leaves a row carrying translation, definition and both examples", async ({
+  page,
+  stubUnlisted,
+}) => {
+  await deleteTranslator(page);
+  await stubUnlisted({
+    translations: [DOOM.translation],
+    definition: DOOM.definition,
+    example: { en: DOOM.exampleEn, es: DOOM.exampleEs },
+    lemma: null,
+    rule: null,
+  });
+  await openReady(page);
+
+  const box = page.getByRole("textbox", { name: messages.search.label });
+  await box.fill("doomscrolling");
+  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: 3000 });
+  await settle(page, box);
+
+  const rows = (await readLogRows(page)).filter((row) => row.normalised === "doomscrolling");
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    outcome: "unlisted",
+    translation: DOOM.translation,
+    definition: DOOM.definition,
+    exampleEn: DOOM.exampleEn,
+    exampleEs: DOOM.exampleEs,
+  });
+});
+
+test("700 hecho, sin red: offline, /registro/doomscrolling paints translation, definition, example and its translation", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.route(/[?&]_rsc=/, (route) => route.abort());
+  await seedFromHome(page, { lookups: [unlistedSeed()] });
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+
+  await page.context().setOffline(true);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+  });
+  await page.goto("/registro/doomscrolling");
+
+  expect(page.url()).not.toContain("chrome-error:");
+  await expectWholeAnswer(page);
+});
+
+test("700 sin conexión pedida: opening the page paints the answer and sends no request to /api/word/*", async ({
+  page,
+  stubUnlisted,
+}) => {
+  await deleteTranslator(page);
+  // A stub that would answer, so a request for it could only come from the page.
+  await stubUnlisted({
+    translations: ["otra cosa"],
+    definition: "Another.",
+    example: { en: "Other.", es: "Otra." },
+    lemma: null,
+    rule: null,
+  });
+  await seedFromHome(page, { lookups: [unlistedSeed()] });
+
+  const wordRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/word/")) wordRequests.push(request.url());
+  });
+  await page.goto("/registro/doomscrolling");
+  await expectWholeAnswer(page);
+  // Past use-network-answer's own debounce, so a late ask would be in by now.
+  await page.waitForTimeout(1500);
+
+  expect(wordRequests).toEqual([]);
+});
+
+test("700 fila vieja: a schema 2 row paints its translation alone, with no definition label and no example", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  const old = unlistedSeed({ schema: 2 });
+  delete old.definition;
+  delete old.exampleEn;
+  delete old.exampleEs;
+  await seedFromHome(page, { lookups: [old] });
+
+  await page.goto("/registro/doomscrolling");
+  await expect(page.getByText(DOOM.translation, { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.word.definitionEnglish, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(messages.word.example, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+});
+
+test("700 sin definición: an answer with definition null paints the example and no definition label", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await seedFromHome(page, { lookups: [unlistedSeed({ definition: null })] });
+
+  await page.goto("/registro/doomscrolling");
+  await expect(page.getByText(DOOM.translation, { exact: true })).toBeVisible();
+  await expect(page.getByText(DOOM.exampleEn, { exact: true })).toBeVisible();
+  await expect(page.getByText(DOOM.exampleEs, { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.word.definitionEnglish, { exact: true })).toHaveCount(0);
+});
+
+test("700 pendiente: before the row is read the page never says the dictionary lacks the word", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await seedFromHome(page, { lookups: [unlistedSeed()] });
+
+  const forbidden = [messages.search.notFound, messages.search.notFoundHint, messages.log.word.emptyBody.replace("{word}", "doomscrolling")];
+  await page.addInitScript((needles) => {
+    const w = window as unknown as { __saidMissing: string[] };
+    w.__saidMissing = [];
+    const check = () => {
+      const text = document.body?.innerText ?? "";
+      for (const needle of needles) if (text.includes(needle)) w.__saidMissing.push(needle);
+    };
+    new MutationObserver(check).observe(document, { subtree: true, childList: true, characterData: true });
+  }, forbidden);
+
+  await page.goto("/registro/doomscrolling");
+  await expectWholeAnswer(page);
+  expect(await page.evaluate(() => (window as unknown as { __saidMissing: string[] }).__saidMissing)).toEqual([]);
+});
+
+test("700 copia: a row with the three fields pulled through /api/log/sync paints the same page", async ({ page }) => {
+  await deleteTranslator(page);
+  await seedFromHome(page, { sync: copyOn() });
+  await page.route("**/api/log/sync", (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        accepted: 0,
+        rows: [
+          {
+            deviceId: randomUUID(),
+            localId: 1,
+            at: Date.now(),
+            text: "doomscrolling",
+            normalised: "doomscrolling",
+            kind: "word",
+            outcome: "unlisted",
+            headword: "doomscrolling",
+            rule: null,
+            senses: 0,
+            translation: DOOM.translation,
+            dictionaryReady: true,
+            origin: null,
+            recordSchema: 3,
+            definition: DOOM.definition,
+            exampleEn: DOOM.exampleEn,
+            exampleEs: DOOM.exampleEs,
+            receivedAt: new Date().toISOString(),
+          },
+        ],
+        cursor: "doom-cursor",
+      }),
+    }),
+  );
+
+  await page.goto("/registro");
+  await expect(page.locator('a[href="/registro/doomscrolling"]')).toBeVisible();
+  await page.goto("/registro/doomscrolling");
+  await expectWholeAnswer(page);
 });
