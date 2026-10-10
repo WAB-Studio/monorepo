@@ -125,7 +125,7 @@ function SignedOutForm() {
         <Text size="2">
           {gone === null
             ? t("copy.offlineNoCopy")
-            : t("copy.failedOffline", { time: bareSpan(gone, format, "un momento") })}
+            : t("copy.failedOffline", { time: bareSpan(gone, format, t("copy.momentSpan")) })}
         </Text>
       </Flex>
     );
