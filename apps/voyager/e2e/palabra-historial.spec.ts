@@ -813,71 +813,202 @@ test("a form's own URL opens its lemma's page with the same rows", async ({
   ).toHaveCount(1);
 });
 
-test("a word with no entry that the network answered carries the latest network translation in its subtitle", async ({
-  page,
-}) => {
-  await deleteTranslator(page);
-  await page.goto("/registro");
-  // Inserted newest-`at` first: insertion order and `at` order disagree.
-  await seedRows(page, [
+// Module 682 · RL-56: a word the dictionary lacks and the network answered
+// shows its saved translation in the body, under «Traducciones de internet»,
+// never the dictionary's miss copy and never repeated in the subtitle.
+const COUNT_LINE = /^3 búsquedas desde el \d{1,2} de [a-záéíóú]+\.$/;
+const DOOM = "deslizar sin parar por malas noticias";
+
+function seedDoomscrolling(now: number): SeedRow[] {
+  return [
+    // Inserted oldest first: only `at` says which is the latest.
     {
-      at: Date.now() - 1 * DAY_MS,
-      text: "whereat",
-      normalised: "whereat",
-      translation: "¿en dónde?, adónde",
+      at: now - 3 * DAY_MS,
+      text: "doomscrolling",
+      normalised: "doomscrolling",
+      translation: "deslizar sin parar",
       outcome: "unlisted",
       headword: null,
     },
     {
-      at: Date.now() - 3 * DAY_MS,
-      text: "whereat",
-      normalised: "whereat",
-      translation: "a lo cual",
+      at: now - 1 * DAY_MS,
+      text: "doomscrolling",
+      normalised: "doomscrolling",
+      translation: DOOM,
+      outcome: "unlisted",
+      headword: null,
+    },
+    {
+      at: now,
+      text: "doomscrolling",
+      normalised: "doomscrolling",
+      translation: null,
+      outcome: "miss",
+      headword: null,
+    },
+  ];
+}
+
+for (const width of [360, 1280]) {
+  test.describe(`at ${width}px`, () => {
+    test.use({ viewport: { width, height: 800 } });
+
+    test("a word the network answered shows its saved translation under «Traducciones de internet», never the dictionary's miss", async ({
+      page,
+    }) => {
+      await deleteTranslator(page);
+      await page.goto("/registro");
+      await seedRows(page, seedDoomscrolling(Date.now()));
+
+      await page.goto("/registro/doomscrolling");
+      await expect(
+        page.getByRole("heading", { name: "doomscrolling", exact: true }),
+      ).toBeVisible();
+      const label = page.getByText(messages.word.networkTranslations, {
+        exact: true,
+      });
+      await expect(label).toBeVisible();
+      const body = page.getByText(DOOM, { exact: true });
+      await expect(body).toBeVisible();
+      await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+      await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
+      await expect(page.getByText(/Revisa la ortografía/)).toHaveCount(0);
+      // The older network answer is not the one shown.
+      await expect(page.getByText("deslizar sin parar", { exact: true })).toHaveCount(0);
+
+      // Label, then its translation, then the list of searches.
+      const labelBox = await label.boundingBox();
+      const bodyBox = await body.boundingBox();
+      const firstRow = await page.getByText("doomscrolling", { exact: true }).last().boundingBox();
+      expect(labelBox!.y).toBeLessThan(bodyBox!.y);
+      expect(bodyBox!.y).toBeLessThan(firstRow!.y);
+
+      // A dictionary word page speaks in the serif voice.
+      const family = await body.evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(family).not.toBe(
+        await page.getByText(COUNT_LINE).evaluate((el) => getComputedStyle(el).fontFamily),
+      );
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBe(0);
+    });
+
+    test("the subtitle holds the count line alone, not the translation", async ({
+      page,
+    }) => {
+      await deleteTranslator(page);
+      await page.goto("/registro");
+      await seedRows(page, seedDoomscrolling(Date.now()));
+
+      await page.goto("/registro/doomscrolling");
+      await expect(page.getByText(COUNT_LINE)).toBeVisible();
+      // The translation appears once on the page: in the body.
+      await expect(page.getByText(DOOM)).toHaveCount(1);
+      await expect(page.getByText(/· 3 búsquedas/)).toHaveCount(0);
+    });
+
+    test("a dictionary word keeps its senses and its translation-led subtitle", async ({
+      page,
+    }) => {
+      await deleteTranslator(page);
+      await page.goto("/registro");
+      await seedRows(page, [
+        { at: Date.now(), text: "leave", normalised: "leave", translation: "permiso" },
+      ]);
+
+      await page.goto("/registro/leave");
+      await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
+      await expect(glossLocator(page, "permiso")).toBeVisible();
+      await expect(page.getByText(/^permiso · 1 búsqueda desde el /)).toBeVisible();
+      await expect(
+        page.getByText(messages.word.networkTranslations, { exact: true }),
+      ).toHaveCount(0);
+      await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+    });
+  });
+}
+
+test("an unlisted row of a word the dictionary does have draws its senses, not the network translation", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    {
+      at: Date.now(),
+      text: "leave",
+      normalised: "leave",
+      translation: "marcharse",
+      outcome: "unlisted",
+    },
+  ]);
+
+  await page.goto("/registro/leave");
+  await expect(glossLocator(page, "permiso")).toBeVisible();
+  await expect(
+    page.getByText(messages.word.networkTranslations, { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+});
+
+test("an unlisted row with no translation draws the subtitle alone, no body and no «no tiene»", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    {
+      at: Date.now(),
+      text: "doomscrolling",
+      normalised: "doomscrolling",
+      translation: null,
       outcome: "unlisted",
       headword: null,
     },
   ]);
 
-  await page.goto("/registro/whereat");
+  // A fresh context holds no dictionary: it downloads, installs, then
+  // answers. Absence is asserted only once all three have happened.
+  const asset = page.waitForResponse((response) =>
+    response.url().includes(manifest.asset.path),
+  );
+  await page.goto("/registro/doomscrolling");
   await expect(
-    page.getByRole("heading", { name: "whereat", exact: true }),
+    page.getByText("1 búsqueda desde el", { exact: false }),
   ).toBeVisible();
+  await asset;
+  await expect(page.getByText(/Instalando el diccionario/)).toHaveCount(0);
+  await expect(page.getByText(messages.log.word.skeletonAnswer)).toHaveCount(0);
+  await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+  await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
   await expect(
-    page.getByText(/^¿en dónde\?, adónde · 2 búsquedas desde el /),
-  ).toBeVisible();
-  await expect(
-    page.getByText(messages.log.outcome.unlisted, { exact: true }),
-  ).toHaveCount(2);
+    page.getByText(messages.word.networkTranslations, { exact: true }),
+  ).toHaveCount(0);
 });
 
-test("the network translation in the subtitle is the latest unlisted row's, not the latest row's", async ({
+test("a word whose only rows are misses still draws the dictionary's miss", async ({
   page,
 }) => {
   await deleteTranslator(page);
   await page.goto("/registro");
   await seedRows(page, [
     {
-      at: Date.now() - 3 * DAY_MS,
-      text: "whereat",
-      normalised: "whereat",
-      translation: "¿en dónde?, adónde",
-      outcome: "unlisted",
-      headword: null,
-    },
-    {
-      at: Date.now() - 1 * DAY_MS,
-      text: "whereat",
-      normalised: "whereat",
+      at: Date.now(),
+      text: "zzqqxv",
+      normalised: "zzqqxv",
       translation: null,
       outcome: "miss",
       headword: null,
     },
   ]);
 
-  await page.goto("/registro/whereat");
+  await page.goto("/registro/zzqqxv");
+  await expect(page.getByText(messages.search.notFound)).toBeVisible();
   await expect(
-    page.getByText(/^¿en dónde\?, adónde · 2 búsquedas desde el /),
-  ).toBeVisible();
+    page.getByText(messages.word.networkTranslations, { exact: true }),
+  ).toHaveCount(0);
 });
 
 test("a lemma none of whose forms was searched draws the empty state, even with other words recorded", async ({

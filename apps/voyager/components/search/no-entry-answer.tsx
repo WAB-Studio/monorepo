@@ -1,11 +1,12 @@
 "use client";
 
 import NextLink from "next/link";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { functionWordTranslation } from "@/lib/phrase/function-words";
-import { Box, Flex, Headword, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
+import { Box, Button, Flex, Headword, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
 import { SenseList } from "./sense-list";
 
 export type NoEntryPart = { token: string; answer: WordAnswer | null };
@@ -90,6 +91,25 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
   // exact headword itself, so it is hidden there and drawn here, above the
   // table line.
   const heading = part.answer.exact?.headword ?? part.token;
+  return <FunctionWordBlock part={part} answer={part.answer} heading={heading} table={table} t={t} />;
+}
+
+// The dictionary block folds behind one ghost control; a word with no block
+// of its own draws no control.
+function FunctionWordBlock({
+  part,
+  answer,
+  heading,
+  table,
+  t,
+}: {
+  part: NoEntryPart;
+  answer: WordAnswer;
+  heading: string;
+  table: string;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [open, setOpen] = useState(false);
   return (
     <Flex direction="column" gap="3">
       <Link asChild underline="always">
@@ -101,9 +121,22 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
         </NextLink>
       </Link>
       <Text variant="translation">{table}</Text>
-      <Box muted>
-        <SenseList answer={part.answer} variant="compact" wordHref={wordHref(part.token)} showExactHeadword={false} />
-      </Box>
+      <Button
+        variant="ghost"
+        color="gray"
+        size="2"
+        tap={44}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {t(open ? "noEntry.hideDictionary" : "noEntry.showDictionary")}
+        <ChevronGlyph />
+      </Button>
+      {open && (
+        <Box muted>
+          <SenseList answer={answer} variant="compact" wordHref={wordHref(part.token)} showExactHeadword={false} />
+        </Box>
+      )}
     </Flex>
   );
 }
