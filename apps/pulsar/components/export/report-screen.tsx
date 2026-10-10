@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useFormatter } from "next-intl";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
@@ -228,6 +229,7 @@ function GoalPart({
   t: Translator<"export">;
 }) {
   const unit = goal.unit;
+  const format = useFormatter();
 
   if (goal.endedOn !== null) {
     return (
@@ -421,8 +423,9 @@ function GoalPart({
           };
         });
         const out = goal.months.filter((m) => !printsOnPaper(m));
-        const outNames = new Intl.ListFormat("es", { style: "long", type: "conjunction" }).format(
+        const outNames = format.list(
           out.map((m) => monthOnly.format(civilDateToDate(m.month))),
+          { type: "conjunction" },
         );
         const current = goal.months.findIndex((m) => m.current);
         const week = goal.weeks.find((w) => w.current);
@@ -461,7 +464,7 @@ function GoalPart({
               />
               {out.length > 0 ? (
                 <PrintOnly>
-                  <Text as="p" variant="sentence">
+                  <Text as="p" variant="line">
                     {t("monthsOut", { months: outNames })}
                   </Text>
                 </PrintOnly>

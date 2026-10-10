@@ -184,6 +184,18 @@ test.describe("the paper names the months it leaves out (RP-71)", () => {
       const table = await section.locator("table").locator("visible=true").first().boundingBox();
       const at = await line.boundingBox();
       expect(at!.y, "the line sits under the table").toBeGreaterThanOrEqual(table!.y + table!.height - 1);
+      // Body text, not the quiet note: the body-line size token, in the sans family.
+      const look = await line.evaluate((node) => {
+        const probe = document.createElement("span");
+        probe.style.fontSize = "var(--pulsar-text-line-size)";
+        document.body.append(probe);
+        const wanted = getComputedStyle(probe).fontSize;
+        probe.remove();
+        const style = getComputedStyle(node);
+        return { size: style.fontSize, wanted, family: style.fontFamily };
+      });
+      expect(look.size, "the line is set at the body-line size").toBe(look.wanted);
+      expect(look.family).not.toMatch(/mono/i);
     } finally {
       await context.close();
       await remove(db, person, id);

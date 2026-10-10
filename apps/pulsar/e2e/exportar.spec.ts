@@ -511,7 +511,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       }
     });
 
-    test(`at ${width} a goal no source feeds still reads «mide km · hasta el …» and adds nothing`, async ({ person, browser, db }) => {
+    test(`at ${width} a goal no source feeds still reads «mide en km · hasta el …» and adds nothing`, async ({ person, browser, db }) => {
       needFault();
       const seeded = await seedDown(db, person);
       const { context, page } = await openDown(browser, person, width);
@@ -526,7 +526,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       }
     });
 
-    test(`at ${width} the goal a down source feeds reads «mide … · hasta el … · solo lo que dijiste tú» and says it under its figure`, async ({ person, browser, db }) => {
+    test(`at ${width} the goal a down source feeds reads «mide búsquedas, en searches · hasta el … · solo lo que dijiste tú» and says it under its figure`, async ({ person, browser, db }) => {
       needFault();
       const seeded = await seedDown(db, person);
       const { context, page } = await openDown(browser, person, width);
@@ -1299,7 +1299,7 @@ const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "jul
 // `ReporteFuenteCaida` with the source readable: the line is the
 // same for every goal and carries nothing about a source.
 test.describe("a readable source", () => {
-  test("every goal reads «mide … · hasta el …», fed or not, with no word about a source", async ({
+  test("every goal reads «mide X, en Y · hasta el …» or «mide en Y · hasta el …», fed or not, with no word about a source", async ({
     person,
     browser,
     baseURL,
@@ -1692,7 +1692,7 @@ test.describe("the report on A4, compact", () => {
         ).toBe(true);
       }
       const orphan = new RegExp(
-        `^(${goals.map((goal) => goal.name).join("|")})( · por mes( · \d+ meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
+        `^(${goals.map((goal) => goal.name).join("|")})( · por mes( · \\d+ meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
         "i",
       );
       for (const [index, lines] of pages.entries()) {
