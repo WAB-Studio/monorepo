@@ -44,10 +44,10 @@ Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignm
 
 ## Parallel tracks
 
-- Four lanes take workers. Lane 1 is yours: you merge, you tick, you run the suites the branches share.
+- Lanes 2 to 6 take e2e work, 7 and up work with no e2e (`AGENTS.md` § Parallel tracks). Lane 1 is yours: you merge, you tick, you run the suites the branches share.
 - Give each dispatch its lane number, its worktree path, its port and its branch.
 - Never put two workers on one lane, and never two on one file.
-- Cap the suites running at once at three.
+- Cap the suites running at once at five.
 - Serialize only what a dependency forces. Nothing else.
 
 ## What a dispatch costs

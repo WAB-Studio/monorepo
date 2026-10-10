@@ -23,7 +23,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   the contract, never from the implementation, and shows every one of them red under a named mutation.
 - Dispatch the `tester` before the `worker` on every module that draws or changes a screen. It writes the
   plan's Done table red; the worker makes it green. Decided by the user 2026-10-06, after four modules in
-  one evening went worker → validator → worker over clauses nobody had tested.
+  one evening went worker → validator → worker over clauses nobody had tested. Except a module that only
+  changes words on an existing line: see `## Verification`.
 - Dispatch the `mutator` before closing a slice, once the validator is green. It breaks the lines the
   branch itself changed and reports what no suite noticed. A survivor is a regression that ships in
   silence.
@@ -267,8 +268,18 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
     the pull request — never locally.** A red there is fixed on the branch before it merges. A chosen
     list missed `deshacer.spec.ts` and `cifra-unidad.spec.ts` on 2026-09-30; CI is what caught them.
 - Have the worker save every check's output to a file under the lane's `private/` and name the paths.
-  The validator reads those logs, re-runs only the module's own tests and mutations, and asks of each
-  assertion whether it can fail. It never re-runs a suite the worker already logged green.
+  The validator reads those logs, re-runs only the module's own tests, and asks of each assertion
+  whether it can fail. It never re-runs a suite the worker logged green, nor a mutation the worker
+  logged red: it checks that log ran the right code. Decided by the user 2026-10-10.
+- Give a module that only changes words on a line that already exists one agent for tests and code:
+  it writes the Done table red first, then makes it green. Keep the separate `tester` for any new
+  form. Decided by the user 2026-10-10.
+- Run a mutation against the one test that kills it (`spec:line` or `-g`), never the module's suite.
+  Wait for the server to answer, never a fixed `sleep`. Run the suite once, over the final code.
+  Measured 2026-10-10: module 702 spent ~36 s of each ~50 s mutation cycle on 59 tests and 8 s asleep.
+- Drive pulsar's mutations against `next build` + `next start`, never `next dev`, never `rm -rf .next`.
+  Decided by the user 2026-10-10 and proved on module 723 the same day: 30 tests alike under both, the one
+  difference a cold `next dev` compile; the specs took 57 s on the build and 2.4 min on dev.
 - Run at most two whole suites at once against the remote pool: a third exhausts it (`EMAXCONNSESSION`,
   15 clients). CI and the lanes run on local stacks and do not count.
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
@@ -289,6 +300,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   lockfile, and always on the push to `main`. Merge on `typecheck`, `lint` and `voyager-e2e`; read a
   red on `main` and fix forward. Waiting on it by choice is what cost this session its afternoon, not
   the suite.
+- **`voyager-e2e` runs on a pull request only when it reaches `apps/voyager`, `packages/`, the lockfile
+  or `ci.yml`,** and always on a push. Skipped, it does not block the merge. Decided by the user 2026-10-10.
 - The suite is 17 minutes and **1043 of its 1099 seconds are the suite itself** — setup is 48. There
   is nothing to shave there. Make it run less, or shard it across harness lanes. Never micro-optimise
   the install.
