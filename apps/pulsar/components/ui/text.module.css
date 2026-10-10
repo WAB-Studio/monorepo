@@ -54,6 +54,17 @@
   color: var(--pulsar-muted);
 }
 
+/* A plain line in the main text colour at the body-line size (15 / 1.6). */
+.line.line {
+  font-family: var(--font-sans);
+  font-size: var(--pulsar-text-line-size);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  line-height: var(--pulsar-text-line-leading);
+  color: var(--pulsar-ink);
+}
+
 .ink.ink {
   color: var(--pulsar-ink);
 }

@@ -31,6 +31,7 @@
     "reopen": "Reabrir",
     "reviewLink": "Ver por semana",
     "monthsLink": "Ver por mes",
+    "monthTasks": "{done} de {total} {total, plural, one {tarea hecha} other {tareas hechas}}",
     "monthNoPlan": "sin monto planeado",
     "monthInLieu": "en lugar del ritmo",
     "monthPlanLink": "Planear {month}",

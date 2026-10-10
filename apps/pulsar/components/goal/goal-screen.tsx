@@ -264,6 +264,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             )}
           </>
         ) : null}
+        {measuresOther && planItems.length > 0 ? (
+          <Text as="p" variant="line">
+            {t("goal.detail.monthTasks", { done: planDone, total: planItems.length })}
+          </Text>
+        ) : null}
         {planned === null && !archived && !ended ? (
           <Button asChild variant="outline">
             <Link href={planHrefFrom(goal.id, today.slice(0, 7), `/metas/${goal.id}`)}>
