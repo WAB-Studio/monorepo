@@ -23,7 +23,7 @@ import exportMessages from "../messages/es/export.json";
 // printed and the month's tasks, measured by `pdfinfo`
 // (spaced sections and the months printed alone keep a section from running across pages).
 // Measured with `page.pdf({ preferCSSPageSize: true })`: the sheet is the app's own `@page`, never the test's.
-const A4_PAGES = 4;
+const A4_PAGES = 5;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {

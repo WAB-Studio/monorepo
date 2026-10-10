@@ -79,6 +79,7 @@
   display: block;
   margin-block-start: 3px;
   font-size: var(--pulsar-text-meta-size);
+  white-space: normal;
   color: var(--pulsar-quiet);
 }
 
@@ -106,7 +107,8 @@
   min-inline-size: 0;
 }
 
-.narrow .detail {
+.narrow .detail,
+.stackInCard .detail {
   white-space: normal;
 }
 

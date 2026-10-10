@@ -27,14 +27,15 @@
   "monthsCaption": "{count, plural, one {# mes} other {# meses}}",
   "monthsCaptionDeclared": "{count, plural, one {# mes} other {# meses}} · solo lo dicho",
   "columns": {
-    "month": "mes",
+    "month": "por mes",
     "week": "semana",
     "done": "hecho",
+    "planned": "planeado",
     "status": "estado"
   },
+  "owes": "falta {owes}",
   "of": "de {planned}",
   "fromMonth": "de {month}",
-  "owes": "falta {owes}",
   "carriedTo": "{percent} % pasó a {month}",
   "planned": "planeado",
   "current": "en curso",
