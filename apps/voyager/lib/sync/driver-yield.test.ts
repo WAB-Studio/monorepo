@@ -37,6 +37,7 @@ const wireRows = (count: number, from: number) =>
     deviceId: OTHER, localId: from + i, at: 1_700_000_000_000, text: "cat", normalised: "cat", kind: "word",
     outcome: "exact", headword: "cat", rule: null, senses: 1, translation: null, dictionaryReady: true,
     origin: "device", recordSchema: 1, receivedAt: "2026-10-08T10:00:00.000Z",
+    definition: null, exampleEn: null, exampleEs: null,
   }));
 
 let responses: { rows: unknown[]; cursor: string | null }[] = [];
