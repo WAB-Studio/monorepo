@@ -177,6 +177,7 @@
       "otherReader": "Las búsquedas de antes se quedan en este dispositivo. A tu cuenta sólo va lo que busques desde ahora.",
       "failedOfflineTitle": "La copia no salió",
       "failedOffline": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
+      "offlineNoCopy": "Sin conexión. Tus palabras siguen en este dispositivo.",
       "failedQuotaTitle": "Hoy ya no se copia más",
       "failedQuotaBody": "Copiaste el máximo de hoy. Sigue sola a las {time}; tus palabras siguen en este dispositivo.",
       "failedServer": "Falló de nuestro lado. Tus palabras siguen en este dispositivo."
