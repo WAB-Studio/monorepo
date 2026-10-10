@@ -220,7 +220,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 - [ ] **RL-08** — A sentence is translated by the device's own translator when the browser offers one and it is ready. Whether it does is asked of the browser at runtime, on every open, and never inferred from the browser's name or version.
 - [x] **RL-09** — When the device offers no translator, the sentence is translated over the network, and the answer says the translation came from the network. *This is a server surface and the sentence path's own exception to "no backend": one route handler that holds the provider's identity and any key it needs off the client and makes the provider a one-file change. Nothing on the word path passes through it, ever.*
-- [ ] **RL-60** *(successor of RL-53)* — A sentence is translated over the network by the paid model the word routes use,
+- [x] **RL-60** *(successor of RL-53)* — A sentence is translated over the network by the paid model the word routes use,
   each call counted against the shared daily cap; the model replies with the translation alone, and an empty reply or an
   echo of what was typed is refused. At the cap, with no key, or when the model fails, the provider's public memory
   answers as before, and the answer says network either way. That fallback keeps RL-53's reading: when the provider's
@@ -241,8 +241,8 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 #### The shell
 
-- [ ] **RL-16** — The app opens with no connection and shows its box, and it can be launched from the phone's home screen without a browser around it. This holds from the second time it is opened onwards: the first open needs the network to deliver the app itself.
-- [ ] **RL-61** — With no connection, everything the reader's record points at opens from the device
+- [x] **RL-16** — The app opens with no connection and shows its box, and it can be launched from the phone's home screen without a browser around it. This holds from the second time it is opened onwards: the first open needs the network to deliver the app itself.
+- [x] **RL-61** — With no connection, everything the reader's record points at opens from the device
   once the app has been opened a second time: «Información» on `/cuenta` as well as its account tab, and any
   row of `/registro` on its word's page, including a word the reader never opened online. The page shows
   what the device saved for that word. A word that is not in the record says so, in the same page; no
@@ -275,7 +275,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-25** — The reader sees the list of devices that have copied to their account: which one is
   in their hand, when each was last seen, and how many searches it has copied. They can retire any of
   them, their own included.
-- [ ] **RL-52** *(successor of RL-30)* — With an account open on the device, nothing leaves it until the reader
+- [x] **RL-52** *(successor of RL-30)* — With an account open on the device, nothing leaves it until the reader
   confirms the copy to that account, by its address, with one tap. From then on it sends up what this device already
   had and brings down what the others recorded, with no further act. When the device last copied for another reader, it sends up only what is searched after this
   confirmation; the earlier rows stay on the device and never reach this account. Signing out stops it. A device the reader
@@ -308,17 +308,17 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-46** — A sentence answered by translation also names the terms in it that are not obvious
   and says what they are. The app picks which terms earn a note; a note on every word is RL-31's
   answer, not this one.
-- [ ] **RL-56** *(successor of RL-32)* — The reader reads their record grouped by the headword each search
+- [x] **RL-56** *(successor of RL-32)* — The reader reads their record grouped by the headword each search
   reached: one row per headword — the lemma when an inflected form was typed, the typed string when no headword was
   reached — with the forms searched under it and how many times, ordered by frequency, case-insensitive; tapping a row
   opens every search of every form with its date. Decided by the user 2026-10-08.
-- [ ] **RL-59** *(successor of RL-57)* — A function word typed alone, and a sentence the app cannot translate, lead
+- [x] **RL-59** *(successor of RL-57)* — A function word typed alone, and a sentence the app cannot translate, lead
   with the translation of a hand-written table of about a hundred words, each with its common sense: `it` reads
   «eso, lo», not «tecnología de la información». The dictionary's own answer sits underneath, folded behind one
   control the reader taps open; a table word the dictionary has no entry for shows its table line alone, with no
   control and no suggestions. Case and surrounding spaces do not matter. It answers from the device, so it holds
   with no network at all. A word the table lacks answers as before. Decided by the user 2026-10-09.
-- [ ] **RL-58** *(successor of RL-47)* — The form the reader typed leads the answer with its own translation and one
+- [x] **RL-58** *(successor of RL-47)* — The form the reader typed leads the answer with its own translation and one
   example sentence, resolved over the network when the dictionary has no row for the form itself. The headword it
   inflects from sits named as such, with its own sense groups, **right under the form's first group**, not at the end:
   `left` answers its own first group and the `leave` block follows it. An exact entry the reader typed on purpose still

@@ -1163,3 +1163,12 @@ Taken by the user the same night («todo lo que recomendaste»).
 - **The rhythm runs from 1 min to 744 h a month** (orchestrator, 689), and its error says so in hours.
 - **No boards drawn for 686–689 before the code:** the user chose to review every app at the end. The canvas gets the built
   screens at slice close.
+
+### The canvas at slice close, 2026-10-09
+
+- **Version 95 carries the built Part 2 as real captures** of `integracion` c021347b: the eleven approved boards, plus
+  `ImportarRitmoHoja`, `RitmoTope`, `ImportarCifraSinTiempo` (686, 689), `MetaMesEnLugarDelRitmo` (687) and `PlanMesTareas` (688).
+- `PermisoPalabras`, `FuenteCaidaPalabras`, `ImportarRevisarRitmo` and `ConexionesCreadaDesktop` are in «Archivo».
+- **`ConexionesDesktopConector` is the capture, not the drawing:** after a key is created there is no Claude Desktop section.
+- **Boards still drawn though built:** `HoyTareaMesSinPlan` (656), `HoySueltaMoverArrastrada` (654), `ConexionesVencidaSinUsar`
+  (657), `ImportarErrorLinea` (659). Their captures are owed.

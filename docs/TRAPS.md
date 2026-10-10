@@ -3039,3 +3039,24 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Surface it: `worker.onerror` in `use-dictionary.ts` sets the failed state, so offline `/` says «No se pudo
   instalar el diccionario» and not «Instalando…» forever.
 - Measured 2026-10-09, module 691: `sin-red-una-visita.spec.ts` 10/10 green with the three changes, red with any one removed.
+
+## A pulsar spec named `*caida.spec.ts` never runs in the mobile project
+
+- `apps/pulsar/playwright.config.ts` makes `mobile` ignore `(caida|fuente-caida|importar-modelo)\.spec\.ts`, unanchored, so
+  any new file ending in `caida.spec.ts` is ignored there too. It runs only if the `caida` or `fuente-caida` project
+  matches it; otherwise Playwright says «No tests found» and the module looks covered.
+- Measured 2026-10-09, cierre parte 2. Name a new spec something else, or add it to a project by name.
+
+## A lane's `npm run build` outside `supabase-local.sh exec` bakes the remote Supabase URL
+
+- `NEXT_PUBLIC_SUPABASE_URL` is inlined at build time. A production build of a lane run without
+  `scripts/supabase-local.sh exec` carries the remote project's URL while the harness mints sessions on the local stack,
+  so every sign-in fails with `otp_expired`.
+- Measured 2026-10-09, the voyager offline modules. Build and start inside `scripts/supabase-local.sh exec`.
+
+## `indexedDB.open("reading-dictionary")` in a voyager spec breaks the dictionary
+
+- Opening the database unconditionally creates it empty at version 1. The dictionary Worker then sees the version it
+  expects already present, never runs its upgrade, and never builds its stores: the box answers nothing.
+- Measured 2026-10-09, the voyager offline modules. Check `indexedDB.databases()` first and open only a database that
+  exists.
