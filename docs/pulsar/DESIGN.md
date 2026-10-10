@@ -1138,6 +1138,20 @@ module; until it lands, the screen and its approved board stay as built.
   chips ending in «sin día»; RP-61 moves a one-off «to any day from today on», so the chip stays out and the step offers
   «hoy», «mañana», «otro día». A one-off on today opens on «mañana»; a carried one opens on «hoy».
 
+## Decisions of 2026-10-10, after the train-4 critic
+
+Taken by the user the same evening, on the critic's four questions.
+
+- **(1) The months a paper leaves out always carry their year:** «diciembre de 2026, enero de 2027 y febrero de 2027: sin
+  monto». No ranges, no count. RP-71 already says every printed date carries its year; the line now obeys it.
+- **(2) A goal's «por mes» label, its table and its months-left-out line stay together on paper.** A blank at the foot of a
+  page is the accepted cost; a table longer than a page still breaks.
+- **(3) The import accepts the goal's unit on every line that carries an amount, and shows every error at once.** A
+  commitment written «8 km» under a km goal passes like a month; under a goal in another unit the message names the unit
+  that goes. One reading lists all the template's errors, not the first. Board before code.
+- **(4) A goal with no measure prints its months on paper:** a «por mes» table of its tasks, done and to do. RP-71 already
+  promises «its months» for every goal. Board before code.
+
 ## Decisions of 2026-10-10, after the part-3 critic
 
 Taken by the user («1. b 2. b 3. b 4. a»); questions 2 and 3 are voyager's.
