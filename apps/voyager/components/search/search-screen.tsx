@@ -511,6 +511,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const unlistedPayload = useMemo<LogPayload | null>(() => {
     if (networkWord === null || unlistedTranslation === null) return null;
     if (!logPayload || logPayload.kind !== "word" || logPayload.outcome !== "miss") return null;
+    // A network answer for an earlier word never labels the word now on screen.
+    if (logPayload.normalised !== networkWord) return null;
     return {
       ...logPayload,
       outcome: "unlisted",
@@ -522,11 +524,14 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     };
   }, [logPayload, networkWord, unlistedTranslation]);
   const recordable = unlistedPayload ?? logPayload;
+  // The same payload object re-running the effect must not record the lookup twice.
+  const recordedRef = useRef<LogPayload | null>(null);
 
   // The call site the log's fields are true to: an effect fires after React
   // has already committed the answer, never inside the path that produced it.
   useEffect(() => {
-    if (!recordable) return;
+    if (!recordable || recordable === recordedRef.current) return;
+    recordedRef.current = recordable;
     // Conditioned on both the flag and the text, so a restore can never
     // swallow the next genuine lookup, whatever order the two arrive in.
     if (restoringRef.current && recordable.text === lastLoggedText) {
