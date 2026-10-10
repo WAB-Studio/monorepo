@@ -270,7 +270,20 @@ test("a goal measured in «páginas» reads its plain number on the goal and in 
     `;
 
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText(`750 ${unit}`, { exact: true })).toBeVisible();
+    // The goal's total sits right above «en total, desde…»; the month block below carries its own 750.
+    const total = page
+      .locator("p", { hasText: /^en total, desde el / })
+      .locator("visible=true")
+      .locator("xpath=preceding-sibling::*[1]");
+    await expect(total).toHaveCount(1);
+    await expect(total).toHaveText(`750 ${unit}`);
+    // The month block beside «sin monto planeado» names the unit too, as the total does.
+    const monthFigure = page
+      .getByText("sin monto planeado")
+      .locator("visible=true")
+      .locator("xpath=./*[1]");
+    await expect(monthFigure).toHaveCount(1);
+    await expect(monthFigure).toHaveJSProperty("textContent", `750\u00a0${unit}`);
     await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
     await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
 
