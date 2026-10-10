@@ -27,24 +27,16 @@ export type SyncOutcome =
   | { kind: "failed"; cause: SyncFailure };
 
 // The row's own device, not this one's: it already crossed the wire once.
+// Every other wire field passes through, so a new one needs no edit here.
 function toForeignRow(row: SyncResponse["rows"][number]): ForeignRow {
-  return {
-    schema: row.recordSchema,
-    at: row.at,
-    text: row.text,
-    normalised: row.normalised,
-    kind: row.kind,
-    outcome: row.outcome,
-    headword: row.headword,
-    rule: row.rule,
-    senses: row.senses,
-    translation: row.translation,
-    dictionaryReady: row.dictionaryReady,
-    origin: row.origin,
-    device: row.deviceId,
-    deviceSeq: row.localId,
-  };
+  const { deviceId, localId, recordSchema, receivedAt, ...rest } = row;
+  void receivedAt;
+  return { ...rest, schema: recordSchema, device: deviceId, deviceSeq: localId };
 }
+
+// Hands the main thread back so a search typed meanwhile runs between the
+// parse and the merge, not after them.
+const yieldToLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 // `deviceId` travels on every round, `rows` empty or not: a pull-only round
 // still has to seal this device's own row in `reading.devices` (module 31,
@@ -96,6 +88,7 @@ async function runSync(): Promise<SyncOutcome> {
 
       // The merge is awaited in full before either cursor moves: a batch
       // that only half lands must be read again next time, not skipped.
+      await yieldToLoop();
       pulled += await mergeForeign(response.rows.map(toForeignRow));
 
       // The upload cursor follows what was scanned, not what was sent: a page
@@ -104,6 +97,7 @@ async function runSync(): Promise<SyncOutcome> {
       pushed += rows.length;
       pulledThroughCursor = response.cursor;
       await writeSyncState({ pushedThroughLocalId, pulledThroughCursor, lastSyncedAt: Date.now() });
+      await yieldToLoop();
 
       // Stop only once neither side has a next page waiting: a short scanned
       // page alone no longer ends the call, or a large foreign backlog would
