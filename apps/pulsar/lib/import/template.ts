@@ -1,4 +1,4 @@
-import { isTimeUnit, parseTime } from "@/lib/units/time";
+import { isTimeUnit, parseTime, storedMeasure } from "@/lib/units/time";
 
 import { importDraftSchema, type ImportDraft } from "./draft";
 
@@ -144,7 +144,7 @@ export function parseTemplate(text: string): TemplateResult {
       }
       const measure = /^medida: (.+?) · (.+)$/.exec(line);
       if (measure) {
-        goal.measure = { name: measure[1].trim(), unit: measure[2].trim() };
+        goal.measure = { name: measure[1].trim(), unit: storedMeasure(measure[2].trim(), null).unit };
         spots.set(`${at}.measure`, { line: n, expected: FORMS.measure });
         afterMeasure = true;
         continue;

@@ -209,6 +209,9 @@ async function confirmed(draft: Draft) {
   return { goalIds: result.goalIds, statements };
 }
 
+// Per run, so a count sees this run's rows only and an orphan of a red run cannot fail the next.
+const RUN = Date.now().toString(36);
+
 async function countGoals(name: string): Promise<number> {
   const [{ count }] = await sql<{ count: number }[]>`
     select count(*)::int as count from goals.goals where user_id = ${personId} and name = ${name}`;
@@ -318,30 +321,30 @@ test("confirmImport: a four-goal draft pays the same number of statements as the
 });
 
 test("confirmImport: a month outside the goal's span is refused with its key and path, and writes nothing", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: fuera de plazo").replace(`- ${M1} · 20 h`, `- ${M14} · 20 h`));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# RP-37 fixture: fuera de plazo ${RUN}`).replace(`- ${M1} · 20 h`, `- ${M14} · 20 h`));
   const result = await confirmImport(draft);
   assert.deepEqual(result, { ok: false, error: "import.errors.monthAfterEnd", at: "goals.0.months.1" });
-  assert.equal(await countGoals("RP-37 fixture: fuera de plazo"), 0);
+  assert.equal(await countGoals(`RP-37 fixture: fuera de plazo ${RUN}`), 0);
 });
 
 test("confirmImport: a goal whose end already passed is refused whole", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: pasada").replace(`${M12}-01`, TODAY));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# RP-37 fixture: pasada ${RUN}`).replace(`${M12}-01`, TODAY));
   const result = await confirmImport(draft);
   assert.deepEqual(result, { ok: false, error: "import.errors.horizonPast", at: "goals.0.horizon" });
-  assert.equal(await countGoals("RP-37 fixture: pasada"), 0);
+  assert.equal(await countGoals(`RP-37 fixture: pasada ${RUN}`), 0);
 });
 
 test("confirmImport: a draft with an extra unknown field is refused by the schema", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: campo extra"));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# RP-37 fixture: campo extra ${RUN}`));
   const forged = { goals: [{ ...draft.goals[0], admin: true }] };
   const result = await confirmImport(forged);
   assert.deepEqual(result, { ok: false, error: "import.errors.draftInvalid", at: "goals.0" });
-  assert.equal(await countGoals("RP-37 fixture: campo extra"), 0);
+  assert.equal(await countGoals(`RP-37 fixture: campo extra ${RUN}`), 0);
   assert.deepEqual(await confirmImport({ goals: [] }), { ok: false, error: "import.errors.empty", at: "goals" });
 });
 
 test("confirmImport: a parent task with its own estimate is refused at the parent and writes nothing", async () => {
-  const name = "RP-37 fixture: padre con monto";
+  const name = `RP-37 fixture: padre con monto ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0].tasks[1] = { ...draft.goals[0].tasks[1], estimate: 30 };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.parentWithAmount", at: "goals.0.tasks.1" });
@@ -349,7 +352,7 @@ test("confirmImport: a parent task with its own estimate is refused at the paren
 });
 
 test("confirmImport: a forged draft with an estimate on a goal with no measure is refused whole and writes nothing", async () => {
-  const name = "RP-37 fixture: estimado sin medida";
+  const name = `RP-37 fixture: estimado sin medida ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   const [first] = draft.goals;
   draft.goals[0] = {
@@ -363,7 +366,7 @@ test("confirmImport: a forged draft with an estimate on a goal with no measure i
 });
 
 test("confirmImport: a tap commitment with a target is refused at the commitment and writes nothing", async () => {
-  const name = "RP-37 fixture: toque con monto";
+  const name = `RP-37 fixture: toque con monto ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], targetQuantity: 5, unit: "minutos" };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.tapWithAmount", at: "goals.0.commitments.1" });
@@ -371,7 +374,7 @@ test("confirmImport: a tap commitment with a target is refused at the commitment
 });
 
 test("confirmImport: a commitment the table refuses leaves no goal behind", async () => {
-  const name = "RP-37 fixture: atómica";
+  const name = `RP-37 fixture: atómica ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   // A daily commitment with a count passes the form's schema and meets
   // `commitments_n_for_counted_kinds` at the commitments insert, after the goals.
@@ -442,7 +445,7 @@ test("confirmImport: without ritmo: the rhythm and plan_seen stay null", async (
 });
 
 test("confirmImport: a rhythm on a measure that is not time is refused with its key and writes nothing", async () => {
-  const name = "RP-63 fixture: ritmo en km";
+  const name = `RP-63 fixture: ritmo en km ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0] = { ...draft.goals[0], rhythm: 720, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "roadmap.errors.rhythmNotTime", at: "goals.0.rhythm" });
@@ -458,4 +461,98 @@ test("confirmImport: four goals with a rhythm pay the statements of one", async 
   const [{ armed }] = await sql<{ armed: number }[]>`
     select count(*)::int as armed from goals.goals where id in ${sql(ids)} and rhythm = 720 and plan_seen is not null`;
   assert.equal(armed, 4);
+});
+
+// RP-67: with a rhythm the tasks go into the plan and their month only orders them.
+function withRhythm(text: string, name: string): string {
+  return text
+    .replace("# IA aplicada", `# ${name}`)
+    .replace("medida: horas de estudio · minutos", "medida: horas de estudio · minutos\nritmo: 12 h");
+}
+
+test("confirmImport: the example with a rhythm puts its parents in the plan, with no month", async () => {
+  const { goalIds: [goalId] } = await confirmed(draftOf(withRhythm(EXAMPLE, "RP-67 fixture: ritmo en el plan")));
+  const parents = await sql`
+    select name, planned_month::text as planned_month, in_plan from goals.one_offs
+    where goal_id = ${goalId} and parent_id is null order by name`;
+  assert.deepEqual(parents.map((p) => ({ ...p })), [
+    { name: "Leer AI Engineering cap. 1–4", planned_month: null, in_plan: true },
+    { name: "Tutor", planned_month: null, in_plan: true },
+  ]);
+  const children = await sql`select in_plan from goals.one_offs where goal_id = ${goalId} and parent_id is not null`;
+  assert.equal(children.length, 2);
+  assert.ok(children.every((c) => c.in_plan));
+});
+
+test("confirmImport: with a rhythm a task written for a later month ends after an earlier one in position", async () => {
+  const text = withRhythm(EXAMPLE, "RP-67 fixture: orden por mes").replace(
+    `## Tareas\n- ${M0} · 4 h · Leer AI Engineering cap. 1–4\n- ${M0} · Tutor`,
+    `## Tareas\n- ${M1} · 2 h · Tarde\n- ${M0} · 4 h · Temprano\n- ${M1} · 1 h · Tarde segunda\n- ${M0} · Tutor`,
+  );
+  const { goalIds: [goalId] } = await confirmed(draftOf(text));
+  const rows = await sql<{ name: string }[]>`
+    select name from goals.one_offs where goal_id = ${goalId} and parent_id is null order by position`;
+  assert.deepEqual(rows.map((r) => r.name), ["Temprano", "Tutor", "Tarde", "Tarde segunda"]);
+  const kids = await sql<{ name: string }[]>`
+    select c.name from goals.one_offs c join goals.one_offs p on p.id = c.parent_id
+    where c.goal_id = ${goalId} order by p.position, c.position`;
+  assert.deepEqual(kids.map((k) => k.name), ["Elegir tutor", "Sesiones 1–4"]);
+});
+
+test("confirmImport: the plan spreads the imported goal from the current month", async () => {
+  const { goalIds: [goalId] } = await confirmed(draftOf(withRhythm(EXAMPLE, "RP-67 fixture: el plan reparte")));
+  const { loadGoal } = await import("@/lib/queries/goal");
+  const view = await loadGoal(goalId, TODAY);
+  assert.ok(view);
+  assert.equal(view.roadmap.state, "planned");
+  const [first] = view.roadmap.months;
+  assert.equal(first.month, `${M0}-01`);
+  assert.ok(first.items.length > 0);
+});
+
+test("confirmImport: without a rhythm the parents keep the month they were written with", async () => {
+  const { goalIds: [goalId] } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", "# RP-67 fixture: mes fijo")));
+  const parents = await sql`
+    select planned_month::text as planned_month, in_plan from goals.one_offs where goal_id = ${goalId} and parent_id is null`;
+  assert.ok(parents.length > 0 && parents.every((p) => p.planned_month === `${M0}-01` && p.in_plan));
+});
+
+test("confirmImport: a draft measured in hours arrives in minutes", async () => {
+  const name = "RP-65 fixture: horas";
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  const [first] = draft.goals;
+  draft.goals[0] = {
+    ...first,
+    measure: { name: "estudio", unit: "horas" },
+    months: [{ month: M0, amount: 12 }],
+    commitments: [],
+    tasks: [{ name: "Leer", month: M0, estimate: 3, children: [] }],
+  };
+  const { goalIds: [goalId] } = await confirmed(draft);
+  const [goal] = await sql`select measure_unit from goals.goals where id = ${goalId}`;
+  assert.equal(goal.measure_unit, "minutos");
+  const [month] = await sql`select amount from goals.month_budgets where goal_id = ${goalId}`;
+  assert.equal(month.amount, 720);
+  const [task] = await sql`select estimate from goals.one_offs where goal_id = ${goalId}`;
+  assert.equal(task.estimate, 180);
+});
+
+test("confirmImport: a forged figure in a goal not measured in time is refused whole and writes nothing", async () => {
+  const name = `RP-66 fixture: cifra en km ${RUN}`;
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
+  const [first] = draft.goals;
+  draft.goals[0] = {
+    ...first,
+    measure: { name: "distancia", unit: "km" },
+    months: [],
+    commitments: [],
+    tasks: [{ name: "Correr", month: M0, estimate: 5, children: [] }],
+  };
+  assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.estimateNotTime", at: "goals.0.tasks.0" });
+  assert.equal(await countGoals(name), 0);
+});
+
+test("confirmImport: a rhythm does not raise the statements", async () => {
+  const { statements } = await confirmed(draftOf(withRhythm(EXAMPLE, "RP-67 fixture: sentencias")));
+  assert.equal(statements, measured.one);
 });

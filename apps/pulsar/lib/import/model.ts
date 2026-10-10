@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 // variable of `@/lib/env`, which refuses to read it in a client bundle.
 import { env } from "@/lib/env";
 
-import { importDraftJsonSchema, importDraftSchema, type ImportDraft } from "./draft";
+import { importDraftJsonSchema, importDraftSchema, inMinutes, type ImportDraft } from "./draft";
 import { modelStub, type ModelStub } from "./model-seam";
 
 export const MODEL_NAME = "gpt-5-mini";
@@ -109,7 +109,7 @@ function judge(content: unknown, usage: Usage | undefined): PlanReading {
   if (Array.isArray(goals) && goals.length === 0) return { status: "empty", usage };
   const result = importDraftSchema.safeParse(parsed);
   if (!result.success) return { status: "invalid", usage };
-  return { status: "ok", draft: result.data, usage: usage ?? { input: 0, output: 0 } };
+  return { status: "ok", draft: inMinutes(result.data), usage: usage ?? { input: 0, output: 0 } };
 }
 
 async function answerFromStub(stub: ModelStub): Promise<PlanReading> {
