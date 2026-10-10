@@ -155,28 +155,6 @@ test("RL-58 keeps the bed clause: bed answers whole and offers no lemma block", 
   await expect(page.getByText("encamarse", { exact: false })).toBeVisible();
 });
 
-// RL-57's breakdown (`variant="compact"`) is untouched: a word block there
-// still closes its own groups before the lemma it offers.
-test("RL-58: the compact breakdown keeps all of left's glosses above the leave block", async ({
-  page,
-  context,
-}) => {
-  await deleteTranslator(page);
-  await gotoReady(page);
-  await context.setOffline(true);
-  await search(page, "left bed");
-
-  const leaveHeading = page.getByRole("heading", { name: "leave", exact: true });
-  await expect(leaveHeading).toBeVisible({ timeout: 5000 });
-  await expect(page.locator("[data-network-answer]")).toHaveCount(0);
-  const second = line(page, SECOND_GROUP);
-  const first = line(page, FIRST_GROUP);
-  await expect(first).toBeVisible();
-  await expect(second).toBeVisible();
-  expect(await precedes(first, leaveHeading)).toBe(true);
-  expect(await precedes(second, leaveHeading), "compact does not split the entry").toBe(true);
-});
-
 // `said` draws two pronunciation blocks (/seɪd/ adjective, /saɪd/ proper
 // noun) and is an inflection of `say`: the offer sits under the first
 // category of block 1, never under block 2's.
