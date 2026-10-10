@@ -6,6 +6,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
   goalSections,
+  printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
@@ -389,6 +390,7 @@ function GoalPart({
             detail: started ? status : undefined,
             phoneFigure: started ? month.reached : null,
             note: phoneNote,
+            printed: printsOnPaper(month),
           };
         });
         const current = goal.months.findIndex((m) => m.current);

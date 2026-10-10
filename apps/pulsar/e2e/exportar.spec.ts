@@ -23,6 +23,7 @@ import exportMessages from "../messages/es/export.json";
 // printed and the month's tasks, measured by `pdfinfo`
 // (spaced sections and the months printed alone keep a section from running across pages).
 // Measured with `page.pdf({ preferCSSPageSize: true })`: the sheet is the app's own `@page`, never the test's.
+// Remeasured after RP-70 (empty future months off paper): `pdfinfo` still reads 5 pages for the seeded report.
 const A4_PAGES = 5;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
@@ -878,7 +879,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
     }
   });
 
-  test("RP-49 on paper loses nothing: every goal and every month row the screen shows is in the PDF, in its goal", async ({
+  test("RP-49 on paper loses nothing: every goal and every month row the screen shows, but the empty future ones (RP-70), is in the PDF, in its goal", async ({
     person,
     browser,
     baseURL,
@@ -913,7 +914,16 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
           (label) => /^[a-zñ]+ \d{4}/.exec(label.trim())![0],
         );
         expect(labels.length, `${name}: months on screen`).toBeGreaterThanOrEqual(4);
-        onScreen.push(labels);
+        // RP-70: a month with no state and no planned amount is on screen only.
+        const rows = table.locator("tbody tr");
+        const kept: string[] = [];
+        for (const [row, month] of labels.entries()) {
+          const cells = rows.nth(row).locator("td");
+          const state = (await cells.nth(0).innerText()).trim().replace(/^[a-zñ]+ \d{4}/, "").trim();
+          const planned = (await cells.nth(2).innerText()).trim();
+          if (state !== "" || planned !== "") kept.push(month);
+        }
+        onScreen.push(kept);
       }
 
       await page.emulateMedia({ media: "print" });
