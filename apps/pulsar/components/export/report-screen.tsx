@@ -424,7 +424,7 @@ function GoalPart({
         });
         const out = goal.months.filter((m) => !printsOnPaper(m));
         const outNames = format.list(
-          out.map((m) => monthOnly.format(civilDateToDate(m.month))),
+          out.map((m) => monthYear.format(civilDateToDate(m.month))),
           { type: "conjunction" },
         );
         const current = goal.months.findIndex((m) => m.current);
@@ -521,7 +521,7 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        <PrintBlock key={section} span={spans(section)}>
+        <PrintBlock key={section} span={spans(section)} whole={section === "months"}>
           {render(section)}
         </PrintBlock>
       ))}

@@ -86,6 +86,10 @@
     break-after: avoid;
   }
 
+  .whole {
+    break-inside: avoid;
+  }
+
   .only {
     display: block;
   }
