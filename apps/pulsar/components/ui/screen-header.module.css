@@ -64,6 +64,10 @@
   margin-block-end: 6px;
 }
 
+.eyebrowFill {
+  inline-size: 100%;
+}
+
 .eyebrowLink {
   color: var(--pulsar-accent);
   font-size: var(--pulsar-text-line-size);

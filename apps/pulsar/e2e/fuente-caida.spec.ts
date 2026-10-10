@@ -63,7 +63,7 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
       (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
     values (
       ${person.id}, ${goal.id}, ${evidenceName}, 'daily', 'evidence',
-      (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
+      (select id from goals.evidence_sources where key = 'reading_lookups'), 3,
       now() - interval '20 days'
     )
   `;
@@ -94,11 +94,15 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       await expect(page.getByText(FAILURE)).toHaveCount(0);
 
       // The unreadable source still lets the row say what it asks (RP-08), and
-      // never names a source it could not read.
-      const evidence = page.locator("button", { hasText: seeded.evidenceName });
-      const meta = (await evidence.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
-      expect(meta).toBe("sin leer la fuente");
-      expect(meta).not.toContain("búsqueda");
+      // never names a source it could not read. Literals on purpose.
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 844 });
+        const evidence = page.locator("button", { hasText: seeded.evidenceName }).locator("visible=true");
+        const meta = (await evidence.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
+        expect(meta, `at ${width}`).toBe("sin leer la fuente · pide 3 búsquedas");
+        expect(meta).not.toMatch(/diccionario|lectura|Reading/i);
+        await expect(evidence.locator("[data-state]")).not.toHaveAttribute("data-state", "evidence");
+      }
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -228,6 +232,16 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
         await settle(page, content);
         await expect(page.getByText(NOTE_TITLE)).toHaveCount(0);
         await expect(page.getByText(FAILURE)).toHaveCount(0);
+        if (path === "/") {
+          // Source read: the same figure, with no «sin leer».
+          for (const width of [390, 1440]) {
+            await page.setViewportSize({ width, height: 844 });
+            const row = page.locator("button", { hasText: seeded.evidenceName }).locator("visible=true");
+            const meta = (await row.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
+            expect(meta, `at ${width}`).toContain("3 búsquedas");
+            expect(meta).not.toContain("sin leer");
+          }
+        }
       }
     } finally {
       await seamContext.close();
