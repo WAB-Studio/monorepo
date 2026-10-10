@@ -188,6 +188,10 @@ test("the nav reaches /registro, which counts what was searched and exports it",
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("apple");
+  // A lookup is recorded only once its answer has settled: clearing the box
+  // earlier supersedes the query before it resolves, and nothing is logged.
+  // Under load the answer lands tens of milliseconds after the next fill.
+  await expect(page.getByRole("heading", { name: "apple" })).toBeVisible();
   await searchBox.fill("");
   await page.waitForTimeout(300);
 
