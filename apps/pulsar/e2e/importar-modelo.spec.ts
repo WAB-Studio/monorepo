@@ -32,6 +32,21 @@ test.describe("the import screen against a stubbed model (RP-37, RNP-13)", () =>
     }
   });
 
+  test("a model draft whose days come out of order is reviewed Monday first with «y» before the last", async ({ person, browser, baseURL }) => {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/metas/importar");
+      await page.getByLabel(messages.textLabel).fill(PROSE);
+      await page.getByRole("button", { name: "Leer el plan" }).click();
+      await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
+
+      await expect(page.getByRole("checkbox", { name: /Tema técnico/ })).toHaveAccessibleName(/Tema técnico lunes, miércoles y domingo/);
+    } finally {
+      await context.close();
+    }
+  });
+
   test("with ten reads today the cap notice shows, the upload is shut and nothing more is claimed", async ({
     person,
     browser,
