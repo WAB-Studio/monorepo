@@ -94,8 +94,9 @@ test("a goal with no measure at 1280: its month sits in a card and «Ver por mes
   const { context, page } = await open(browser, person.sessionFile, 1280, 900);
   try {
     await page.goto(`/metas/${goalId}`);
-    const line = page.getByText(/\b1 tarea/).first();
-    await expect(line).toBeVisible();
+    // The count carries a no-break space, so «1» never strands from «tarea» at a line end.
+    const line = page.getByText(/^1\u00a0tarea\b/).locator("visible=true");
+    await expect(line).toHaveCount(1);
     const inCard = await line.evaluate((el) => {
       for (let node: Element | null = el; node; node = node.parentElement) {
         if (getComputedStyle(node).borderTopWidth !== "0px" && getComputedStyle(node).borderRadius === "14px") return true;

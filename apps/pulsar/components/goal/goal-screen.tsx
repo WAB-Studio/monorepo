@@ -140,9 +140,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   // `MetaMes*.dc.html` (RP-28, RP-29): the current month's amount, drawn only
   // with a measure and a month inside the span. A time unit prints itself in
-  // hours and minutes; any other unit is already named by «mide en».
+  // hours and minutes; any other unit is named beside each figure, as the total is.
   const month = goal.month;
-  const figureUnit = isTimeUnit(goal.measureUnit) ? (goal.measureUnit ?? undefined) : undefined;
+  const figureUnit = goal.measureUnit ?? undefined;
   const monthName = (t.raw("day.monthLong") as string[])[Number(today.slice(5, 7)) - 1];
   const daysLeft = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate() - Number(today.slice(8, 10));
   const planned = month?.planned ?? null;
