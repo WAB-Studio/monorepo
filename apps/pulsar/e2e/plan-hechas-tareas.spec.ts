@@ -7,7 +7,9 @@ import { todayInZone } from "@/lib/zone";
 import { test as base, expect } from "./fixtures";
 
 // `MetaPlanHechas.dc.html` and `RoadmapMesCifras.dc.html` (RP-50,
-// RP-52, RP-28): the plan's «hechas» says it counts tasks done. The words are
+// RP-52, RP-28): the plan's «hechas» says it counts tasks done. The goal's
+// row says it in tasks, not time (`MetaRitmoTareas.dc.html`, module 676):
+// «Ritmo 12 h al mes · en octubre, 0 de 4 tareas hechas». The words are
 // the approved boards' own, quoted here as literals, never read from the
 // catalogue: a catalogue edit is what this spec exists to catch.
 
@@ -78,7 +80,7 @@ for (const width of [390, 1440]) {
   test.describe(`405 at ${width}`, () => {
     test.use({ viewport: { width, height: 900 } });
 
-    test("the current month header and the goal's row say «en tareas hechas», figures mono, words Archivo", async ({ mine: page, db, person }) => {
+    test("the current month header says «en tareas hechas»; the goal's row counts tasks, figures mono, words Archivo", async ({ mine: page, db, person }) => {
       const goalId = await seedGoal(db, person.id, 720);
       try {
         await seedTask(db, person.id, goalId, "Hecha 3", 180, true, 1);
@@ -92,9 +94,10 @@ for (const width of [390, 1440]) {
         await expect(page.getByText(/\d hechas de/)).toHaveCount(0);
 
         await page.goto(`/metas/${goalId}`);
-        const rhythm = planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 5 h de 12 h en tareas hechas`, { exact: true });
+        const rhythm = planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 2 de 3 tareas hechas`, { exact: true });
         await expect(rhythm).toBeVisible();
         await figuresMono(rhythm, 3);
+        await expect(planRow(page, goalId)).not.toContainText("en tareas hechas");
       } finally {
         await drop(db, person.id, goalId);
       }
@@ -115,20 +118,92 @@ for (const width of [390, 1440]) {
       }
     });
 
-    test("nothing done: «0 min de 12 h en tareas hechas» on the header and the row", async ({ mine: page, db, person }) => {
+    test("nothing done: the header keeps «0 min de 12 h en tareas hechas»; the row says «0 de 4 tareas hechas», never «0 min»", async ({ mine: page, db, person }) => {
       const goalId = await seedGoal(db, person.id, 720);
       try {
-        await seedTask(db, person.id, goalId, "Pendiente", 240, false, 1);
+        for (let i = 1; i <= 4; i++) await seedTask(db, person.id, goalId, `Pendiente ${i}`, 120, false, i);
         await page.goto(`/metas/${goalId}/plan`);
         await expect(current(page).getByText("0 min de 12 h en tareas hechas", { exact: true })).toBeVisible();
         await page.goto(`/metas/${goalId}`);
-        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 0 min de 12 h en tareas hechas`, { exact: true })).toBeVisible();
+        const row = planRow(page, goalId);
+        await expect(row.getByText(`Ritmo 12 h al mes · en ${monthName}, 0 de 4 tareas hechas`, { exact: true })).toBeVisible();
+        await expect(row).not.toContainText("0 min");
+        await expect(row).not.toContainText("en tareas hechas");
       } finally {
         await drop(db, person.id, goalId);
       }
     });
 
-    test("the figure counts tasks, never facts: a 2 h fact moves «lo medido» to 7 h and neither plan line", async ({ mine: page, db, person }) => {
+    test("marking one done moves the row to «1 de 4»; a task done last month is neither counted nor listed", async ({ mine: page, db, person }) => {
+      const goalId = await seedGoal(db, person.id, 720);
+      try {
+        for (let i = 1; i <= 4; i++) await seedTask(db, person.id, goalId, `Tarea ${i}`, 120, false, i);
+        const [old] = await db<{ id: string }[]>`
+          insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan)
+          values (${person.id}, ${goalId}, 'Hecha el mes pasado', 60, 0, true) returning id`;
+        await db`insert into goals.facts (user_id, goal_id, one_off_id, day)
+          values (${person.id}, ${goalId}, ${old.id}, (${m0}::date - interval '1 day')::date)`;
+        await page.goto(`/metas/${goalId}`);
+        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 0 de 4 tareas hechas`, { exact: true })).toBeVisible();
+
+        const [first] = await db<{ id: string }[]>`select id from goals.one_offs where goal_id = ${goalId} and name = 'Tarea 1'`;
+        await db`insert into goals.facts (user_id, goal_id, one_off_id, day) values (${person.id}, ${goalId}, ${first.id}, ${today}::date)`;
+        await page.goto(`/metas/${goalId}`);
+        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 1 de 4 tareas hechas`, { exact: true })).toBeVisible();
+      } finally {
+        await drop(db, person.id, goalId);
+      }
+    });
+
+    test("a task split across months counts once: two small tasks and a 30 h one, one done, read «1 de 3»", async ({ mine: page, db, person }) => {
+      const goalId = await seedGoal(db, person.id, 720);
+      try {
+        await seedTask(db, person.id, goalId, "Corta 1", 120, true, 1);
+        await seedTask(db, person.id, goalId, "Corta 2", 120, false, 2);
+        await seedTask(db, person.id, goalId, "Partida", 1800, false, 3);
+        await page.goto(`/metas/${goalId}`);
+        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 1 de 3 tareas hechas`, { exact: true })).toBeVisible();
+      } finally {
+        await drop(db, person.id, goalId);
+      }
+    });
+
+    test("no task in the month: the row says «Ritmo 12 h al mes» and nothing else", async ({ mine: page, db, person }) => {
+      const goalId = await seedGoal(db, person.id, 720);
+      try {
+        await db`insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan, planned_month)
+          values (${person.id}, ${goalId}, 'Más adelante', 120, 1, true, ${`${m1.slice(0, 7)}-01`}::date)`;
+        await page.goto(`/metas/${goalId}`);
+        const row = planRow(page, goalId);
+        await expect(row.getByText("Ritmo 12 h al mes", { exact: true })).toBeVisible();
+        await expect(row).not.toContainText("tareas");
+        await expect(row).not.toContainText(" · en ");
+      } finally {
+        await drop(db, person.id, goalId);
+      }
+    });
+
+    test("the month block keeps its own measure: «4 h 15 min de 12 h» while the row counts tasks", async ({ mine: page, db, person }) => {
+      const goalId = await seedGoal(db, person.id, 720);
+      try {
+        for (let i = 1; i <= 4; i++) await seedTask(db, person.id, goalId, `Tarea ${i}`, 120, false, i);
+        const [commitment] = await db<{ id: string }[]>`
+          insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+          values (${person.id}, ${goalId}, ${`Sesión ${Date.now()}`}, 'daily', 'quantity', 30, 'minutos', now() - interval '40 days')
+          returning id`;
+        await db`insert into goals.facts (user_id, goal_id, commitment_id, day, quantity) values (${person.id}, ${goalId}, ${commitment.id}, ${today}::date, 255)`;
+        await page.goto(`/metas/${goalId}`);
+        const block = page.locator("section").filter({ has: page.getByText(monthName, { exact: true }) }).filter({ hasText: /4 h 15 min/ });
+        await expect(block.first()).toContainText("4 h 15 min");
+        await expect(block.first()).toContainText("12 h");
+        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 0 de 4 tareas hechas`, { exact: true })).toBeVisible();
+        await expect(planRow(page, goalId)).not.toContainText("4 h 15 min");
+      } finally {
+        await drop(db, person.id, goalId);
+      }
+    });
+
+    test("the figure counts tasks, never facts: a 2 h fact moves «lo medido» to 7 h and neither the header nor the row", async ({ mine: page, db, person }) => {
       const goalId = await seedGoal(db, person.id, 720);
       try {
         await seedTask(db, person.id, goalId, "Hecha 3", 180, true, 1);
@@ -143,7 +218,7 @@ for (const width of [390, 1440]) {
         await page.goto(`/metas/${goalId}/plan`);
         await expect(current(page).getByText("5 h de 12 h en tareas hechas", { exact: true })).toBeVisible();
         await page.goto(`/metas/${goalId}`);
-        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 5 h de 12 h en tareas hechas`, { exact: true })).toBeVisible();
+        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 2 de 3 tareas hechas`, { exact: true })).toBeVisible();
         const measured = page.locator("section").filter({ has: page.getByText(monthName, { exact: true }) }).filter({ hasText: /7 h/ });
         await expect(measured.first()).toBeVisible();
         await expect(measured.first()).not.toContainText("tareas hechas");
@@ -157,7 +232,7 @@ for (const width of [390, 1440]) {
 test.describe("405 at 360", () => {
   test.use({ viewport: { width: 360, height: 800 } });
 
-  test("«12 h 30 min de 120 h en tareas hechas» fits on the header and the row", async ({ mine: page, db, person }) => {
+  test("«12 h 30 min de 120 h en tareas hechas» fits on the header and «1 de 2 tareas hechas» on the row", async ({ mine: page, db, person }) => {
     const goalId = await seedGoal(db, person.id, 7200);
     try {
       await seedTask(db, person.id, goalId, "Hecha larga", 750, true, 1);
@@ -166,7 +241,7 @@ test.describe("405 at 360", () => {
       await expect(current(page).getByText("12 h 30 min de 120 h en tareas hechas", { exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
       await page.goto(`/metas/${goalId}`);
-      await expect(planRow(page, goalId).getByText(`Ritmo 120 h al mes · en ${monthName}, 12 h 30 min de 120 h en tareas hechas`, { exact: true })).toBeVisible();
+      await expect(planRow(page, goalId).getByText(`Ritmo 120 h al mes · en ${monthName}, 1 de 2 tareas hechas`, { exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     } finally {
       await drop(db, person.id, goalId);
