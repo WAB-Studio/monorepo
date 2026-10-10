@@ -84,6 +84,7 @@ function WordHistorySkeleton() {
 
 export function WordHistory({ normalised }: { normalised: string }) {
   const t = useTranslations("log");
+  const tWord = useTranslations("word");
   const format = useFormatter();
   const router = useRouter();
   const [state, setState] = useState<ViewState>({ kind: "loading" });
@@ -202,9 +203,11 @@ export function WordHistory({ normalised }: { normalised: string }) {
   // A word the dictionary lacks and the network answered has no stored
   // gloss of its own but the latest network one; a lemma keeps the latest
   // row's.
+  const unlistedRow = isPhrase ? undefined : state.rows.find((row) => row.outcome === "unlisted");
+  const networkOnly = unlistedRow !== undefined && answer !== null && answer.exact === null && answer.viaInflection.length === 0;
   const gloss = isPhrase
     ? null
-    : (state.rows.find((row) => row.outcome === "unlisted") ?? state.rows[0]).translation;
+    : networkOnly ? null : (unlistedRow ?? state.rows[0]).translation;
   // The provider formats in the server's zone; the reader's is the browser's.
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const subtitleValues = {
@@ -259,6 +262,13 @@ export function WordHistory({ normalised }: { normalised: string }) {
         )
       ) : dictionaryStatus.state !== "ready" ? (
         <InstallStatus status={dictionaryStatus} onRetry={retryDictionary} query="" hasBox={false} />
+      ) : networkOnly ? (
+        unlistedRow!.translation === null ? null : (
+          <Flex direction="column" gap="1">
+            <Text variant="definitionLabel" muted>{tWord("networkTranslations")}</Text>
+            <Text variant="translation">{unlistedRow!.translation}</Text>
+          </Flex>
+        )
       ) : answer ? (
         <SenseList answer={answer} showExactHeadword={false} />
       ) : (
