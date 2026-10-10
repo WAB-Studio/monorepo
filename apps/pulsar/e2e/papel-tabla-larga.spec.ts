@@ -205,6 +205,20 @@ test.describe("the paper report: a «por mes» table of 20 rows or more starts w
     });
   });
 
+  // Open tasks above the table slide the page cut along it; across enough of them the cut falls between the last row and the line.
+  for (const tasks of range(26))
+  test(`a 46-month table with ${tasks} open tasks above it never leaves the months-left-out line alone on a page`, async ({
+    person, browser, baseURL, db,
+  }) => {
+    await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 46, measured: true, tag: `m46e${tasks}`, tasks }, (w) => {
+      const last = w.rows[45];
+      expect(
+        w.pages[last.page].findIndex((text, at) => at > last.at && text.includes("sin monto")),
+        `«…: sin monto» follows the last row on page ${last.page + 1}`,
+      ).toBeGreaterThan(last.at);
+    });
+  });
+
   // The boundary: 19 printed rows keep today's whole block; 20 flow.
   test("19 printed rows stay whole: label, every row and the months-left-out line on one page", async ({
     person, browser, baseURL, db,
