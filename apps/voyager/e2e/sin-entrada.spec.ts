@@ -309,6 +309,8 @@ test("every block and the trailing line lead back to /?q=<word>, and that screen
   await page.locator('main a[href="/?q=she"]').click();
   await expect(page).toHaveURL(/\/\?q=she$/);
   await expect(page.getByRole("heading", { name: "she", exact: true })).toBeVisible();
+  // RL-59: `she` is a function word, so the dictionary's lines sit folded.
+  await page.locator("main").getByRole("button", { name: messages.search.noEntry.showDictionary }).click();
   await expect(page.getByText(messages.word.translations)).toBeVisible();
 
   await page.goBack();
@@ -484,20 +486,6 @@ test("a content word's block draws the dictionary alone", async ({ page }) => {
   expect(lines.length, "weird draws its senses").toBeGreaterThan(0);
   expect(lines.filter((line) => GLOSSES.has(line))).toEqual([]);
   expect(lines).toContain("raro, anormal, bizarro, cuático, extraño");
-});
-
-test("a function word typed alone answers as the dictionary does, with no table line first", async ({ page }) => {
-  await deleteTranslator(page);
-  await failTranslation(page);
-  await openReady(page);
-  const tableText = functionWordTranslation("something") as string;
-
-  await page.getByRole("textbox", { name: messages.search.label }).fill("something");
-  await expect(page.getByText("basurita")).toBeVisible();
-  const lines = (await blockLines(page, "something", null)).map((l) => l.text);
-  // The dictionary's own order: `basurita` first, `algo, alguna cosa` its second sense.
-  expect(lines.indexOf("basurita")).toBeLessThan(lines.indexOf(tableText));
-  expect(lines.filter((line) => line === tableText)).toHaveLength(1);
 });
 
 test("offline, the breakdown still leads with the table translation and asks for nothing", async ({ page, context }) => {

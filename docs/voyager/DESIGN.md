@@ -1653,3 +1653,4 @@ Taken by the user the same evening, on canvas version 43.
 ### Decisions of 2026-10-09, sentences
 
 - Sentences are translated by the paid model within the daily cap, MyMemory as fallback (692, user 2026-10-09).
+- **A function word typed alone leads with the table, the dictionary folded beneath** (690, user 2026-10-09). No board drawn before the code: the user reviews the apps at the end.

@@ -53,9 +53,25 @@ const SUGGESTIONS_SETTLE_MS = 900;
 // commas"), so it is no longer a text node of its own: this finds it
 // bounded by the line's own start, end or comma, never a longer gloss that
 // merely contains it.
-function glossLocator(page: Page, gloss: string): Locator {
+function glossPattern(gloss: string): RegExp {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, )${escaped}(,|$)`));
+  return new RegExp(`(^|, )${escaped}(,|$)`);
+}
+
+function glossLocator(page: Page, gloss: string): Locator {
+  return page.getByText(glossPattern(gloss));
+}
+
+// A table word folds the dictionary behind one control (RL-59); the block
+// it opens is that control's next sibling.
+async function openDictionary(page: Page): Promise<void> {
+  const toggle = page.locator("main button[aria-expanded]");
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+}
+
+function dictionaryBlock(page: Page): Locator {
+  return page.locator("main button[aria-expanded=true] + *");
 }
 
 type WorkerRequestShape = Extract<WorkerRequest, { kind: "lookup" }>;
@@ -452,10 +468,10 @@ test("the English definition draws open with no interaction, and stays inside th
   await page.waitForTimeout(1000);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("her");
-  await expect(page.getByRole("heading", { name: "her", exact: true })).toBeVisible({ timeout: 5000 });
+  await searchBox.fill("bitter");
+  await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible({ timeout: 5000 });
 
-  const englishText = "The form of she used after a preposition, as the object of a verb";
+  const englishText = "(usually in the plural bitters) A liquid or powder, made from bitter herbs, used in mixed drinks or as a tonic.";
 
   // Open on arrival, nothing tapped: the label and its prose both show.
   await expect(page.getByText(messages.word.definitionEnglish).first()).toBeVisible();
@@ -531,13 +547,18 @@ test("a one-character query answers only `a` and `i`, never the other ten single
   // "a" is one of the two: its own entry answers, translations included.
   await searchBox.fill("a");
   await expect(page.getByRole("heading", { name: "a", exact: true })).toBeVisible({ timeout: 5000 });
-  await expect(glossLocator(page, "una")).toBeVisible();
+  // RL-59: a table word's dictionary entry sits folded; open it and read
+  // the entry itself, not the table line above it.
+  await openDictionary(page);
+  await expect(dictionaryBlock(page).getByText(messages.word.translations).first()).toBeVisible();
+  await expect(dictionaryBlock(page).getByText(glossPattern("una"))).toBeVisible();
   await expect(suggestionsLabel).toHaveCount(0);
 
   // "I" is the other: it normalises to "i" and answers with "yo".
   await searchBox.fill("I");
   await expect(page.getByRole("heading", { name: "i", exact: true })).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText("yo", { exact: true })).toBeVisible();
+  await openDictionary(page);
+  await expect(dictionaryBlock(page).getByText("yo", { exact: true })).toBeVisible();
 
   // Two or more characters are untouched: `be` and `bed` answer as before.
   await searchBox.fill("be");

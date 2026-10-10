@@ -7,7 +7,9 @@ import { useTranslations } from "next-intl";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { functionWordTranslation } from "@/lib/phrase/function-words";
 import { Box, Button, Flex, Headword, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
-import { SenseList } from "./sense-list";
+import { SenseList, SpeakButton, leadPronunciation } from "./sense-list";
+import type { GeneratedTextState } from "./generated-text";
+import type { NetworkAnswerState } from "./network-answer";
 
 export type NoEntryPart = { token: string; answer: WordAnswer | null };
 
@@ -95,46 +97,76 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
 }
 
 // The dictionary block folds behind one ghost control; a word with no block
-// of its own draws no control.
-function FunctionWordBlock({
+// of its own draws no control. `alone` is RL-59's word typed by itself: the
+// headword is plain and carries the voice control, and the folded block is
+// the dictionary's whole answer (IPA, definitions, example) instead of the
+// breakdown's translations alone.
+export function FunctionWordBlock({
   part,
   answer,
   heading,
   table,
   t,
+  alone = false,
+  generated,
+  networkAnswer,
 }: {
   part: NoEntryPart;
   answer: WordAnswer;
   heading: string;
   table: string;
   t: ReturnType<typeof useTranslations>;
+  alone?: boolean;
+  generated?: GeneratedTextState;
+  networkAnswer?: NetworkAnswerState;
 }) {
   const [open, setOpen] = useState(false);
+  const tWord = useTranslations("word");
+  const hit = hasHit(answer);
   return (
     <Flex direction="column" gap="3">
-      <Link asChild underline="always">
-        <NextLink href={wordHref(part.token)}>
-          <TapTarget align="center" gap="1">
-            <Headword>{heading}</Headword>
-            <ChevronGlyph />
-          </TapTarget>
-        </NextLink>
-      </Link>
+      {alone ? (
+        <Flex align="center" gap="1">
+          <Headword>{heading}</Headword>
+          <SpeakButton headword={heading} ipa={answer.exact ? leadPronunciation(answer.exact.senses) : null} t={tWord} />
+        </Flex>
+      ) : (
+        <Link asChild underline="always">
+          <NextLink href={wordHref(part.token)}>
+            <TapTarget align="center" gap="1">
+              <Headword>{heading}</Headword>
+              <ChevronGlyph />
+            </TapTarget>
+          </NextLink>
+        </Link>
+      )}
       <Text variant="translation">{table}</Text>
-      <Button
-        variant="ghost"
-        color="gray"
-        size="2"
-        tap={44}
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {t(open ? "noEntry.hideDictionary" : "noEntry.showDictionary")}
-        <ChevronGlyph />
-      </Button>
-      {open && (
+      {hit && (
+        <Button
+          variant="ghost"
+          color="gray"
+          size="2"
+          tap={44}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {t(open ? "noEntry.hideDictionary" : "noEntry.showDictionary")}
+          <ChevronGlyph />
+        </Button>
+      )}
+      {hit && open && (
         <Box muted>
-          <SenseList answer={answer} variant="compact" wordHref={wordHref(part.token)} showExactHeadword={false} />
+          {alone ? (
+            <SenseList
+              answer={answer}
+              showExactHeadword={false}
+              showSpeaker={false}
+              generated={generated}
+              networkAnswer={networkAnswer}
+            />
+          ) : (
+            <SenseList answer={answer} variant="compact" wordHref={wordHref(part.token)} showExactHeadword={false} />
+          )}
         </Box>
       )}
     </Flex>

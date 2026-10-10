@@ -20,10 +20,11 @@ import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-l
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
 import { Flex, Text } from "@/components/ui";
 import { InstallStatus } from "./install-status";
-import { NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
+import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
 import { SearchBox } from "./search-box";
 import { SenseList } from "./sense-list";
+import { functionWordTranslation } from "@/lib/phrase/function-words";
 import { Suggestions } from "./suggestions";
 
 // The query string's own name: `/?q=book`.
@@ -477,6 +478,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // read. Decided by the user 2026-09-09.
   const wordFound = wordAnswer !== null && (wordAnswer.exact !== null || wordAnswer.viaInflection.length > 0);
   const suppressNotFound = !wordFound && suggestions.length > 0;
+  // RL-59: the hand-written table leads a function word typed alone.
+  const tableLine = kind.kind === "word" ? functionWordTranslation(text) : null;
 
   // RL-35's decoration clause: the network is asked about a headword only
   // once its own answer is already painted, and only for the exact match —
@@ -557,8 +560,20 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
 
       {kind.kind === "word" && (
         <Flex direction="column" gap="4">
-          {!wordFound && <Suggestions items={suggestions} onPick={handleTextChange} />}
-          {wordAnswer && !suppressNotFound && (
+          {!wordFound && tableLine === null && <Suggestions items={suggestions} onPick={handleTextChange} />}
+          {wordAnswer && tableLine !== null && (
+            <FunctionWordBlock
+              part={{ token: text, answer: wordAnswer }}
+              answer={wordAnswer}
+              heading={wordAnswer.exact?.headword ?? normaliseHeadword(text)}
+              table={tableLine}
+              t={tSearch}
+              alone
+              generated={decoration}
+              networkAnswer={networkAnswer}
+            />
+          )}
+          {wordAnswer && !suppressNotFound && tableLine === null && (
             <SenseList
               answer={wordAnswer}
               generated={decoration}
