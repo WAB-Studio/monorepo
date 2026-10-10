@@ -234,5 +234,12 @@ for (const viewport of [
       await expect(page.getByText(/Sin conexión/)).toHaveCount(0);
       await expect.poll(async () => (await readSync(page))?.enabled).toBe(false);
     });
+
+    test("offline with a copy made under a minute ago: «desde hace un momento»", async ({ page, context }) => {
+      await seed(page, state({ lastSyncedAt: Date.now() - 10_000 }));
+      await openOffline(page, context);
+      await expect(page.getByText(WITH_TIME("un momento"), { exact: true })).toBeVisible();
+      await expect(page.getByText(SIGN_IN)).toHaveCount(0);
+    });
   });
 }

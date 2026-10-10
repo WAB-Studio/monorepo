@@ -1201,3 +1201,30 @@ test.describe("dates", () => {
     );
   });
 });
+
+// RL-56 + RL-58: a form with no entry of its own whose lemma the dictionary
+// has answers with the lemma's senses. An old row recorded as unlisted (the
+// network answered before the inflection was reached) must not hide them
+// behind «Traducciones de internet».
+test("an old unlisted row of a form whose lemma the dictionary has draws the lemma's senses, not the network translation", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await page.goto("/registro");
+  await seedRows(page, [
+    {
+      at: Date.now(),
+      text: "lingered",
+      normalised: "lingered",
+      translation: "traduccion-vieja-de-la-red",
+      outcome: "unlisted",
+      headword: null,
+    },
+  ]);
+
+  await page.goto("/registro/lingered");
+  await expect(glossLocator(page, "persistir")).toBeVisible();
+  await expect(
+    page.getByText(messages.word.networkTranslations, { exact: true }),
+  ).toHaveCount(0);
+});
