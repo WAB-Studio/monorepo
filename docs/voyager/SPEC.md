@@ -322,7 +322,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   frequency order. It is answered from the device and touches the network on no keystroke. Decided by the user
   2026-10-08.
 - [x] **RL-54** *(successor of RL-31)* — A string of two or more words that the dictionary has no entry for is
-  answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-57's answer. Only a string of more than 60 words is not sent anywhere: the app names how many words it holds and asks
+  answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-59's answer. Only a string of more than 60 words is not sent anywhere: the app names how many words it holds and asks
   for one word, or a sentence of up to sixty. That answer comes from the device and touches the network on
   no keystroke. Decided by the user 2026-10-08.
 
