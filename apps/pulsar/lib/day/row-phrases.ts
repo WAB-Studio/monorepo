@@ -20,7 +20,9 @@ export function cadencePhrase(translate: Translate, cadence: Cadence, names: Cad
     case "weekdays":
       return cadence.days.length === 1
         ? translate("day.cadence.onlyWeekday", { weekday: names.weekdayPlural[cadence.days[0] - 1] })
-        : daysSentence(translate, [...cadence.days].sort((a, b) => a - b).map((day) => names.weekdayShort[day - 1]));
+        : cadence.days.length === 7
+          ? translate("day.cadence.everyDay")
+          : weekdaysSentence(translate, cadence.days, names.weekdayShort);
     case "times_per_week":
       return translate("day.cadence.timesPerWeek", { count: cadence.count });
     case "every_n_days":
@@ -30,9 +32,13 @@ export function cadencePhrase(translate: Translate, cadence: Cadence, names: Cad
   }
 }
 
-function daysSentence(translate: Translate, names: string[]): string {
-  if (names.length === 7) return translate("day.cadence.everyDay");
-  return translate("day.cadence.daysJoin", { list: names.slice(0, -1).join(", "), last: names[names.length - 1] });
+// Every screen that names a weekdays cadence reads it through here: ISO days
+// (1 = Monday), whatever order they were stored in, said Monday first as a
+// sentence. `names` is Monday first, in the word length the screen wants.
+export function weekdaysSentence(translate: Translate, days: number[], names: string[]): string {
+  const said = [...days].sort((a, b) => a - b).map((day) => names[day - 1]);
+  if (said.length < 2) return said.join("");
+  return translate("day.cadence.daysJoin", { list: said.slice(0, -1).join(", "), last: said[said.length - 1] });
 }
 
 // A goal's phase line: «fase 2 de 3 · desbloquear la boca»; a goal with one

@@ -14,6 +14,7 @@ import { formatQuantity, isTimeUnit, splitMinutes } from "@/lib/units/time";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { setRhythmSchema } from "@/lib/validation/rhythm";
+import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { shortMonth } from "@/lib/dates/short-month";
 import { civilDateToDate } from "@/lib/zone";
 import { useTimeWords } from "@/components/ui/figure";
@@ -197,8 +198,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       case "daily":
         return t("goal.cadence.daily");
       case "weekdays": {
-        const names = t.raw("goal.cadence.weekdayFull") as string[];
-        return format.list((commitment.cadenceWeekdays ?? []).map((day) => names[day - 1]), { type: "conjunction" });
+        return weekdaysSentence((key, values) => t(key, values), commitment.cadenceWeekdays ?? [], t.raw("goal.cadence.weekdayFull") as string[]);
       }
       case "times_per_week":
         return t("goal.cadence.timesPerWeek", { count: commitment.cadenceN ?? 0 });
