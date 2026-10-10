@@ -95,6 +95,7 @@
       "section": "Las secciones son «## Fases», «## Meses», «## Compromisos» y «## Tareas».",
       "phase": "Una fase va como «- AAAA-MM-DD a AAAA-MM-DD · objetivo».",
       "month": "Un mes va como «- AAAA-MM · monto».",
+      "monthUnit": "Esa unidad no es {unit}. Escribe el monto en {unit}, como «- AAAA-MM · 8 {unit}».",
       "commitment": "Un compromiso va como «- nombre · cadencia · toque o monto».",
       "task": "Una tarea va como «- AAAA-MM · nombre» o «- AAAA-MM · monto · nombre».",
       "child": "Una sub-tarea va como «  - nombre» o «  - monto · nombre».",

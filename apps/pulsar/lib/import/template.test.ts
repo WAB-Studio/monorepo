@@ -384,3 +384,19 @@ test("ritmo: under a measure that is not time says the rhythm needs a time measu
     assert.equal(sentenceOf(expected), "El ritmo solo va con una medida en tiempo.");
   }
 });
+
+const KM = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\nmedida: carrera · km\n## Meses\n";
+
+test("a month amount takes the goal's own unit after the number, or the bare number", () => {
+  for (const amount of ["8", "8 km", "8km", "8 KM"]) {
+    assert.equal(draftOf(`${KM}- 2026-10 · ${amount}\n`).months[0].amount, 8, amount);
+  }
+  assert.equal(draftOf(`${HEAD}## Meses\n- 2026-10 · 12 h\n`).months[0].amount, 720);
+});
+
+test("a month amount in another unit than the goal's stops saying which unit to write", () => {
+  const error = errorOf(`${KM}- 2026-10 · 8 h\n`);
+  assert.deepEqual(error, { line: 6, expected: "import.errors.form.monthUnit", unit: "km" });
+  assert.equal(errorOf(`${KM}- 2026-10 · ocho\n`).expected, "import.errors.form.month");
+  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 8 km\n`).expected, "import.errors.form.month");
+});
