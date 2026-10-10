@@ -231,18 +231,6 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
 
   if (created) {
     const command = t("created.claudeCode", { url: siteUrl, key: created.key });
-    const desktop = JSON.stringify(
-      {
-        mcpServers: {
-          pulsar: {
-            command: "npx",
-            args: ["mcp-remote", `${siteUrl}/mcp`, "--header", `Authorization: Bearer ${created.key}`],
-          },
-        },
-      },
-      null,
-      2,
-    );
     return (
       <Page>
         <ScreenHeader title={t("created.title")} back={place} />
@@ -252,12 +240,6 @@ export function ConnectionsScreen({ rows, siteUrl }: { rows: ConnectionRow[]; si
         </Section>
         <Section label={t("created.terminal")}>
           <Copyable text={command} label={t("created.copyCommandName")} />
-        </Section>
-        <Section label={t("created.desktop")}>
-          <Text as="p" variant="sentence" tone="muted">
-            {t("created.desktopNote")}
-          </Text>
-          <Copyable text={desktop} label={t("created.copyDesktopName")} />
         </Section>
         <Text as="p" variant="sentence" tone="muted">
           {t("created.connected")}
