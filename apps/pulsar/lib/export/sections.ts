@@ -20,6 +20,12 @@ export function goalSections(goal: GoalReport): Section[] {
   return sections;
 }
 
+// A month that has not started and has no planned amount prints nothing; a
+// past or current month always prints, and a planned 0 is still an amount (RP-70).
+export function printsOnPaper(month: GoalReport["months"][number]): boolean {
+  return month.past || month.current || month.planned !== null;
+}
+
 // A week as one month holds it: the whole week, or its days in that month.
 export type MonthWeek = Pick<ReviewWeek, "index" | "startsOn" | "endsOn" | "total" | "current">;
 
