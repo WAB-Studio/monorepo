@@ -1,21 +1,15 @@
-import NextLink from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { getReader } from "@/lib/session";
 import { AccountPanel } from "@/components/account/account-panel";
+import { AccountTabs, TabBody } from "@/components/account/tab-body";
 import { AccountInfo } from "@/components/account/account-info";
-import { Flex, Headword, Link, Page, Separator, TapTarget, Text } from "@/components/ui";
-
-type InfoTab = "account" | "info";
+import { Flex, Headword, Page, Separator, Text } from "@/components/ui";
 
 // RL-49: `app/auth/confirm/route.ts` sends a failed link here as
 // `?error=linkTimeout` (the gateway never answered) or `?error=linkInvalid`
 // (the link is genuinely spent or expired). Anything else is no failure.
 type LinkFailure = "linkTimeout" | "linkInvalid" | null;
-
-function resolveTab(raw: string | string[] | undefined): InfoTab {
-  return raw === "info" ? "info" : "account";
-}
 
 function resolveLinkFailure(raw: string | string[] | undefined): LinkFailure {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -35,10 +29,9 @@ export default async function CuentaPage({
   searchParams: Promise<{ tab?: string | string[]; error?: string | string[] }>;
 }) {
   const t = await getTranslations("account");
-  const tInfo = await getTranslations("account.info");
   const reader = await getReader();
   const { tab: rawTab, error: rawError } = await searchParams;
-  const tab = resolveTab(rawTab);
+  const tab = rawTab === "info" ? "info" : "account";
   const linkFailure = resolveLinkFailure(rawError);
 
   return (
@@ -46,29 +39,7 @@ export default async function CuentaPage({
       <Flex direction="column" gap="5">
         <Headword>{t("title")}</Headword>
 
-        {/* Two tabs, `?tab=` on the same route — the box's own `/?q=`
-            pattern (search-screen.tsx), so the licence tab is a link, not a
-            control, and reads the same signed out as signed in (RL-33). */}
-        <Flex gap="5">
-          <Link asChild underline="none">
-            <NextLink href="/cuenta" aria-current={tab === "account" ? "page" : undefined}>
-              <TapTarget>
-                <Text size="2" weight={tab === "account" ? "bold" : undefined} muted={tab !== "account"}>
-                  {tInfo("tabs.account")}
-                </Text>
-              </TapTarget>
-            </NextLink>
-          </Link>
-          <Link asChild underline="none">
-            <NextLink href="/cuenta?tab=info" aria-current={tab === "info" ? "page" : undefined}>
-              <TapTarget>
-                <Text size="2" weight={tab === "info" ? "bold" : undefined} muted={tab !== "info"}>
-                  {tInfo("tabs.info")}
-                </Text>
-              </TapTarget>
-            </NextLink>
-          </Link>
-        </Flex>
+        <AccountTabs />
 
         {linkFailure && tab === "account" && (
           // No red in this palette (docs/voyager/DESIGN.md "Failure"): a
@@ -86,7 +57,7 @@ export default async function CuentaPage({
           </Flex>
         )}
 
-        {tab === "account" ? <AccountPanel reader={reader} /> : <AccountInfo />}
+        <TabBody account={<AccountPanel reader={reader} />} info={<AccountInfo />} />
       </Flex>
     </Page>
   );

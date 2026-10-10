@@ -10,7 +10,7 @@
 // — the field `sense-list.tsx` has read since RL-28 (#157). Bumping the name
 // is what drops that pool; `SHELL_BUILD` below is what keeps a later deploy
 // from rebuilding it.
-const CACHE_NAME = "reading-shell-v10";
+const CACHE_NAME = "reading-shell-v11";
 
 // The shell the cache is allowed to hold, read off the current `/` every time
 // the network answers one. A deploy changes the hashed script names in that
@@ -27,7 +27,10 @@ const NAVIGATION_TIMEOUT_MS = 3000;
 // own, never only as a side effect of having been visited online first — a
 // bookmark, or a link into "/cuenta" that lands before "/" ever loaded, must
 // still draw the app's own screen, not the browser's error page.
-const SHELL_ROUTES = ["/", "/registro", "/cuenta"];
+// "/registro/_" is the generic word page: the server renders no row, and the
+// client reads the word from the address, so one cached copy answers every
+// "/registro/<word>" the reader never opened online.
+const SHELL_ROUTES = ["/", "/registro", "/cuenta", "/registro/_"];
 
 // Both routes call `getReader()` on the server and let a signed-in render
 // draw more than a signed-out one does: "/cuenta" bakes the email itself
@@ -41,7 +44,7 @@ const SHELL_ROUTES = ["/", "/registro", "/cuenta"];
 // both cache entries are written exactly once, with credentials withheld
 // (see `install`), and `navigate` below never overwrites either — not with
 // a signed-in render, not with any other.
-const NO_OVERWRITE_ROUTES = new Set(["/cuenta", "/registro"]);
+const NO_OVERWRITE_ROUTES = new Set(["/cuenta", "/registro", "/registro/_"]);
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -174,8 +177,14 @@ async function navigate(request, event) {
     if (path === "/") event.waitUntil(retireOtherBuilds(cache, response.clone()));
     return response;
   } catch {
-    const shell = await cache.match(request);
+    // "/cuenta" ignores the query: the tab is chosen on the client from the
+    // address, so one cached copy serves both.
+    const shell = await cache.match(request, { ignoreSearch: path === "/cuenta" });
     if (shell) return shell;
+    if (path.startsWith("/registro/")) {
+      const generic = await cache.match("/registro/_");
+      if (generic) return generic;
+    }
     throw new Error("offline, no cached shell");
   }
 }
