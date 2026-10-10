@@ -344,3 +344,14 @@ test("get_month refuses the month 2026-00 and never answers data", async () => {
   assert.equal(config.inputSchema.safeParse({ goal_id: subjectGoal, month: "2026-00" }).success, false);
   assert.equal(config.inputSchema.safeParse({ goal_id: subjectGoal, month: currentMonth }).success, true);
 });
+
+test("get_report keeps every month of the goal, down to the horizon's with no amount (RP-39, RP-70)", async () => {
+  const result = await call("get_report", {});
+  const body = result.structuredContent as {
+    goals: { months: { month: string; planned: number | null; past: boolean; current: boolean }[] }[];
+  };
+  const months = body.goals[0].months;
+  const last = months[months.length - 1];
+  assert.equal(last.month, dayFrom(120).slice(0, 7));
+  assert.deepEqual([last.planned, last.past, last.current], [null, false, false]);
+});

@@ -241,3 +241,8 @@ test("a partial in kilometres says the unit once; a time pair is as it was", () 
   assert.deepEqual(partialPair("5 min", "10 min", "min"), { logged: "5", target: "10 min" });
   assert.deepEqual(partialPair("1 h 05 min", "2 h", "min"), { logged: "1 h 05 min", target: "2 h" });
 });
+
+test("days stored out of order read Monday first", () => {
+  assert.equal(days([6, 1]), "lun y sáb");
+  assert.equal(days([7, 3, 1]), "lun, mié y dom");
+});

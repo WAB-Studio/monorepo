@@ -388,4 +388,9 @@
   .fold {
     display: none;
   }
+
+  .stackRow[data-unprinted],
+  .wide tr[data-unprinted] {
+    display: none;
+  }
 }

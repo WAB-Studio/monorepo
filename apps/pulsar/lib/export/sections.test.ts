@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { GoalReport } from "./report";
-import { civilSpan, goalSections, monthsWithWeeks } from "./sections";
+import { civilSpan, goalSections, monthsWithWeeks, printsOnPaper } from "./sections";
 
 function goal(patch: Partial<GoalReport> = {}): GoalReport {
   return {
@@ -111,4 +111,30 @@ test("RP-49 civilSpan: every span carries its year, both ends across a year", ()
   assert.equal(civilSpan("2026-08-31", "2026-08-31"), "31 ago 2026");
   assert.equal(civilSpan("2026-10-05", "2026-10-11"), "5–11 oct 2026");
   assert.equal(civilSpan("2026-12-28", "2027-01-03"), "28 dic 2026–3 ene 2027");
+});
+
+type MonthRow = GoalReport["months"][number];
+
+function row(patch: Partial<MonthRow>): MonthRow {
+  return { month: "2026-12-01", planned: null, reached: 0, current: false, past: false, carried: null, ...patch };
+}
+
+test("RP-70 printsOnPaper: a past month prints with no amount", () => {
+  assert.equal(printsOnPaper(row({ past: true, planned: null, reached: 0 })), true);
+});
+
+test("RP-70 printsOnPaper: the current month prints with no amount", () => {
+  assert.equal(printsOnPaper(row({ current: true, planned: null })), true);
+});
+
+test("RP-70 printsOnPaper: a future month with an amount prints", () => {
+  assert.equal(printsOnPaper(row({ planned: 1200 })), true);
+});
+
+test("RP-70 printsOnPaper: a future month planned at 0 prints, zero is an amount", () => {
+  assert.equal(printsOnPaper(row({ planned: 0 })), true);
+});
+
+test("RP-70 printsOnPaper: a future month with no amount does not print", () => {
+  assert.equal(printsOnPaper(row({ past: false, current: false, planned: null })), false);
 });
