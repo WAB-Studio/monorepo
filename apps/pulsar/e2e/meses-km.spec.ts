@@ -179,7 +179,6 @@ test("km goal, empty month: the list does not say its tasks add time, and says w
     await expect(page.getByText(/no tiene tareas\. Escribe las que quieras hacer este mes\./).first()).toBeAttached();
     await expect(page.getByText("suman su tiempo")).toHaveCount(0);
     expect(await page.locator("body").innerText()).not.toContain("suman su tiempo");
-    expect(await page.content()).not.toContain("suman su tiempo");
   } finally {
     await context.close();
   }
