@@ -18,6 +18,11 @@
   "measuresDeclaredUnnamed": "mide en {unit} · hasta el {date} · solo lo que dijiste tú",
   "timeUnit": "horas y minutos",
   "monthsOut": "{months}: sin monto",
+  "monthsOutTasks": "{months}: sin tareas",
+  "noTasks": "sin tareas",
+  "tasksDone": "{done} de {total} hechas",
+  "tasksToDo": "{count, plural, one {# por hacer} other {# por hacer}}",
+  "upcoming": "por venir",
   "continuesIn": "sigue en {month} · <total>x</total> en total",
   "noMeasure": "no mide nada · hasta el {date}",
   "sections": {
@@ -34,6 +39,7 @@
     "month": "por mes",
     "week": "semana",
     "done": "hecho",
+    "tasks": "tareas",
     "planned": "planeado",
     "status": "estado"
   },

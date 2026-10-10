@@ -370,6 +370,50 @@ function GoalPart({
           </Section>
         );
       case "months": {
+        if (unit === null) {
+          const rows: TableRow[] = goal.months.map((month) => {
+            const started = month.current || month.past;
+            const tasks = month.tasks ?? { done: 0, total: 0 };
+            return {
+              key: month.month,
+              cells: [
+                monthLabel(month.month),
+                tasks.total === 0
+                  ? t("noTasks")
+                  : started
+                    ? t("tasksDone", { done: tasks.done, total: tasks.total })
+                    : t("tasksToDo", { count: tasks.total }),
+                month.current ? t("current") : started ? t("closed") : t("upcoming"),
+              ],
+              printed: printsOnPaper(month),
+            };
+          });
+          const out = goal.months.filter((m) => !printsOnPaper(m));
+          return (
+            <Section
+              label={t("byMonth", { goal: goal.name })}
+              printSuffix={t("monthsCaption", { count: goal.months.length - out.length })}
+            >
+              <Table
+                caption={t("monthsCaption", { count: goal.months.length })}
+                columns={[t("columns.month"), t("columns.tasks"), t("columns.status")]}
+                rows={rows}
+                nowrapLabel
+                stackInCard
+              />
+              {out.length > 0 ? (
+                <Text as="p" variant="line">
+                  {t("monthsOutTasks", {
+                    months: format.list(
+                      out.map((m) => monthYear.format(civilDateToDate(m.month))),
+                      { type: "conjunction" },
+                    ),
+                  })}
+                </Text>
+              ) : null}
+            </Section>
+          );
+        }
         const nextMonth = (month: string) => {
           const day = civilDateToDate(month);
           day.setUTCMonth(day.getUTCMonth() + 1);
@@ -521,7 +565,7 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        <PrintBlock key={section} span={spans(section)} whole={section === "months"}>
+        <PrintBlock key={section} span={spans(section)} whole={section === "months"} only={section === "months" && unit === null}>
           {render(section)}
         </PrintBlock>
       ))}

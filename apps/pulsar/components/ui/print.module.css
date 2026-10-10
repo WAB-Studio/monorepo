@@ -9,6 +9,10 @@
   display: none;
 }
 
+.blockOnly {
+  display: none;
+}
+
 .goal {
   display: flex;
   flex-direction: column;
@@ -91,6 +95,10 @@
   }
 
   .only {
+    display: block;
+  }
+
+  .blockOnly {
     display: block;
   }
 
