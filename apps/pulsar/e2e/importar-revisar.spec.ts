@@ -103,6 +103,16 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     });
   });
 
+  test("a commitment whose days come out of order is read Monday first with «y» before the last", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      const text = template().replace("- Tema técnico · martes y jueves · 2 h", "- Tema técnico · domingo, miércoles y lunes · 2 h");
+      expect(text).toContain("domingo, miércoles y lunes");
+      await toReview(page, text);
+
+      await expect(box(page, /Tema técnico/)).toHaveAccessibleName("Tema técnico lunes, miércoles y domingo 2 h");
+    });
+  });
+
   test("unmarking a sub-task and changing a month, then confirming, writes exactly that", async ({ person, browser, baseURL, db }) => {
     const { first, second } = monthsFromToday();
     await asPerson({ person, browser, baseURL }, async (page) => {

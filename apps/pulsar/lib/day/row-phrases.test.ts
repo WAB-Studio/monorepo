@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { cadencePhrase, flexibleWords, metPhrase, phaseLine, partialPair, phasePositions, rowMeta, type RowMetaPart } from "./row-phrases";
+import { weekdaysSentence, cadencePhrase, flexibleWords, metPhrase, phaseLine, partialPair, phasePositions, rowMeta, type RowMetaPart } from "./row-phrases";
 
 const names = {
   weekdayShort: ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
@@ -52,6 +52,12 @@ test("three or more days read as a sentence: commas, then «y» before the last"
 
 test("seven weekdays read «todos los días»", () => {
   assert.equal(days([1, 2, 3, 4, 5, 6, 7]), "todos los días");
+});
+
+test("six weekdays read as a list, never «todos los días»", () => {
+  assert.equal(days([1, 2, 3, 4, 5, 6]), "lun, mar, mié, jue, vie y sáb");
+  assert.equal(days([6, 2, 5, 1, 4, 3]), "lun, mar, mié, jue, vie y sáb");
+  assert.equal(days([7, 6, 5, 4, 3, 2]), "mar, mié, jue, vie, sáb y dom");
 });
 
 test("a weekly, monthly and every-n-days cadence name their count", () => {
@@ -245,4 +251,18 @@ test("a partial in kilometres says the unit once; a time pair is as it was", () 
 test("days stored out of order read Monday first", () => {
   assert.equal(days([6, 1]), "lun y sáb");
   assert.equal(days([7, 3, 1]), "lun, mié y dom");
+});
+
+const fullNames = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+
+test("weekdaysSentence sorts Monday first and joins with commas and «y»", () => {
+  assert.equal(weekdaysSentence(realTranslate, [7, 3, 1], fullNames), "lunes, miércoles y domingo");
+  assert.equal(weekdaysSentence(realTranslate, [6, 2], fullNames), "martes y sábado");
+  assert.equal(weekdaysSentence(realTranslate, [4], fullNames), "jueves");
+});
+
+test("weekdaysSentence leaves its input untouched", () => {
+  const stored = [7, 3, 1];
+  weekdaysSentence(realTranslate, stored, fullNames);
+  assert.deepEqual(stored, [7, 3, 1]);
 });

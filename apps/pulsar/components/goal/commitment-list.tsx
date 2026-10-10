@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import type { Translator } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
+import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { Button, Figure, Flex, Section, Text } from "@/components/ui";
 
@@ -31,8 +32,7 @@ function cadenceWords(cadence: Cadence, t: Translator): string {
     case "daily":
       return t("goal.cadence.daily");
     case "weekdays": {
-      const names = t.raw("goal.cadence.weekdayFull") as string[];
-      return cadence.days.map((day) => names[day - 1]).join(", ");
+      return weekdaysSentence((key, values) => t(key, values), cadence.days, t.raw("goal.cadence.weekdayFull") as string[]);
     }
     case "times_per_week":
       return t("goal.cadence.timesPerWeek", { count: cadence.count });

@@ -237,3 +237,23 @@ test("a goal measured in km keeps «mide en km» (guard, green today)", async ({
     await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
   }
 });
+
+// A commitment stored with its weekdays unsorted reads Monday first, as a sentence.
+test("the goal screen reads a commitment's weekdays Monday first, joined with «y»", async ({ person, browser, baseURL, db }) => {
+  const year = Number(todayInZone().slice(0, 4));
+  const { goalId } = await seedGoal(db, person, { openedYear: year, measured: false, minutes: 0 });
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_weekdays, satisfaction)
+    values (${person.id}, ${goalId}, ${`Laboratorio ${Date.now()}`}, 'weekdays', '{7,3,1}', 'tap')
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText("lunes, miércoles y domingo", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("domingo, miércoles, lunes")).toHaveCount(0);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
+  }
+});
