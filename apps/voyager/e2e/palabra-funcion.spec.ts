@@ -33,7 +33,6 @@ async function openReady(page: Page): Promise<void> {
   );
   await page.goto("/");
   await assetResponse;
-  await page.waitForTimeout(1000);
 }
 
 const searchBox = (page: Page) => page.getByRole("textbox", { name: messages.search.label });
@@ -106,6 +105,9 @@ for (const width of [360, 1280]) {
   });
 }
 
+// Table words the dictionary has no entry for.
+const NO_ENTRY = new Set(["am", "could"]);
+
 test("every word of the table, typed alone, shows its own table translation and a folded control", async ({ page }) => {
   test.setTimeout(180_000);
   await deleteTranslator(page);
@@ -121,14 +123,40 @@ test("every word of the table, typed alone, shows its own table translation and 
       .first()
       .waitFor({ timeout: 1500 })
       .then(() => true, () => false);
-    // Words the dictionary holds no entry for (am, could) answer with
-    // suggestions; what the table owes them is not in the contract.
-    if (!ok && (await page.getByText(messages.word.suggestions).count()) > 0) continue;
-    const folded = ok && (await control(page).first().getAttribute("aria-expanded", { timeout: 1500 }).catch(() => null)) === "false";
+    // A table word the dictionary holds no entry for (am, could) is led by
+    // its table line too, with no control to fold and no suggestions above.
+    const suggestions = await page.getByText(messages.word.suggestions).count();
+    const controls = await control(page).count();
+    const folded = ok && (controls === 0
+      ? NO_ENTRY.has(word)
+      : (await control(page).first().getAttribute("aria-expanded", { timeout: 1500 }).catch(() => null)) === "false");
+    if (suggestions > 0) failures.push(`${word} (suggestions)`);
     if (!ok || !folded) failures.push(word);
     if (failures.length >= 3) break;
   }
   expect(failures).toEqual([]);
+});
+
+test("a table word with no dictionary entry is led by its table line: no control, no suggestions", async ({ page }) => {
+  await deleteTranslator(page);
+  await openReady(page);
+  for (const word of NO_ENTRY) {
+    await searchBox(page).fill(word);
+    await expect(visible(page, functionWordTranslation(word) as string)).toHaveCount(1);
+    await expect(control(page)).toHaveCount(0);
+    await expect(page.getByText(messages.word.suggestions)).toHaveCount(0);
+  }
+});
+
+test("case and padding do not matter: «It» and « would » answer like «it» and «would»", async ({ page }) => {
+  await deleteTranslator(page);
+  await openReady(page);
+  for (const [typed, word] of [["It", "it"], [" would ", "would"]]) {
+    await searchBox(page).fill(typed);
+    await expect(visible(page, functionWordTranslation(word) as string)).toHaveCount(1);
+    await expect(control(page)).toHaveAttribute("aria-expanded", "false");
+    await expect(visible(page, DICTIONARY_LEAD[word], false)).toHaveCount(0);
+  }
 });
 
 test("offline, a function word typed alone still answers from the table, folded, with no request", async ({
@@ -149,7 +177,6 @@ test("offline, a function word typed alone still answers from the table, folded,
   await control(page).click();
   await expect(visible(page, DICTIONARY_LEAD.would, false)).toHaveCount(1);
 
-  await page.waitForTimeout(900);
   // The word's own paid routes may try the network and fail; the phrase
   // route is not a word's business.
   expect(urls.filter((url) => url.includes("/api/translate"))).toEqual([]);

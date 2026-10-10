@@ -307,11 +307,12 @@ this gets built, and no schema, table or column is "prepared for" it.
   reached: one row per headword — the lemma when an inflected form was typed, the typed string when no headword was
   reached — with the forms searched under it and how many times, ordered by frequency, case-insensitive; tapping a row
   opens every search of every form with its date. Decided by the user 2026-10-08.
-- [ ] **RL-57** *(successor of RL-37)* — A sentence the app cannot translate gets the same answer a string it never
-  tried to translate gets: the app names what it could not answer and offers, underneath, the dictionary's own answer
-  for each of its words. For a function word, that answer reads a hand-written table of about a hundred words, each
-  with its common translation, before the dictionary's order; the table serves this fallback alone. It answers from
-  the device, so it holds with no network at all. Decided by the user 2026-10-08.
+- [ ] **RL-59** *(successor of RL-57)* — A function word typed alone, and a sentence the app cannot translate, lead
+  with the translation of a hand-written table of about a hundred words, each with its common sense: `it` reads
+  «eso, lo», not «tecnología de la información». The dictionary's own answer sits underneath, folded behind one
+  control the reader taps open; a table word the dictionary has no entry for shows its table line alone, with no
+  control and no suggestions. Case and surrounding spaces do not matter. It answers from the device, so it holds
+  with no network at all. A word the table lacks answers as before. Decided by the user 2026-10-09.
 - [ ] **RL-58** *(successor of RL-47)* — The form the reader typed leads the answer with its own translation and one
   example sentence, resolved over the network when the dictionary has no row for the form itself. The headword it
   inflects from sits named as such, with its own sense groups, **right under the form's first group**, not at the end:
@@ -365,6 +366,12 @@ Dead codes. The number stays burned and the tick stays as it was.
   read. Measured live: MyMemory's best pick for «the cat sat on the mat» is empty while a lower entry answers it in
   full.
   _Retired 2026-10-09. Successor: RL-60. MyMemory prepended a word the sentence never had («it would be there» came back «Sin embargo, estaría ahí.»); the paid model now translates first and MyMemory is the fallback._
+- [ ] **RL-57** *(successor of RL-37)* — A sentence the app cannot translate gets the same answer a string it never
+  tried to translate gets: the app names what it could not answer and offers, underneath, the dictionary's own answer
+  for each of its words. For a function word, that answer reads a hand-written table of about a hundred words, each
+  with its common translation, before the dictionary's order; the table serves this fallback alone. It answers from
+  the device, so it holds with no network at all. Decided by the user 2026-10-08.
+  _Retired 2026-10-09. Successor: RL-59. The table also leads the word typed alone, with the dictionary folded beneath._
 - [x] **RL-32** — The reader reads their record grouped by word: one row per word, with how many
   times it was searched, ordered by frequency, case-insensitive; and tapping a word opens every one
   of its searches with its date. This replaces the chronological list.

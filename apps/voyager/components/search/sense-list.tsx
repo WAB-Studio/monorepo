@@ -129,7 +129,7 @@ function getServerSnapshot(): boolean {
 // directly under the headword — instead of claiming two sounds and offering
 // one unnamed (RL-51). A second control was refused: the voice takes the
 // spelling, so both would sound alike.
-function SpeakButton({
+export function SpeakButton({
   headword,
   ipa,
   t,
@@ -163,7 +163,7 @@ function SpeakButton({
 // never in first place. The voice control and the generated example are
 // both named from here, so neither can name a sound the screen does not
 // lead with.
-function leadPronunciation(senses: readonly Sense[]): string | null {
+export function leadPronunciation(senses: readonly Sense[]): string | null {
   return pronunciationBlocks(senses)?.[0].ipa ?? null;
 }
 
@@ -476,6 +476,7 @@ export function SenseList({
   variant = "full",
   wordHref,
   showExactHeadword = true,
+  showSpeaker = true,
   generated,
   networkAnswer,
 }: {
@@ -493,6 +494,9 @@ export function SenseList({
   // lemma underneath still gets its own heading either way — that word
   // never names the page.
   showExactHeadword?: boolean;
+  // False where the caller draws the voice control beside the headword
+  // itself (a function word's block, RL-59).
+  showSpeaker?: boolean;
   // Set by `search-screen.tsx` alone, from `useDecoration` — the state a
   // network call resolved for the exact headword, never fetched here.
   // Absent on `/registro/[palabra]`, which opens no connection at all.
@@ -546,7 +550,7 @@ export function SenseList({
         <Flex direction="column" gap="3">
           <Flex align="center" gap="1">
             {showExactHeadword && <BlockHeading word={answer.exact.headword} wordHref={wordHref} />}
-            {!compact && <SpeakButton headword={answer.exact.headword} ipa={exactLead} t={t} />}
+            {!compact && showSpeaker && <SpeakButton headword={answer.exact.headword} ipa={exactLead} t={t} />}
           </Flex>
           <SenseGroup
             senses={answer.exact.senses}
