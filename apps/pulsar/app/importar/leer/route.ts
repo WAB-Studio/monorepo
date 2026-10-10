@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
           error: "import.errors.templateLine",
           line: template.error.line,
           expected: template.error.expected,
+          unit: template.error.unit,
         });
       }
       return reply(200, { via: "template", draft: template.draft });

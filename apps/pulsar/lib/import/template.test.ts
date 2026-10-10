@@ -384,3 +384,43 @@ test("ritmo: under a measure that is not time says the rhythm needs a time measu
     assert.equal(sentenceOf(expected), "El ritmo solo va con una medida en tiempo.");
   }
 });
+
+const KM = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\nmedida: carrera · km\n## Meses\n";
+
+test("a month amount takes the goal's own unit after the number, or the bare number", () => {
+  for (const amount of ["8", "8 km", "8km", "8 KM"]) {
+    assert.equal(draftOf(`${KM}- 2026-10 · ${amount}\n`).months[0].amount, 8, amount);
+  }
+  assert.equal(draftOf(`${HEAD}## Meses\n- 2026-10 · 12 h\n`).months[0].amount, 720);
+});
+
+test("a month amount in another unit than the goal's stops saying which unit to write", () => {
+  const error = errorOf(`${KM}- 2026-10 · 8 h\n`);
+  assert.deepEqual(error, { line: 6, expected: "import.errors.form.monthUnit", unit: "km" });
+  assert.equal(errorOf(`${KM}- 2026-10 · ocho\n`).expected, "import.errors.form.month");
+  assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 8 km\n`).expected, "import.errors.form.month");
+});
+
+test("a month's amount tolerates spacing and case around the goal's unit", () => {
+  for (const amount of ["8   km", "8\tkm", " 8 km", "8 Km"]) {
+    assert.equal(draftOf(`${KM}- 2026-10 · ${amount}\n`).months[0].amount, 8, JSON.stringify(amount));
+  }
+});
+
+test("a month with a unit and no number is the generic month error, never an amount of 0", () => {
+  for (const amount of ["km", " km"]) {
+    assert.equal(errorOf(`${KM}- 2026-10 · ${amount}\n`).expected, "import.errors.form.month", JSON.stringify(amount));
+  }
+});
+
+test("a month's wrong unit stuck to the number says the unit, like the spaced one", () => {
+  assert.deepEqual(errorOf(`${KM}- 2026-10 · 8h\n`), errorOf(`${KM}- 2026-10 · 8 h\n`));
+  assert.equal(errorOf(`${KM}- 2026-10 · 8h\n`).expected, "import.errors.form.monthUnit");
+});
+
+test("a decimal month amount says amounts are whole numbers, whatever the separator or unit", () => {
+  for (const amount of ["8.5 km", "8,5 km", "8.5", "8,5"]) {
+    const error = errorOf(`${KM}- 2026-10 · ${amount}\n`);
+    assert.deepEqual(error, { line: 6, expected: "import.errors.form.monthWhole", unit: "km" }, amount);
+  }
+});

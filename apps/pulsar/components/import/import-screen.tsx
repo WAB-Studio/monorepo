@@ -26,7 +26,7 @@ const KNOWN_ERRORS = new Set([
 ]);
 
 type Failure =
-  | { kind: "templateLine"; line: number; expected: string; text: string }
+  | { kind: "templateLine"; line: number; expected: string; unit?: string; text: string }
   | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
 const subscribeNothing = () => () => {};
@@ -94,6 +94,7 @@ export function ImportScreen() {
         error?: string;
         line?: number;
         expected?: string;
+        unit?: string;
         via?: "template" | "model";
         draft?: ImportDraft;
       } | null;
@@ -108,6 +109,7 @@ export function ImportScreen() {
           kind: "templateLine",
           line: body.line,
           expected: body.expected,
+          unit: body.unit,
           text: source.split("\n")[body.line - 1] ?? "",
         });
       } else if (body?.error && KNOWN_ERRORS.has(body.error)) {
@@ -166,7 +168,7 @@ export function ImportScreen() {
         ? t("import.errors.templateLine", {
             line: failure.line,
             text: failure.text,
-            expected: t(messageKey(failure.expected)),
+            expected: t(messageKey(failure.expected), { unit: failure.unit ?? "" }),
           })
         : t(failure.key, failure.values)}
     </Notice>
