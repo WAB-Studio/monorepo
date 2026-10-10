@@ -43,6 +43,13 @@
       "when": 1791606114201,
       "tag": "0005_lookups_network_answer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791606395820,
+      "tag": "0006_lookups_network_answer_grant",
+      "breakpoints": true
     }
   ]
 }
