@@ -518,7 +518,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       try {
         await expect(page.getByRole("main").getByText(seeded.plainName, { exact: true })).toBeVisible();
         const panel = panelOf(page, seeded.plainName);
-        await expect(panel.getByText(new RegExp(`^mide km · hasta el ${DATE}$`))).toBeVisible();
+        await expect(panel.getByText(new RegExp(`^mide km, en km · hasta el ${DATE}$`))).toBeVisible();
         await expect(panel.getByText("solo lo que dijiste tú")).toHaveCount(0);
       } finally {
         await context.close();
@@ -534,7 +534,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
         await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
         const panel = panelOf(page, seeded.fedName);
         await expect(
-          panel.getByText(new RegExp(`^mide búsquedas · hasta el ${DATE} · solo lo que dijiste tú$`)),
+          panel.getByText(new RegExp(`^mide búsquedas, en searches · hasta el ${DATE} · solo lo que dijiste tú$`)),
         ).toBeVisible();
         await expect(panel.getByText("solo lo que dijiste tú", { exact: true })).toHaveCount(1);
       } finally {
@@ -691,7 +691,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       const horizon = plusDays(90);
       await expect(
         page.getByText(
-          `mide minutos · hasta el ${longDate(dayBefore(horizon))}`,
+          `mide minutos, en horas y minutos · hasta el ${longDate(dayBefore(horizon))}`,
         ),
       ).toBeVisible();
       await expect(
@@ -1247,7 +1247,7 @@ test.describe("the report's type and space", () => {
             .first()
             .evaluate((node) => getComputedStyle(node).fontFamily);
         // The goal's measure line and the count under the title are sentences.
-        expect(await family(/^mide minutos · hasta el /)).not.toMatch(/mono/i);
+        expect(await family(/^mide minutos, en horas y minutos · hasta el /)).not.toMatch(/mono/i);
         expect(await family(/^\d+ metas?$/)).not.toMatch(/mono/i);
         expect(await family(seeded.monthTask)).not.toMatch(/mono/i);
         // «de 12 h»: the sentence is Archivo around a mono figure.
@@ -1335,8 +1335,8 @@ test.describe("a readable source", () => {
       const date = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
       const panelOf = (name: string) =>
         page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
-      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide búsquedas · hasta el ${date}$`))).toBeVisible();
-      await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide km · hasta el ${date}$`))).toBeVisible();
+      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide búsquedas, en searches · hasta el ${date}$`))).toBeVisible();
+      await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide km, en km · hasta el ${date}$`))).toBeVisible();
       const body = (await page.locator("main").textContent()) ?? "";
       expect(body).not.toMatch(/diccionario|alimentada|solo lo que dijiste tú|No pudimos leer/i);
     } finally {
@@ -1682,17 +1682,17 @@ test.describe("the report on A4, compact", () => {
       const pages = pageLines(file);
       const monthRow = new RegExp(`^(${MONTH_NAMES.join("|")}) \\d{4}\\b`);
       for (const goal of goals) {
-        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${goal.name} · por mes`.toLowerCase()));
+        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase()));
         expect(at, `${goal.name}: «por mes» label in the PDF`).toBeGreaterThanOrEqual(0);
         const lines = pages[at];
-        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${goal.name} · por mes`.toLowerCase()) + 1);
+        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase()) + 1);
         expect(
           after.some((line) => line.startsWith(goal.months[0]) || monthRow.test(line)),
           `${goal.name}: label on page ${at + 1} of ${pages.length}, its first row is not there`,
         ).toBe(true);
       }
       const orphan = new RegExp(
-        `^(${goals.map((goal) => goal.name).join("|")})( · por mes)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
+        `^(${goals.map((goal) => goal.name).join("|")})( · por mes( · \d+ meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
         "i",
       );
       for (const [index, lines] of pages.entries()) {
@@ -1730,7 +1730,7 @@ test.describe("the report on A4, compact", () => {
       const pages = pageLines(file);
       // Every line of the PDF with the page it is on, so a goal's rows are read between its label and the next goal.
       const run = pages.flatMap((lines, index) => lines.map((line) => ({ line, page: index })));
-      const lowered = (goal: Planned) => `${goal.name} · por mes`.toLowerCase();
+      const lowered = (goal: Planned) => `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase();
       let split = 0;
       for (const [position, goal] of goals.entries()) {
         const from = run.findIndex((entry) => entry.line.toLowerCase() === lowered(goal));
