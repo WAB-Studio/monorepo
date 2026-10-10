@@ -6,7 +6,7 @@ import { test, expect } from "./fixtures";
 // `HoySiguienteCifra` (RP-28, RP-30, RP-54): Hoy's «este mes» row
 // for the next task of the plan says one hour figure and never a 0. A whole
 // task trails its estimate and the line carries no figure; a task with none
-// trails «sin estimar»; a sub-task never shows its parent's share; only a task
+// trails «sin estimar» in a time goal and nothing in a km one (RP-65); a sub-task never shows its parent's share; only a task
 // split across months reads «Siguiente del plan · 10 h este mes».
 
 const letters = (n: number) => [...String(n)].map((digit) => String.fromCharCode(97 + Number(digit))).join("");
@@ -43,7 +43,7 @@ function rowOf(page: Page, name: string): Locator {
 const WIDTHS = [390, 1440];
 
 for (const width of WIDTHS) {
-  test(`Hoy at ${width}: a next task with no estimate trails «sin estimar» muted and draws no 0, in minutes or in km`, async ({
+  test(`Hoy at ${width}: in minutes a next task with no estimate trails «sin estimar» muted, one with a figure trails it, and neither draws a 0`, async ({
     person,
     browser,
     baseURL,
@@ -51,14 +51,14 @@ for (const width of WIDTHS) {
   }) => {
     const stamp = Date.now();
     const minutesName = `Sin cifra minutos ${stamp}`;
-    const kmName = `Sin cifra km ${stamp}`;
     const sizedName = `Con cifra ${stamp}`;
+    const halfName = `Hora y media ${stamp}`;
     const minutes = await seedGoal(db, person.id, `Meta minutos ${stamp}`, { unit: "minutos", rhythm: 600 });
     await planTask(db, person.id, minutes, minutesName, null);
-    const km = await seedGoal(db, person.id, `Meta km ${stamp}`, { unit: "kilómetros", rhythm: 20 });
-    await planTask(db, person.id, km, kmName, null);
     const sized = await seedGoal(db, person.id, `Meta con cifra ${stamp}`, { unit: "minutos", rhythm: 600 });
     await planTask(db, person.id, sized, sizedName, 240);
+    const half = await seedGoal(db, person.id, `Meta hora y media ${stamp}`, { unit: "minutos", rhythm: 600 });
+    await planTask(db, person.id, half, halfName, 90);
 
     const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
     try {
@@ -66,21 +66,94 @@ for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
       await expect(page.locator("main")).toHaveCount(1);
-      for (const name of [minutesName, kmName]) {
+      const row = rowOf(page, minutesName);
+      await expect(row, "the row is drawn").toBeVisible();
+      await expect.soft(row.getByText("sin estimar", { exact: true }), "trails «sin estimar»").toHaveCount(1);
+      const text = await row.innerText();
+      expect.soft(text, "no 0 anywhere in the row").not.toMatch(/\b0\s*(km|min|h|kil)/i);
+      expect.soft(text, "no figure in the line").not.toContain("·");
+      await expect(rowOf(page, halfName).getByText("1 h 30 min", { exact: true }), "a figure trails as is").toHaveCount(1);
+      expect.soft(await rowOf(page, halfName).innerText(), "no «sin estimar» beside a figure").not.toContain("sin estimar");
+      const unsized = await row.getByText("sin estimar", { exact: true }).evaluate((el) => {
+        const c = getComputedStyle(el);
+        return [c.color, c.fontSize, c.fontFamily, c.fontWeight];
+      });
+      const sizedTrail = await rowOf(page, sizedName).getByText("4 h", { exact: true }).evaluate((el) => {
+        const c = getComputedStyle(el);
+        return [c.color, c.fontSize, c.fontFamily, c.fontWeight];
+      });
+      expect(unsized, "«sin estimar» is as muted and as big as an estimate").toEqual(sizedTrail);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where user_id = ${person.id}`;
+    }
+  });
+
+  test(`Hoy at ${width}: a task of a goal measured in km carries nothing on its right, with or without a stored figure`, async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const bareName = `Trote ${letters(stamp)}`;
+    const sizedName = `Carrera ${letters(stamp)}`;
+    const bare = await seedGoal(db, person.id, `Meta km ${stamp}`, { unit: "kilómetros", rhythm: 20 });
+    await planTask(db, person.id, bare, bareName, null);
+    const sized = await seedGoal(db, person.id, `Meta km cifra ${stamp}`, { unit: "kilómetros", rhythm: 20 });
+    await planTask(db, person.id, sized, sizedName, 5);
+
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await expect(page.locator("main")).toHaveCount(1);
+      for (const name of [bareName, sizedName]) {
         const row = rowOf(page, name);
         await expect(row, `${name}: the row is drawn`).toBeVisible();
-        await expect.soft(row.getByText("sin estimar", { exact: true }), `${name}: trails «sin estimar»`).toHaveCount(1);
+        await expect(row.getByText(/^Siguiente del (plan|mes)$/), `${name}: its sentence stays`).toHaveCount(1);
         const text = await row.innerText();
-        expect.soft(text, `${name}: no 0 anywhere in the row`).not.toMatch(/\b0\s*(km|min|h|kil)/i);
-        expect.soft(text, `${name}: no figure in the line`).not.toContain("·");
+        expect.soft(text, `${name}: no «sin estimar»`).not.toContain("sin estimar");
+        expect.soft(text, `${name}: no figure at all`).not.toMatch(/\d/);
+        expect.soft(text, `${name}: no unit`).not.toMatch(/km|kil/i);
       }
-      const unsized = await rowOf(page, minutesName).getByText("sin estimar", { exact: true }).evaluate(
-        (el) => getComputedStyle(el).color,
-      );
-      const sizedTrail = await rowOf(page, sizedName).getByText("4 h", { exact: true }).evaluate(
-        (el) => getComputedStyle(el).color,
-      );
-      expect(unsized, "«sin estimar» is as muted as an estimate").toBe(sizedTrail);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where user_id = ${person.id}`;
+    }
+  });
+
+  test(`Hoy at ${width}: marking a km task completes it and brings the next one`, async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const firstName = `Km primera ${stamp}`;
+    const secondName = `Km segunda ${stamp}`;
+    const goal = await seedGoal(db, person.id, `Meta km marca ${stamp}`, { unit: "kilómetros", rhythm: 20 });
+    const firstId = await planTask(db, person.id, goal, firstName, null);
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, in_plan, position, created_at)
+      values (${person.id}, ${goal}, ${secondName}, true, 2, '2020-01-03T00:00:00Z'::timestamptz)
+    `;
+
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await expect(page.locator("main")).toHaveCount(1);
+      await expect(rowOf(page, firstName)).toBeVisible();
+      await page.getByRole("button", { name: `Marcar hecha: ${firstName}` }).locator("visible=true").click();
+      await expect(rowOf(page, secondName), "the next task comes in").toBeVisible();
+      await expect(page.getByRole("button", { name: `Marcar hecha: ${firstName}` })).toHaveCount(0);
+      const [done] = await db<{ n: string }[]>`
+        select count(*)::text as n from goals.facts where one_off_id = ${firstId}
+      `;
+      expect(done.n, "completeOneOff wrote the first task's fact").toBe("1");
     } finally {
       await context.close();
       await db`delete from goals.goals where user_id = ${person.id}`;
