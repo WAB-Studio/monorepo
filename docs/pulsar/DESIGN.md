@@ -1147,7 +1147,7 @@ Taken by the user («1. b 2. b 3. b 4. a»); questions 2 and 3 are voyager's.
 - **(4a) The paper says which months it leaves out.** A line under the goal's «por mes» table names the months not
   printed (not started, no amount), e.g. «diciembre y enero: sin monto»; the table's count counts printed months only.
   It refines RP-70 (2026-10-09): the months still do not print, but the paper no longer hides that they exist. Board
-  before code.
+  `ReporteImpresoMesesFuera` approved as drawn by the user 2026-10-10; RP-70 retired for **RP-71**.
 - **Taken by the orchestrator, the same day, no board (they fix what boards already draw):**
   - A weekdays cadence reads Monday first and joins with «y» on every screen (goal, import review, Hoy).
   - A km goal's month block carries its unit («34 km de 120 km»); «N tareas» never splits from its number.
