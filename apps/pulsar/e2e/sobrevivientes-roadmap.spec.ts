@@ -256,7 +256,7 @@ test("r04: an invalid rhythm is refused in the sheet and never sent", async ({ p
     const sheet = page.getByRole("dialog");
     await sheet.getByPlaceholder("otra").fill("0");
     await sheet.getByRole("button", { name: "Guardar el ritmo" }).click();
-    await expect(sheet.getByText("El ritmo va de 1 a 1 000 000 de minutos al mes.")).toBeVisible();
+    await expect(sheet.getByText("El ritmo va de 1 min a 744 h al mes.")).toBeVisible();
     expect(sent).toEqual([]);
     const [row] = await db<{ rhythm: number }[]>`select rhythm from goals.goals where id = ${goalId}`;
     expect(row.rhythm).toBe(720);
