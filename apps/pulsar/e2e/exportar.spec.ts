@@ -866,7 +866,8 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       // RP-49: only the months print; no week row reaches the sheet.
       expect(flat).not.toMatch(/sem \d+ ·/);
       // Every printed date carries its year: a day and its month are followed by one within a span.
-      const dayMonth = new RegExp(`\\d{1,2} (?:de )?(?:${months.map((name) => name.slice(0, 3)).join("|")})[a-z]*`, "g");
+      // A count («0 de 1») ends in digits that are not a day: the lookbehind skips them.
+      const dayMonth = new RegExp(`(?<!\\d de )\\d{1,2} (?:de )?(?:${months.map((name) => name.slice(0, 3)).join("|")})[a-z]*`, "g");
       const bare = [...flat.matchAll(dayMonth)]
         .filter((found) => !/\d{4}/.test(flat.slice(found.index, found.index + found[0].length + 22)))
         .map((found) => flat.slice(found.index, found.index + 40));
