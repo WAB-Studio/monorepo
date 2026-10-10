@@ -360,3 +360,67 @@ test("a list opened at /registro?filtro=ling: into a row and back with «← Reg
   await expect(field(page)).toHaveValue("ling");
   await expect(rows(page)).toHaveCount(2);
 });
+
+for (const text of ["ice&fire", "50%", "a#b"]) {
+  test(`a filter holding reserved characters («${text}») survives a reload and the round trip into a word and back`, async ({
+    page,
+  }) => {
+    await open800(page);
+    await seedRows(page, [{ at: Date.now(), text, normalised: text, translation: "reservado" }]);
+    await page.reload();
+    await expect(page.getByText(HEADER.replace("803", "804").replace("800", "801"))).toBeVisible();
+
+    await field(page).fill(text);
+    await expect(rows(page)).toHaveCount(1);
+
+    await page.reload();
+    await expect(field(page)).toHaveValue(text);
+    await expect(rows(page)).toHaveCount(1);
+
+    // Into the word and back by the links, without a reload losing the module's memory.
+    await field(page).fill(text);
+    await rows(page).first().click();
+    await expect(page).toHaveURL(/\/registro\/./);
+    await page.getByRole("link", { name: /← Registro/ }).click();
+    await expect(field(page)).toHaveValue(text);
+    await expect(rows(page)).toHaveCount(1);
+  });
+}
+
+test("n rows show n-1 separators: none above the first row", async ({ page }) => {
+  await open800(page, "/registro?filtro=ling");
+  await expect(rows(page)).toHaveCount(2);
+  const above = await rows(page).evaluateAll((els) =>
+    els.map((el) => el.previousElementSibling?.classList.contains("rt-Separator") === true),
+  );
+  expect(above).toEqual([false, true]);
+  await field(page).fill("");
+  await expect(rows(page)).toHaveCount(WORDS);
+  const all = await rows(page).evaluateAll((els) =>
+    els.map((el) => el.previousElementSibling?.classList.contains("rt-Separator") === true),
+  );
+  expect(all[0]).toBe(false);
+  expect(all.slice(1).every(Boolean)).toBe(true);
+});
+
+test("typing only spaces filters nothing: all rows and no count line", async ({ page }) => {
+  await open800(page);
+  await field(page).fill("   ");
+  await expect(rows(page)).toHaveCount(WORDS);
+  await expect(page.getByText(/ de \d+ palabras/)).toHaveCount(0);
+});
+
+test("«zzz » with a trailing space names «zzz» in the none line", async ({ page }) => {
+  await open800(page);
+  await field(page).fill("zzz ");
+  await expect(page.getByText(none("zzz"), { exact: true })).toBeVisible();
+});
+
+test("clearing the field leaves the address at exactly /registro", async ({ page }) => {
+  await open800(page);
+  await field(page).fill("ling");
+  await expect(page).toHaveURL(/\/registro\?filtro=ling$/);
+  await field(page).fill("");
+  await expect(rows(page)).toHaveCount(WORDS);
+  expect(await page.evaluate(() => location.pathname + location.search + location.hash)).toBe("/registro");
+});
