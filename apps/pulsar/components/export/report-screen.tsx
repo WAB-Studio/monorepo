@@ -401,17 +401,19 @@ function GoalPart({
                 rows={rows}
                 nowrapLabel
                 stackInCard
+                after={
+                  out.length > 0 ? (
+                    <Text as="p" variant="line">
+                      {t("monthsOutTasks", {
+                        months: format.list(
+                          out.map((m) => monthYear.format(civilDateToDate(m.month))),
+                          { type: "conjunction" },
+                        ),
+                      })}
+                    </Text>
+                  ) : undefined
+                }
               />
-              {out.length > 0 ? (
-                <Text as="p" variant="line">
-                  {t("monthsOutTasks", {
-                    months: format.list(
-                      out.map((m) => monthYear.format(civilDateToDate(m.month))),
-                      { type: "conjunction" },
-                    ),
-                  })}
-                </Text>
-              ) : null}
             </Section>
           );
         }
@@ -506,14 +508,15 @@ function GoalPart({
                 stackInCard
                 wrapDetail
                 current={current === -1 ? undefined : current}
+                afterPrintOnly
+                after={
+                  out.length > 0 ? (
+                    <Text as="p" variant="line">
+                      {t("monthsOut", { months: outNames })}
+                    </Text>
+                  ) : undefined
+                }
               />
-              {out.length > 0 ? (
-                <PrintOnly>
-                  <Text as="p" variant="line">
-                    {t("monthsOut", { months: outNames })}
-                  </Text>
-                </PrintOnly>
-              ) : null}
             </Section>
             {goal.weeks.length > 0 ? (
               <PrintHidden>

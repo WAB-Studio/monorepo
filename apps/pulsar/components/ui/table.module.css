@@ -355,6 +355,19 @@
   margin-block-end: 16px;
 }
 
+/* The line under the rows (`after`): not a ruled row, 12px below the last one. */
+.after {
+  margin-block-start: 12px;
+}
+
+.afterRow[data-print-only] {
+  display: none;
+}
+
+.afterCell {
+  padding: 12px 0 0;
+}
+
 /* A row never breaks across pages; a fold is screen-only. */
 @media print {
   .stackRow,
@@ -383,6 +396,23 @@
 
   .wide tbody tr:first-child {
     break-before: avoid;
+  }
+
+  /* Chromium keeps a line with the rows above it only inside the table. */
+  .wide tr[data-last] {
+    break-after: avoid;
+  }
+
+  .wide .afterRow {
+    break-before: avoid;
+  }
+
+  .wide .afterRow[data-print-only] {
+    display: table-row;
+  }
+
+  .phone .after {
+    display: none;
   }
 
   .fold {

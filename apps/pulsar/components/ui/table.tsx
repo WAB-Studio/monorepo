@@ -67,6 +67,12 @@ type TableProps = {
   // Folds the whole table under a link-card with this text, closed
   // (`ReportePlegado.dc.html`'s «Ver las 9 semanas»). Paper never prints it.
   fold?: string;
+  // A line under the last row, kept with it on paper: it never starts a page
+  // alone. The wide face holds it as the table's last row (`data-row="months-out"`),
+  // the phone's stack as a block below.
+  after?: ReactNode;
+  // Shows `after` on paper only; the screen draws nothing for it.
+  afterPrintOnly?: boolean;
 };
 
 function isEmpty(cell: ReactNode): boolean {
@@ -79,7 +85,7 @@ function figureCell(cell: ReactNode, unit: string | undefined, words: TimeWords)
   return isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} /> : formatted;
 }
 
-export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fold }: TableProps) {
+export function Table({ caption, columns, rows, figures = [], unit, current, narrow, open, nowrapLabel, stackInCard, wrapDetail, fold, after, afterPrintOnly }: TableProps) {
   const words = useTimeWords();
   const lead = figures[0];
   const last = columns.length - 1;
@@ -122,6 +128,8 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
     );
   };
 
+  const lastPrinted = rows.findLastIndex((row) => row.printed !== false);
+
   const faces = (
     <>
       <div className={styles.phone}>
@@ -153,6 +161,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
             </li>
           ))}
         </ol>
+        {after && !afterPrintOnly ? <div className={styles.after}>{after}</div> : null}
       </div>
 
       <table className={styles.wide}>
@@ -176,6 +185,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
               className={row.href ? styles.linkedRow : undefined}
               data-current={index === current ? "" : undefined}
               data-unprinted={row.printed === false ? "" : undefined}
+              data-last={after && index === lastPrinted ? "" : undefined}
             >
               {columns.map((_, column) => (
                 <td key={column} className={join(styles.cell, cellClass(column))}>
@@ -195,6 +205,13 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
               ))}
             </tr>
           ))}
+          {after ? (
+            <tr className={styles.afterRow} data-row="months-out" data-print-only={afterPrintOnly ? "" : undefined}>
+              <td colSpan={columns.length} className={styles.afterCell}>
+                {after}
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </>
