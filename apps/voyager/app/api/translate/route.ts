@@ -4,10 +4,15 @@ import { env } from "@/lib/env";
 import { providerFetch } from "@/lib/provider/fetch";
 import { translateRequestSchema, type TranslationResult } from "@/lib/translate/types";
 import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { MODEL_NAME } from "@/lib/word/model";
+import { claimDailyCall } from "@/lib/word/spend";
 
 // The word path never reaches this route (RL-09): it exists for the sentence
 // path alone, and only when the device offers no translator of its own.
 export const dynamic = "force-dynamic";
+
+// The model call may wait its full timeout before MyMemory is tried.
+export const maxDuration = 40;
 
 // MyMemory's endpoint and language pair, the one constant a provider swap
 // touches. English to Spanish is fixed for this slice; direction is not a
@@ -17,6 +22,8 @@ const MYMEMORY_ENDPOINT = "https://api.mymemory.translated.net/get";
 // Half the OpenAI routes' 20 s: a sentence the reader is waiting on falls to
 // RL-37's per-word answer sooner.
 const MYMEMORY_TIMEOUT_MS = 10_000;
+
+const MODEL_TIMEOUT_MS = 20_000;
 
 type MyMemoryMatch = {
   translation?: string;
@@ -132,6 +139,44 @@ async function translateWithProvider(text: string): Promise<string> {
   throw new Error("MyMemory returned no usable translation");
 }
 
+// RL-60: the model translates first, inside the daily cap the word routes
+// share. Null on any reason not to answer (no key, no cap, cap spent, failure,
+// empty or echoed reply) so the caller falls to MyMemory.
+async function translateWithModel(text: string): Promise<string | null> {
+  const apiKey = env.OPENAI_API_KEY;
+  if (!apiKey || !env.WORD_TEXT_DAILY_CALL_CAP) return null;
+  if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+  const response = await providerFetch(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        reasoning_effort: "low",
+        max_completion_tokens: 2000,
+        messages: [
+          {
+            role: "system",
+            content: "Translate the English sentence into Spanish. Reply with the translation only; add no words.",
+          },
+          { role: "user", content: text },
+        ],
+      }),
+    },
+    { name: "openai-translate", timeoutMs: MODEL_TIMEOUT_MS },
+  );
+  if (!response) return null;
+  try {
+    const payload = (await response.json()) as { choices?: { message?: { content?: unknown } }[] };
+    const content = payload.choices?.[0]?.message?.content;
+    const out = typeof content === "string" ? content.trim() : "";
+    return out && !isEcho(text, out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request): Promise<Response> {
   let raw: unknown;
   try {
@@ -155,7 +200,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const text = await translateWithProvider(parsed.data.text);
+    const text = (await translateWithModel(parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
     const result: TranslationResult = { text, origin: "network" };
     return Response.json(result, { status: 200 });
   } catch {

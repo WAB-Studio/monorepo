@@ -220,12 +220,12 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 - [ ] **RL-08** — A sentence is translated by the device's own translator when the browser offers one and it is ready. Whether it does is asked of the browser at runtime, on every open, and never inferred from the browser's name or version.
 - [x] **RL-09** — When the device offers no translator, the sentence is translated over the network, and the answer says the translation came from the network. *This is a server surface and the sentence path's own exception to "no backend": one route handler that holds the provider's identity and any key it needs off the client and makes the provider a one-file change. Nothing on the word path passes through it, ever.*
-- [x] **RL-53** — When the provider's best pick for a sentence is unusable — empty, the quota warning, or an echo of
-  what was typed — the route does not give up on the reply: it reads the provider's other candidates (`matches`)
-  through the same gate and answers with the usable one of highest `match` score, whatever its position. Only when
-  none is usable does the route answer 502. A quota refusal (`responseStatus` not 200) stops before `matches` is
-  read. Measured live: MyMemory's best pick for «the cat sat on the mat» is empty while a lower entry answers it in
-  full.
+- [ ] **RL-60** *(successor of RL-53)* — A sentence is translated over the network by the paid model the word routes use,
+  each call counted against the shared daily cap; the model replies with the translation alone, and an empty reply or an
+  echo of what was typed is refused. At the cap, with no key, or when the model fails, the provider's public memory
+  answers as before, and the answer says network either way. That fallback keeps RL-53's reading: when the provider's
+  best pick is unusable — empty, the quota warning, or an echo — it answers with the usable `matches` candidate of
+  highest `match` score, and only when none is usable does the route answer 502.
 - [ ] **RL-10** — While the device's translator is downloading what it needs, the interface says so and the box stays usable.
 - [x] **RL-11** — When the device has a translator that is not yet installed, that sentence is translated over the network and a single control offers to install the translator. Activating that control is what starts the download; every sentence after it is translated on the device. A person who never activates it keeps getting network translations and is never blocked.
 
@@ -358,6 +358,13 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 Dead codes. The number stays burned and the tick stays as it was.
 
+- [x] **RL-53** — When the provider's best pick for a sentence is unusable — empty, the quota warning, or an echo of
+  what was typed — the route does not give up on the reply: it reads the provider's other candidates (`matches`)
+  through the same gate and answers with the usable one of highest `match` score, whatever its position. Only when
+  none is usable does the route answer 502. A quota refusal (`responseStatus` not 200) stops before `matches` is
+  read. Measured live: MyMemory's best pick for «the cat sat on the mat» is empty while a lower entry answers it in
+  full.
+  _Retired 2026-10-09. Successor: RL-60. MyMemory prepended a word the sentence never had («it would be there» came back «Sin embargo, estaría ahí.»); the paid model now translates first and MyMemory is the fallback._
 - [x] **RL-32** — The reader reads their record grouped by word: one row per word, with how many
   times it was searched, ordered by frequency, case-insensitive; and tapping a word opens every one
   of its searches with its date. This replaces the chronological list.
