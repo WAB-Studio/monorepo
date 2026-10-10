@@ -5,7 +5,7 @@ import { dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test, expect, type Person } from "./fixtures";
 
-// RP-14, RP-28: the figure beside «mide en minutos» is the goal's total since
+// RP-14, RP-28: the figure beside «mide en horas y minutos» (RP-35, RP-66) is the goal's total since
 // it opened, and a quiet line under it says so: «en total, desde el 1 de
 // enero» (`MetaTotal`). The date is DM Mono inside an
 // Archivo sentence; the year shows only when it is not the current one. «0 min»
@@ -26,21 +26,21 @@ function openedAt(year: number): Date {
 async function seedGoal(
   db: postgres.Sql,
   person: Person,
-  opts: { openedYear: number; measured: boolean; minutes: number },
+  opts: { openedYear: number; measured: boolean; minutes: number; unit?: string },
 ): Promise<{ goalId: string }> {
   const horizon = dateToCivilDate(new Date(Date.now() + 90 * 86_400_000));
   const opened = openedAt(opts.openedYear);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
     values (${person.id}, ${`Meta total ${Date.now()}`}, ${horizon}::date,
-            ${opts.measured ? "Estudio" : null}, ${opts.measured ? "minutos" : null}, ${opened})
+            ${opts.measured ? "Estudio" : null}, ${opts.measured ? (opts.unit ?? "minutos") : null}, ${opened})
     returning id
   `;
   if (opts.measured) {
     const [commitment] = await db<{ id: string }[]>`
       insert into goals.commitments
         (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
-      values (${person.id}, ${goal.id}, ${`Estudio ${Date.now()}`}, 'daily', 'quantity', 60, 'minutos', ${opened})
+      values (${person.id}, ${goal.id}, ${`Estudio ${Date.now()}`}, 'daily', 'quantity', 60, ${opts.unit ?? "minutos"}, ${opened})
       returning id
     `;
     if (opts.minutes > 0) {
@@ -85,7 +85,8 @@ for (const [width, height] of WIDTHS) {
     try {
       const page = await context.newPage();
       await page.goto(`/metas/${goalId}`);
-      await expect(page.getByText("mide en minutos", { exact: true })).toBeVisible();
+      await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+      await expect(page.getByText("mide en minutos", { exact: true })).toHaveCount(0);
 
       // Names the total, with the board's words.
       const line = totalLine(page);
@@ -144,7 +145,8 @@ test("a measured goal with nothing done keeps «0 min» and its line", async ({ 
   try {
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("mide en minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en minutos", { exact: true })).toHaveCount(0);
     await expect(page.getByText(/^0 min$/).locator("visible=true").first()).toBeVisible();
     await expect(totalLine(page)).toHaveText("en total, desde el 1 de enero");
   } finally {
@@ -164,6 +166,72 @@ test("a goal with no measure draws no total line and no «mide en»", async ({ p
     await expect(page.getByText("mide en", { exact: false })).toHaveCount(0);
     await expect(page.getByText(/en total/)).toHaveCount(0);
     await expect(page.getByText(/desde el \d/)).toHaveCount(0);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
+  }
+});
+
+// Module 720. A measure kept in minutes is named as its figures read.
+test("a goal made with «2 horas» says «mide en horas y minutos», never «mide en minutos»", async ({
+  page,
+  db,
+  personId,
+}) => {
+  const goalName = `Meta horas ${Date.now()}`;
+  await page.goto("/metas/nueva");
+  await page.getByLabel("nombre").fill(goalName);
+  await page.getByRole("button", { name: "Abrirla" }).click();
+  await page.waitForURL(/\/metas\/[0-9a-f-]{36}$/);
+  const goalId = page.url().split("/metas/")[1];
+  try {
+    await page.getByRole("link", { name: "Añadir un compromiso" }).click();
+    await page.waitForURL(`**/metas/${goalId}/compromisos/nuevo`);
+    await page.getByLabel("qué es").fill(`Estudio horas ${Date.now()}`);
+    await page.getByRole("button", { name: "un número", exact: true }).click();
+    await page.getByLabel("cantidad", { exact: true }).fill("2");
+    await page.getByLabel("unidad").fill("horas");
+    await page.getByRole("button", { name: "Añadirlo" }).click();
+    await page.waitForURL(`**/metas/${goalId}`);
+
+    const [row] = await db<{ measure_unit: string }[]>`select measure_unit from goals.goals where id = ${goalId}`;
+    expect(row.measure_unit).toBe("minutos");
+
+    for (const [width, height] of WIDTHS) {
+      await page.setViewportSize({ width, height });
+      await page.goto(`/metas/${goalId}`);
+      await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+      await expect(page.getByText("mide en minutos", { exact: true })).toHaveCount(0);
+    }
+  } finally {
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
+  }
+});
+
+test("a goal whose unit is stored as «min» says «mide en horas y minutos»", async ({ person, browser, baseURL, db }) => {
+  const year = Number(todayInZone().slice(0, 4));
+  const { goalId } = await seedGoal(db, person, { openedYear: year, measured: true, minutes: 90, unit: "min" });
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en min", { exact: true })).toHaveCount(0);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
+  }
+});
+
+test("a goal measured in km keeps «mide en km» (guard, green today)", async ({ person, browser, baseURL, db }) => {
+  const year = Number(todayInZone().slice(0, 4));
+  const { goalId } = await seedGoal(db, person, { openedYear: year, measured: true, minutes: 5, unit: "km" });
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.goto(`/metas/${goalId}`);
+    await expect(page.getByText("mide en km", { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;

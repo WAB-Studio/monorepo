@@ -3068,3 +3068,10 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - A probe run as the migration's superuser passes; only an insert `set local role authenticated` sees it.
 - Measured 2026-10-09, module 697: 0005 added three columns, its validator passed, and 698's `check:sync` hit 42501 on the
   first upload. Fixed by 0006. Prove a new column as the role that writes it.
+
+## `page.content()` always holds every interface string
+- `NextIntlClientProvider` in `apps/pulsar/app/layout.tsx` ships the whole message catalogue in each page's payload.
+- `expect(await page.content()).not.toContain("<copy>")` cannot pass, whatever the screen paints.
+- Assert absence on what is drawn: `getByText(...).toHaveCount(0)` or `locator("body").innerText()`.
+- Measured 2026-10-10, module 723: `meses-km.spec.ts:165` stayed red with the feature correct; the only match was the raw
+  `month.list.empty` message.

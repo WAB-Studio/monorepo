@@ -30,6 +30,8 @@ export type TableRow = {
   // The lead cell must then be plain text: it is what the link names, so a
   // link of its own there would nest. Every other cell stays text.
   href?: string;
+  // `false` keeps the row on screen and off paper, on both faces. Omitted prints.
+  printed?: boolean;
 };
 
 type TableProps = {
@@ -134,6 +136,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
                   : styles.stackRow
               }
               data-current={index === current ? "" : undefined}
+              data-unprinted={row.printed === false ? "" : undefined}
             >
               {row.href ? (
                 <Link
@@ -172,6 +175,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
               key={row.key}
               className={row.href ? styles.linkedRow : undefined}
               data-current={index === current ? "" : undefined}
+              data-unprinted={row.printed === false ? "" : undefined}
             >
               {columns.map((_, column) => (
                 <td key={column} className={join(styles.cell, cellClass(column))}>

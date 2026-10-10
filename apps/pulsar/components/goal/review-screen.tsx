@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { shortMonth } from "@/lib/dates/short-month";
 import { loadGoal } from "@/lib/queries/goal";
+import { isTimeUnit } from "@/lib/units/time";
 import { Page, ScreenHeader, Section, Table, Text, type TableRow } from "@/components/ui";
 
 // «21–27 sep», «31 ago–6 sep».
@@ -71,7 +72,9 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
     <Page width="full">
       <ScreenHeader title={t("goal.review.title")} back={back} />
       <Text as="p" variant="sentence">
-        {t("goal.review.measure", { unit: goal.measureUnit })}
+        {isTimeUnit(goal.measureUnit)
+          ? t("goal.review.measureTime")
+          : t("goal.review.measure", { unit: goal.measureUnit })}
       </Text>
       <Table
         caption={t("goal.review.caption")}

@@ -20,7 +20,7 @@ export function cadencePhrase(translate: Translate, cadence: Cadence, names: Cad
     case "weekdays":
       return cadence.days.length === 1
         ? translate("day.cadence.onlyWeekday", { weekday: names.weekdayPlural[cadence.days[0] - 1] })
-        : daysSentence(translate, cadence.days.map((day) => names.weekdayShort[day - 1]));
+        : daysSentence(translate, [...cadence.days].sort((a, b) => a - b).map((day) => names.weekdayShort[day - 1]));
     case "times_per_week":
       return translate("day.cadence.timesPerWeek", { count: cadence.count });
     case "every_n_days":

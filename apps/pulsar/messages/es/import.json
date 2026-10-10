@@ -33,6 +33,7 @@
     "horizon": "horizonte",
     "horizonUntil": "hasta el {date}",
     "measure": "medida",
+    "measureTime": "horas y minutos",
     "rhythmOf": "Ritmo al mes, {amount}",
     "rhythmName": "Ritmo al mes",
     "rhythmMeta": "las tareas van al plan",

@@ -6,9 +6,10 @@ import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
 import { amountOf } from "@/lib/plan/roadmap";
 import { nextMonth } from "@/lib/plan/months";
+import { monthDetail } from "@/lib/plan/month-detail";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
-import { formatQuantity, type TimeWords } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 import { Button, ListDetail, Page, ScreenHeader, Table, Text, type TableRow } from "@/components/ui";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
@@ -62,6 +63,7 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
   }
 
   const unit = goal.measureUnit;
+  const timed = isTimeUnit(unit);
   const units = await getTranslations("units");
   const words: TimeWords = {
     h: (h) => units("h", { h }),
@@ -94,11 +96,14 @@ export async function MonthsList({ goal, open }: { goal: GoalView; open: string 
           ? t("month.months.planned")
           : null;
 
+    const count = timed ? 0 : planMonthList(goal.plan, row.month).length;
+    const tasks = count === 0 ? null : t("month.months.tasksCount", { count });
+
     return {
       key: row.month,
       href: hrefOf(row.month),
       cells: [monthLabel(row.month), started ? row.reached : null, amount],
-      detail: state,
+      detail: monthDetail(state, tasks),
       note: amount,
     };
   });

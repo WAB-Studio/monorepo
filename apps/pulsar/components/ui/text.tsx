@@ -5,7 +5,7 @@ import styles from "./text.module.css";
 // The type scale of docs/pulsar/DESIGN.md "Type", one class per role, so no
 // screen names a size. `sentence` is the quiet sentence (a hint, a refusal, a
 // note, an empty state) in Archivo; `meta` stays for figures and dates only. `body` inherits the base step and only takes a tone.
-type Variant = "title" | "heading" | "name" | "meta" | "sentence" | "body";
+type Variant = "title" | "heading" | "name" | "meta" | "sentence" | "line" | "body";
 
 // docs/pulsar/DESIGN.md "Tokens": `quiet` never carries a word a person must
 // read, so a screen reaching for it is asking for decoration, not a sentence.
@@ -37,6 +37,7 @@ const variants: Record<Variant, string | undefined> = {
   name: styles.name,
   meta: styles.meta,
   sentence: styles.sentence,
+  line: styles.line,
   body: undefined,
 };
 
