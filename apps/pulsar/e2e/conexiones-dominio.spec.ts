@@ -4,7 +4,7 @@ import type { Sql } from "postgres";
 import { test, expect, type Person } from "./fixtures";
 
 // RP-38, RP-60, RP-64, RNP-20: boards `ConexionesConDominio`, `ConexionesPlegadas`,
-// `ConexionesPlegadasAbiertas`, `ConexionesVencidaCreaOtra`, `ConexionesCreadaDesktop`.
+// `ConexionesPlegadasAbiertas`, `ConexionesVencidaCreaOtra`, `ConexionesSeccionConexiones`, `ConexionesDesktopConector`.
 // The words are the boards', typed here on purpose: a message key renamed or reworded in the
 // catalogue must not drag the assertion with it.
 const DAY = 86_400_000;
@@ -293,10 +293,11 @@ for (const width of [390, 1440]) {
         const conns = fold(page, "2 conexiones que ya no entran");
         await expect(keys).toHaveAttribute("aria-expanded", "false");
         await expect(conns).toHaveAttribute("aria-expanded", "false");
-        // Keys' fold sits above the claude.ai label, the connections' fold below it.
+        // Keys' fold sits above the «conexiones» label, the connections' fold below it.
         const y = async (l: Locator) => (await l.boundingBox())!.y;
         // The host in a row is a <strong>; the section label is the one that is not.
-        const label = (await page.getByText("claude.ai", { exact: true }).and(page.locator(":not(strong)")).boundingBox())!.y;
+        await expect(page.getByText("claude.ai", { exact: true }).and(page.locator(":not(strong)"))).toHaveCount(0);
+        const label = (await page.getByText("conexiones", { exact: true }).boundingBox())!.y;
         expect(await y(keys)).toBeLessThan(label);
         expect(await y(conns)).toBeGreaterThan(label);
 
@@ -422,13 +423,99 @@ for (const width of [390, 1440]) {
       }
     });
 
-    test("the created key gives Claude Code its command and Claude Desktop its JSON, then a generic try-it line", async ({
+    test("the section of authorizations is «conexiones», between the keys and the form, and Claude Code is not filed under «claude.ai»", async ({
+      person,
+      db,
+      browser,
+      baseURL,
+    }) => {
+      await seed(db, person, live("portátil del trabajo"));
+      await seed(db, person, {
+        kind: "oauth",
+        name: "Claude",
+        created: ago(8),
+        used: new Date(),
+        redirect: "https://claude.ai/api/mcp/auth_callback",
+      });
+      await seed(db, person, {
+        kind: "oauth",
+        name: "Claude Code",
+        created: ago(6),
+        used: ago(1),
+        redirect: "http://localhost:33418/callback",
+      });
+      const { context, page } = await openScreen(browser, baseURL!, person, width);
+      try {
+        const label = page.getByText("conexiones", { exact: true });
+        await expect(label).toHaveCount(1);
+        await expect(page.getByText("claude.ai", { exact: true }).and(page.locator(":not(strong)"))).toHaveCount(0);
+        const y = async (l: Locator) => (await l.boundingBox())!.y;
+        const keysLabel = await y(page.getByText("llaves", { exact: true }));
+        const conns = await y(label);
+        const another = await y(page.getByText("otra llave", { exact: true }));
+        expect(keysLabel).toBeLessThan(conns);
+        // Both OAuth rows sit under the one label, above the form.
+        for (const name of ["Revocar Claude, vuelve a claude.ai", "Revocar Claude Code, vuelve a localhost:33418"]) {
+          const row = await y(page.getByRole("button", { name, exact: true }));
+          expect(row).toBeGreaterThan(conns);
+          expect(row).toBeLessThan(another);
+        }
+        // The key's row is above the label.
+        expect(await y(page.getByRole("button", { name: "Revocar la llave portátil del trabajo", exact: true }))).toBeLessThan(conns);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("with only a key, no «conexiones» label stands over nothing", async ({ person, db, browser, baseURL }) => {
+      await seed(db, person, live("portátil del trabajo"));
+      const { context, page } = await openScreen(browser, baseURL!, person, width);
+      try {
+        await expect(page.getByText("llaves", { exact: true })).toBeVisible();
+        await expect(page.getByText("conexiones", { exact: true })).toHaveCount(0);
+        await expect(page.getByText("claude.ai", { exact: true }).and(page.locator(":not(strong)"))).toHaveCount(0);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test("the connector section names claude.ai and Claude Desktop, shows the address on the main screen, and keeps it with no keys at all", async ({
+      person,
+      db,
+      browser,
+      baseURL,
+    }) => {
+      // Empty first: no key, no connection.
+      let opened = await openScreen(browser, baseURL!, person, width);
+      try {
+        const page = opened.page;
+        await expect(page.getByText("en claude.ai o claude desktop", { exact: true })).toBeVisible();
+        await expect(page.getByText("Agrega un conector con esta dirección y entra con tu correo.", { exact: true })).toBeVisible();
+        await expect(page.locator("pre").filter({ hasText: /^\S+\/mcp$/ })).toHaveCount(1);
+        await expect(page.getByRole("button", { name: "Copiar la dirección" })).toBeVisible();
+        await expect(page.getByText("en claude.ai", { exact: true })).toHaveCount(0);
+      } finally {
+        await opened.context.close();
+      }
+      await seed(db, person, live("portátil"));
+      opened = await openScreen(browser, baseURL!, person, width);
+      try {
+        const page = opened.page;
+        await expect(page.getByText("en claude.ai o claude desktop", { exact: true })).toBeVisible();
+        await expect(page.locator("pre").filter({ hasText: /^\S+\/mcp$/ })).toHaveCount(1);
+      } finally {
+        await opened.context.close();
+      }
+    });
+
+    test("the created key gives Claude Code its command and a generic try-it line, with no Claude Desktop file and the address not repeated", async ({
       person,
       browser,
       baseURL,
     }) => {
       const { context, page } = await openScreen(browser, baseURL!, person, width);
       try {
+        const address = (await page.locator("pre").filter({ hasText: /^\S+\/mcp$/ }).textContent())!;
         await page.getByLabel("nombre de la llave").fill("portátil del trabajo");
         await page.getByRole("button", { name: "Crear llave" }).click();
         await expect(page.getByRole("heading", { level: 1, name: "Tu llave" })).toBeVisible();
@@ -438,54 +525,39 @@ for (const width of [390, 1440]) {
         const keyBlock = page.locator("pre").first();
         await expect(keyBlock).toHaveText(KEY);
         const key = (await keyBlock.textContent())!;
-
         await expect(page.getByText("claude code · pégalo en tu terminal", { exact: true })).toBeVisible();
-        await expect(page.getByText("claude desktop · claude_desktop_config.json", { exact: true })).toBeVisible();
-        await expect(page.getByText("Pega esto en el archivo y reinicia Claude Desktop.", { exact: true })).toBeVisible();
 
-        // Terminal command.
         await page.getByRole("button", { name: "Copiar el comando de Claude Code" }).click();
         const command = await page.evaluate(() => navigator.clipboard.readText());
-        expect(command).toMatch(/^claude mcp add --transport http pulsar \S+\/mcp --header "Authorization: Bearer pls_/);
-        expect(command).toContain(key);
-        const url = command.match(/pulsar (\S+\/mcp) --header/)![1];
+        expect(command).toBe(`claude mcp add --transport http pulsar ${address} --header "Authorization: Bearer ${key}"`);
 
-        // Desktop config: valid JSON, the whole key, the same address as the terminal's.
-        const copyConfig = page.getByRole("button", { name: "Copiar la configuración de Claude Desktop" });
-        await expect(copyConfig).toBeVisible();
-        await expect(copyConfig).toHaveText("Copiar");
-        const block = page.locator("pre").filter({ hasText: "mcpServers" });
-        await expect(block).toHaveCount(1);
-        const shown = JSON.parse((await block.textContent())!);
-        await copyConfig.click();
-        const copied = await page.evaluate(() => navigator.clipboard.readText());
-        expect(JSON.parse(copied)).toEqual({
-          mcpServers: {
-            pulsar: {
-              command: "npx",
-              args: ["mcp-remote", url, "--header", `Authorization: Bearer ${key}`],
-            },
-          },
-        });
-        expect(shown).toEqual(JSON.parse(copied));
-        expect(copied).not.toContain("…");
+        // Key and command only: no Claude Desktop file, no JSON, no address of its own.
+        await expect(page.locator("pre")).toHaveCount(2);
+        await expect(page.locator("pre").filter({ hasText: /^\S+\/mcp$/ })).toHaveCount(0);
+        await expect(page.getByText("claude_desktop_config.json")).toHaveCount(0);
+        await expect(page.getByText("mcpServers")).toHaveCount(0);
+        await expect(page.getByText("mcp-remote")).toHaveCount(0);
+        await expect(page.getByText("reinicia Claude Desktop")).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /Claude Desktop/ })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "Copiar la dirección" })).toHaveCount(0);
+        await expect(page.getByText("en claude.ai o claude desktop")).toHaveCount(0);
 
-        // The try-it line is generic: no goal of the person's is named.
         const sentence = page.getByText("Prueba: «lee mis metas y dime qué sigue».", { exact: true });
         await expect(sentence).toBeVisible();
         await expect(page.getByText(/inglés/)).toHaveCount(0);
         await expect(page.getByText(/queda conectado/)).toHaveCount(0);
 
-        // Order: terminal, then desktop, then the line, then «Listo».
         const y = async (l: Locator) => (await l.boundingBox())!.y;
         const terminal = await y(page.getByText("claude code · pégalo en tu terminal", { exact: true }));
-        const desktop = await y(page.getByText("claude desktop · claude_desktop_config.json", { exact: true }));
         const line = await y(sentence);
         const done = await y(page.getByRole("button", { name: "Listo", exact: true }));
-        expect(terminal).toBeLessThan(desktop);
-        expect(desktop).toBeLessThan(line);
+        expect(terminal).toBeLessThan(line);
         expect(line).toBeLessThan(done);
         expect(await overflow(page)).toBeLessThanOrEqual(0);
+
+        // «Listo» brings the address back to the main screen.
+        await page.getByRole("button", { name: "Listo", exact: true }).click();
+        await expect(page.locator("pre").filter({ hasText: /^\S+\/mcp$/ })).toHaveCount(1);
       } finally {
         await context.close();
       }
