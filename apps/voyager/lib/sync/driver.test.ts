@@ -35,6 +35,9 @@ function foreignRows(count: number, from: number) {
     dictionaryReady: true,
     origin: "device",
     recordSchema: 1,
+    definition: null,
+    exampleEn: null,
+    exampleEs: null,
     receivedAt: "2026-10-08T10:00:00.000Z",
   }));
 }

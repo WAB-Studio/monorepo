@@ -33,8 +33,22 @@ const untypedModule = Module as unknown as {
   _load: (request: string, parent: unknown, isMain: boolean) => unknown;
 };
 const originalLoad = untypedModule._load;
-untypedModule._load = (request, parent, isMain) =>
-  request === "server-only" ? {} : originalLoad(request, parent, isMain);
+// The route is driven for S30/S31 with the session stood in for: the reader is
+// the one the block created, and `run` opens the same settled transaction.
+const sessionStub: { readerId: string; run: (work: (tx: Transaction) => Promise<unknown>) => Promise<unknown> } = {
+  readerId: "",
+  run: () => Promise.reject(new Error("session stub not set")),
+};
+untypedModule._load = (request, parent, isMain) => {
+  if (request === "server-only") return {};
+  if (/(^|\/)lib\/session(\.ts)?$/.test(request)) {
+    return {
+      getReader: async () => ({ id: sessionStub.readerId, email: "" }),
+      withReaderDb: (work: (tx: Transaction) => Promise<unknown>) => sessionStub.run(work),
+    };
+  }
+  return originalLoad(request, parent, isMain);
+};
 
 const sql = postgres(process.env.DATABASE_URL!, {
   prepare: false,
@@ -172,7 +186,7 @@ async function main() {
       const cols = insertCols.map((r) => r.column_name);
       assert(
         "S3",
-        cols.length === 15 && cols.includes("translation") && !cols.includes("received_at"),
+        cols.length === 18 && cols.includes("translation") && cols.includes("definition") && !cols.includes("received_at"),
         `${cols.length} insertable columns, translation = ${cols.includes("translation")}, received_at = ${cols.includes("received_at")}`,
       );
 
@@ -676,6 +690,70 @@ async function main() {
     const sent = await asReader((reader) => downloadRows(reader, null, viewer));
     const back = sent.find((row) => row.device_id === unlistedDevice);
     assert("S29", back?.outcome === "unlisted", `outcome of the row another device downloads = ${back?.outcome ?? "none"}`);
+
+    // S30/S31: the route itself. The answer of the network travels up from one
+    // device and down to another; a client that predates the fields still enters.
+    sessionStub.readerId = late;
+    sessionStub.run = (work) => asReader(work);
+    const { POST } = await import("../app/api/log/sync/route");
+    const post = async (body: unknown) => {
+      const response = await POST(new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify(body) }));
+      return { status: response.status, json: (await response.json()) as { rows: Record<string, unknown>[] } };
+    };
+    const [phone, laptop] = [randomUUID(), randomUUID()];
+    const answered = {
+      ...rowsOf(phone, [1])[0],
+      outcome: "unlisted",
+      definition: "d".repeat(500),
+      exampleEn: "An example.",
+      exampleEs: "Un ejemplo.",
+    };
+    await post({ deviceId: phone, rows: [answered], since: null });
+    const pulled = await post({ deviceId: laptop, rows: [], since: null });
+    const carried = pulled.json.rows.find((wire) => wire.deviceId === phone);
+    assert(
+      "S30",
+      pulled.status === 200 &&
+        carried?.definition === answered.definition &&
+        carried?.exampleEn === answered.exampleEn &&
+        carried?.exampleEs === answered.exampleEs,
+      `definition = ${String(carried?.definition).length} chars, example_en = ${String(carried?.exampleEn)}, example_es = ${String(carried?.exampleEs)}`,
+    );
+
+    const oldPhone = randomUUID();
+    const oldClient = await post({ deviceId: oldPhone, rows: rowsOf(oldPhone, [1]), since: null });
+    const pulledOld = await post({ deviceId: laptop, rows: [], since: null });
+    const oldBack = pulledOld.json.rows.find((wire) => wire.deviceId === oldPhone);
+    assert(
+      "S31",
+      oldClient.status === 200 && oldBack?.definition === null && oldBack?.exampleEn === null && oldBack?.exampleEs === null,
+      `status = ${oldClient.status}, fields = ${JSON.stringify([oldBack?.definition, oldBack?.exampleEn, oldBack?.exampleEs])}`,
+    );
+
+    // S32: another reader sees none of those columns, by download or by select.
+    const stranger = randomUUID();
+    await lateDb.begin(async (tx) => {
+      await tx`insert into auth.users (id, email) values (${stranger}, ${`harness-reader-${stranger}@example.invalid`})`;
+      await tx`insert into harness.identities (user_id, run_id, email, disposition)
+        values (${stranger}, ${run}, ${`harness-reader-${stranger}@example.invalid`}, 'ephemeral')`;
+    });
+    try {
+      const strangerSees = await lateDb.begin(async (tx) => {
+        await enterUserContext(tx, stranger);
+        const downloaded = await downloadRows(readerTx(tx), null, randomUUID());
+        const selected = await tx`select definition, example_en, example_es from reading.lookups
+          where definition is not null or example_en is not null or example_es is not null`;
+        return { downloaded: downloaded.length, selected: selected.length };
+      });
+      assert(
+        "S32",
+        strangerSees.downloaded === 0 && strangerSees.selected === 0,
+        `rows another reader downloads = ${strangerSees.downloaded}, selects = ${strangerSees.selected}`,
+      );
+    } finally {
+      await lateDb`delete from harness.identities where user_id = ${stranger}`;
+      await lateDb`delete from auth.users where id = ${stranger}`;
+    }
   } finally {
     await lateDb`delete from harness.identities where user_id = ${late}`;
     await lateDb`delete from auth.users where id = ${late}`;

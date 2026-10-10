@@ -6,6 +6,11 @@ import { syncRowSchema, type SyncRow } from "./protocol";
 const TEXT_MAX = syncRowSchema.shape.text.maxLength!;
 const NORMALISED_MAX = syncRowSchema.shape.normalised.maxLength!;
 const HEADWORD_MAX = syncRowSchema.shape.headword.unwrap().maxLength!;
+const ANSWER_MAX = syncRowSchema.shape.definition.unwrap().unwrap().maxLength!;
+
+function cutAnswer(value: string | null | undefined): string | null {
+  return value == null ? null : cut(value, ANSWER_MAX);
+}
 
 function cut(value: string, max: number): string {
   return value.length <= max ? value : value.slice(0, max).replace(/[\uD800-\uDBFF]$/, "");
@@ -24,6 +29,9 @@ function toSyncRow(row: LookupRecord, deviceId: string): SyncRow {
     rule: row.rule,
     senses: row.senses,
     translation: row.translation,
+    definition: cutAnswer(row.definition),
+    exampleEn: cutAnswer(row.exampleEn),
+    exampleEs: cutAnswer(row.exampleEs),
     dictionaryReady: row.dictionaryReady,
     origin: row.origin,
     recordSchema: row.schema,

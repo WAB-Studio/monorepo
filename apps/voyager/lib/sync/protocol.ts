@@ -6,8 +6,10 @@ import { z } from "zod";
 // sync (the pattern is lib/translate/types.ts's `translateRequestSchema`).
 
 // ~155 KB per request at ~310 bytes/row typical (424 B/row worst case admits
-// 212 KB), up from 289 B/row measured before `translation`. Both stay well
-// under a megabyte, so splitting the batch would only double the requests.
+// 212 KB), up from 289 B/row measured before `translation`. The network's
+// answer (`definition` and two examples, 500 characters each) adds up to
+// 1.5 KB a row: 500 such rows serialise under 1 MB, still under the 4 MB the
+// route admits, so splitting the batch would only double the requests.
 export const SYNC_BATCH = 500;
 
 // Rows one reader may send in a UTC day, across every device. Bounds what a
@@ -39,6 +41,12 @@ export const syncRowSchema = z.object({
   dictionaryReady: z.boolean(),
   origin: z.enum(["device", "network"]).nullable(),
   recordSchema: z.int().positive().max(MAX_INT2),
+  // The network's answer travels in the copy (RL-62). Optional on the way up:
+  // a client installed before this field existed uploads without it, and the
+  // row is stored with null. `syncResponseSchema` makes them required.
+  definition: z.string().max(500).nullable().optional(),
+  exampleEn: z.string().max(500).nullable().optional(),
+  exampleEs: z.string().max(500).nullable().optional(),
 });
 
 // What a device sends: its own rows since the last upload, and the cursor of
@@ -80,7 +88,14 @@ export const syncRequestSchema = z.object({
 // boundary (RL-24).
 export const syncResponseSchema = z.object({
   accepted: z.int(),
-  rows: z.array(syncRowSchema.extend({ receivedAt: z.iso.datetime() })),
+  rows: z.array(
+    syncRowSchema.extend({
+      definition: z.string().max(500).nullable(),
+      exampleEn: z.string().max(500).nullable(),
+      exampleEs: z.string().max(500).nullable(),
+      receivedAt: z.iso.datetime(),
+    }),
+  ),
   cursor: z.string().min(1).nullable(),
 });
 
