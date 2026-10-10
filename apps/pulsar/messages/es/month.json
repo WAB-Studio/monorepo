@@ -19,7 +19,7 @@
     "caption": "{count, plural, one {# mes} other {# meses}}",
     "planned": "planeado",
     "noAmount": "sin monto",
-    "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",
+    "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",
     "of": "de {planned}",
     "ofFigure": "de <fig>{planned}</fig>",
     "current": "en curso",
@@ -27,9 +27,9 @@
     "emptyBody": "Ningún mes tiene monto. Ponle uno a {month} y la meta dirá cuánto llevas de él.",
     "emptyAction": "Planear {month}",
     "withoutMeasure": {
-      "tasks": "{count, plural, one {# tarea} other {# tareas}}",
+      "tasks": "{count, plural, one {# tarea} other {# tareas}}",
       "none": "sin tareas",
-      "goalTasks": "{count, plural, one {# tarea} other {# tareas}} · {done, plural, one {# hecha} other {# hechas}}",
+      "goalTasks": "{count, plural, one {# tarea} other {# tareas}} · {done, plural, one {# hecha} other {# hechas}}",
       "columnTasks": "tareas"
     },
     "columns": {
@@ -57,6 +57,7 @@
     "closedNote": "Un mes cerrado no toma tareas nuevas.",
     "noMeasure": "esta meta no mide nada",
     "emptyNoMeasure": "{month} no tiene tareas. Escribe las que quieras hacer este mes.",
+    "emptyNoMeasureLater": "{month} no tiene tareas. Escribe las que quieras hacer en {name}.",
     "allMonths": "Todos los meses"
   },
   "task": {

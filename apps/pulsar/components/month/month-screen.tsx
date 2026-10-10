@@ -100,6 +100,9 @@ export async function MonthDetail({
 
   const planned =
     row.planned === null ? t("month.noPlan") : t("month.months.of", { planned: say(row.planned) });
+  // A future month of a goal not measured in time has nothing reached to
+  // show beside «planeado» while it has no amount: the one phrase stands alone.
+  const bareFuture = row.planned === null && !closed && !row.current && !isTimeUnit(unit);
   const label = closed ? t("month.list.closed") : row.current ? t("month.list.thisMonth") : t("month.months.planned");
   let note: ReactNode = null;
   if (closed) {
@@ -221,9 +224,9 @@ export async function MonthDetail({
         </Text>
       ) : null}
       {unit ? (
-        <Section label={label} as="div">
+        <Section label={bareFuture ? undefined : label} as="div">
           <Flex align="baseline" gap="2">
-            <Figure value={row.reached} unit={unit} />
+            {bareFuture ? null : <Figure value={row.reached} unit={unit} />}
             {open && !closed ? (
               <TextLink href={planHrefFrom(goal.id, month, from ?? `/metas/${goal.id}/meses/${month}`)}>
                 {planned}
@@ -254,7 +257,10 @@ export async function MonthDetail({
       {empty && open && !closed ? (
         <Section as="div" label={t("month.list.tasks")}>
           <Text as="p" variant="sentence">
-            {t(isTimeUnit(unit) ? "month.list.empty" : "month.list.emptyNoMeasure", { month: capitalised(name) })}
+            {t(
+              isTimeUnit(unit) ? "month.list.empty" : row.current || !unit ? "month.list.emptyNoMeasure" : "month.list.emptyNoMeasureLater",
+              { month: capitalised(name), name },
+            )}
           </Text>
           <Button asChild block>
             <Link href={addHref}>{t("month.list.emptyAction")}</Link>

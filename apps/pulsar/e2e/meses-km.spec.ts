@@ -210,3 +210,111 @@ test("minutes goal: no «Por mes» row says «tarea», and its empty month still
     await context.close();
   }
 });
+
+// The widest a row's second line can be, split by line: every client rect of
+// the text node «N tarea(s)» sits on one line when the number and its word stay together.
+async function taskCountLines(row: import("@playwright/test").Locator, pattern: RegExp): Promise<number> {
+  return row.evaluate((element, source) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const regex = new RegExp(source);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.textContent ?? "";
+      const match = regex.exec(text);
+      if (!match) continue;
+      const range = document.createRange();
+      range.setStart(node, match.index);
+      range.setEnd(node, match.index + match[0].length);
+      const tops = new Set([...range.getClientRects()].filter((rect) => rect.width > 0).map((rect) => Math.round(rect.top)));
+      return tops.size;
+    }
+    return -1;
+  }, pattern.source);
+}
+
+for (const width of [360, 390, 1440]) {
+  test(`km goal: «N tareas» in a «Por mes» row never splits the number from its word at ${width} (RP-69)`, async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goalId = await seedGoal(db, person.id, `Meta km sin corte ${stamp}`, "km");
+    await seedBudget(db, person.id, goalId, thisMonth, 40);
+    await seedBudget(db, person.id, goalId, followingMonth, 30);
+    for (const [index, month] of [thisMonth, thisMonth, followingMonth, followingMonth].entries()) {
+      await seedTask(db, person.id, goalId, `Tarea ${index} ${stamp}`, month, 3);
+    }
+    const context = await open(browser, baseURL, person.sessionFile);
+    try {
+      const page = await context.newPage();
+      const row = await rows(page, goalId, width);
+      for (const month of [thisMonth, followingMonth]) {
+        const line = row(month);
+        await expect(line).toContainText("2 tareas");
+        expect(await taskCountLines(line, /2[\s\u00a0]tareas/), `${month}: the count is one unbroken run`).toBe(1);
+        expect(await line.innerText()).toContain("2\u00a0tareas");
+      }
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test("km goal: the month block reads «34 km de 120 km», unit on both figures (RP-69)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalId = await seedGoal(db, person.id, `Meta km unidad ${stamp}`, "km");
+  await seedBudget(db, person.id, goalId, thisMonth, 120);
+  const [commitment] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+    values (${person.id}, ${goalId}, ${`Salida ${stamp}`}, 'daily', 'quantity', 10, 'km', now() - interval '40 days')
+    returning id`;
+  await db`insert into goals.facts (user_id, goal_id, commitment_id, day, quantity) values (${person.id}, ${goalId}, ${commitment.id}, ${todayInZone()}::date, 34)`;
+  const context = await open(browser, baseURL, person.sessionFile);
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto(`/metas/${goalId}`);
+    const block = page.locator("main section", { hasText: /de\s+120/ }).first();
+    await expect(block).toBeVisible();
+    const text = (await block.innerText()).replace(/\s+/g, " ");
+    expect(text).toMatch(/34 km de 120 km/);
+  } finally {
+    await context.close();
+  }
+});
+
+test("km goal, a future month with no tasks and no amount: «sin monto planeado» alone, and the empty text names that month (RP-69)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const stamp = Date.now();
+  const goalId = await seedGoal(db, person.id, `Meta km mes futuro ${stamp}`, "km");
+  await seedBudget(db, person.id, goalId, thisMonth, 40);
+  const name = label(followingMonth);
+  const context = await open(browser, baseURL, person.sessionFile);
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto(`/metas/${goalId}/meses/${seg(followingMonth)}`);
+    const body = (await page.locator("main").first().innerText()).replace(/\s+/g, " ");
+    expect(body).toContain("sin monto planeado");
+    expect(body).not.toMatch(/planeado\s*·?\s*0 km/i);
+    expect(body).not.toMatch(/0 km sin monto planeado/);
+    expect(body).toContain(`${name[0].toUpperCase()}${name.slice(1)} no tiene tareas. Escribe las que quieras hacer en ${name}.`);
+    expect(body).not.toContain("hacer este mes");
+
+    // The current month keeps its text.
+    await page.goto(`/metas/${goalId}/meses/${seg(thisMonth)}`);
+    expect((await page.locator("main").first().innerText()).replace(/\s+/g, " ")).toContain("Escribe las que quieras hacer este mes.");
+  } finally {
+    await context.close();
+  }
+});
