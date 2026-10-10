@@ -33,3 +33,15 @@ export function filterStudyRows(rows: StudyRow[], query: string): StudyRow[] {
   if (needle === "") return rows;
   return rows.filter((row) => haystackOf(row).some((field) => field.includes(needle)));
 }
+
+// Last text typed in this tab session, so the back link from a word can
+// return to the filtered list; module memory dies with a reload on purpose.
+let lastFilter = "";
+
+export function rememberFilter(text: string): void {
+  lastFilter = text;
+}
+
+export function recalledFilter(): string {
+  return lastFilter;
+}
