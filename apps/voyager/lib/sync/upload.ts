@@ -29,6 +29,9 @@ const INSERT_COLUMNS = sql.join(
     "dictionary_ready",
     "origin",
     "record_schema",
+    "definition",
+    "example_en",
+    "example_es",
   ].map((column) => sql.identifier(column)),
   sql`, `,
 );
@@ -54,6 +57,9 @@ function uploadedRows(rows: SyncRow[]): string {
       dictionary_ready: row.dictionaryReady,
       origin: row.origin,
       record_schema: row.recordSchema,
+      definition: row.definition ?? null,
+      example_en: row.exampleEn ?? null,
+      example_es: row.exampleEs ?? null,
     })),
   );
 }
@@ -104,11 +110,13 @@ export async function writeUpload(
     written as (
       insert into reading.lookups (${INSERT_COLUMNS})
       select ${userId}, r.device_id, r.local_id, r."at", r."text", r.normalised, r.kind, r.outcome,
-             r.headword, r."rule", r.senses, r.translation, r.dictionary_ready, r.origin, r.record_schema
+             r.headword, r."rule", r.senses, r.translation, r.dictionary_ready, r.origin, r.record_schema,
+             r.definition, r.example_en, r.example_es
       from jsonb_to_recordset(${uploadedRows(rows)}::text::jsonb) as r(
         device_id uuid, local_id integer, "at" timestamptz, "text" text, normalised text, kind text,
         outcome text, headword text, "rule" text, senses integer, translation text,
-        dictionary_ready boolean, origin text, record_schema smallint
+        dictionary_ready boolean, origin text, record_schema smallint,
+        definition text, example_en text, example_es text
       )
       where (select allowed from gate)
       on conflict (user_id, device_id, local_id) do nothing
@@ -148,6 +156,9 @@ export type DownloadedRow = {
   dictionary_ready: boolean;
   origin: SyncRow["origin"];
   record_schema: number;
+  definition: string | null;
+  example_en: string | null;
+  example_es: string | null;
   received_at: string;
 };
 
@@ -190,7 +201,7 @@ export async function downloadRows(
   return tx.execute<DownloadedRow>(sql`
     select device_id, local_id, to_json(timezone('utc', "at")) as "at", text, normalised,
            kind, outcome, headword, rule, senses, translation, dictionary_ready, origin,
-           record_schema, to_json(timezone('utc', received_at)) as received_at
+           record_schema, definition, example_en, example_es, to_json(timezone('utc', received_at)) as received_at
     from reading.lookups
     where user_id = auth.uid() and ${boundary} ${notOwn}
     -- Table-qualified: the output column of the same name is the to_json

@@ -31,6 +31,9 @@ function toWireRow(row: DownloadedRow): SyncResponse["rows"][number] {
     dictionaryReady: row.dictionary_ready,
     origin: row.origin,
     recordSchema: row.record_schema,
+    definition: row.definition,
+    exampleEn: row.example_en,
+    exampleEs: row.example_es,
     receivedAt: `${row.received_at}Z`,
   };
 }

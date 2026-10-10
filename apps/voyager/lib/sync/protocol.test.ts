@@ -63,3 +63,32 @@ test("a batch admits 500 rows and refuses 501", () => {
 test("a reader may send 20 000 rows a day", () => {
   assert.equal(SYNC_DAILY_ROW_CAP, 20_000);
 });
+
+test("definition and examples admit 500 characters and refuse 501", () => {
+  const one = randomUUID();
+  for (const field of ["definition", "exampleEn", "exampleEs"] as const) {
+    assert.equal(syncRowSchema.safeParse({ ...row(one, 1), [field]: "x".repeat(500) }).success, true, field);
+    assert.equal(syncRowSchema.safeParse({ ...row(one, 1), [field]: "x".repeat(501) }).success, false, field);
+  }
+});
+
+test("a request row without the three fields still passes", () => {
+  const one = randomUUID();
+  assert.equal(syncRequestSchema.safeParse({ deviceId: one, rows: [row(one, 1)], since: null }).success, true);
+});
+
+test("500 rows with the three fields at 500 characters serialise under 4 MB", () => {
+  const one = randomUUID();
+  const full = (localId: number): SyncRow => ({
+    ...row(one, localId),
+    text: "x".repeat(500),
+    normalised: "x".repeat(500),
+    headword: "x".repeat(500),
+    definition: "x".repeat(500),
+    exampleEn: "x".repeat(500),
+    exampleEs: "x".repeat(500),
+  });
+  const batch = { deviceId: one, rows: Array.from({ length: SYNC_BATCH }, (_, index) => full(index + 1)), since: null };
+  assert.equal(syncRequestSchema.safeParse(batch).success, true);
+  assert.ok(JSON.stringify(batch).length < 4 * 1024 * 1024);
+});
