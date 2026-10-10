@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, visit, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 // Semana says when a goal ended (`SemanaMetaTerminada.dc.html`): «terminó el
@@ -68,9 +68,8 @@ async function withPerson(
 }
 
 async function open(page: Page): Promise<void> {
-  await page.goto("/semana");
-  await expect(page.locator("main :is(h1, p, a, button, input)").first()).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
+  await visit(page, "/semana");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 }
 
 for (const width of [360, 1280]) {

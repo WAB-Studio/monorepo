@@ -2,7 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import day from "../messages/es/day.json";
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, visit, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-44, RP-16, RP-06 on Semana: ‹ › step a week at a time, read-only beyond
@@ -258,7 +258,7 @@ test("at 390 the steps sit on their own row above the title, one at each edge (R
   person,
 }) => {
   await withWeeks(browser, baseURL, db, person, 390, async (page) => {
-    await page.goto(`/semana?semana=${mondayAgo(2)}`);
+    await visit(page, `/semana?semana=${mondayAgo(2)}`);
     const h1 = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
     const p = (await prev(page).boundingBox())!;
     const n = (await next(page).boundingBox())!;
@@ -280,7 +280,7 @@ test("at 1280 the steps sit to the right of the title, on the header row (RP-44)
   person,
 }) => {
   await withWeeks(browser, baseURL, db, person, 1280, async (page) => {
-    await page.goto(`/semana?semana=${mondayAgo(2)}`);
+    await visit(page, `/semana?semana=${mondayAgo(2)}`);
     const h1 = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
     const p = (await prev(page).boundingBox())!;
     const n = (await next(page).boundingBox())!;
