@@ -160,7 +160,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   // The goals with no measure keep their tasks, without the time they cannot hold.
   const work = useMemo(() => (draft ? withoutStrayEstimates(draft) : null), [draft]);
-  const strays = useMemo(() => new Set(draft ? strayEstimates(draft).map((stray) => stray.path) : []), [draft]);
+  const strays = useMemo(() => new Map(draft ? strayEstimates(draft).map((stray) => [stray.path, stray.key] as const) : []), [draft]);
   const repeated = useMemo(() => new Set(work ? repeatedGoals(work, openGoalNames) : []), [work, openGoalNames]);
   const refusals = useMemo(() => (work ? draftRefusals(work, today) : []), [work, today]);
   const refused = useMemo(() => new Set(refusals.map((refusal) => refusal.path)), [refusals]);
@@ -510,6 +510,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                         disabled={!goalOn}
                         onCheckedChange={(value) => toggle(path, value)}
                         name={monthWord(entry.month)}
+                        meta={planned ? t("import.review.inLieuOfRhythm") : undefined}
                         {...amountProps(path, monthWord(entry.month), unit ?? "", entry.amount, "month")}
                       />
                     ))}
@@ -554,16 +555,16 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                             note={task.note}
                             meta={
                               planned
-                                ? t("import.review.toPlan", { month: monthWord(task.month) })
+                                ? t("import.review.toPlan")
                                 : task.children.length > 0
                                 ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
                                 : strays.has(path)
-                                  ? `${monthWord(task.month)} · ${t("import.notices.estimateDropped")}`
+                                  ? `${monthWord(task.month)} · ${t(messageKey(strays.get(path)!))}`
                                   : monthWord(task.month)
                             }
                             metaMore={
                               planned && task.children.length > 0
-                                ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
+                                ? t("import.review.sumAlone")
                                 : undefined
                             }
                             {...(task.children.length === 0 && task.estimate !== null
@@ -580,7 +581,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
                               onCheckedChange={(value) => toggle(childPath, value)}
                               name={child.name}
                               note={child.note}
-                              meta={strays.has(childPath) ? t("import.notices.estimateDropped") : undefined}
+                              meta={strays.has(childPath) ? t(messageKey(strays.get(childPath)!)) : undefined}
                               {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
                             />
                           ))}

@@ -9,7 +9,7 @@ export const setRhythmSchema = z.object({
     .number({ error: "roadmap.errors.rhythmRange" })
     .int({ error: "roadmap.errors.rhythmRange" })
     .min(1, { error: "roadmap.errors.rhythmRange" })
-    .max(1_000_000, { error: "roadmap.errors.rhythmRange" }),
+    .max(44_640, { error: "roadmap.errors.rhythmRange" }),
 }, { error: "month.errors.invalid" });
 
 export type SetRhythmInput = z.infer<typeof setRhythmSchema>;

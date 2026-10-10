@@ -37,7 +37,9 @@
     "rhythmName": "Ritmo al mes",
     "rhythmMeta": "las tareas van al plan",
     "rhythmAmountOf": "Cambiar el ritmo, {amount} al mes",
-    "toPlan": "va al plan · desde {month}",
+    "toPlan": "va al plan",
+    "sumAlone": "la suma de lo marcado",
+    "inLieuOfRhythm": "en lugar del ritmo",
     "groups": {
       "phases": "fases",
       "months": "meses",
