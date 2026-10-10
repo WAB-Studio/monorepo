@@ -522,7 +522,7 @@ test("RP-72 row 6: a missing «# nombre» is still reported, first, with the goa
 const GOAL = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n";
 
 test("RP-72 row 1: lines are listed by ascending line even when a later line is found before an earlier one", () => {
-  const found = mistakesOf("pulsar · plantilla 1\n# A\n- x\n# B\nhorizonte: 2027-10-01\n").map((m) => m.line);
+  const found = mistakesOf(`${GOAL}## Meses\n- 2020-01 · 5 h\n## Tareas\n- x\n`).map((m) => m.line);
   assert.ok(found.length >= 2, JSON.stringify(found));
   assert.deepEqual(found, [...found].sort((a, b) => a - b));
   assert.deepEqual(found, [...new Set(found)]);
@@ -544,7 +544,7 @@ test("RP-72 row 1: a broken sub-task reports itself once, not its «nota:»", ()
 });
 
 test("RP-72 row 1: `error` is the first of `errors`, the one a single-error reader shows", () => {
-  const read = parseTemplate("pulsar · plantilla 1\n# A\n- x\n# B\nhorizonte: 2027-10-01\n");
+  const read = parseTemplate(`${GOAL}## Meses\n- 2020-01 · 5 h\n## Tareas\n- x\n`);
   assert.ok(read.matched && "error" in read);
   assert.ok(read.errors.length >= 2);
   assert.deepEqual(read.error, read.errors[0]);
