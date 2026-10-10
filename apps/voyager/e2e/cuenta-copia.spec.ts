@@ -518,7 +518,6 @@ test("RL-52, RNL-02: a 30-second-old copy reads «hace un momento» or its own w
 // «Copiaste el máximo de hoy. Sigue sola a las 7:00 p. m.; tus palabras siguen en este dispositivo.»
 // The clock is pinned to an October day so Madrid is UTC+2 whatever day this runs.
 const OCT_9 = new Date("2026-10-09T15:00:00Z");
-const normal = (text: string | null): string => (text ?? "").replace(/[\s  ]+/g, " ").trim();
 
 async function openCapped(page: Page, reader: Reader, signIn: () => Promise<void>): Promise<void> {
   await page.clock.install({ time: OCT_9 });
@@ -550,8 +549,8 @@ test.describe("daily cap, Bogotá reader", () => {
     test.setTimeout(45_000);
     await withReader(page, async ({ reader, signIn }) => {
       await openCapped(page, reader, signIn);
-      expect(normal(await quotaLine(page).textContent())).toBe(
-        "Copiaste el máximo de hoy. Sigue sola a las 7:00 p. m.; tus palabras siguen en este dispositivo.",
+      expect(await quotaLine(page).textContent()).toBe(
+        "Copiaste el máximo de hoy. Sigue sola a las 7:00\u00a0p.\u00a0m.; tus palabras siguen en este dispositivo.",
       );
       await expectCapRefusal(page);
     });
@@ -565,11 +564,46 @@ test.describe("daily cap, Bogotá reader, wide screen", () => {
     test.setTimeout(45_000);
     await withReader(page, async ({ reader, signIn }) => {
       await openCapped(page, reader, signIn);
-      expect(normal(await quotaLine(page).textContent())).toBe(
-        "Copiaste el máximo de hoy. Sigue sola a las 7:00 p. m.; tus palabras siguen en este dispositivo.",
+      expect(await quotaLine(page).textContent()).toBe(
+        "Copiaste el máximo de hoy. Sigue sola a las 7:00\u00a0p.\u00a0m.; tus palabras siguen en este dispositivo.",
       );
       const fits = await quotaLine(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
       expect(fits).toBe(true);
+    });
+  });
+});
+
+// Module 702: the hour is one piece. A Range over «7:00 p. m.» that wraps has
+// two client rects; with non-breaking spaces it has one, whatever the width.
+test.describe("daily cap, Bogotá reader, phone widths", () => {
+  test.use({ timezoneId: "America/Bogota", viewport: { width: 390, height: 800 } });
+
+  test("RL-22: at 390 and the widths around it, «7:00 p. m.» never breaks across lines", async ({ page }) => {
+    test.setTimeout(60_000);
+    await withReader(page, async ({ reader, signIn }) => {
+      await openCapped(page, reader, signIn);
+      const hourRects = () =>
+        quotaLine(page).evaluate((el) => {
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.textContent ?? "";
+            const start = text.indexOf("7:00");
+            if (start < 0) continue;
+            const end = text.indexOf("m.", start) + 2;
+            const range = document.createRange();
+            range.setStart(node, start);
+            range.setEnd(node, end);
+            return { rects: range.getClientRects().length, slice: text.slice(start, end) };
+          }
+          return null;
+        });
+      for (const width of [390, 340, 350, 360, 370, 380, 400, 410, 420]) {
+        await page.setViewportSize({ width, height: 800 });
+        const hour = await hourRects();
+        expect(hour, `no hour in the line at ${width}px`).not.toBeNull();
+        expect(hour!.slice).toBe("7:00\u00a0p.\u00a0m.");
+        expect(hour!.rects, `the hour wraps at ${width}px`).toBe(1);
+      }
     });
   });
 });
@@ -581,8 +615,8 @@ test.describe("daily cap, Madrid reader", () => {
     test.setTimeout(45_000);
     await withReader(page, async ({ reader, signIn }) => {
       await openCapped(page, reader, signIn);
-      const line = normal(await quotaLine(page).textContent());
-      expect(line).toMatch(/^Copiaste el máximo de hoy\. Sigue sola a las 2:00( a\. m\.)?; tus palabras siguen en este dispositivo\.$/);
+      const line = (await quotaLine(page).textContent()) ?? "";
+      expect(line).toMatch(/^Copiaste el máximo de hoy\. Sigue sola a las 2:00(\u00a0a\.\u00a0m\.)?; tus palabras siguen en este dispositivo\.$/);
       expect(line).not.toContain("7:00");
       await expectCapRefusal(page);
     });
@@ -1131,5 +1165,54 @@ test.describe("signed out, phone", () => {
     // The input sits inside its bordered root; the root is what spans the column.
     const fieldBox = (await field.locator("xpath=..").boundingBox())!;
     expect(Math.abs(fieldBox.width - column.width), `field ${fieldBox.width}px, column ${column.width}px`).toBeLessThanOrEqual(1);
+  });
+});
+
+// Module 702 (RNL-09): the reload the returning network causes is the open of
+// `/cuenta` that the cut interrupted, so it runs that open's pull once, no more.
+test.describe("network returns on /cuenta", () => {
+  test.use({ viewport: { width: 360, height: 740 } });
+
+  test("RNL-09: signed in, offline then back: the page reloads and runs a single pull", async ({ page, context }) => {
+    test.setTimeout(60_000);
+    await deleteTranslator(page);
+    await withReader(page, async ({ reader, signIn }) => {
+      await seedLocal(page, { sync: confirmedFor(reader, { lastSyncedAt: Date.now() - 3 * 3_600_000 }) });
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+      await expect
+        .poll(() =>
+          page.evaluate(async () => {
+            for (const name of await caches.keys()) {
+              if (await (await caches.open(name)).match(new URL("/cuenta", location.origin).toString())) return true;
+            }
+            return false;
+          }),
+        )
+        .toBe(true);
+      await signIn();
+
+      await context.setOffline(true);
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+      });
+      await page.goto("/cuenta");
+      await expect(page.getByText(/Sin conexión desde hace/)).toBeVisible();
+
+      const posts = trackSync(page);
+      await page.evaluate(() => sessionStorage.setItem("net-back", "1"));
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "onLine", {
+          configurable: true,
+          get: () => sessionStorage.getItem("net-back") !== null,
+        });
+      });
+      await context.setOffline(false);
+      await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
+      await expect(page.getByText(/Sin conexión/)).toHaveCount(0);
+      await expect(page.getByText(copy.lastCopyMoment, { exact: true })).toBeVisible();
+      expect(posts).toHaveLength(1);
+    });
   });
 });
