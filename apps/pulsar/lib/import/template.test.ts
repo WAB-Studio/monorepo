@@ -597,3 +597,48 @@ test("801 cut: several broken head lines answer the first one only", () => {
   const found = mistakesOf("pulsar · plantilla 1\n# A\nhorizonte: pronto\n# B\nhorizonte: nunca\n");
   assert.deepEqual(found.map((m) => m.line), [3]);
 });
+
+// Module 801, mutation killers. A schema refusal on a head field is a head error: it cuts, and the broken month below is not judged.
+const BROKEN_MONTH = "## Meses\n- 2026-11x · 8 h\n";
+
+function cutOf(text: string) {
+  const result = parseTemplate(text);
+  assert.ok(result.matched && "errors" in result, JSON.stringify(result));
+  return result;
+}
+
+test("801 cut: a goal name over the limit is one error on its line, and cuts", () => {
+  const result = cutOf(`${"pulsar · plantilla 1\n"}# ${"a".repeat(300)}\nhorizonte: 2026-12-17\nmedida: d · km\n${BROKEN_MONTH}`);
+  assert.deepEqual(result.errors.map((e) => e.line), [2]);
+  assert.equal(result.cut, true);
+});
+
+test("801 cut: a unit over 40 characters and a measure name over the limit are one error on the measure line, and cut", () => {
+  for (const measure of [`d · ${"k".repeat(60)}`, `${"d".repeat(300)} · km`]) {
+    const result = cutOf(`pulsar · plantilla 1\n# A\nhorizonte: 2026-12-17\nmedida: ${measure}\n${BROKEN_MONTH}`);
+    assert.deepEqual(result.errors.map((e) => e.line), [4], measure.slice(0, 12));
+    assert.equal(result.cut, true);
+  }
+});
+
+test("801 cut: a rhythm the schema refuses is one error on its line, and cuts", () => {
+  const result = cutOf(`pulsar · plantilla 1\n# A\nhorizonte: 2026-12-17\nmedida: d · minutos\nritmo: 99999 h\n${BROKEN_MONTH}`);
+  assert.deepEqual(result.errors.map((e) => e.line), [5]);
+  assert.equal(result.cut, true);
+});
+
+test("801 first line: «pulsar ·» in the middle of the first line still goes to the AI reading", () => {
+  assert.deepEqual(parseTemplate("mi pulsar · plantilla 1\n# A\n"), { matched: false });
+});
+
+test("801 cut: a goal with no horizon followed by another goal names the horizon sentence on the first goal's line", () => {
+  const result = cutOf("pulsar · plantilla 1\n# A\n# B\nhorizonte: 2026-12-17\n");
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[2, "import.errors.form.horizon"]]);
+  assert.equal(result.cut, true);
+});
+
+test("801 cut: a stray text line under a goal with no horizon cuts there with the horizon sentence", () => {
+  const result = cutOf(`pulsar · plantilla 1\n# A\nhola\n${BROKEN_MONTH}`);
+  assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[3, "import.errors.form.horizon"]]);
+  assert.equal(result.cut, true);
+});

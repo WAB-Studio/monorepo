@@ -264,5 +264,85 @@ for (const size of SIZES) {
         await expect(alert.locator('[aria-current="true"]')).toHaveCount(1);
       });
     });
+    test("reading again after a tap clears the mark: no row carries aria-current on the new list", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        const text = plan(HEAD);
+        await paste(page, text);
+        const alert = alertOf(page);
+        await expect(alert.getByText("3 líneas por corregir", { exact: true })).toBeVisible();
+        await rowsOf(alert).filter({ hasText: `Línea ${lineOf(text, MONTH_BAD)}:` }).click();
+        await expect(alert.locator('[aria-current="true"]')).toHaveCount(1);
+
+        const answered = page.waitForResponse((r) => r.url().includes("/importar/leer"));
+        await page.getByRole("button", { name: "Leer el plan" }).click();
+        await answered;
+        await expect(alert.getByText("3 líneas por corregir", { exact: true })).toBeVisible();
+        await expect(rowsOf(alert)).toHaveCount(3);
+        await expect(alert.locator("[aria-current]")).toHaveCount(0);
+      });
+    });
+
+    test("the box is marked invalid while the error list shows, and not before", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        await page.goto("/metas/importar");
+        await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
+        await pageSettled(page);
+        const box = page.getByLabel(messages.textLabel);
+        await expect(box).not.toHaveAttribute("aria-invalid", "true");
+        await box.fill(plan(HEAD));
+        await expect(box).not.toHaveAttribute("aria-invalid", "true");
+        await page.getByRole("button", { name: "Leer el plan" }).click();
+        await expect(alertOf(page).getByText("3 líneas por corregir", { exact: true })).toBeVisible();
+        await expect(box).toHaveAttribute("aria-invalid", "true");
+      });
+    });
+
+    test("a refusal that is not a list of lines takes no focus and its box is not marked invalid", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        await page.goto("/metas/importar");
+        await expect(page.getByRole("button", { name: "Leer el plan" })).toBeVisible();
+        await pageSettled(page);
+        await page.getByRole("button", { name: "Leer el plan" }).click();
+        const alert = alertOf(page);
+        await expect(alert).toBeVisible();
+        await expect(alert).not.toHaveAttribute("tabindex", /.*/);
+        await expect(page.getByLabel(messages.textLabel)).not.toHaveAttribute("aria-invalid", "true");
+      });
+    });
+
+    test("a line under very long unbroken words is still brought into view", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        const url = `https://ejemplo.test/${"a".repeat(180)}`;
+        const text = [
+          ...HEAD, "", "## Meses", `- ${M1} · 40 km`, MONTH_BAD, "",
+          "## Tareas", ...Array.from({ length: 10 }, () => `- ${M2} · ${url}`), TASK_BAD,
+        ].join("\n");
+        await paste(page, text);
+        const alert = alertOf(page);
+        await expect(rowsOf(alert).first()).toBeVisible();
+        const box = page.getByLabel(messages.textLabel);
+        await rowsOf(alert).filter({ hasText: `Línea ${lineOf(text, TASK_BAD)}:` }).click();
+        const seen = await selectionSeen(box);
+        expect(seen.scrolls).toBe(true);
+        expect(seen.picked).toBe(TASK_BAD);
+        expect(seen.inView).toBe(true);
+      });
+    });
+
+    test("an error that points past the last line selects the empty line and brings it into view", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        // The header is the only text: the missing goal is reported on the empty line after it.
+        const text = `${"\n".repeat(40)}pulsar · plantilla 1\n`;
+        await paste(page, text);
+        const alert = alertOf(page);
+        await expect(rowsOf(alert)).toHaveCount(1);
+        const box = page.getByLabel(messages.textLabel);
+        await rowsOf(alert).first().click();
+        const seen = await selectionSeen(box);
+        expect(seen.scrolls).toBe(true);
+        expect(seen.picked).toBe("");
+        expect(seen.inView).toBe(true);
+      });
+    });
   });
 }
