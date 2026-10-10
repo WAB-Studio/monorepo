@@ -1148,9 +1148,11 @@ Taken by the user the same evening, on the critic's four questions.
   page is the accepted cost; a table longer than a page still breaks.
 - **(3) The import accepts the goal's unit on every line that carries an amount, and shows every error at once.** A
   commitment written «8 km» under a km goal passes like a month; under a goal in another unit the message names the unit
-  that goes. One reading lists all the template's errors, not the first. Board before code.
+  that goes. One reading lists all the template's errors, not the first. Board `ImportarTodosLosErrores` approved as
+  drawn by the user 2026-10-10: **RP-72**.
 - **(4) A goal with no measure prints its months on paper:** a «por mes» table of its tasks, done and to do. RP-71 already
-  promises «its months» for every goal. Board before code.
+  promises «its months» for every goal. Board `ReporteImpresoSinMedida` approved as drawn by the user 2026-10-10:
+  TAREAS instead of HECHO, «N de M hechas» or «N por hacer», and «…: sin tareas» for the months left out.
 
 ## Decisions of 2026-10-10, after the part-3 critic
 
