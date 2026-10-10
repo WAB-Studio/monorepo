@@ -43,7 +43,8 @@ export type GoalReport = {
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
   tasks: ReportTask[];
   carried: CarriedReport[];
-  months: (MonthRow & { carried: number | null })[];
+  // `tasks` is read for a goal that measures nothing: the months it prints on paper are its tasks' (RP-71).
+  months: (MonthRow & { carried: number | null; tasks?: { done: number; total: number } })[];
   weeks: ReviewWeek[];
   // The current week's planned minutes (RP-58); null when it has no amount.
   weekPlanned?: number | null;

@@ -63,12 +63,7 @@ export async function POST(request: NextRequest) {
     const template = parseTemplate(text);
     if (template.matched) {
       if ("error" in template) {
-        return reply(422, {
-          error: "import.errors.templateLine",
-          line: template.error.line,
-          expected: template.error.expected,
-          unit: template.error.unit,
-        });
+        return reply(422, { error: "import.errors.templateLine", errors: template.errors });
       }
       return reply(200, { via: "template", draft: template.draft });
     }

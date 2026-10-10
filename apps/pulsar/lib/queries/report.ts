@@ -198,6 +198,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
     const current = phaseOn(phases, today);
     const planInput = planInputOf(row, today);
     const monthItems = planMonthList(planInput, thisMonth);
+    const unmeasured = row.goal.measure_unit === null;
 
     return {
       id: row.goal.id,
@@ -244,9 +245,11 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         }),
       months: figures.months.map((row) => {
         const share = row.past ? planShare(planInput, row.month) : null;
+        const items = unmeasured ? planMonthList(planInput, row.month) : null;
         return {
           ...row,
           carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
+          ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
         };
       }),
       weeks: figures.weeks,

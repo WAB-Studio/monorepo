@@ -27,8 +27,8 @@ async function settled(page: Page) {
 async function expectLineError(page: Page, line: number, written: string) {
   const alert = appAlerts(page).filter({ hasText: /\S/ });
   const escaped = written.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  await expect(alert).toHaveText(new RegExp(`^Línea ${line}: «${escaped}»\\. \\S[\\s\\S]*\\.$`));
-  const whole = (await alert.textContent()) ?? "";
+  await expect(alert).toHaveText(new RegExp(`^\\d+ líneas? por corregirLínea ${line}: «${escaped}»\\. \\S[\\s\\S]*\\.$`));
+  const whole = ((await alert.textContent()) ?? "").replace(/^\d+ líneas? por corregir/, "");
   const sentence = whole.slice(`Línea ${line}: «${written}». `.length);
   expect(sentence, "the cause").not.toContain(written);
   expect(sentence.startsWith(`Esperaba ${written}`)).toBe(false);
@@ -426,7 +426,7 @@ for (const width of [390, 1440]) {
         await page.getByRole("button", { name: "Leer el plan" }).click();
 
         const alert = appAlerts(page).filter({ hasText: /\S/ });
-        await expect(alert).toHaveText(BOARD_SENTENCE);
+        await expect(alert).toHaveText(`1 línea por corregir${BOARD_SENTENCE}`);
         await expect(alert).toHaveCount(1);
         await expect(page.getByRole("heading", { level: 1 })).toHaveText("Importar un plan");
         await expect(area).toHaveValue(BOARD_TEXT);

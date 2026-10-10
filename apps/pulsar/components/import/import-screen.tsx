@@ -26,7 +26,7 @@ const KNOWN_ERRORS = new Set([
 ]);
 
 type Failure =
-  | { kind: "templateLine"; line: number; expected: string; unit?: string; text: string }
+  | { kind: "templateLine"; lines: { line: number; expected: string; unit?: string; text: string }[] }
   | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
 const subscribeNothing = () => () => {};
@@ -92,9 +92,7 @@ export function ImportScreen() {
       const response = await fetch("/importar/leer", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
-        line?: number;
-        expected?: string;
-        unit?: string;
+        errors?: { line: number; expected: string; unit?: string }[];
         via?: "template" | "model";
         draft?: ImportDraft;
       } | null;
@@ -104,13 +102,11 @@ export function ImportScreen() {
         router.push("/metas/importar/revisar");
         return;
       }
-      if (body?.error === "import.errors.templateLine" && body.line && body.expected) {
+      if (body?.error === "import.errors.templateLine" && body.errors?.length) {
+        const written = source.split("\n");
         fail({
           kind: "templateLine",
-          line: body.line,
-          expected: body.expected,
-          unit: body.unit,
-          text: source.split("\n")[body.line - 1] ?? "",
+          lines: body.errors.map((e) => ({ ...e, text: written[e.line - 1] ?? "" })),
         });
       } else if (body?.error && KNOWN_ERRORS.has(body.error)) {
         fail({ kind: "key", key: messageKey(body.error) });
@@ -163,15 +159,20 @@ export function ImportScreen() {
   }
 
   const notice = failure ? (
-    <Notice>
-      {failure.kind === "templateLine"
-        ? t("import.errors.templateLine", {
-            line: failure.line,
-            text: failure.text,
-            expected: t(messageKey(failure.expected), { unit: failure.unit ?? "" }),
-          })
-        : t(failure.key, failure.values)}
-    </Notice>
+    failure.kind === "templateLine" ? (
+      <Notice
+        title={t("import.errors.templateCount", { count: failure.lines.length })}
+        rows={failure.lines.map((e) =>
+          t("import.errors.templateLine", {
+            line: e.line,
+            text: e.text,
+            expected: t(messageKey(e.expected), { unit: e.unit ?? "" }),
+          }),
+        )}
+      />
+    ) : (
+      <Notice>{t(failure.key, failure.values)}</Notice>
+    )
   ) : null;
 
   return (

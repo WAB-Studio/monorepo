@@ -22,6 +22,8 @@ const startOf = (offset: number) => {
 };
 const nameOf = (offset: number) => NAMES[Number(startOf(offset).slice(5, 7)) - 1];
 const labelOf = (offset: number) => `${nameOf(offset)} ${startOf(offset).slice(0, 4)}`;
+// The line names every month with its year (decision 2026-10-10).
+const yearName = (offset: number) => `${nameOf(offset)} de ${startOf(offset).slice(0, 4)}`;
 
 type Spec = {
   name: string;
@@ -101,7 +103,7 @@ test.describe("the paper names the months it leaves out (RP-71)", () => {
     try {
       await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
       const section = sectionOf(await printed(page, "dos"), name);
-      expect(section).toContain(`${nameOf(1)} y ${nameOf(2)}: sin monto`);
+      expect(section).toContain(`${yearName(1)} y ${yearName(2)}: sin monto`);
       for (const offset of [-2, -1, 0]) expect(named(section, offset), `printed month ${offset} not named`).toBe(false);
       // The line is the table's, so it comes after the last printed row.
       expect(section.indexOf(": sin monto")).toBeGreaterThan(section.indexOf(labelOf(0)));
@@ -121,11 +123,11 @@ test.describe("the paper names the months it leaves out (RP-71)", () => {
     try {
       await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
       const section = sectionOf(await printed(page, "uno"), name);
-      expect(section).toContain(`${nameOf(2)}: sin monto`);
-      expect(section).not.toContain(`${nameOf(1)} y ${nameOf(2)}`);
+      expect(section).toContain(`${yearName(2)}: sin monto`);
+      expect(section).not.toContain(`${yearName(1)} y ${yearName(2)}`);
       expect(named(section, 0), "the current month not named").toBe(false);
       expect(named(section, 1), "a month planned at 0 not named").toBe(false);
-      expect(section).not.toContain(`${nameOf(1)}: sin monto`);
+      expect(section).not.toContain(`${yearName(1)}: sin monto`);
       expect(section.match(/sin monto/g) ?? []).toHaveLength(1);
     } finally {
       await context.close();
@@ -143,7 +145,7 @@ test.describe("the paper names the months it leaves out (RP-71)", () => {
     try {
       await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
       const section = sectionOf(await printed(page, "tres"), name);
-      expect(section).toContain(`${nameOf(1)}, ${nameOf(2)} y ${nameOf(3)}: sin monto`);
+      expect(section).toContain(`${yearName(1)}, ${yearName(2)} y ${yearName(3)}: sin monto`);
       for (const offset of [-2, -1, 0]) expect(named(section, offset), `printed month ${offset} not named`).toBe(false);
       expect(section.match(/sin monto/g) ?? []).toHaveLength(1);
     } finally {
@@ -179,7 +181,7 @@ test.describe("the paper names the months it leaves out (RP-71)", () => {
       await expect(page.getByRole("main").getByText(name, { exact: true }).first()).toBeVisible();
       await page.emulateMedia({ media: "print" });
       const section = page.locator("section").filter({ hasText: `${name} · por mes` }).last();
-      const line = section.getByText(`${nameOf(1)} y ${nameOf(2)}: sin monto`, { exact: true }).locator("visible=true");
+      const line = section.getByText(`${yearName(1)} y ${yearName(2)}: sin monto`, { exact: true }).locator("visible=true");
       await expect(line).toHaveCount(1);
       const table = await section.locator("table").locator("visible=true").first().boundingBox();
       const at = await line.boundingBox();

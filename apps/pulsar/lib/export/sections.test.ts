@@ -138,3 +138,10 @@ test("RP-70 printsOnPaper: a future month planned at 0 prints, zero is an amount
 test("RP-70 printsOnPaper: a future month with no amount does not print", () => {
   assert.equal(printsOnPaper(row({ past: false, current: false, planned: null })), false);
 });
+
+test("RP-71 goalSections: a goal with no unit and only future months without tasks prints no months", () => {
+  const ahead = (day: string) => ({ ...row({ month: day, past: false, current: false, planned: null }), carried: null, tasks: { done: 0, total: 0 } });
+  assert.deepEqual(goalSections(goal({ unit: null, months: [ahead("2026-11-01"), ahead("2026-12-01")] })), ["phases", "tasks"]);
+  const held = { ...ahead("2027-01-01"), tasks: { done: 0, total: 1 } };
+  assert.deepEqual(goalSections(goal({ unit: null, months: [ahead("2026-11-01"), held] })), ["phases", "tasks", "months"]);
+});
