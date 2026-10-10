@@ -269,6 +269,8 @@ Drawn 2026-10-06 on the pages they belong to, approved by the user the same day:
 
 Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 
+- **Modules 720, 721 and 723.** Built without a board (decided 2026-10-09 by the orchestrator); the user reviews them
+  at the end.
 - **Dark beyond `HoyOscuro.dc.html`.** Every other state is this design with the dark column of the
   token table. Drawing it again repeats a decision instead of taking one. Decided by the user
   2026-09-10, for every app.
@@ -674,7 +676,7 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   progress says only its progress; a flexible met in its period stays as a quiet row «cumplida esta
   semana», and can be marked again. Board `HoyCuenta.dc.html`. Decided 2026-09-29 by the coordinator,
   on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
-- **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed
+- **The goal's measure line reads «mide en {unidad}»** (in time, «mide en horas y minutos»: see below), and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.
 - **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
   says «pide el número» after its target.** «Anki · 10 min · 07:40 · lo dijiste tú», «Monólogo
@@ -1172,3 +1174,18 @@ Taken by the user the same night («todo lo que recomendaste»).
 - **`ConexionesDesktopConector` is the capture, not the drawing:** after a key is created there is no Claude Desktop section.
 - **Boards still drawn though built:** `HoyTareaMesSinPlan` (656), `HoySueltaMoverArrastrada` (654), `ConexionesVencidaSinUsar`
   (657), `ImportarErrorLinea` (659). Their captures are owed.
+
+## Decisions of 2026-10-09, after the critic of Part 3
+
+Three answers of the user, 2026-10-09.
+
+- **RP-49 is retired for RP-70 (2026-10-09, user).** On paper a month that has not begun and has no planned amount does not
+  print; past months, the current one and the planned ones do. On screen and to a connected AI every month stays.
+- **RP-69 opens (2026-10-09, user).** A goal measured in km or pages says this month's tasks on its own screen, «1 de 3 tareas
+  hechas», and «Por mes» counts them beside each month.
+- **The two changes of form take a board before the code (2026-10-09, user):** `MetaKmTareas` (722) and
+  `ReporteImpresoSinMesesVacios` (725). Both approved as drawn (user, 2026-10-09, canvas version 97).
+- **A measure in time reads «mide en horas y minutos»** (orchestrator, 2026-10-09). It replaces «mide en {unidad}» above for
+  time only; every other unit keeps «mide en {unidad}».
+- **The empty month of a goal that does not measure time promises no time** (orchestrator, 2026-10-09, 723).
+- **Built without a board, for the user's review at the end:** 720, 721 and 723 (see «The boards that do not exist»).
