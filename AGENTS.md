@@ -277,8 +277,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run a mutation against the one test that kills it (`spec:line` or `-g`), never the module's suite.
   Wait for the server to answer, never a fixed `sleep`. Run the suite once, over the final code.
   Measured 2026-10-10: module 702 spent ~36 s of each ~50 s mutation cycle on 59 tests and 8 s asleep.
-- Pilot on module 723: drive pulsar's mutations against `next build` + `next start`, never `rm -rf .next`.
-  Decided by the user 2026-10-10. It becomes the rule once 723 shows no red only `next dev` catches.
+- Drive pulsar's mutations against `next build` + `next start`, never `next dev`, never `rm -rf .next`.
+  Decided by the user 2026-10-10 and proved on module 723 the same day: 30 tests alike under both, the one
+  difference a cold `next dev` compile; the specs took 57 s on the build and 2.4 min on dev.
 - Run at most two whole suites at once against the remote pool: a third exhausts it (`EMAXCONNSESSION`,
   15 clients). CI and the lanes run on local stacks and do not count.
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures

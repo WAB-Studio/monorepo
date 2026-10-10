@@ -3060,3 +3060,10 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
   expects already present, never runs its upgrade, and never builds its stores: the box answers nothing.
 - Measured 2026-10-09, the voyager offline modules. Check `indexedDB.databases()` first and open only a database that
   exists.
+
+## `page.content()` always holds every interface string
+- `NextIntlClientProvider` in `apps/pulsar/app/layout.tsx` ships the whole message catalogue in each page's payload.
+- `expect(await page.content()).not.toContain("<copy>")` cannot pass, whatever the screen paints.
+- Assert absence on what is drawn: `getByText(...).toHaveCount(0)` or `locator("body").innerText()`.
+- Measured 2026-10-10, module 723: `meses-km.spec.ts:165` stayed red with the feature correct; the only match was the raw
+  `month.list.empty` message.
