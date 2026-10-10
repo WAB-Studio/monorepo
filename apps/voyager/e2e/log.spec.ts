@@ -149,6 +149,9 @@ function foreignPage(since: string | null): { accepted: number; rows: unknown[];
       dictionaryReady: true,
       origin: "device",
       recordSchema: 2,
+      definition: null,
+      exampleEn: null,
+      exampleEs: null,
       receivedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 0, i)).toISOString(),
     });
   }
