@@ -56,7 +56,6 @@ test("the example reads into the draft it describes, minutes and all", () => {
 test("a text whose first non-empty line is not the header is not matched", () => {
   assert.deepEqual(parseTemplate(""), { matched: false });
   assert.deepEqual(parseTemplate("# IA\nhorizonte: 2027-10-01"), { matched: false });
-  assert.deepEqual(parseTemplate("pulsar · plantilla 2\n"), { matched: false });
   assert.deepEqual(parseTemplate("hola\npulsar · plantilla 1"), { matched: false });
 });
 
@@ -549,4 +548,47 @@ test("RP-72 row 1: `error` is the first of `errors`, the one a single-error read
   assert.ok(read.matched && "error" in read);
   assert.ok(read.errors.length >= 2);
   assert.deepEqual(read.error, read.errors[0]);
+});
+
+// Module 801. A broken header cuts the reading (RP-72 holds only after a sound header); a wrong first line is refused here.
+const HEAD_OK = "pulsar · plantilla 1\n\n# Correr 10K\nhorizonte: 2026-12-17\n";
+
+test("801 cut: a measure without its unit answers that one line, and the broken month below is not judged", () => {
+  const text = `${HEAD_OK}medida: distancia\n\n## Meses\n- 2026-11 · 8 h\n`;
+  const found = mistakesOf(text);
+  assert.deepEqual(found, [{ line: 5, expected: "import.errors.form.measure" }]);
+  assert.equal(said(found[0]), "La medida va como «medida: nombre · unidad».");
+});
+
+test("801 cut: the header's other lines cut too — a bad horizon hides the broken lines below it", () => {
+  const found = mistakesOf("pulsar · plantilla 1\n# Correr\nhorizonte: pronto\nmedida: distancia · km\n## Meses\n- 2026-11 · 8 h\n");
+  assert.deepEqual(found.map((m) => m.line), [3]);
+});
+
+test("801 cut: a «ritmo:» the reader cannot take is a header error and cuts the reading", () => {
+  const found = mistakesOf(`${HEAD_OK}medida: distancia · km\nritmo: 12 h\n\n## Meses\n- 2026-11 · 8 h\n`);
+  assert.deepEqual(found.map((m) => m.line), [6]);
+});
+
+test("801 cut: after a sound header every broken line is still listed at once", () => {
+  const found = mistakesOf(`${HEAD_OK}medida: distancia · km\n\n## Meses\n- 2026-11 · 8 h\n\n## Compromisos\n- Series · martes · 30 min\n`);
+  assert.deepEqual(found.map((m) => m.line), [8, 11]);
+});
+
+test("801 first line: «pulsar ·» with another version is refused on line 1, matched, with no draft", () => {
+  for (const first of ["pulsar · plantilla 2", "pulsar · plantilla 10", "pulsar · plantilla 1 bis", "pulsar · plantilla"]) {
+    const found = mistakesOf(`${first}\n\n# Correr 10K\nhorizonte: 2026-12-17\nmedida: distancia · km\n`);
+    assert.deepEqual(found.map((m) => m.line), [1], first);
+  }
+});
+
+test("801 first line: the refusal names the first line and the header the plantilla wants", () => {
+  const [only] = mistakesOf("pulsar · plantilla 2\n# A\nhorizonte: 2027-10-01\n");
+  assert.equal(said(only), "La primera línea va como «pulsar · plantilla 1».");
+});
+
+test("801 first line: a text that does not start with «pulsar ·» still goes to the AI reading", () => {
+  for (const text of ["pulsar plantilla 1\n# A", "mi plan\npulsar · plantilla 2", "# A\nhorizonte: 2027-10-01"]) {
+    assert.deepEqual(parseTemplate(text), { matched: false }, text);
+  }
 });
