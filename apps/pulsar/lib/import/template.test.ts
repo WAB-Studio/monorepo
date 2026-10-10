@@ -400,3 +400,9 @@ test("a month amount in another unit than the goal's stops saying which unit to 
   assert.equal(errorOf(`${KM}- 2026-10 · ocho\n`).expected, "import.errors.form.month");
   assert.equal(errorOf(`${HEAD}## Meses\n- 2026-10 · 8 km\n`).expected, "import.errors.form.month");
 });
+
+test("a month's amount tolerates spacing and case around the goal's unit", () => {
+  for (const amount of ["8   km", "8\tkm", " 8 km", "8 Km"]) {
+    assert.equal(draftOf(`${KM}- 2026-10 · ${amount}\n`).months[0].amount, 8, JSON.stringify(amount));
+  }
+});

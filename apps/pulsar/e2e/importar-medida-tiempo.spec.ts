@@ -83,3 +83,32 @@ test.describe("the review names a time measure «horas y minutos» (RP-35, RP-66
     });
   });
 });
+
+// RP-66: a month's amount carries the goal's own unit; another unit is refused by name.
+const kmPlan = (amount: string) =>
+  `pulsar · plantilla 1\n# Correr 10K\nhorizonte: ${shift(0).year + 1}-${shift(0).month}-01\nmedida: distancia · km\n## Meses\n- ${shift(0).year}-${shift(0).month} · ${amount}`;
+
+test.describe("a month's amount in the goal's unit (km)", () => {
+  test("«8 km» passes to the review", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await toReview(page, kmPlan("8 km"));
+      await expect(card(page, "Correr 10K")).toBeVisible();
+    });
+  });
+
+  test("«8 h» is refused with the message that names «km»", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      await page.goto("/metas/importar");
+      await page.getByLabel(messages.textLabel).fill(kmPlan("8 h"));
+      await page.getByRole("button", { name: "Leer el plan" }).click();
+      const line = `- ${shift(0).year}-${shift(0).month} · 8 h`;
+      const unitMessage = messages.errors.form.monthUnit.replaceAll("{unit}", "km");
+      const expected = messages.errors.templateLine
+        .replace("{line}", "6")
+        .replace("{text}", line)
+        .replace("{expected}", unitMessage);
+      await expect(page.getByText(expected, { exact: true })).toBeVisible();
+      await expect(page).toHaveURL(/\/metas\/importar$/);
+    });
+  });
+});
