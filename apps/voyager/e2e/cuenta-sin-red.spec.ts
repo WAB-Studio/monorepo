@@ -241,5 +241,129 @@ for (const viewport of [
       await expect(page.getByText(WITH_TIME("un momento"), { exact: true })).toBeVisible();
       await expect(page.getByText(SIGN_IN)).toHaveCount(0);
     });
+
+    // Module 702 (RL-61, RNL-09): the network comes back, the page reloads by itself.
+    // `openOffline` pins `navigator.onLine` to false; once the network is back the
+    // page must say so, or the reload lands on the held line again.
+    if (viewport.width === 360) {
+      async function reconnect(page: Page, context: import("@playwright/test").BrowserContext): Promise<void> {
+        await page.evaluate(() => sessionStorage.setItem("net-back", "1"));
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            get: () => sessionStorage.getItem("net-back") !== null,
+          });
+        });
+        await context.setOffline(false);
+      }
+
+      function countNavigations(page: Page): { count: () => number } {
+        let count = 0;
+        // `framenavigated` fires twice for one reload here; `load` once per document.
+        page.on("load", () => {
+          count += 1;
+        });
+        return { count: () => count };
+      }
+
+      async function mark(page: Page): Promise<void> {
+        await page.evaluate(() => {
+          (window as unknown as { __alive?: boolean }).__alive = true;
+        });
+      }
+
+      // A reload runs on the next task; three frames outlast it.
+      async function settle(page: Page): Promise<void> {
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+            ),
+        );
+      }
+
+      const alive = (page: Page) =>
+        page.evaluate(() => (window as unknown as { __alive?: boolean }).__alive === true);
+
+      test("702: with the held line up, the network returning reloads /cuenta and the line goes", async ({
+        page,
+        context,
+      }) => {
+        await seed(page, state());
+        await openOffline(page, context);
+        await expect(page.getByText(WITH_TIME("3 horas"), { exact: true })).toBeVisible();
+        await reconnect(page, context);
+        const navigated = page.waitForEvent("framenavigated", (frame) => frame === page.mainFrame());
+        await page.evaluate(() => window.dispatchEvent(new Event("online")));
+        await navigated;
+        await expect(page.getByText(/Sin conexión/)).toHaveCount(0);
+        await expect(page.getByText(messages.account.copy.noSessionTitle)).toBeVisible();
+      });
+
+      test("702: three online events in one tick reload once", async ({ page, context }) => {
+        await seed(page, state());
+        await openOffline(page, context);
+        await expect(page.getByText(WITH_TIME("3 horas"), { exact: true })).toBeVisible();
+        await reconnect(page, context);
+        // A reload asked for twice is two document requests even when only one
+        // document lands, so count the requests, not the loads.
+        let documentRequests = 0;
+        page.on("request", (request) => {
+          if (request.isNavigationRequest() && new URL(request.url()).pathname === "/cuenta") documentRequests += 1;
+        });
+        const navigations = countNavigations(page);
+        // Same tick: only the once flag stops the second event, since the first
+        // reload has not begun to tear the page down yet.
+        await page.evaluate(() => {
+          window.dispatchEvent(new Event("online"));
+          window.dispatchEvent(new Event("online"));
+          window.dispatchEvent(new Event("online"));
+        });
+        await expect(page.getByText(messages.account.copy.noSessionTitle)).toBeVisible();
+        await settle(page);
+        expect(navigations.count()).toBe(1);
+        expect(documentRequests).toBe(1);
+      });
+
+      test("702: the sign-in screen with no held copy ignores online", async ({ page }) => {
+        await seed(page, null);
+        await page.goto("/cuenta");
+        await expect(page.getByText(messages.account.copy.noSessionTitle)).toBeVisible();
+        const navigations = countNavigations(page);
+        await mark(page);
+        await page.evaluate(() => window.dispatchEvent(new Event("online")));
+        await settle(page);
+        expect(navigations.count()).toBe(0);
+        expect(await alive(page)).toBe(true);
+        await expect(page.getByText(messages.account.copy.noSessionTitle)).toBeVisible();
+      });
+
+      // Client-side both ways, so /cuenta mounts and unmounts inside one document:
+      // a hard navigation drops the listener with the page and proves nothing.
+      test("702: leaving /cuenta with the line up drops the listener: online reloads nothing", async ({ page }) => {
+        await seed(page, state());
+        await page.goto("/");
+        await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+        await page.evaluate(() => {
+          Object.defineProperty(navigator, "onLine", {
+            configurable: true,
+            get: () => sessionStorage.getItem("net-back") !== null,
+          });
+        });
+        await mark(page);
+        const nav = page.getByRole("navigation", { name: messages.nav.label });
+        await nav.getByRole("link", { name: messages.nav.account }).click();
+        await expect(page.getByText(WITH_TIME("3 horas"), { exact: true })).toBeVisible();
+        await nav.getByRole("link", { name: messages.nav.search }).click();
+        await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
+        expect(await alive(page)).toBe(true);
+        await page.evaluate(() => sessionStorage.setItem("net-back", "1"));
+        const navigations = countNavigations(page);
+        await page.evaluate(() => window.dispatchEvent(new Event("online")));
+        await settle(page);
+        expect(navigations.count()).toBe(0);
+        expect(await alive(page)).toBe(true);
+      });
+    }
   });
 }

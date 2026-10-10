@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { readLemmaHistory, readLemmaKey, type WordHistoryRow } from "@/lib/log/summary";
+import { recalledFilter } from "@/lib/log/study-filter";
 import type { LookupOutcome } from "@/lib/log/types";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
@@ -47,9 +48,10 @@ function outcomeKey(outcome: LookupOutcome | "unlisted"): OutcomeKey {
 }
 
 function BackLink({ label }: { label: string }) {
+  const filter = recalledFilter();
   return (
     <Link asChild underline="none">
-      <NextLink href="/registro">
+      <NextLink href={filter === "" ? "/registro" : `/registro?filtro=${encodeURIComponent(filter)}`}>
         <TapTarget align="center">← {label}</TapTarget>
       </NextLink>
     </Link>
