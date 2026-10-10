@@ -120,28 +120,28 @@ function Trailing({
   unit: string | null;
   t: Translator<"export">;
 }) {
-  if (unit !== null && task.part !== null) {
-    return <Quantity value={task.part} unit={unit} />;
-  }
-  if (unit !== null && task.from !== null && !task.done && task.hasAmount) {
-    return (
-      <>
-        {t("owes", { owes: "" })}
-        <Figure variant="meta" value={task.owes} unit={unit} />
-      </>
-    );
-  }
-  const amount = totalOf(task);
-  if (unit !== null && amount !== null) {
-    return <Quantity value={amount} unit={unit} />;
-  }
-  if (task.children.length > 0) {
+  if (task.part === null && task.children.length > 0) {
     return t("taskProgress", {
       done: task.children.filter((child) => child.done).length,
       total: task.children.length,
     });
   }
-  return task.done ? t("taskDone") : t("taskPending");
+  const word = task.done ? t("taskDone") : t("taskPending");
+  const amount =
+    task.part !== null
+      ? task.part
+      : task.from !== null && !task.done && task.hasAmount
+        ? task.owes
+        : totalOf(task);
+  if (unit !== null && amount !== null) {
+    return (
+      <>
+        {`${word} · `}
+        <Quantity value={amount} unit={unit} />
+      </>
+    );
+  }
+  return word;
 }
 
 function TaskLine({
@@ -321,7 +321,10 @@ function GoalPart({
                       indented
                       trailing={
                         unit !== null && child.estimate !== null ? (
-                          <Figure variant="meta" value={child.estimate} unit={unit} />
+                          <>
+                            {`${child.done ? t("taskDone") : t("taskPending")} · `}
+                            <Quantity value={child.estimate} unit={unit} />
+                          </>
                         ) : child.done ? (
                           t("taskDone")
                         ) : (
@@ -350,15 +353,7 @@ function GoalPart({
               <Figure variant="meta" value={month.planned} unit={unit as string} />
             );
           const done = started ? (
-            <>
-              <Figure variant="meta" value={month.reached} unit={unit as string} />
-              {month.planned !== null ? (
-                <>
-                  <Text variant="sentence">{` ${t("of", { planned: "" })}`}</Text>
-                  <Figure variant="meta" value={month.planned} unit={unit as string} />
-                </>
-              ) : null}
-            </>
+            <Figure variant="meta" value={month.reached} unit={unit as string} />
           ) : null;
           const status = month.current ? (
             <Text wrap="nowrap">{t("current")}</Text>
@@ -390,7 +385,8 @@ function GoalPart({
           );
           return {
             key: month.month,
-            cells: [monthLabel(month.month), done, status],
+            cells: [monthLabel(month.month), done, plannedFigure],
+            detail: started ? status : undefined,
             phoneFigure: started ? month.reached : null,
             note: phoneNote,
           };
@@ -417,13 +413,14 @@ function GoalPart({
                 columns={[
                   t("columns.month"),
                   t("columns.done"),
-                  t("columns.status"),
+                  t("columns.planned"),
                 ]}
                 rows={rows}
                 figures={[1]}
                 unit={unit as string}
                 nowrapLabel
                 stackInCard
+                wrapDetail
                 current={current === -1 ? undefined : current}
               />
             </Section>
