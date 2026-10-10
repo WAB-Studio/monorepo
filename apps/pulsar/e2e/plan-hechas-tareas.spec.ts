@@ -155,6 +155,17 @@ for (const width of [390, 1440]) {
       }
     });
 
+    test("one task in the month reads in the singular: «0 de 1 tarea hecha»", async ({ mine: page, db, person }) => {
+      const goalId = await seedGoal(db, person.id, 720);
+      try {
+        await seedTask(db, person.id, goalId, "Única", 120, false, 1);
+        await page.goto(`/metas/${goalId}`);
+        await expect(planRow(page, goalId).getByText(`Ritmo 12 h al mes · en ${monthName}, 0 de 1 tarea hecha`, { exact: true })).toBeVisible();
+      } finally {
+        await drop(db, person.id, goalId);
+      }
+    });
+
     test("a task split across months counts once: two small tasks and a 30 h one, one done, read «1 de 3»", async ({ mine: page, db, person }) => {
       const goalId = await seedGoal(db, person.id, 720);
       try {
