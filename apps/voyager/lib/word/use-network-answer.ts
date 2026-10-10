@@ -43,8 +43,13 @@ async function fetchAnswer(word: string, signal: AbortSignal): Promise<NetworkAn
 // two outcomes render cannot know ahead of time (a request now in flight,
 // and one that just resolved) reach `setState`, and both do it from an
 // asynchronous callback, never from the effect's own synchronous body.
-export function useNetworkAnswer(word: string | null): NetworkAnswerState {
-  const [pendingWord, setPendingWord] = useState<string | null>(null);
+//
+// `holdFromKeystroke`: a word with no entry at all reads pending during the
+// debounce too, so the spelling hint never shows ahead of the network's
+// verdict. A form the dictionary already answers keeps absent until the
+// request leaves.
+export function useNetworkAnswer(word: string | null, holdFromKeystroke = false): NetworkAnswerState {
+  const [asked, setAsked] = useState<string | null>(null);
   const [resolved, setResolved] = useState<{ word: string; state: NetworkAnswerState } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -65,11 +70,7 @@ export function useNetworkAnswer(word: string | null): NetworkAnswerState {
       timerRef.current = null;
       const controller = new AbortController();
       abortRef.current = controller;
-      // The pending block only appears once a request is actually in
-      // flight, never while a keystroke could still replace this word
-      // before the settle.
-      setPendingWord(word);
-
+      setAsked(word);
       void fetchAnswer(word, controller.signal).then((state) => {
         if (controller.signal.aborted) return;
         cache.set(word, state);
@@ -91,6 +92,5 @@ export function useNetworkAnswer(word: string | null): NetworkAnswerState {
   const cached = cache.get(word);
   if (cached) return cached;
   if (resolved && resolved.word === word) return resolved.state;
-  if (pendingWord === word) return PENDING;
-  return ABSENT;
+  return holdFromKeystroke || asked === word ? PENDING : ABSENT;
 }
