@@ -1649,3 +1649,7 @@ Taken by the user the same evening, on canvas version 43.
   (682), `CuentaSinRedConSesionOscuroMovil` (683).
 - **A network word's saved translation leaves the subtitle** and stays in the body (682).
 - **Offline, `/cuenta` draws no «Cerrar sesión»**, nor «Reintentar» nor «Dispositivos» (683).
+
+### Decisions of 2026-10-09, sentences
+
+- Sentences are translated by the paid model within the daily cap, MyMemory as fallback (692, user 2026-10-09).

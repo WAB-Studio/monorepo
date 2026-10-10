@@ -42,6 +42,8 @@ const SALT = "check-translate-salt-not-a-reader";
 const CLIENT_CAP = 2;
 process.env.CLIENT_KEY_SALT = SALT;
 process.env.TRANSLATE_DAILY_CLIENT_CAP = String(CLIENT_CAP);
+// RL-60: with no key the route never reaches the paid model, only MyMemory.
+delete process.env.OPENAI_API_KEY;
 
 let POST: (request: Request) => Promise<Response>;
 
