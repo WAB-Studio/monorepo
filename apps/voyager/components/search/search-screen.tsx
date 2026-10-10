@@ -500,7 +500,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     kind.kind === "word" && wordAnswer !== null && wordAnswer.exact === null && !suppressNotFound
       ? normaliseHeadword(wordAnswer.query)
       : null;
-  const networkAnswer = useNetworkAnswer(networkWord);
+  const networkAnswer = useNetworkAnswer(
+    networkWord,
+    wordAnswer !== null && wordAnswer.viaInflection.length === 0,
+  );
 
   // RL-55: a word with no entry is recorded only once the network's answer
   // for that same text is in hand. It replaces the miss payload that call

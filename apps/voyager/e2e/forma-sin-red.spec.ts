@@ -192,3 +192,40 @@ test("whereat resolved: the offer for whereas and the answer, and no Â«no tieneÂ
   await expect(page.getByRole("link", { name: "whereas", exact: false })).toBeVisible();
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
 });
+
+// A word with no entry that will go to the network: the hint is held back from
+// the first keystroke until the network says no, and the wait shows meanwhile.
+test("coccidiosis slow network: the spelling hint never shows before the network answered, and shows after it failed", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await openReady(page);
+
+  await page.route(`**${UNLISTED}`, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({ status: 204, headers: { [STUB_HEADER]: "1" } });
+  });
+
+  // `innerText`, not `textContent`: the latter reads the page's script payload.
+  await page.evaluate(
+    ([hint, failed]) => {
+      const w = window as unknown as { __hintEarly: boolean };
+      w.__hintEarly = false;
+      new MutationObserver(() => {
+        const text = document.body.innerText;
+        if (text.includes(hint) && !text.includes(failed)) w.__hintEarly = true;
+      }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    },
+    [messages.search.notFoundHint, messages.word.networkFailed],
+  );
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill("coccidiosis");
+  await expect(page.getByText(messages.word.networkPending)).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
+
+  await expect(page.getByText(messages.word.networkFailed)).toBeVisible({ timeout: 5000 });
+  await expect(page.getByText(messages.search.notFoundHint)).toBeVisible();
+
+  const early = await page.evaluate(() => (window as unknown as { __hintEarly: boolean }).__hintEarly);
+  expect(early, "the hint was on screen before the network answered").toBe(false);
+});
