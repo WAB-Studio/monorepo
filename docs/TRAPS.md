@@ -3075,3 +3075,11 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Assert absence on what is drawn: `getByText(...).toHaveCount(0)` or `locator("body").innerText()`.
 - Measured 2026-10-10, module 723: `meses-km.spec.ts:165` stayed red with the feature correct; the only match was the raw
   `month.list.empty` message.
+
+## A field made required on the sync wire breaks every spec that seeds a peer's rows
+- 698 made `definition`, `exampleEn`, `exampleEs` required in the download schema. `log.spec.ts` (`foreignPage`),
+  `registro-copia.spec.ts` (`zebraRound`) and `export.spec.ts` (`recordSchema` 2) still seeded the old shape.
+- The rows are rejected silently: RNL-01 waits for `pulledThroughCursor` until the 30 s timeout, with no error.
+- Each module's own suite stayed green; only the train's CI run caught them. Measured 2026-10-10, train t3 (#566).
+- Grep `recordSchema`, `foreign` and `/api/log/sync` routes in `apps/voyager/e2e` in the same module that changes the wire.
+

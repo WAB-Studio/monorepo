@@ -310,7 +310,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
     }
   }
 
-  const SECTION_LABEL = /^(este mes · |hasta hoy$|fases$|tareas de |al terminar$)|· por mes$/i;
+  const SECTION_LABEL = /^(este mes · |hasta hoy$|fases$|tareas de |al terminar$)|· por mes · \d+ mes(es)?$/i;
 
   test("on paper a goal's heading and a section label are never the last line of a page", async ({ person, browser, baseURL, db }) => {
     await sweepOnPaper({ person, browser, baseURL, db }, (lines, names) => {
@@ -330,7 +330,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
     await sweepOnPaper({ person, browser, baseURL, db }, (lines) => {
       let checked = 0;
       for (const [index, line] of lines.entries()) {
-        if (!/· por mes$/i.test(line.text)) continue;
+        if (!/· por mes · \d+ mes(es)?$/i.test(line.text)) continue;
         checked += 1;
         const firstRow = lines.slice(index + 1).find((later) => MONTH_LABEL.test(later.text));
         expect(firstRow?.page, `«${line.text}» is parted from its first month`).toBe(line.page);
@@ -635,6 +635,8 @@ test.describe("the paper's month tables without their empty months (RP-70)", () 
     const stamp = Date.now();
     const ids: string[] = [];
     const names: string[] = [];
+    // Each goal prints its past months and this one: past + 1 rows, and the label says so.
+    const printed = new Map<string, number>();
     for (const [index, past] of [3, 1, 4, 2, 5, 1, 3, 2].entries()) {
       const name = `Vacíos ${stamp} n${index}`;
       const [goal] = await db<{ id: string }[]>`
@@ -649,6 +651,7 @@ test.describe("the paper's month tables without their empty months (RP-70)", () 
       `;
       ids.push(goal.id);
       names.push(name);
+      printed.set(name, past + 1);
     }
     const context = await browser.newContext({
       storageState: person.sessionFile,
@@ -674,10 +677,10 @@ test.describe("the paper's month tables without their empty months (RP-70)", () 
       const row = new RegExp(`^(${NAMES.join("|")}) \\d{4}\\b`);
       let rows = 0;
       for (const name of names) {
-        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${name} · por mes`.toLowerCase()));
+        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${name} · por mes · ${printed.get(name)} meses`.toLowerCase()));
         expect(at, `${name}: label in the PDF`).toBeGreaterThanOrEqual(0);
         const lines = pages[at];
-        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${name} · por mes`.toLowerCase()) + 1);
+        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${name} · por mes · ${printed.get(name)} meses`.toLowerCase()) + 1);
         expect(after.some((line) => row.test(line)), `${name}: label on page ${at + 1}, its first row is not there`).toBe(true);
       }
       for (const lines of pages) rows += lines.filter((line) => row.test(line)).length;

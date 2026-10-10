@@ -8,7 +8,7 @@ export const TEMPLATE_HEADER = "pulsar · plantilla 1";
 export type TemplateResult =
   | { matched: false }
   | { matched: true; draft: ImportDraft }
-  | { matched: true; error: { line: number; expected: string } };
+  | { matched: true; error: { line: number; expected: string; unit?: string } };
 
 type Goal = ImportDraft["goals"][number];
 type Commitment = Goal["commitments"][number];
@@ -25,6 +25,8 @@ const FORMS = {
   section: "import.errors.form.section",
   phase: "import.errors.form.phase",
   month: "import.errors.form.month",
+  monthUnit: "import.errors.form.monthUnit",
+  monthWhole: "import.errors.form.monthWhole",
   commitment: "import.errors.form.commitment",
   task: "import.errors.form.task",
   child: "import.errors.form.child",
@@ -64,6 +66,12 @@ function parseAmount(text: string, timeUnit: boolean): number | null {
   return /^\d+$/.test(t) ? Number(t) : null;
 }
 
+// A month's amount may carry the goal's own unit: "8 km", "8km", "8 KM".
+function parseUnitAmount(text: string, unit: string): number | null {
+  const m = /^(\d+)\s*(\S.*)$/.exec(text.trim());
+  return m && m[2].trim().toLowerCase() === unit.trim().toLowerCase() ? Number(m[1]) : null;
+}
+
 type Spot = { line: number; expected: string };
 
 export function parseTemplate(text: string): TemplateResult {
@@ -71,9 +79,9 @@ export function parseTemplate(text: string): TemplateResult {
   const first = lines.findIndex((l) => l.trim() !== "");
   if (first === -1 || lines[first] !== TEMPLATE_HEADER) return { matched: false };
 
-  const fail = (line: number, expected: string): TemplateResult => ({
+  const fail = (line: number, expected: string, unit?: string): TemplateResult => ({
     matched: true,
-    error: { line, expected },
+    error: unit === undefined ? { line, expected } : { line, expected, unit },
   });
 
   const goals: Goal[] = [];
@@ -189,8 +197,16 @@ export function parseTemplate(text: string): TemplateResult {
       goal.phases.push({ startsOn: m[1], endsOn: m[2], aim: m[3].trim() });
       spot("phases", FORMS.phase);
     } else if (section === "months") {
-      const amount = parts.length === 2 ? parseAmount(parts[1], timeUnit) : null;
-      if (amount === null) return fail(n, FORMS.month);
+      const unit = goal.measure !== null && !timeUnit ? goal.measure.unit : null;
+      const amount = parts.length === 2
+        ? parseAmount(parts[1], timeUnit) ?? (unit === null ? null : parseUnitAmount(parts[1], unit))
+        : null;
+      if (amount === null) {
+        // A decimal is a whole-number mistake; a number with another unit after it is a unit mistake.
+        if (unit !== null && parts.length === 2 && /^\d+[.,]\d/.test(parts[1])) return fail(n, FORMS.monthWhole, unit);
+        const wrongUnit = unit !== null && parts.length === 2 && /^\d+\s*\S/.test(parts[1]);
+        return wrongUnit ? fail(n, FORMS.monthUnit, unit) : fail(n, FORMS.month);
+      }
       goal.months.push({ month: parts[0], amount });
       spot("months", FORMS.month);
     } else if (section === "commitments") {
