@@ -543,3 +543,10 @@ test("RP-72 row 1: a broken sub-task reports itself once, not its «nota:»", ()
   const found = mistakesOf(`${GOAL}## Tareas\n- 2026-10 · Madre\n  - 30 min · mala hija\n    nota: de la hija rota\n`);
   assert.deepEqual(found.map((m) => m.line), [6]);
 });
+
+test("RP-72 row 1: `error` is the first of `errors`, the one a single-error reader shows", () => {
+  const read = parseTemplate("pulsar · plantilla 1\n# A\n- x\n# B\nhorizonte: 2027-10-01\n");
+  assert.ok(read.matched && "error" in read);
+  assert.ok(read.errors.length >= 2);
+  assert.deepEqual(read.error, read.errors[0]);
+});
