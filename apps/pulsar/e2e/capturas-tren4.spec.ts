@@ -211,7 +211,7 @@ test("D. Hoy at 390 with three moved plans: «Ver el plan» is one line (Roadmap
   }
 });
 
-test("E. the report's months table in print: «de» is Archivo a step beside two equal mono figures", async ({ browser, baseURL, db, person }) => {
+test("E. the report's months table in print: «hecho» holds the reached figure alone and «planeado» the plan, both mono and one size", async ({ browser, baseURL, db, person }) => {
   const goalId = await seedPlan(db, person.id);
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 794, height: 1123 } });
   try {
@@ -220,40 +220,35 @@ test("E. the report's months table in print: «de» is Archivo a step beside two
     await page.goto("/exportar");
     await expect(page.getByText(/por mes/).first()).toBeVisible();
     await page.emulateMedia({ media: "print" });
-    const cell = await page.evaluate((header) => {
-      const table = [...document.querySelectorAll("table")].find((t) => [...t.querySelectorAll("th")].some((th) => th.textContent?.trim().toLowerCase() === header));
+    const cell = await page.evaluate(([doneHeader, plannedHeader]) => {
+      const lower = (th: Element) => th.textContent?.trim().toLowerCase();
+      const table = [...document.querySelectorAll("table")].find((t) => [...t.querySelectorAll("th")].some((th) => lower(th) === doneHeader));
       if (!table) return null;
-      const col = [...table.querySelectorAll("th")].findIndex((th) => th.textContent?.trim().toLowerCase() === header);
-      // «de» abuts the unit before it in the cell's text, so find it as a text node of its own.
-      const ofNode = (td: Element | undefined) => {
-        if (!td) return null;
-        const walker = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
-        for (let node = walker.nextNode(); node; node = walker.nextNode()) if (/^\s*de\s*$/.test(node.textContent ?? "")) return node;
-        return null;
+      const heads = [...table.querySelectorAll("th")];
+      const doneCol = heads.findIndex((th) => lower(th) === doneHeader);
+      const plannedCol = heads.findIndex((th) => lower(th) === plannedHeader);
+      const figuresOf = (td: Element | undefined) =>
+        [...(td?.querySelectorAll<HTMLElement>("[class*='figure-module'][class*='__figure']") ?? [])].map((f) => ({
+          size: parseFloat(getComputedStyle(f).fontSize),
+          own: getComputedStyle(f).fontFamily,
+        }));
+      const row = [...table.querySelectorAll("tbody tr")].find(
+        (tr) => figuresOf(tr.children[doneCol]).length > 0 && figuresOf(tr.children[plannedCol]).length > 0,
+      );
+      if (!row) return null;
+      const doneCell = row.children[doneCol] as HTMLElement;
+      return {
+        done: figuresOf(doneCell),
+        planned: figuresOf(row.children[plannedCol]),
+        doneText: doneCell.textContent ?? "",
       };
-      const row = [...table.querySelectorAll("tbody tr")].find((tr) => ofNode(tr.children[col]) !== null);
-      const td = row?.children[col] as HTMLElement | undefined;
-      if (!td) return null;
-      const deStyle = getComputedStyle(ofNode(td)!.parentElement!);
-      const size = parseFloat(deStyle.fontSize);
-      const figures = [...td.querySelectorAll<HTMLElement>("[class*='figure-module'][class*='__figure']")].map((f) => ({
-        size: parseFloat(getComputedStyle(f).fontSize),
-        family: getComputedStyle(f.firstElementChild ?? f).fontFamily,
-        own: getComputedStyle(f).fontFamily,
-      }));
-      const status = row!.children[row!.children.length - 1] as HTMLElement;
-      return { de: size, deFamily: deStyle.fontFamily, figures, body: parseFloat(getComputedStyle(status).fontSize), tdSize: parseFloat(getComputedStyle(td).fontSize) };
-    }, exportMessages.columns.done);
+    }, [exportMessages.columns.done, exportMessages.columns.planned]);
     expect(cell).not.toBeNull();
-    expect(cell!.figures).toHaveLength(2);
-    expect(cell!.figures[0].size).toBe(cell!.figures[1].size);
-    for (const figure of cell!.figures) expect(figure.own).toMatch(/mono/i);
-    expect(cell!.deFamily).not.toMatch(/mono/i);
-    expect(cell!.de).toBeLessThanOrEqual(cell!.body);
-    // The board draws «de» a step beside its figures, never 26px against 12.
-    const figureSize = cell!.figures[0].size;
-    expect(cell!.de).toBeGreaterThanOrEqual(figureSize + 1);
-    expect(cell!.de).toBeLessThanOrEqual(figureSize + 3);
+    expect(cell!.done).toHaveLength(1);
+    expect(cell!.planned).toHaveLength(1);
+    expect(cell!.doneText).not.toMatch(/\bde\b/);
+    expect(cell!.done[0].size).toBe(cell!.planned[0].size);
+    for (const figure of [cell!.done[0], cell!.planned[0]]) expect(figure.own).toMatch(/mono/i);
   } finally {
     await context.close();
     await dropGoals(db, person.id, [goalId]);

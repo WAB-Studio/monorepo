@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
-import { Flex, IconButton, Page, ScreenHeader } from "@/components/ui";
+import { Face, Flex, Page, ScreenHeader, SectionLabel, TextLink } from "@/components/ui";
 import { dayPhrase } from "@/lib/day/day-phrase";
 import { weekDayHref } from "@/lib/day/week-href";
 import { weekSteps } from "@/lib/day/week-param";
@@ -114,26 +113,47 @@ export async function WeekScreen({ day, today }: { day: string; today: string })
   }
 
   function step(href: string | null, label: string, icon: "prev" | "next") {
-    if (href === null) return <Flex width="48px" flexShrink="0" aria-hidden />;
+    if (href === null) return <Flex flexGrow="1" aria-hidden />;
     return (
-      <IconButton asChild tap={48} variant="ghost">
-        <Link href={href} aria-label={label}>
-          {icon === "prev" ? <ChevronLeft size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
-        </Link>
-      </IconButton>
+      <TextLink href={href} nowrap>
+        <Flex as="span" align="center" gap="1">
+          {icon === "prev" ? <ChevronLeft size={16} aria-hidden /> : null}
+          {label}
+          {icon === "next" ? <ChevronRight size={16} aria-hidden /> : null}
+        </Flex>
+      </TextLink>
     );
   }
+
+  const eyebrow = eyebrowFor(view.start, thisMonday, week.firstMonday, t);
+  const stepLinks = (
+    <>
+      {step(prev, t("week.nav.prev"), "prev")}
+      {step(next, t("week.nav.next"), "next")}
+    </>
+  );
 
   return (
     <Page width="full">
       <ScreenHeader
         title={formatWeekRange(view.start, view.days[6]?.day ?? view.start, t)}
-        eyebrow={eyebrowFor(view.start, thisMonday, week.firstMonday, t)}
+        eyebrowFill
+        eyebrow={
+          <>
+            <Face on="phone">
+              <Flex justify="between" align="center" gap="3" width="100%">
+                {stepLinks}
+              </Flex>
+            </Face>
+            <SectionLabel>{eyebrow}</SectionLabel>
+          </>
+        }
         actions={
-          <Flex align="center" gap="1">
-            {step(prev, t("week.nav.prev"), "prev")}
-            {step(next, t("week.nav.next"), "next")}
-          </Flex>
+          <Face on="desktop">
+            <Flex align="center" justify="end" gap="5">
+              {stepLinks}
+            </Flex>
+          </Face>
         }
       />
 

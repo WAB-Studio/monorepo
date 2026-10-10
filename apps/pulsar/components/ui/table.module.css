@@ -110,6 +110,11 @@
   white-space: normal;
 }
 
+.wrapDetail .detail,
+.wrapDetail .detailWide {
+  white-space: normal;
+}
+
 /* The wide face, `RevisionEscritorio.dc.html`. */
 .wide {
   display: none;

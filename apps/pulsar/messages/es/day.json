@@ -120,7 +120,7 @@
     "saidByYou": "lo dijiste tú",
     "partialAmount": "{logged} de {target}",
     "evidenceAmount": "{count} {unit}",
-    "unreadSource": "sin leer la fuente"
+    "unreadSourceAsks": "sin leer la fuente · pide {asks}"
   },
   "monthLine": {
     "title": "este mes",

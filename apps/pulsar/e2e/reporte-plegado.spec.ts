@@ -84,7 +84,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
         // The label and the table the board draws.
         await expect(main.getByText(`${seeded.name} · por mes`, { exact: true })).toBeVisible();
         if (width === 1280) {
-          await expect(main.locator("table thead").first().locator("th")).toHaveText(["mes", "hecho", "estado"]);
+          await expect(main.locator("table thead").first().locator("th")).toHaveText(["por mes", "hecho", "planeado"]);
         }
         await expect(main.getByText("por semana", { exact: true })).toBeVisible();
         await expect(main.getByText(/^Esta semana: .*\.$/)).toBeVisible();
@@ -153,7 +153,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
       const dir = resolve(process.cwd(), "private/export-pdf");
       mkdirSync(dir, { recursive: true });
       const file = resolve(dir, `379-${first.goalId}.pdf`);
-      writeFileSync(file, await page.pdf({ format: "A4" }));
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
       const text = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" });
       expect(text).not.toMatch(/sem \d+ ·/);
       expect(text).not.toContain("Ver las");
@@ -221,7 +221,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
   async function printTo(page: Page, file: string): Promise<Line[]> {
     await page.emulateMedia({ media: "print" });
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, await page.pdf({ format: "A4" }));
+    writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
     return printedLines(file);
   }
 
