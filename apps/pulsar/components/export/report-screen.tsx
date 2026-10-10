@@ -7,6 +7,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
   goalSections,
+  isLongTable,
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
@@ -565,7 +566,7 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        <PrintBlock key={section} span={spans(section)} whole={section === "months"} only={section === "months" && unit === null}>
+        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(goal.months)} only={section === "months" && unit === null}>
           {render(section)}
         </PrintBlock>
       ))}
