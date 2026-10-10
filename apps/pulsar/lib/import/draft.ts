@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { dayBefore } from "@/lib/day/weeks";
 import { monthsOfSpan } from "@/lib/plan/months";
+import { isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
 import { setRhythmSchema } from "@/lib/validation/rhythm";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
@@ -180,12 +181,43 @@ export function draftRefusals(draft: ImportDraft, today: string): DraftRefusal[]
   return refusals;
 }
 
-// The estimates a goal with no measure cannot keep: a task's or a sub-task's.
+// A goal measured in hours is kept in minutes (RP-65): its figures are multiplied
+// by 60 once, and a draft already in minutes passes through unchanged.
+export function inMinutes(draft: ImportDraft): ImportDraft {
+  return {
+    goals: draft.goals.map((goal) => {
+      if (goal.measure === null || !isHourUnit(goal.measure.unit)) return goal;
+      const times = (n: number | null) => (n === null ? null : n * 60);
+      return {
+        ...goal,
+        measure: { ...goal.measure, unit: "minutos" },
+        months: goal.months.map((entry) => ({ ...entry, amount: entry.amount * 60 })),
+        commitments: goal.commitments.map((commitment) =>
+          commitment.unit !== null && isHourUnit(commitment.unit)
+            ? { ...commitment, unit: "minutos", targetQuantity: times(commitment.targetQuantity) }
+            : commitment,
+        ),
+        tasks: goal.tasks.map((task) => ({
+          ...task,
+          estimate: times(task.estimate),
+          children: task.children.map((child) => ({ ...child, estimate: times(child.estimate) })),
+        })),
+      };
+    }),
+  };
+}
+
+// A figure only a goal measured in time can keep (RP-66).
+function keepsFigures(goal: ImportDraft["goals"][number]): boolean {
+  return goal.measure !== null && isTimeUnit(goal.measure.unit);
+}
+
+// The estimates a goal not measured in time cannot keep: a task's or a sub-task's.
 export function strayEstimates(draft: ImportDraft): DraftRefusal[] {
   const stray: DraftRefusal[] = [];
-  const key = "import.notices.estimateDropped";
   draft.goals.forEach((goal, g) => {
-    if (goal.measure !== null) return;
+    if (keepsFigures(goal)) return;
+    const key = goal.measure === null ? "import.notices.estimateDropped" : "import.notices.estimateDroppedNotTime";
     goal.tasks.forEach((task, t) => {
       if (task.estimate !== null) stray.push({ path: `goals.${g}.tasks.${t}`, key });
       task.children.forEach((child, c) => {
@@ -200,7 +232,7 @@ export function strayEstimates(draft: ImportDraft): DraftRefusal[] {
 export function withoutStrayEstimates(draft: ImportDraft): ImportDraft {
   return {
     goals: draft.goals.map((goal) =>
-      goal.measure !== null
+      keepsFigures(goal)
         ? goal
         : {
             ...goal,

@@ -355,3 +355,24 @@ test("ritmo: in its place with an amount that is not a time says the amount is t
   const text = `${RHYTHM_HEAD}medida: horas de estudio · minutos\nritmo: doce\n`;
   assert.equal(sentenceOf(errorOf(text).expected), "El ritmo es un tiempo por mes, como «12 h».");
 });
+
+test("a measure in hours is stored in minutes, its amounts and rhythm in the time forms", () => {
+  const text = [
+    "pulsar · plantilla 1", "", "# Estudio", "horizonte: 2027-10-01", "medida: estudio · horas", "ritmo: 10 h", "",
+    "## Meses", "- 2026-10 · 12 h", "", "## Tareas", "- 2026-10 · 90 min · Leer",
+  ].join("\n");
+  const result = parseTemplate(text);
+  assert.ok(result.matched && "draft" in result);
+  const [goal] = result.draft.goals;
+  assert.equal(goal.measure?.unit, "minutos");
+  assert.equal(goal.months[0].amount, 720);
+  assert.equal(goal.rhythm, 600);
+  assert.equal(goal.tasks[0].estimate, 90);
+});
+
+test("a bare integer amount under a measure in hours stops the reading", () => {
+  const text = ["pulsar · plantilla 1", "# Estudio", "horizonte: 2027-10-01", "medida: estudio · horas", "## Meses", "- 2026-10 · 12"].join("\n");
+  const result = parseTemplate(text);
+  assert.ok(result.matched && "error" in result);
+  assert.equal(result.error.line, 6);
+});
