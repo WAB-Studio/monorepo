@@ -264,6 +264,32 @@ async function main(): Promise<void> {
       modelCalls === CLIENT_CAP && mymemoryCalls === 0 && (await spend()) === CLIENT_CAP,
       `model=${modelCalls} mymemory=${mymemoryCalls} spend=${await spend()}`,
     );
+
+    // 7. A model that echoes the sentence said nothing: MyMemory answers.
+    for (const echo of [SENTENCE, "  It Would Be There ", "IT WOULD   BE THERE"]) {
+      reset();
+      await setSpend(0);
+      modelReply = () => modelSays(echo);
+      const echoed = await translate(SENTENCE);
+      assert(
+        `T7. the model echoing the sentence (${JSON.stringify(echo)}) falls to MyMemory`,
+        echoed.status === 200 && echoed.body.text === MYMEMORY_TEXT && modelCalls === 1 && mymemoryCalls === 1,
+        `${JSON.stringify(echoed)} model=${modelCalls} mymemory=${mymemoryCalls}`,
+      );
+    }
+
+    // 8. The prompt pins translation only: a prompt that lets the model explain fails here.
+    reset();
+    await setSpend(0);
+    await translate(SENTENCE);
+    const system = (modelRequests[0]?.messages as { role?: string; content?: string }[] | undefined)?.find(
+      (message) => message.role === "system",
+    )?.content ?? "";
+    assert(
+      "T8. the system message asks for the translation only and no added words",
+      /translation only/i.test(system) && /add no words/i.test(system),
+      `system=${JSON.stringify(system)}`,
+    );
   } finally {
     await sql`delete from reading.client_spend where day = current_date and client = any(${capKeys})`;
     if (prior) await setSpend(prior.calls);
