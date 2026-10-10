@@ -1654,3 +1654,21 @@ Taken by the user the same evening, on canvas version 43.
 
 - Sentences are translated by the paid model within the daily cap, MyMemory as fallback (692, user 2026-10-09).
 - **A function word typed alone leads with the table, the dictionary folded beneath** (690, user 2026-10-09). No board drawn before the code: the user reviews the apps at the end.
+
+### Decisions of 2026-10-09, part 3
+
+Taken by the orchestrator, 2026-10-09, for modules 695–704.
+
+- **(a) A form whose lemma answers draws no network line offline.** With no connection or the network down, the network
+  answer of a form whose lemma answers shows nothing: no «Buscando…» left behind and no «No se pudo responder por
+  internet». A word with no entry (RL-44) keeps its failure line.
+- **(b) A network answer that arrived silences the dictionary's miss.** The search stops drawing «El diccionario no tiene
+  esa palabra» and «Revisa la ortografía…». While it waits, the first stays and the second does not. With the network
+  down, both stay.
+- **(c) `/cuenta` offline with a session reloads itself when the connection returns**, so «Sin conexión desde hace X» is
+  never shown with a connection.
+- **(d) The hour of the quota does not break.** Its spaces are non-breaking («7:00 p. m.» stays whole at 390 px).
+- **(e) The forms line on `/registro` is 14 px (`Text size="2"`), muted.** The board of 704 governs instead if the user
+  asks for one (open question to the user, not yet answered).
+- **(f) The filter on `/registro` is a field above the list, visible whenever the list has rows** (RL-63).
+- **(g) Boards that do not exist:** none for 700–702; they draw blocks already drawn or remove lines.
