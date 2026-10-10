@@ -61,12 +61,30 @@ test("a deploy retires the previous build's chunks, and a re-open sweeps nothing
   // One open of "/" is the whole trigger: the shell that arrives names a
   // different set of scripts, so everything under the old fingerprint goes.
   await page.goto("/");
+  // The sweep deletes the stale chunk first and writes the new fingerprint
+  // last, so the stale chunk's absence alone marks it half done; the page's
+  // own chunks are cached only after, as it asks for them (and a chunk
+  // cached before the sweep's listing is swept with the rest).
   await expect
-    .poll(async () => (await cachedStaticPaths(page, CACHE_NAME)).includes(STALE_CHUNK), { timeout: 15_000 })
-    .toBe(false);
-
-  const swept = await cachedStaticPaths(page, CACHE_NAME);
-  expect(swept.filter((path) => path.startsWith("/_next/static/")).length, "this build's own chunks are back").toBeGreaterThan(0);
+    .poll(
+      async () =>
+        page.evaluate(
+          async ({ cacheName, buildKey, chunk }) => {
+            const stored = await (await caches.open(cacheName)).match(buildKey);
+            return stored !== undefined && (await stored.text()) !== chunk;
+          },
+          { cacheName: CACHE_NAME, buildKey: BUILD_KEY, chunk: STALE_CHUNK },
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  await expect
+    .poll(async () => (await cachedStaticPaths(page, CACHE_NAME)).filter((path) => path.startsWith("/_next/static/")).length, {
+      timeout: 15_000,
+      message: "this build's own chunks are back",
+    })
+    .toBeGreaterThan(0);
+  expect(await cachedStaticPaths(page, CACHE_NAME)).not.toContain(STALE_CHUNK);
 
   // And the sweep is not a treadmill: a second open of the same build finds
   // its own fingerprint and leaves every entry where it is.
