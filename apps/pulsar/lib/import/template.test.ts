@@ -516,3 +516,27 @@ test("RP-72 row 6: a missing «# nombre» is still reported, first, with the goa
   assert.equal(found[0].line, 2);
   assert.match(said(found[0]), /^Falta el nombre de la meta/);
 });
+
+const GOAL = "pulsar · plantilla 1\n# A\nhorizonte: 2027-10-01\n";
+
+test("RP-72 row 1: lines are listed by ascending line even when a later line is found before an earlier one", () => {
+  const found = mistakesOf("pulsar · plantilla 1\n# A\n- x\n# B\nhorizonte: 2027-10-01\n").map((m) => m.line);
+  assert.ok(found.length >= 2, JSON.stringify(found));
+  assert.deepEqual(found, [...found].sort((a, b) => a - b));
+  assert.deepEqual(found, [...new Set(found)]);
+});
+
+test("RP-72 row 1: an unknown «## » section reports itself once, not the lines under it", () => {
+  const found = mistakesOf(`${GOAL}## Cosas\n- uno\n- dos · tres\n  - cuatro\n`);
+  assert.deepEqual(found.map((m) => m.line), [4]);
+});
+
+test("RP-72 row 1: a broken task reports itself once, not its sub-tasks nor its «nota:»", () => {
+  const found = mistakesOf(`${GOAL}## Tareas\n- 2026-10 · 2 h · Rota\n  - 30 min · hija\n  - otra\n  nota: de la tarea\n    nota: de la hija\n`);
+  assert.deepEqual(found.map((m) => m.line), [5]);
+});
+
+test("RP-72 row 1: a broken sub-task reports itself once, not its «nota:»", () => {
+  const found = mistakesOf(`${GOAL}## Tareas\n- 2026-10 · Madre\n  - 30 min · mala hija\n    nota: de la hija rota\n`);
+  assert.deepEqual(found.map((m) => m.line), [6]);
+});

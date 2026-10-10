@@ -74,7 +74,11 @@ test.describe("one reading lists every mistake (RP-72)", () => {
         sentence(lineOf(BOARD, SERIES_BAD), SERIES_BAD, "Esa unidad no es km. Escribe la cantidad en km, como «- nombre · cadencia · 8 km»."),
         sentence(lineOf(BOARD, TASK_BAD), TASK_BAD, messages.errors.estimateNotTime),
       ];
+      const rule = (row: string) => alert.getByText(row, { exact: true }).evaluate((el) => parseFloat(getComputedStyle(el).borderTopWidth));
       for (const row of rows) await expect(alert.getByText(row, { exact: true })).toBeVisible();
+      expect(await rule(rows[0])).toBe(0);
+      expect(await rule(rows[1])).toBeGreaterThan(0);
+      expect(await rule(rows[2])).toBeGreaterThan(0);
       const whole = (await alert.textContent()) ?? "";
       const places = rows.map((row) => whole.indexOf(row));
       expect(places.every((p) => p >= 0)).toBe(true);
