@@ -616,3 +616,77 @@ test("the weeks table marks «en curso» on the current week's row and on no oth
     await remove(db, person, [seeded.goalId]);
   }
 });
+
+// RP-70: with the months that have not started and carry no amount left off the paper, a «por mes» label
+// still lands on the page of its first printed row and the page foot never ends on it.
+test.describe("the paper's month tables without their empty months (RP-70)", () => {
+  const NAMES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ];
+  const startOf = (offset: number) => firstOfMonth(`${todayInZone().slice(0, 7)}-01`, offset);
+
+  test("on paper the «por mes» label of a goal with trailing empty months sits with its first month, and no empty month prints", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const ids: string[] = [];
+    const names: string[] = [];
+    for (const [index, past] of [3, 1, 4, 2, 5, 1, 3, 2].entries()) {
+      const name = `Vacíos ${stamp} n${index}`;
+      const [goal] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+        values (${person.id}, ${name}, ${startOf(6)}::date, 'km', 'km',
+                (${startOf(-past)}::date + interval '14 days' + interval '12 hours')::timestamptz)
+        returning id
+      `;
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${startOf(0)}::date, 40)
+      `;
+      ids.push(goal.id);
+      names.push(name);
+    }
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 794, height: 1123 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(names[0], { exact: true }).first()).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const dir = resolve(process.cwd(), "private/export-pdf");
+      mkdirSync(dir, { recursive: true });
+      const file = resolve(dir, `725-etiqueta-${stamp}.pdf`);
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+      const count = Number(/Pages:\s+(\d+)/.exec(execFileSync("pdfinfo", [file], { encoding: "utf8" }))![1]);
+      const pages = Array.from({ length: count }, (_, i) =>
+        execFileSync("pdftotext", ["-layout", "-f", String(i + 1), "-l", String(i + 1), file, "-"], { encoding: "utf8" })
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== ""),
+      );
+      const row = new RegExp(`^(${NAMES.join("|")}) \\d{4}\\b`);
+      let rows = 0;
+      for (const name of names) {
+        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${name} · por mes`.toLowerCase()));
+        expect(at, `${name}: label in the PDF`).toBeGreaterThanOrEqual(0);
+        const lines = pages[at];
+        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${name} · por mes`.toLowerCase()) + 1);
+        expect(after.some((line) => row.test(line)), `${name}: label on page ${at + 1}, its first row is not there`).toBe(true);
+      }
+      for (const lines of pages) rows += lines.filter((line) => row.test(line)).length;
+      // Each goal: its past months and this one print; the five after it do not.
+      const expected = [3, 1, 4, 2, 5, 1, 3, 2].reduce((sum, past) => sum + past + 1, 0);
+      expect(rows).toBe(expected);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${ids}) and user_id = ${person.id}`;
+    }
+  });
+});

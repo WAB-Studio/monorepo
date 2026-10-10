@@ -2413,3 +2413,200 @@ test.describe("what closes a task's row on the report (RP-49)", () => {
     }
   });
 });
+
+// `ReporteImpresoSinMesesVacios.dc.html` (RP-70): on paper a month that has not started and has no
+// amount is not printed; on screen, and for the AI, the goal keeps every month.
+test.describe("the paper leaves out the months that have not started and carry no amount (RP-70)", () => {
+  const NAMES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ];
+
+  const startOf = (offset: number) => {
+    const date = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
+    date.setUTCMonth(date.getUTCMonth() + offset);
+    return dateToCivilDate(date);
+  };
+  const labelOf = (offset: number) => {
+    const day = startOf(offset);
+    return `${NAMES[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
+  };
+
+  type Sparse = { goalId: string; name: string };
+
+  // Months `from`..`to` (offsets from this month, `to` inclusive); only the offsets in `budgets` carry an amount.
+  async function seedSparse(
+    db: postgres.Sql,
+    person: Person,
+    spec: { name: string; measure: string; unit: string; from: number; to: number; budgets: number[]; amount: number; fact?: number },
+  ): Promise<Sparse> {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${spec.name}, ${startOf(spec.to + 1)}::date, ${spec.measure}, ${spec.unit},
+              (${startOf(spec.from)}::date + interval '14 days' + interval '12 hours')::timestamptz)
+      returning id
+    `;
+    for (const offset of spec.budgets) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${startOf(offset)}::date, ${spec.amount})
+      `;
+    }
+    if (spec.fact !== undefined) {
+      const [commitment] = await db<{ id: string }[]>`
+        insert into goals.commitments
+          (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+        values (${person.id}, ${goal.id}, ${`Sesión ${spec.name}`}, 'daily', 'quantity', 1, ${spec.unit}, now() - interval '70 days')
+        returning id
+      `;
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${person.id}, ${goal.id}, ${commitment.id}, ${todayInZone()}::date, ${spec.fact})
+      `;
+    }
+    return { goalId: goal.id, name: spec.name };
+  }
+
+  // The board: IA in minutes (this month and two planned), Correr in km (two closed, this month, two with no amount).
+  async function seedBoard(db: postgres.Sql, person: Person, stamp: number) {
+    const ia = await seedSparse(db, person, {
+      name: `IA aplicada ${stamp}`, measure: "minutos", unit: "minutos", from: 0, to: 2, budgets: [0, 1, 2], amount: 720,
+    });
+    const run = await seedSparse(db, person, {
+      name: `Correr 10K ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [-2, -1, 0], amount: 40, fact: 11,
+    });
+    return { ia, run };
+  }
+
+  async function open(
+    browser: import("@playwright/test").Browser,
+    baseURL: string,
+    person: Person,
+    viewport = { width: 794, height: 1123 },
+  ) {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL, viewport });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    return { context, page };
+  }
+
+  async function printed(page: import("@playwright/test").Page, label: string): Promise<string> {
+    await page.emulateMedia({ media: "print" });
+    const dir = resolve(process.cwd(), "private/export-pdf");
+    mkdirSync(dir, { recursive: true });
+    const file = resolve(dir, `725-${label}-${Date.now()}.pdf`);
+    writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+    return file;
+  }
+
+  // The text of one goal's «por mes» table: from its label to the next goal's name (or the end), lowercase, one run.
+  function tableOf(file: string, name: string, next?: string): string {
+    const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" })
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+    const from = flat.indexOf(`${name} · por mes`.toLowerCase());
+    expect(from, `«${name} · por mes» in the PDF`).toBeGreaterThanOrEqual(0);
+    const to = next ? flat.indexOf(next.toLowerCase(), from) : -1;
+    return flat.slice(from, to === -1 ? undefined : to);
+  }
+
+  test("RP-70 on paper: a goal in km prints its closed, current and planned months and none of the two with no amount", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }, testInfo) => {
+    const stamp = Date.now();
+    const { ia, run } = await seedBoard(db, person, stamp);
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      const file = await printed(page, "km");
+      testInfo.annotations.push({ type: "pdf", description: file });
+      const table = tableOf(file, run.name);
+      for (const offset of [-2, -1, 0]) expect(table, `month ${offset} printed`).toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table, `month +${offset} has no amount`).not.toContain(labelOf(offset));
+      expect(table).toContain("en curso");
+      expect(table.match(/cerrado/g) ?? []).toHaveLength(2);
+      expect(table).toContain("11 km");
+      // The other goal has an amount in every month, so every one of them prints.
+      const other = tableOf(file, ia.name, run.name);
+      for (const offset of [0, 1, 2]) expect(other, `IA month ${offset}`).toContain(labelOf(offset));
+      expect(other).toContain("12 h");
+      expect(other).toContain("planeado");
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[ia.goalId, run.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("RP-70 on paper, printed from a phone-wide window: the same months, the stacked face adds none", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }, testInfo) => {
+    const stamp = Date.now();
+    const run = await seedSparse(db, person, {
+      name: `Correr 10K ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [-2, -1, 0], amount: 40, fact: 11,
+    });
+    const { context, page } = await open(browser, baseURL!, person, { width: 390, height: 844 });
+    try {
+      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      const file = await printed(page, "telefono");
+      testInfo.annotations.push({ type: "pdf", description: file });
+      const table = tableOf(file, run.name);
+      for (const offset of [-2, -1, 0]) expect(table).toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table).not.toContain(labelOf(offset));
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${run.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("RP-70 on paper: a closed month with no amount and no activity still prints, as «cerrado»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const run = await seedSparse(db, person, {
+      name: `Correr vacío ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [0], amount: 40,
+    });
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      const table = tableOf(await printed(page, "pasado-vacio"), run.name);
+      for (const offset of [-2, -1, 0]) expect(table, `month ${offset}`).toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table, `month +${offset}`).not.toContain(labelOf(offset));
+      expect(table.match(/cerrado/g) ?? []).toHaveLength(2);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${run.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    test(`RP-70 on screen at ${width} px: the goal shows all five of its months`, async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const run = await seedSparse(db, person, {
+        name: `Correr 10K ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [-2, -1, 0], amount: 40, fact: 11,
+      });
+      const { context, page } = await open(browser, baseURL!, person, { width, height });
+      try {
+        await expect(page.getByRole("main").getByText(run.name, { exact: true }).first()).toBeVisible();
+        const section = page.locator("section").filter({ hasText: `${run.name} · por mes` }).last();
+        for (const offset of [-2, -1, 0, 1, 2]) {
+          await expect(
+            section.getByText(labelOf(offset)).locator("visible=true"),
+            `month ${offset} on screen`,
+          ).toHaveCount(1);
+        }
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${run.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
+});
