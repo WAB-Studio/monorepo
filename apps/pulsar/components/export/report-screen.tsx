@@ -9,6 +9,7 @@ import {
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
+import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate } from "@/lib/zone";
@@ -211,7 +212,8 @@ function MeasureLine({
   const words = useTimeWords();
   const unitWords = isTimeUnit(unit) ? t("timeUnit") : (words.unit?.(unit, 2) ?? unit);
   const key = declared ? "measuresDeclared" : "measures";
-  return name === null ? t(`${key}Unnamed`, { unit: unitWords, date }) : t(key, { measure: name, unit: unitWords, date });
+  const measure = distinctMeasureName(name, unit, [words.unit?.(unit, 1) ?? unit, words.unit?.(unit, 2) ?? unit]);
+  return measure === null ? t(`${key}Unnamed`, { unit: unitWords, date }) : t(key, { measure, unit: unitWords, date });
 }
 
 function GoalPart({

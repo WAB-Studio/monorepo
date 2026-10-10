@@ -518,7 +518,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       try {
         await expect(page.getByRole("main").getByText(seeded.plainName, { exact: true })).toBeVisible();
         const panel = panelOf(page, seeded.plainName);
-        await expect(panel.getByText(new RegExp(`^mide km, en km · hasta el ${DATE}$`))).toBeVisible();
+        await expect(panel.getByText(new RegExp(`^mide en km · hasta el ${DATE}$`))).toBeVisible();
         await expect(panel.getByText("solo lo que dijiste tú")).toHaveCount(0);
       } finally {
         await context.close();
@@ -691,7 +691,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       const horizon = plusDays(90);
       await expect(
         page.getByText(
-          `mide minutos, en horas y minutos · hasta el ${longDate(dayBefore(horizon))}`,
+          `mide en horas y minutos · hasta el ${longDate(dayBefore(horizon))}`,
         ),
       ).toBeVisible();
       await expect(
@@ -1247,7 +1247,7 @@ test.describe("the report's type and space", () => {
             .first()
             .evaluate((node) => getComputedStyle(node).fontFamily);
         // The goal's measure line and the count under the title are sentences.
-        expect(await family(/^mide minutos, en horas y minutos · hasta el /)).not.toMatch(/mono/i);
+        expect(await family(/^mide en horas y minutos · hasta el /)).not.toMatch(/mono/i);
         expect(await family(/^\d+ metas?$/)).not.toMatch(/mono/i);
         expect(await family(seeded.monthTask)).not.toMatch(/mono/i);
         // «de 12 h»: the sentence is Archivo around a mono figure.
@@ -1336,7 +1336,7 @@ test.describe("a readable source", () => {
       const panelOf = (name: string) =>
         page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
       await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide búsquedas, en searches · hasta el ${date}$`))).toBeVisible();
-      await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide km, en km · hasta el ${date}$`))).toBeVisible();
+      await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide en km · hasta el ${date}$`))).toBeVisible();
       const body = (await page.locator("main").textContent()) ?? "";
       expect(body).not.toMatch(/diccionario|alimentada|solo lo que dijiste tú|No pudimos leer/i);
     } finally {
