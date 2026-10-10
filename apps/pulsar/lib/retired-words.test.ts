@@ -19,6 +19,7 @@ const retired: { word: RegExp; allowed: string[] }[] = [
   { word: /alimentada por/i, allowed: [] },
   { word: /correr el plan/i, allowed: [] },
   { word: /mover tareas de mes/i, allowed: [] },
+  { word: /aceptar que el plan corra/i, allowed: [] },
 ];
 
 function values(node: unknown, path: string, out: [string, string][]) {

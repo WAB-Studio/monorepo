@@ -13,7 +13,7 @@ import { ConsentList } from "./consent-list";
 import { type MessageKey } from "@/i18n/translator";
 
 const MAY = ["read", "done", "write", "rename", "phases", "plan"] as const;
-const NEVER = ["delete", "undo"] as const;
+const NEVER = ["delete", "undo", "rhythm"] as const;
 
 export function Consent({
   client,
@@ -43,7 +43,7 @@ export function Consent({
   }
 
   return (
-    <Page alone middle>
+    <Page alone middle snug>
       <ScreenHeader
         title={t("title", { client })}
         eyebrow={t("eyebrow")}

@@ -102,3 +102,9 @@
     padding: 0;
   }
 }
+
+@media (min-width: 1024px) {
+  .page.alone.snug {
+    gap: 32px;
+  }
+}
