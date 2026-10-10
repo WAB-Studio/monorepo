@@ -247,12 +247,12 @@ this gets built, and no schema, table or column is "prepared for" it.
   row of `/registro` on its word's page, including a word the reader never opened online. The page shows
   what the device saved for that word. A word that is not in the record says so, in the same page; no
   address inside the app ever lands on the browser's offline page.
-- [ ] **RL-62** — A word the network answered (RL-44) is recorded with the whole answer that arrived: its translations, its
+- [x] **RL-62** — A word the network answered (RL-44) is recorded with the whole answer that arrived: its translations, its
   definition when it carried one, and its example sentence with the example's Spanish translation, each cut to what the
   copy admits. Its page on `/registro` draws that answer from the device, with or without a connection, as the box drew
   it. The answer travels in the copy and comes down to the reader's other devices with the row. A row recorded before
   keeps its translation alone. Decided by the user 2026-10-09.
-- [ ] **RL-63** — `/registro` can be narrowed by typing. A field above the list keeps only the rows whose word, a form
+- [x] **RL-63** — `/registro` can be narrowed by typing. A field above the list keeps only the rows whose word, a form
   searched under it, or its translation contains what was typed, case and accents aside; a line says how many of the
   record's words are shown, and a typing that matches nothing says so. Emptying the field gives the whole list back, and
   returning from a word's page finds the list as it was left. It reads the device's record alone and sends nothing.
@@ -360,7 +360,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RNL-08** — Exporting never touches the read path: building the file happens on a screen that
   is not the box, mounts no dictionary Worker, and with the export never opened the app behaves
   exactly as before.
-- [ ] **RNL-09** — The copy is never on the read path: **with no account turned on the app opens not
+- [x] **RNL-09** — The copy is never on the read path: **with no account turned on the app opens not
   one connection, and the box still opens, focuses and answers the same**; with the box in view not
   one request leaves while typing; the copy fires only when the reader confirms or retries it, when the tab
   is hidden, or once each time the reader opens `/registro` or `/cuenta` with the copy on; and a lookup answers in the same time with a ten-thousand-row merge in flight as without
