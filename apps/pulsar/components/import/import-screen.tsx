@@ -31,18 +31,39 @@ type Failure =
 
 const subscribeNothing = () => () => {};
 
+// The box's own layout, replayed in a hidden twin: where `[start, end)` really sits, wrapped lines included.
+function spanOffset(area: HTMLTextAreaElement, start: number, end: number) {
+  const style = getComputedStyle(area);
+  const twin = document.createElement("div");
+  for (const name of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight", "tabSize"] as const) {
+    twin.style[name] = style[name];
+  }
+  twin.style.position = "absolute";
+  twin.style.visibility = "hidden";
+  twin.style.boxSizing = "border-box";
+  twin.style.width = `${area.clientWidth}px`;
+  twin.style.whiteSpace = "pre-wrap";
+  twin.style.overflowWrap = "break-word";
+  twin.textContent = area.value.slice(0, start);
+  const span = document.createElement("span");
+  span.textContent = area.value.slice(start, end) || ".";
+  twin.appendChild(span);
+  document.body.appendChild(twin);
+  const offset = { top: span.offsetTop, height: span.offsetHeight };
+  twin.remove();
+  return offset;
+}
+
 // Selects line `n` (1-based) of the box without its newline and scrolls it into view.
-// Wrapped lines count as one, so a very long line above can leave the target below the fold.
 function selectLine(area: HTMLTextAreaElement, n: number) {
   const lines = area.value.split("\n");
   const start = lines.slice(0, n - 1).reduce((sum, l) => sum + l.length + 1, 0);
-  const style = getComputedStyle(area);
-  const lineHeight = parseFloat(style.lineHeight) || (area.scrollHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)) / lines.length;
-  const top = parseFloat(style.paddingTop) + (n - 1) * lineHeight;
+  const end = start + (lines[n - 1]?.length ?? 0);
+  const { top, height } = spanOffset(area, start, end);
   if (top < area.scrollTop) area.scrollTop = top;
-  else if (top + lineHeight > area.scrollTop + area.clientHeight) area.scrollTop = top + lineHeight - area.clientHeight;
+  else if (top + height > area.scrollTop + area.clientHeight) area.scrollTop = top + height - area.clientHeight;
   area.focus({ preventScroll: true });
-  area.setSelectionRange(start, start + (lines[n - 1]?.length ?? 0));
+  area.setSelectionRange(start, end);
 }
 
 // What each failure draws: where its box sits and what it offers next.

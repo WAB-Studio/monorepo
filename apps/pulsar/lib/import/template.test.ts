@@ -592,3 +592,8 @@ test("801 first line: a text that does not start with «pulsar ·» still goes t
     assert.deepEqual(parseTemplate(text), { matched: false }, text);
   }
 });
+
+test("801 cut: several broken head lines answer the first one only", () => {
+  const found = mistakesOf("pulsar · plantilla 1\n# A\nhorizonte: pronto\n# B\nhorizonte: nunca\n");
+  assert.deepEqual(found.map((m) => m.line), [3]);
+});

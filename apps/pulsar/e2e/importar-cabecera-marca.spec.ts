@@ -46,6 +46,36 @@ const HEAD = ["pulsar · plantilla 1", "", "# Correr 10K", `horizonte: ${HORIZON
 const BROKEN_HEAD = ["pulsar · plantilla 1", "", "# Correr 10K", `horizonte: ${HORIZON}`, "medida: distancia"];
 const lineOf = (text: string, written: string) => text.split("\n").indexOf(written) + 1;
 
+// Where the selection really sits, wrapped lines included: a hidden twin of the box laid out with its width, padding and type.
+async function selectionSeen(box: Locator) {
+  return box.evaluate((el: HTMLTextAreaElement) => {
+    const s = getComputedStyle(el);
+    const twin = document.createElement("div");
+    for (const name of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight", "tabSize"] as const) {
+      twin.style[name] = s[name];
+    }
+    twin.style.position = "absolute";
+    twin.style.visibility = "hidden";
+    twin.style.boxSizing = "border-box";
+    twin.style.width = `${el.clientWidth}px`;
+    twin.style.whiteSpace = "pre-wrap";
+    twin.style.overflowWrap = "break-word";
+    twin.textContent = el.value.slice(0, el.selectionStart);
+    const span = document.createElement("span");
+    span.textContent = el.value.slice(el.selectionStart, el.selectionEnd) || ".";
+    twin.appendChild(span);
+    document.body.appendChild(twin);
+    const top = span.offsetTop;
+    const height = span.offsetHeight;
+    twin.remove();
+    return {
+      picked: el.value.slice(el.selectionStart, el.selectionEnd),
+      inView: top >= el.scrollTop - 1 && top + height <= el.scrollTop + el.clientHeight + 1,
+      scrolls: el.scrollHeight > el.clientHeight,
+    };
+  });
+}
+
 const SIZES = [
   { name: "390x844", viewport: { width: 390, height: 844 } },
   { name: "1440", viewport: { width: 1440, height: 900 } },
@@ -161,20 +191,48 @@ for (const size of SIZES) {
           const n = lineOf(text, written);
           await rowsOf(alert).filter({ hasText: `Línea ${n}:` }).click();
           await expect(box).toBeFocused();
-          const seen = await box.evaluate((el: HTMLTextAreaElement, index: number) => {
-            const style = getComputedStyle(el);
-            const lineHeight = parseFloat(style.lineHeight) || (el.scrollHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)) / el.value.split("\n").length;
-            const top = parseFloat(style.paddingTop) + (index - 1) * lineHeight;
-            return {
-              picked: el.value.slice(el.selectionStart, el.selectionEnd),
-              inView: el.scrollTop <= top + 1 && el.scrollTop + el.clientHeight >= top + lineHeight - 1,
-              scrolls: el.scrollHeight > el.clientHeight,
-            };
-          }, n);
+          const seen = await selectionSeen(box);
           expect(seen.scrolls, "the fixture must overflow the box").toBe(true);
           expect(seen.picked).toBe(written);
           expect(seen.inView, `${written} in view`).toBe(true);
         }
+      });
+    });
+
+    test("with long wrapping lines above, a tapped row still brings its line into view", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        const long = "objetivo largo ".repeat(10).trim();
+        const phases = Array.from({ length: 12 }, (_, i) => {
+          const month = String(i + 1).padStart(2, "0");
+          return `- ${shift(0).year}-${month}-01 a ${shift(0).year}-${month}-20 · ${long}`;
+        });
+        const text = [
+          ...HEAD, "", "## Fases", ...phases, "",
+          "## Meses", `- ${M1} · 40 km`, MONTH_BAD, "",
+          "## Compromisos", SERIES_BAD, "",
+          "## Tareas", ...Array.from({ length: 4 }, () => `- ${M2} · Inscribirme ${long}`), TASK_BAD,
+        ].join("\n");
+        await paste(page, text);
+        const alert = alertOf(page);
+        await expect(rowsOf(alert).first()).toBeVisible();
+        const box = page.getByLabel(messages.textLabel);
+        for (const written of [TASK_BAD, MONTH_BAD, SERIES_BAD]) {
+          await rowsOf(alert).filter({ hasText: `Línea ${lineOf(text, written)}:` }).click();
+          const seen = await selectionSeen(box);
+          expect(seen.scrolls).toBe(true);
+          expect(seen.picked).toBe(written);
+          expect(seen.inView, `${written} in view`).toBe(true);
+        }
+      });
+    });
+
+    test("a short error row is still a button of 44 px or more", async ({ person, browser, baseURL }) => {
+      await asPerson({ person, browser, baseURL }, size.viewport, async (page) => {
+        await paste(page, "pulsar · plantilla 1\nhorizonte: 2027-10-01");
+        const alert = alertOf(page);
+        const row = rowsOf(alert).first();
+        await expect(row).toBeVisible();
+        expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       });
     });
 
