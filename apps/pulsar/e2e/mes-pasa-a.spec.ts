@@ -109,7 +109,7 @@ test("a closed month that carried nothing says no «pasó a» — in the report,
     await page.goto("/exportar");
     const main = page.getByRole("main");
     await expect(main.getByText(/Meta sin pase/).first()).toBeVisible();
-    await expect(main.getByText("cerrado", { exact: true }).first()).toBeVisible();
+    await expect(main.getByText("cerrado", { exact: true }).locator("visible=true").first()).toBeVisible();
     await expect(main.getByText(/pasó a/)).toHaveCount(0);
   } finally {
     await context.close();
