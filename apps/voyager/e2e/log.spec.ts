@@ -358,7 +358,7 @@ test("every lookup that finds an answer is recorded, a miss leaves no row, a fat
 // The merge is the app's own: `SyncOnOpen` calls `syncNow`, the driver posts to
 // `/api/log/sync` (answered here, per page, for this browser alone) and hands
 // the pages to `mergeForeign`. Nothing in this spec inserts a row itself.
-test("RNL-01: a lookup answers in under 10ms, median, while the app merges 10,000 rows from the account", async ({
+test("RNL-01: a lookup answers in under 10ms at the median and at the 95th percentile while the app merges 10,000 rows from the account", async ({
   page,
 }) => {
   await deleteTranslator(page);
@@ -410,6 +410,7 @@ test("RNL-01: a lookup answers in under 10ms, median, while the app merges 10,00
   const median = percentile(durations, 50);
   console.log(`RNL-01 worker round trip during the app's own 10,000-row merge — ${durations.length} lookups, median ${median.toFixed(3)} ms, p95 ${percentile(durations, 95).toFixed(1)} ms, max ${Math.max(...durations).toFixed(1)} ms`);
   expect(median).toBeLessThan(10);
+  expect(percentile(durations, 95)).toBeLessThan(10);
 
   const foreign = (await readLogRows(page)).filter((row) => row.normalised.startsWith("foreign-"));
   expect(foreign).toHaveLength(FOREIGN_TOTAL);
