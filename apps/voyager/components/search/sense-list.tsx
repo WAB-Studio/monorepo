@@ -511,9 +511,9 @@ export function SenseList({
   // `SinEntradaFrase` carries its translations alone").
   const exactLead = !compact && answer.exact !== null ? leadPronunciation(answer.exact.senses) : null;
 
-  // RL-58: on the full variant the lemma block rises under the form's first
-  // group instead of closing the entry; compact keeps it at the end.
-  const offerInside = !compact && answer.exact !== null && answer.viaInflection.length > 0;
+  // RL-58: the lemma block rises under the form's first group instead of
+  // closing the entry, on both variants.
+  const offerInside = answer.exact !== null && answer.viaInflection.length > 0;
   const offerAbove = !offerInside;
   const offer = offerInside ? (
     <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
