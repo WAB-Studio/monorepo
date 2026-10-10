@@ -37,6 +37,35 @@ type Row = {
   origin: unknown;
 };
 
+// The dictionary's own store holds a manifest once the install has landed.
+async function dictionaryInstalled(page: Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    const known = await indexedDB.databases();
+    if (!known.some((db) => db.name === "reading-dictionary")) return false;
+    return new Promise<boolean>((resolve) => {
+      const open = indexedDB.open("reading-dictionary");
+      open.onerror = () => resolve(false);
+      open.onsuccess = () => {
+        const db = open.result;
+        if (!db.objectStoreNames.contains("meta")) {
+          db.close();
+          resolve(false);
+          return;
+        }
+        const count = db.transaction("meta", "readonly").objectStore("meta").count();
+        count.onsuccess = () => {
+          db.close();
+          resolve(count.result > 0);
+        };
+        count.onerror = () => {
+          db.close();
+          resolve(false);
+        };
+      };
+    });
+  });
+}
+
 async function readLogRows(page: Page): Promise<Row[]> {
   return page.evaluate(
     () =>
@@ -340,8 +369,17 @@ function copyOn(): SyncState {
 
 // Seeds from the home screen, once the dictionary is installed: /registro
 // itself mints the sync row and would race the write.
-async function seedFromHome(page: Page, rows: { sync?: SyncState; lookups?: Seed[] }): Promise<void> {
-  await openReady(page);
+async function seedFromHome(
+  page: Page,
+  rows: { sync?: SyncState; lookups?: Seed[] },
+  installs = true,
+): Promise<void> {
+  if (installs) {
+    await openReady(page);
+  } else {
+    await page.goto("/");
+    await page.waitForTimeout(1000);
+  }
   await page.evaluate(
     ({ version, sync, lookups }) =>
       new Promise<void>((resolve, reject) => {
@@ -429,6 +467,7 @@ test("700 hecho, sin red: offline, /registro/doomscrolling paints translation, d
   await seedFromHome(page, { lookups: [unlistedSeed()] });
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  await expect.poll(() => dictionaryInstalled(page)).toBe(true);
 
   await page.context().setOffline(true);
   await page.addInitScript(() => {
@@ -559,4 +598,14 @@ test("700 copia: a row with the three fields pulled through /api/log/sync paints
   await expect(page.locator('a[href="/registro/doomscrolling"]')).toBeVisible();
   await page.goto("/registro/doomscrolling");
   await expectWholeAnswer(page);
+});
+
+test("700 instalación fallida: la fila con respuesta se pinta", async ({ page }) => {
+  await deleteTranslator(page);
+  await page.route(`**${manifest.asset.path}*`, (route) => route.abort());
+  await seedFromHome(page, { lookups: [unlistedSeed()] }, false);
+
+  await page.goto("/registro/doomscrolling");
+  await expectWholeAnswer(page);
+  await expect(page.getByText(messages.install.failed, { exact: true })).toHaveCount(0);
 });
