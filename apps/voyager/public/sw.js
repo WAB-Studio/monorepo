@@ -10,7 +10,7 @@
 // — the field `sense-list.tsx` has read since RL-28 (#157). Bumping the name
 // is what drops that pool; `SHELL_BUILD` below is what keeps a later deploy
 // from rebuilding it.
-const CACHE_NAME = "reading-shell-v9";
+const CACHE_NAME = "reading-shell-v10";
 
 // The shell the cache is allowed to hold, read off the current `/` every time
 // the network answers one. A deploy changes the hashed script names in that
@@ -77,17 +77,32 @@ self.addEventListener("install", (event) => {
 // Every hashed asset a page's HTML names. Content-hashed, so storing one is
 // never stale; `retireOtherBuilds` sweeps them when "/" names another build.
 async function precacheChunks(cache, html) {
-  const urls = new Set(html.match(/\/_next\/static\/[^"'\\\s)<>]+?\.(?:js|css|woff2?)/g) ?? []);
-  await Promise.all(
-    Array.from(urls).map(async (url) => {
-      if (await cache.match(url)) return;
-      // One chunk that will not load must not keep the worker from installing.
+  const seen = new Set();
+  const fetchOne = async (url) => {
+    if (seen.has(url)) return "";
+    seen.add(url);
+    let response = await cache.match(url);
+    if (!response) {
       try {
-        const response = await fetch(url);
-        if (response.ok) await cache.put(url, response);
-      } catch {}
-    }),
-  );
+        response = await fetch(url);
+        if (response.ok) await cache.put(url, response.clone());
+      } catch {
+        return "";
+      }
+    }
+    return url.endsWith(".js") ? await response.clone().text() : "";
+  };
+  const urls = new Set(html.match(/\/_next\/static\/[^"'\\\s)<>]+?\.(?:js|css|woff2?)/g) ?? []);
+  const bodies = await Promise.all(Array.from(urls).map(fetchOne));
+  // Workers are named inside a chunk, with the chunks they import.
+  const extra = new Set();
+  for (const body of bodies) {
+    for (const m of body.matchAll(/"(static\/chunks\/turbopack-worker-[^"]+\.js)",\[([^\]]*)\]/g)) {
+      extra.add("/_next/" + m[1]);
+      for (const d of m[2].matchAll(/"(static\/[^"]+)"/g)) extra.add("/_next/" + d[1]);
+    }
+  }
+  await Promise.all(Array.from(extra).map(fetchOne));
 }
 
 self.addEventListener("activate", (event) => {
@@ -170,7 +185,9 @@ async function navigate(request, event) {
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
-  if (cached) return cached;
+  // A stored response keeps its own URL, which has no fragment; a Worker
+  // takes its location from it and loses the `#params=` its bootstrap reads.
+  if (cached) return new Response(cached.body, { status: cached.status, headers: cached.headers });
   const response = await fetch(request);
   if (response.ok) cache.put(request, response.clone());
   return response;
