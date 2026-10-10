@@ -258,7 +258,7 @@ export async function MonthDetail({
         <Section as="div" label={t("month.list.tasks")}>
           <Text as="p" variant="sentence">
             {t(
-              isTimeUnit(unit) ? "month.list.empty" : row.current || !unit ? "month.list.emptyNoMeasure" : "month.list.emptyNoMeasureLater",
+              isTimeUnit(unit) ? "month.list.empty" : row.current ? "month.list.emptyNoMeasure" : "month.list.emptyNoMeasureLater",
               { month: capitalised(name), name },
             )}
           </Text>
