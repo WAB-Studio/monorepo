@@ -88,11 +88,13 @@
     "tooBigNamed": "«{file}» pesa {size} y el tope es 4 MB. Pega su texto en la caja.",
     "unreadableType": "Ese tipo de archivo no se lee. Pega su texto en la caja.",
     "templateLine": "Línea {line}: «{text}». {expected}",
+    "templateCut": "Arréglala y vuelve a leer: las líneas de abajo no se pudieron leer.",
     "templateCount": "{count, plural, one {# línea por corregir} other {# líneas por corregir}}",
     "form": {
       "goal": "Falta el nombre de la meta: «# nombre».",
       "horizon": "La meta termina con «horizonte: AAAA-MM-DD», justo después del nombre.",
       "measure": "La medida va como «medida: nombre · unidad».",
+      "firstLine": "La primera línea va como «pulsar · plantilla 1».",
       "section": "Las secciones son «## Fases», «## Meses», «## Compromisos» y «## Tareas».",
       "phase": "Una fase va como «- AAAA-MM-DD a AAAA-MM-DD · objetivo».",
       "month": "Un mes va como «- AAAA-MM · monto».",

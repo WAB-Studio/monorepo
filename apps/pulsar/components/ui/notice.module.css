@@ -24,3 +24,41 @@
   margin-top: 10px;
   border-top: 1px solid var(--pulsar-line);
 }
+
+.notice:focus {
+  outline: none;
+}
+
+.pressable {
+  display: block;
+  box-sizing: border-box;
+  inline-size: calc(100% + 16px);
+  min-block-size: 44px;
+  margin-inline: -8px;
+  padding-block: 10px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.pressable:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 1px;
+}
+
+.pressable[aria-current="true"] {
+  background: var(--pulsar-today);
+}
+
+.aside {
+  margin: 0;
+  padding-top: 10px;
+  color: var(--pulsar-ink-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}

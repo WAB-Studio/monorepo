@@ -8,8 +8,9 @@ export const TEMPLATE_HEADER = "pulsar · plantilla 1";
 export type TemplateResult =
   | { matched: false }
   | { matched: true; draft: ImportDraft }
-  | { matched: true; error: TemplateError; errors: TemplateError[] };
+  | { matched: true; error: TemplateError; errors: TemplateError[]; cut: boolean };
 
+// `cut` means the reading stopped at a head line or the first line, so `errors` holds that one alone.
 // `expected` is a catalogue key; `unit` fills the sentence that names the goal's own.
 export type TemplateError = { line: number; expected: string; unit?: string };
 
@@ -25,6 +26,7 @@ const FORMS = {
   rhythmPlace: "import.errors.form.rhythmPlace",
   rhythmUnit: "import.errors.form.rhythmUnit",
   rhythmAmount: "import.errors.form.rhythmAmount",
+  firstLine: "import.errors.form.firstLine",
   section: "import.errors.form.section",
   phase: "import.errors.form.phase",
   month: "import.errors.form.month",
@@ -81,10 +83,22 @@ function parseUnitAmount(text: string, unit: string): number | null {
 
 type Spot = { line: number; expected: string };
 
+// The parts of a goal that its head lines write.
+const HEAD_FIELDS = new Set(["name", "horizon", "measure", "rhythm"]);
+
+// A head line the reader cannot take stops the reading: nothing below it is judged.
+function cut(line: number, expected: string): TemplateResult {
+  const error: TemplateError = { line, expected };
+  return { matched: true, error, errors: [error], cut: true };
+}
+
 export function parseTemplate(text: string): TemplateResult {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).map((l) => l.trimEnd());
   const first = lines.findIndex((l) => l.trim() !== "");
-  if (first === -1 || lines[first] !== TEMPLATE_HEADER) return { matched: false };
+  if (first === -1) return { matched: false };
+  if (lines[first] !== TEMPLATE_HEADER) {
+    return lines[first].startsWith("pulsar ·") ? cut(first + 1, FORMS.firstLine) : { matched: false };
+  }
 
   const errors: TemplateError[] = [];
   const report = (line: number, expected: string, unit?: string) => {
@@ -94,7 +108,7 @@ export function parseTemplate(text: string): TemplateResult {
   const finish = (): TemplateResult => {
     const seen = new Set<number>();
     const list = errors.filter((e) => !seen.has(e.line) && seen.add(e.line)).sort((a, b) => a.line - b.line);
-    return { matched: true, error: list[0], errors: list };
+    return { matched: true, error: list[0], errors: list, cut: false };
   };
   // A goal measured in something else than time keeps no figure on a task.
   const isFigure = (text: string) => parseAmount(text, false) !== null || parseAmount(text, true) !== null;
@@ -127,7 +141,7 @@ export function parseTemplate(text: string): TemplateResult {
     const at = `goals.${g}`;
 
     if (line.startsWith("# ")) {
-      if (needsHorizon) report(needsHorizon.line, FORMS.horizon);
+      if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
       const name = line.slice(2).trim();
       goals.push({ name, horizon: "", measure: null, rhythm: null, phases: [], months: [], commitments: [], tasks: [] });
       spots.set(`goals.${g + 1}`, { line: n, expected: FORMS.goal });
@@ -140,17 +154,19 @@ export function parseTemplate(text: string): TemplateResult {
       noteOwner = null;
       continue;
     }
-    if (!goal) {
-      report(n, FORMS.goal);
-      return finish();
-    }
+    if (!goal) return cut(n, FORMS.goal);
 
     if (line.startsWith("ritmo:")) {
       const minutes = goal.measure !== null && isTimeUnit(goal.measure.unit) ? /^ritmo: (.+)$/.exec(line) : null;
       const amount = followsMeasure && section === null && minutes ? parseTime(minutes[1]) : null;
       if (amount === null) {
-        if (goal.measure === null || !isTimeUnit(goal.measure.unit)) report(n, FORMS.rhythmUnit);
-        else report(n, followsMeasure && section === null ? FORMS.rhythmAmount : FORMS.rhythmPlace);
+        const expected =
+          goal.measure === null || !isTimeUnit(goal.measure.unit)
+            ? FORMS.rhythmUnit
+            : followsMeasure && section === null ? FORMS.rhythmAmount : FORMS.rhythmPlace;
+        // Only a `ritmo:` among the head lines cuts; one under a section is a stray line like any other.
+        if (section === null) return cut(n, expected);
+        report(n, expected);
         continue;
       }
       goal.rhythm = amount;
@@ -188,12 +204,13 @@ export function parseTemplate(text: string): TemplateResult {
         afterMeasure = true;
         continue;
       }
+      if (line.startsWith("medida:")) return cut(n, FORMS.measure);
+      if (line.startsWith("horizonte:")) return cut(n, FORMS.horizon);
     }
 
     if (line.startsWith("## ")) {
       const next = SECTIONS[line as keyof typeof SECTIONS];
-      if (needsHorizon) report(needsHorizon.line, FORMS.horizon);
-      needsHorizon = null;
+      if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
       lastTask = null;
       noteOwner = null;
       brokenTask = false;
@@ -210,7 +227,8 @@ export function parseTemplate(text: string): TemplateResult {
     }
     if (skipping) continue;
     if (section === null) {
-      report(n, needsHorizon ? FORMS.horizon : FORMS.section);
+      if (needsHorizon) return cut(n, FORMS.horizon);
+      report(n, FORMS.section);
       continue;
     }
 
@@ -331,11 +349,8 @@ export function parseTemplate(text: string): TemplateResult {
     }
   }
 
-  if (needsHorizon) report(needsHorizon.line, FORMS.horizon);
-  if (goals.length === 0) {
-    report(first + 2, FORMS.goal);
-    return finish();
-  }
+  if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
+  if (goals.length === 0) return cut(first + 2, FORMS.goal);
 
   const parsed = importDraftSchema.safeParse({ goals });
   if (parsed.success && errors.length === 0) return { matched: true, draft: parsed.data };
@@ -343,12 +358,18 @@ export function parseTemplate(text: string): TemplateResult {
   // The nearest enclosing item names the line: a path is walked up until a
   // part of the draft written on some line matches.
   if (!parsed.success) {
+    const head: Spot[] = [];
     for (const issue of parsed.error.issues) {
       const path = issue.path.map(String);
       let spot: Spot | undefined;
       for (let k = path.length; k >= 0 && !spot; k--) spot = spots.get(path.slice(0, k).join("."));
       spot ??= spots.get(`goals.${goals.length - 1}`)!;
+      if (HEAD_FIELDS.has(path[2])) head.push(spot);
       report(spot.line, spot.expected);
+    }
+    if (head.length > 0) {
+      const [earliest] = head.sort((a, b) => a.line - b.line);
+      return cut(earliest.line, earliest.expected);
     }
   }
   return finish();

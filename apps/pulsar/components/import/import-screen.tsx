@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -26,10 +26,45 @@ const KNOWN_ERRORS = new Set([
 ]);
 
 type Failure =
-  | { kind: "templateLine"; lines: { line: number; expected: string; unit?: string; text: string }[] }
+  | { kind: "templateLine"; cut: boolean; lines: { line: number; expected: string; unit?: string; text: string }[] }
   | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
 const subscribeNothing = () => () => {};
+
+// The box's own layout, replayed in a hidden twin: where `[start, end)` really sits, wrapped lines included.
+function spanOffset(area: HTMLTextAreaElement, start: number, end: number) {
+  const style = getComputedStyle(area);
+  const twin = document.createElement("div");
+  for (const name of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight", "tabSize"] as const) {
+    twin.style[name] = style[name];
+  }
+  twin.style.position = "absolute";
+  twin.style.visibility = "hidden";
+  twin.style.boxSizing = "border-box";
+  twin.style.width = `${area.clientWidth}px`;
+  twin.style.whiteSpace = "pre-wrap";
+  twin.style.overflowWrap = "break-word";
+  twin.textContent = area.value.slice(0, start);
+  const span = document.createElement("span");
+  span.textContent = area.value.slice(start, end) || ".";
+  twin.appendChild(span);
+  document.body.appendChild(twin);
+  const offset = { top: span.offsetTop, height: span.offsetHeight };
+  twin.remove();
+  return offset;
+}
+
+// Selects line `n` (1-based) of the box without its newline and scrolls it into view.
+function selectLine(area: HTMLTextAreaElement, n: number) {
+  const lines = area.value.split("\n");
+  const start = lines.slice(0, n - 1).reduce((sum, l) => sum + l.length + 1, 0);
+  const end = start + (lines[n - 1]?.length ?? 0);
+  const { top, height } = spanOffset(area, start, end);
+  if (top < area.scrollTop) area.scrollTop = top;
+  else if (top + height > area.scrollTop + area.clientHeight) area.scrollTop = top + height - area.clientHeight;
+  area.focus({ preventScroll: true });
+  area.setSelectionRange(start, end);
+}
 
 // What each failure draws: where its box sits and what it offers next.
 function placement(failure: Failure) {
@@ -62,6 +97,9 @@ export function ImportScreen() {
   const stored = useSyncExternalStore(subscribeNothing, () => readSource() ?? "", () => "");
   const [typed, setTyped] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const alertBox = useRef<HTMLDivElement>(null);
+  // The error row last pressed, so the list shows which line the box is pointing at.
+  const [pressed, setPressed] = useState<number | null>(null);
   // The server's box is live before the scripts land: what it holds at hydration was typed.
   useLayoutEffect(() => {
     const early = box.current?.value ?? "";
@@ -73,6 +111,12 @@ export function ImportScreen() {
   const [showTemplate, setShowTemplate] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  const listed = failure?.kind === "templateLine";
+  // A reading with errors hands focus to the list; the key is the failure, which is new on every reading.
+  useEffect(() => {
+    if (failure?.kind === "templateLine") alertBox.current?.focus();
+  }, [failure]);
+
   const placed = failure ? placement(failure) : null;
   // The key and the cap shut the model; the template still reads.
   const modelShut =
@@ -81,6 +125,7 @@ export function ImportScreen() {
 
   function fail(next: Failure) {
     setFailure(next);
+    setPressed(null);
     setShowTemplate(false);
   }
 
@@ -92,6 +137,7 @@ export function ImportScreen() {
       const response = await fetch("/importar/leer", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
+        cut?: boolean;
         errors?: { line: number; expected: string; unit?: string }[];
         via?: "template" | "model";
         draft?: ImportDraft;
@@ -106,6 +152,7 @@ export function ImportScreen() {
         const written = source.split("\n");
         fail({
           kind: "templateLine",
+          cut: body.cut === true,
           lines: body.errors.map((e) => ({ ...e, text: written[e.line - 1] ?? "" })),
         });
       } else if (body?.error && KNOWN_ERRORS.has(body.error)) {
@@ -161,7 +208,15 @@ export function ImportScreen() {
   const notice = failure ? (
     failure.kind === "templateLine" ? (
       <Notice
+        ref={alertBox}
+        focusable
         title={t("import.errors.templateCount", { count: failure.lines.length })}
+        aside={failure.cut ? t("import.errors.templateCut") : undefined}
+        current={pressed}
+        onRow={(index) => {
+          setPressed(index);
+          if (box.current) selectLine(box.current, failure.lines[index].line);
+        }}
         rows={failure.lines.map((e) =>
           t("import.errors.templateLine", {
             line: e.line,
@@ -192,7 +247,7 @@ export function ImportScreen() {
             rows={failure ? 8 : 10}
             value={text}
             disabled={busy}
-            invalid={failure?.kind === "templateLine"}
+            invalid={listed}
             onChange={(event) => setTyped(event.target.value)}
           />
 
