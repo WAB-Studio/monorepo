@@ -2319,3 +2319,97 @@ test.describe("the report's pending tasks and its month table (RP-49, RP-32)", (
     }
   });
 });
+
+// The right-hand words of a task's row (RP-49): «hecha · <its amount>» for a done task,
+// «n de m» only for a parent with no part of its own.
+test.describe("what closes a task's row on the report (RP-49)", () => {
+  const today = todayInZone();
+  const monthStart = `${today.slice(0, 7)}-01`;
+
+  const rowOf = (page: import("@playwright/test").Page, name: string) =>
+    page
+      .locator("main")
+      .getByText(name, { exact: true })
+      .and(page.locator(":visible"))
+      .locator("xpath=ancestor::*[count(.//*[@role='img'])=1][last()]");
+
+  async function open(browser: import("@playwright/test").Browser, baseURL: string, person: Person) {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    return { context, page };
+  }
+
+  test("a carried task done this month prints its own amount, not what it still owes", async ({ person, browser, baseURL, db }) => {
+    const stamp = Date.now();
+    const goalName = `Meta hecha arrastrada ${stamp}`;
+    const taskName = `Arrastrada y hecha ${stamp}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${goalName}, ${plusDays(90)}, 'minutos', 'minutos', now() - interval '70 days')
+      returning id
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${goal.id}, ${monthStart}::date, 720)
+    `;
+    const [task] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${goal.id}, ${taskName}, 60, (${monthStart}::date - interval '1 month')::date)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${goal.id}, ${task.id}, ${today}::date)
+    `;
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
+      const row = rowOf(page, taskName);
+      await expect(row).toContainText("hecha · 1 h", { useInnerText: true });
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
+    }
+  });
+
+  // 12 h a month: a 10 h task, then a parent of 5 h + 5 h of which only 2 h fit.
+  test("a parent whose own part falls in this month prints «pendiente · amount», never «n de m»", async ({ person, browser, baseURL, db }) => {
+    const stamp = Date.now();
+    const goalName = `Meta padre partido ${stamp}`;
+    const filler = `Relleno ${stamp}`;
+    const parentName = `Padre partido ${stamp}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${person.id}, ${goalName}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${filler}, 600, true)
+    `;
+    const [parent] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, in_plan)
+      values (${person.id}, ${goal.id}, ${parentName}, true)
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${parent.id}, ${`Mitad ${stamp}`}, 300), (${person.id}, ${goal.id}, ${parent.id}, ${`Otra mitad ${stamp}`}, 300)
+    `;
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
+      const row = page
+        .locator("main")
+        .getByText(parentName, { exact: true })
+        .and(page.locator(":visible"))
+        .locator("xpath=ancestor::*[count(.//*[@role='img'])=3][last()]");
+      await expect(row).toContainText("pendiente · 2 h", { useInnerText: true });
+      await expect(row).not.toContainText("0 de 2", { useInnerText: true });
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
+    }
+  });
+});
