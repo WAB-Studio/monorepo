@@ -1140,7 +1140,8 @@ module; until it lands, the screen and its approved board stay as built.
 
 ## Decisions of 2026-10-10, after the train-5 critic
 
-Taken by the user the same evening, on the critic's four questions.
+Taken by the user the same evening, on the critic's four questions. Boards `ImportarCabeceraRota`, `ImportarPrimeraLinea`,
+`ImportarErrorMarcaLinea` and `ReporteImpresoTablaLarga` approved as drawn by the user 2026-10-10.
 
 - **(1) A broken header cuts the reading and says so.** A header line the reader cannot take (a measure without its
   unit) shows that one error, with its own message, and «Arréglala y vuelve a leer: las líneas de abajo no se pudieron
