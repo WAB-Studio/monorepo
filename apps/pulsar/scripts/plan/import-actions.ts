@@ -209,6 +209,9 @@ async function confirmed(draft: Draft) {
   return { goalIds: result.goalIds, statements };
 }
 
+// Per run, so a count sees this run's rows only and an orphan of a red run cannot fail the next.
+const RUN = Date.now().toString(36);
+
 async function countGoals(name: string): Promise<number> {
   const [{ count }] = await sql<{ count: number }[]>`
     select count(*)::int as count from goals.goals where user_id = ${personId} and name = ${name}`;
@@ -318,30 +321,30 @@ test("confirmImport: a four-goal draft pays the same number of statements as the
 });
 
 test("confirmImport: a month outside the goal's span is refused with its key and path, and writes nothing", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: fuera de plazo").replace(`- ${M1} · 20 h`, `- ${M14} · 20 h`));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# RP-37 fixture: fuera de plazo ${RUN}`).replace(`- ${M1} · 20 h`, `- ${M14} · 20 h`));
   const result = await confirmImport(draft);
   assert.deepEqual(result, { ok: false, error: "import.errors.monthAfterEnd", at: "goals.0.months.1" });
-  assert.equal(await countGoals("RP-37 fixture: fuera de plazo"), 0);
+  assert.equal(await countGoals(`RP-37 fixture: fuera de plazo ${RUN}`), 0);
 });
 
 test("confirmImport: a goal whose end already passed is refused whole", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: pasada").replace(`${M12}-01`, TODAY));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# RP-37 fixture: pasada ${RUN}`).replace(`${M12}-01`, TODAY));
   const result = await confirmImport(draft);
   assert.deepEqual(result, { ok: false, error: "import.errors.horizonPast", at: "goals.0.horizon" });
-  assert.equal(await countGoals("RP-37 fixture: pasada"), 0);
+  assert.equal(await countGoals(`RP-37 fixture: pasada ${RUN}`), 0);
 });
 
 test("confirmImport: a draft with an extra unknown field is refused by the schema", async () => {
-  const draft = draftOf(EXAMPLE.replace("# IA aplicada", "# RP-37 fixture: campo extra"));
+  const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# RP-37 fixture: campo extra ${RUN}`));
   const forged = { goals: [{ ...draft.goals[0], admin: true }] };
   const result = await confirmImport(forged);
   assert.deepEqual(result, { ok: false, error: "import.errors.draftInvalid", at: "goals.0" });
-  assert.equal(await countGoals("RP-37 fixture: campo extra"), 0);
+  assert.equal(await countGoals(`RP-37 fixture: campo extra ${RUN}`), 0);
   assert.deepEqual(await confirmImport({ goals: [] }), { ok: false, error: "import.errors.empty", at: "goals" });
 });
 
 test("confirmImport: a parent task with its own estimate is refused at the parent and writes nothing", async () => {
-  const name = "RP-37 fixture: padre con monto";
+  const name = `RP-37 fixture: padre con monto ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0].tasks[1] = { ...draft.goals[0].tasks[1], estimate: 30 };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.parentWithAmount", at: "goals.0.tasks.1" });
@@ -349,7 +352,7 @@ test("confirmImport: a parent task with its own estimate is refused at the paren
 });
 
 test("confirmImport: a forged draft with an estimate on a goal with no measure is refused whole and writes nothing", async () => {
-  const name = "RP-37 fixture: estimado sin medida";
+  const name = `RP-37 fixture: estimado sin medida ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   const [first] = draft.goals;
   draft.goals[0] = {
@@ -363,7 +366,7 @@ test("confirmImport: a forged draft with an estimate on a goal with no measure i
 });
 
 test("confirmImport: a tap commitment with a target is refused at the commitment and writes nothing", async () => {
-  const name = "RP-37 fixture: toque con monto";
+  const name = `RP-37 fixture: toque con monto ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0].commitments[1] = { ...draft.goals[0].commitments[1], targetQuantity: 5, unit: "minutos" };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "import.errors.tapWithAmount", at: "goals.0.commitments.1" });
@@ -371,7 +374,7 @@ test("confirmImport: a tap commitment with a target is refused at the commitment
 });
 
 test("confirmImport: a commitment the table refuses leaves no goal behind", async () => {
-  const name = "RP-37 fixture: atómica";
+  const name = `RP-37 fixture: atómica ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   // A daily commitment with a count passes the form's schema and meets
   // `commitments_n_for_counted_kinds` at the commitments insert, after the goals.
@@ -442,7 +445,7 @@ test("confirmImport: without ritmo: the rhythm and plan_seen stay null", async (
 });
 
 test("confirmImport: a rhythm on a measure that is not time is refused with its key and writes nothing", async () => {
-  const name = "RP-63 fixture: ritmo en km";
+  const name = `RP-63 fixture: ritmo en km ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   draft.goals[0] = { ...draft.goals[0], rhythm: 720, measure: { name: "distancia", unit: "km" }, commitments: [], tasks: [], months: [] };
   assert.deepEqual(await confirmImport(draft), { ok: false, error: "roadmap.errors.rhythmNotTime", at: "goals.0.rhythm" });
@@ -535,7 +538,7 @@ test("confirmImport: a draft measured in hours arrives in minutes", async () => 
 });
 
 test("confirmImport: a forged figure in a goal not measured in time is refused whole and writes nothing", async () => {
-  const name = "RP-66 fixture: cifra en km";
+  const name = `RP-66 fixture: cifra en km ${RUN}`;
   const draft = draftOf(EXAMPLE.replace("# IA aplicada", `# ${name}`));
   const [first] = draft.goals;
   draft.goals[0] = {
