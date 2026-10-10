@@ -96,6 +96,20 @@ function SignedOutForm() {
     };
   }, []);
 
+  const isHeld = held !== null;
+  useEffect(() => {
+    if (!isHeld) return;
+    // Two events in one tick must not queue two navigations.
+    let reloaded = false;
+    const onOnline = () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [isHeld]);
+
   async function handleSend(): Promise<void> {
     setState({ kind: "sending" });
 
@@ -311,12 +325,14 @@ function SyncedSection({
           <Text size="2" muted>
             {cause === "quota"
               ? t("copy.failedQuotaBody", {
-                  time: format.dateTime(nextQuotaReset(now), {
-                    hour: "numeric",
-                    minute: "2-digit",
-                    hour12: true,
-                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                  }),
+                  time: format
+                    .dateTime(nextQuotaReset(now), {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    })
+                    .replace(/\s/g, "\u00a0"),
                 })
               : cause === "offline"
                 ? offlineBody
