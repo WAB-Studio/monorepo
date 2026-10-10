@@ -2,7 +2,6 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
-import roadmap from "../messages/es/roadmap.json";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 
 // `MetaMes.dc.html`, `MetaMesSinPlan.dc.html`, `MetaMesBajo.dc.html`
@@ -339,13 +338,9 @@ test("a goal with no measure opens its months, its current month and the task fo
   }
 });
 
-function line(done: string): string {
-  return roadmap.meta.rhythmLineDone
-    .replace(/<\/?fig>/g, "")
-    .replace("{amount}", "12 h")
-    .replace("{done}", done)
-    .replace("{planned}", "12 h")
-    .replace("{month}", monthName);
+// `MetaRitmoTareas.dc.html` (module 676): the row counts the month's tasks, never its time.
+function line(done: number, total: number): string {
+  return `Ritmo 12 h al mes · en ${monthName}, ${done} de ${total} tareas hechas`;
 }
 
 // `MetaVerPlan.dc.html` (RP-50): the goal leads to its plan with one link row —
@@ -386,7 +381,7 @@ test("a goal with a rhythm leads to its plan: «el plan», the end, the rhythm a
     const id = await seedGoal(db, person, { name: `Meta plan ${stamp}`, budget: null, horizon: plusDays(900) });
     await db`update goals.goals set rhythm = 720 where id = ${id}`;
     await task(db, person, id, `Hecha ${stamp}`, 180, today);
-    // A done sub-task counts under a parent that is not done.
+    // A done sub-task does not make its parent a done task: «1 de 2», the parent is one task.
     const parent = await task(db, person, id, `Padre ${stamp}`, 600, null);
     await task(db, person, id, `Hija hecha ${stamp}`, 120, today, parent);
     await task(db, person, id, `Hija falta ${stamp}`, 480, null, parent);
@@ -398,7 +393,7 @@ test("a goal with a rhythm leads to its plan: «el plan», the end, the rhythm a
       const row = page.locator(`a[href="/metas/${id}/plan"]`);
       await expect(row).toHaveCount(1);
       await expect(row).toContainText(/^A este ritmo terminas el \d+ de \p{L}+/u);
-      await expect(row).toContainText(line("5 h"));
+      await expect(row).toContainText(line(1, 2));
       await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);

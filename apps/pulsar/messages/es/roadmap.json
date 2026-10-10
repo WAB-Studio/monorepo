@@ -89,7 +89,8 @@
   },
   "meta": {
     "planLabel": "el plan",
-    "rhythmLineDone": "Ritmo <fig>{amount}</fig> al mes · en {month}, <fig>{done}</fig> de <fig>{planned}</fig> en tareas hechas",
+    "rhythmLine": "Ritmo <fig>{amount}</fig> al mes",
+    "rhythmLineDone": "Ritmo <fig>{amount}</fig> al mes · en {month}, <fig>{done}</fig> de <fig>{total}</fig> {total, plural, one {tarea hecha} other {tareas hechas}}",
     "finish": "A este ritmo terminas el {date}",
     "build": "Armar el plan"
   },
