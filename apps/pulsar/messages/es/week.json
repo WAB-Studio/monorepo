@@ -42,8 +42,8 @@
   "archivedOn": "{label} · archivada el {date}",
   "ratioOf": "de {total}",
   "nav": {
-    "prev": "Semana anterior",
-    "next": "Semana siguiente"
+    "prev": "semana anterior",
+    "next": "semana siguiente"
   },
   "eyebrow": {
     "this": "esta semana",
