@@ -46,8 +46,9 @@ test("coccidiosis: the network block draws under the miss line, 200", async ({ p
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("coccidiosis");
 
-  await expect(page.getByText(messages.search.notFound)).toBeVisible();
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible({ timeout: NETWORK_SETTLE_MS });
+  await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
+  await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
   await expect(page.getByText(UNLISTED_ANSWER.translations[0], { exact: true })).toBeVisible();
   await expect(page.getByText(UNLISTED_ANSWER.definition!)).toBeVisible();
   await expect(page.getByText(UNLISTED_ANSWER.example.en)).toBeVisible();

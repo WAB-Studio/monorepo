@@ -247,6 +247,15 @@ this gets built, and no schema, table or column is "prepared for" it.
   row of `/registro` on its word's page, including a word the reader never opened online. The page shows
   what the device saved for that word. A word that is not in the record says so, in the same page; no
   address inside the app ever lands on the browser's offline page.
+- [ ] **RL-62** — A word the network answered (RL-44) is recorded with the whole answer that arrived: its translations, its
+  definition when it carried one, and its example sentence with the example's Spanish translation, each cut to what the
+  copy admits. Its page on `/registro` draws that answer from the device, with or without a connection, as the box drew
+  it. The answer travels in the copy and comes down to the reader's other devices with the row. A row recorded before
+  keeps its translation alone. Decided by the user 2026-10-09.
+- [ ] **RL-63** — `/registro` can be narrowed by typing. A field above the list keeps only the rows whose word, a form
+  searched under it, or its translation contains what was typed, case and accents aside; a line says how many of the
+  record's words are shown, and a typing that matches nothing says so. Emptying the field gives the whole list back, and
+  returning from a word's page finds the list as it was left. It reads the device's record alone and sends nothing.
 - [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
   sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once that

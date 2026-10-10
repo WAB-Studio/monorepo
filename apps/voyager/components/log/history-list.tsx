@@ -1,14 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import NextLink from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
+import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
-import { Box, Button, Flex, Grid, Link, MetaLabel, Separator, Skeleton, TapTarget, Text } from "@/components/ui";
+import {
+  Box,
+  Button,
+  Flex,
+  Grid,
+  IconButton,
+  Link,
+  MetaLabel,
+  Separator,
+  Skeleton,
+  TapTarget,
+  Text,
+  TextField,
+} from "@/components/ui";
 
 // Reachable through `useEffect` alone (module 25's own store, IndexedDB),
 // never through `lib/dictionary` or `lib/sync` — this screen answers RNL-08
@@ -20,7 +35,7 @@ type ListState =
   | { kind: "ready"; rows: StudyRow[]; totalLookups: number; totalWords: number }
   | { kind: "failed" };
 
-function StudyRowItem({ row }: { row: StudyRow }) {
+const StudyRowItem = memo(function StudyRowItem({ row, first }: { row: StudyRow; first: boolean }) {
   const t = useTranslations("log");
   const lead = row.forms[0];
   // A phrase or a miss reached no lemma: it keeps the text as typed.
@@ -31,10 +46,12 @@ function StudyRowItem({ row }: { row: StudyRow }) {
       ? null
       : row.forms.map((form) => form.text).join(", ");
   return (
-    <Link asChild underline="none">
-      <NextLink href={`/registro/${encodeURIComponent(row.key)}`}>
-        <TapTarget size={44} direction="column" align="stretch" width="100%">
-          {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
+    <Flex direction="column" gap="3">
+      {!first && <Separator size="4" />}
+      <Link asChild underline="none">
+        <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
+          <TapTarget size={44} direction="column" align="stretch" width="100%">
+            {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
               the word; the desktop's third track puts word, translation and
               count on one row (RL-32's board). `gridColumn`/`gridRow` move
               each cell between the two shapes. The `minmax(0, …)` is
@@ -53,47 +70,48 @@ function StudyRowItem({ row }: { row: StudyRow }) {
               container of its own) blockifies the `Text` it holds exactly
               the way module 3's original code had it as the grid item
               directly (docs/voyager/DESIGN.md "What the data forces"). */}
-          <Grid
-            columns={{ initial: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 1fr) auto" }}
-            gap="3"
-            align="center"
-          >
-            <Flex gridColumn="1" gridRow="1" minWidth="0" overflow="hidden">
-              <Text serif truncate>
-                {lemmaless ? row.display : row.key}
-              </Text>
-            </Flex>
-            <Flex
-              gridColumn={{ initial: "1", md: "2" }}
-              gridRow={{ initial: "2", md: "1" }}
-              minWidth="0"
-              overflow="hidden"
-              direction="column"
+            <Grid
+              columns={{ initial: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 1fr) auto" }}
+              gap="3"
+              align="center"
             >
-              {row.lastTranslation !== null ? (
-                <Text variant="translation" muted truncate>
-                  {row.lastTranslation}
+              <Flex gridColumn="1" gridRow="1" minWidth="0" overflow="hidden">
+                <Text serif truncate>
+                  {lemmaless ? row.display : row.key}
                 </Text>
-              ) : row.lastOutcome === "unlisted" ? (
-                <Text variant="translation" muted truncate>
-                  {t("study.noResult")}
-                </Text>
-              ) : null}
-              {formsLine !== null && (
-                <Text size="1" muted truncate>
-                  {formsLine}
-                </Text>
-              )}
-            </Flex>
-            <Box gridColumn={{ initial: "2", md: "3" }} gridRow="1" justifySelf="end">
-              <MetaLabel>{row.count}</MetaLabel>
-            </Box>
-          </Grid>
-        </TapTarget>
-      </NextLink>
-    </Link>
+              </Flex>
+              <Flex
+                gridColumn={{ initial: "1", md: "2" }}
+                gridRow={{ initial: "2", md: "1" }}
+                minWidth="0"
+                overflow="hidden"
+                direction="column"
+              >
+                {row.lastTranslation !== null ? (
+                  <Text variant="translation" muted truncate>
+                    {row.lastTranslation}
+                  </Text>
+                ) : row.lastOutcome === "unlisted" ? (
+                  <Text variant="translation" muted truncate>
+                    {t("study.noResult")}
+                  </Text>
+                ) : null}
+                {formsLine !== null && (
+                  <Text size="2" muted truncate>
+                    {formsLine}
+                  </Text>
+                )}
+              </Flex>
+              <Box gridColumn={{ initial: "2", md: "3" }} gridRow="1" justifySelf="end">
+                <MetaLabel>{row.count}</MetaLabel>
+              </Box>
+            </Grid>
+          </TapTarget>
+        </NextLink>
+      </Link>
+    </Flex>
   );
-}
+});
 
 function StudySkeleton() {
   const t = useTranslations("log");
@@ -118,6 +136,12 @@ function StudySkeleton() {
 export function HistoryList() {
   const t = useTranslations("log");
   const router = useRouter();
+  // The text lives in the URL so the back link from a word finds it; the
+  // state below is what paints, so a key never waits on the router.
+  const initialFilter = useSearchParams().get("filtro") ?? "";
+  const [query, setQuery] = useState(initialFilter);
+  // A page opened with the filter already in the address must also feed the back link.
+  useEffect(() => rememberFilter(initialFilter), [initialFilter]);
   const [state, setState] = useState<ListState>({ kind: "loading" });
   // Bumped by the failed state's own retry, since the read runs in an
   // effect and a click cannot call it directly.
@@ -192,6 +216,12 @@ export function HistoryList() {
     };
   }, [attempt]);
 
+  const readyRows = state.kind === "ready" ? state.rows : null;
+  const visible = useMemo(
+    () => (readyRows === null ? [] : filterStudyRows(readyRows, query)),
+    [readyRows, query],
+  );
+
   if (state.kind === "loading") {
     return <StudySkeleton />;
   }
@@ -239,20 +269,72 @@ export function HistoryList() {
     );
   }
 
+  const filtering = query.trim() !== "";
+
+  function change(text: string): void {
+    setQuery(text);
+    rememberFilter(text);
+    // The router's own `replace` fetches the page again, which a reader
+    // offline cannot; `history.replaceState` only rewrites the address.
+    window.history.replaceState(
+      null,
+      "",
+      text === "" ? "/registro" : `/registro?filtro=${encodeURIComponent(text)}`,
+    );
+  }
+
   return (
     <Flex direction="column" gap="5">
+      <Flex direction="column" gap="3">
+        <TextField.Root
+          size="3"
+          tap
+          value={query}
+          onChange={(event) => change(event.target.value)}
+          placeholder={t("study.filterLabel")}
+          aria-label={t("study.filterLabel")}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+        >
+          {query.length > 0 && (
+            <TextField.Slot side="right">
+              <IconButton
+                type="button"
+                size="2"
+                variant="ghost"
+                color="gray"
+                tap
+                aria-label={t("study.filterClear")}
+                onClick={() => change("")}
+              >
+                <X size={16} />
+              </IconButton>
+            </TextField.Slot>
+          )}
+        </TextField.Root>
+        {filtering && visible.length > 0 && (
+          <Text size="2" muted>
+            {t("study.filterCount", { shown: visible.length, total: state.totalWords })}
+          </Text>
+        )}
+      </Flex>
+
       <Text size="2" muted>
         {t("study.header", { lookups: state.totalLookups, words: state.totalWords })}
       </Text>
 
-      <Flex direction="column" gap="3">
-        {state.rows.map((row, index) => (
-          <Flex direction="column" gap="3" key={row.key}>
-            {index > 0 && <Separator size="4" />}
-            <StudyRowItem row={row} />
-          </Flex>
-        ))}
-      </Flex>
+      {visible.length === 0 ? (
+        <Text size="2" muted>
+          {t("study.filterNone", { query: query.trim() })}
+        </Text>
+      ) : (
+        <Flex direction="column" gap="3">
+          {visible.map((row, index) => (
+            <StudyRowItem key={row.key} row={row} first={index === 0} />
+          ))}
+        </Flex>
+      )}
     </Flex>
   );
 }

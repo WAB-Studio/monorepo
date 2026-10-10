@@ -105,7 +105,11 @@
       "download": "Descargar el registro",
       "skeletonWord": "Palabra de ejemplo",
       "skeletonTranslation": "Su traducción de ejemplo",
-      "noResult": "sin resultado"
+      "noResult": "sin resultado",
+      "filterLabel": "Buscar en el registro",
+      "filterClear": "Borrar el filtro",
+      "filterCount": "{shown} de {total} palabras",
+      "filterNone": "Ninguna palabra con «{query}»"
     },
     "word": {
       "back": "Registro",

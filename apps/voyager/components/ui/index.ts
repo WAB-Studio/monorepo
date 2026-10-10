@@ -4,7 +4,6 @@ export {
   Flex,
   Grid,
   Heading,
-  TextField,
   Badge,
   Callout,
   Progress,
@@ -28,6 +27,8 @@ export { BottomNav } from "./bottom-nav";
 export { TapTarget } from "./tap-target";
 
 export { Button, IconButton } from "./button";
+
+export { TextField } from "./text-field";
 
 export { Text } from "./text";
 
