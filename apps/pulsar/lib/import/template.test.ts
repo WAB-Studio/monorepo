@@ -145,6 +145,9 @@ test("a goal with no horizon, and a line outside a goal, name their line", () =>
 
 test("an unknown section stops at its line", () => {
   assert.equal(errorOf(`${HEAD}## Notas\n`).line, 6);
+  const result = parseTemplate(`${HEAD}## Notas\n  nota: a\n`);
+  assert.ok(result.matched && "errors" in result);
+  assert.deepEqual(result.errors.map((e) => e.line), [6]);
 });
 
 test("a schema refusal lands on the line that wrote it", () => {

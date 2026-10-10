@@ -161,7 +161,7 @@ export function parseTemplate(text: string): TemplateResult {
     const note = /^( {2}| {4})nota:(?: (.*))?$/.exec(line);
     if (note) {
       const depth = note[1].length as 2 | 4;
-      if (brokenTask || (brokenChild && depth === 4)) continue;
+      if (skipping || brokenTask || (brokenChild && depth === 4)) continue;
       if (section !== "tasks" || noteOwner === null || noteOwner.depth !== depth) {
         report(n, FORMS.note);
         continue;
