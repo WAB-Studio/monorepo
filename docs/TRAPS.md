@@ -555,6 +555,26 @@ fired. `harness.runs` answers it instead: `finished_at is null` and `heartbeat_a
 which is the predicate `harness_runs_live_idx` exists for. Set `application_name` anyway if a log
 somewhere wants it; never query it.
 
+### Two parameterless statements queued on one pooled connection never answer
+
+On the remote transaction pooler (`:6543`), a `postgres` client with `max: 1` that queues two
+statements at once — `Promise.all([sql\`select 1\`, sql\`select 2\`])` — hangs forever when neither
+carries a parameter. No error, no CPU, no row in `pg_stat_activity`. Measured 2026-10-10, 20 pairs a run:
+
+```
+both parameterless, Promise.all     hang at pair 1, 2, 1     (three runs)
+first one with ${i}, Promise.all    20/20, 20/20, 20/20
+both parameterless, awaited in turn 20/20, 20/20, 20/20
+max_pipeline: 1                     still hangs — it is the queue, not the pipeline
+```
+
+The same `reap.ts` ran clean on the local Docker stack the day before. This is what hung `harness:reap` against the remote for 16 minutes
+with no output: `deadRuns()` and `staleFinishedRuns()` in one `Promise.all` over `fixtureSql`.
+
+- Await a script's parameterless statements in turn on `fixtureSql`. `max: 1` serializes them on the
+  wire anyway: `Promise.all` saves nothing there.
+- Wrap a remote script's first run in `timeout`. A hang here prints nothing.
+
 ### `void sql`...`` in postgres.js never runs the statement
 
 `postgres.js` builds a lazy `Query`. It dispatches on `.then`, `.catch` or `.execute`, so `void
