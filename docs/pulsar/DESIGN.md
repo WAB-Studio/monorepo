@@ -1155,6 +1155,18 @@ Taken by the user the same evening, on the critic's four questions. Boards `Impo
 - **(4) Tapping an error selects its line in the box.** After a reading with errors, focus goes to the list; each error is
   a control that selects its line in the textarea and scrolls it into view. No line-number gutter.
 
+## Decisions of 2026-10-10, after the train-6 critic
+
+Taken by the user the same evening. No board: they move a page break and name a cause; nothing new is drawn.
+
+- **A goal whose «por mes» table prints whole (under 20 rows) keeps its name, measure line and figures on the table's
+  page.** The head never ends a page without its table. Tables of 20 rows or more do not change.
+- **An over-long goal name says so:** «El nombre de la meta va en 120 caracteres o menos.» It no longer reads «Falta el
+  nombre de la meta».
+- **Accepted as is:** a long table's last page may hold one row, its head and the months-left-out line.
+- **Taken by the orchestrator, no question:** tapping an error scrolls the page so the box and its line are on screen,
+  also with the keyboard up (the approved «scrolls it into view» meant the screen, not only the box).
+
 ## Decisions of 2026-10-10, after the train-4 critic
 
 Taken by the user the same evening, on the critic's four questions.
