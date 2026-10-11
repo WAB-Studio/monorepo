@@ -22,11 +22,11 @@ export function goalSections(goal: GoalReport): Section[] {
   return sections;
 }
 
-// A goal's head stays with its table when the table prints whole and is tall.
+// A goal's head stays with its table when the table is tall and still short enough for the goal to fit a page.
 // A goal taller than a page still breaks, where the printer finds room.
 export function keepsHeadWithTable(months: GoalReport["months"]): boolean {
   const rows = months.filter(printsOnPaper).length;
-  return rows >= HEAD_WITH_TABLE_ROWS && rows < LONG_TABLE_ROWS;
+  return rows >= HEAD_WITH_TABLE_ROWS && rows < HEAD_WITH_TABLE_MAX_ROWS;
 }
 
 // A month that has not started and has no planned amount prints nothing; a
@@ -41,9 +41,12 @@ export function printsOnPaper(month: GoalReport["months"][number]): boolean {
 // the next page; a shorter one is left to flow with its goal.
 export const HEAD_WITH_TABLE_ROWS = 8;
 
+// Past this many rows a table is too long for its goal to keep to one page.
+export const HEAD_WITH_TABLE_MAX_ROWS = 20;
+
 // A «por mes» table of this many printed rows or more flows across pages
 // instead of keeping to one (`ReporteImpresoTablaLarga.dc.html`).
-export const LONG_TABLE_ROWS = 20;
+export const LONG_TABLE_ROWS = 15;
 
 export function isLongTable(months: GoalReport["months"]): boolean {
   return months.filter(printsOnPaper).length >= LONG_TABLE_ROWS;

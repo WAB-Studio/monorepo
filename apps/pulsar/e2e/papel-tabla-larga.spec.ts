@@ -8,9 +8,9 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 // `ReporteImpresoTablaLarga.dc.html` (decision 3 of 2026-10-10, after the train-5 critic): a goal's «por mes» table of
-// 20 printed rows or more starts on the page it reaches (its label on the goal's own page), breaks between rows only,
+// 15 printed rows or more (20 until the train-6 critic) starts on the page it reaches (its label on the goal's own page), breaks between rows only,
 // repeats its head on every page it continues on, and keeps the months-left-out line with its last row. A table of fewer
-// than 20 rows keeps label, table and line on one page. Every month is an offset from the real current month.
+// than 15 rows keeps label, table and line on one page. Every month is an offset from the real current month.
 const NAMES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
@@ -144,7 +144,7 @@ async function withGoal(
   }
 }
 
-test.describe("the paper report: a «por mes» table of 20 rows or more starts where it reaches and flows (RP-71, decision 3)", () => {
+test.describe("the paper report: a «por mes» table of 15 rows or more starts where it reaches and flows (RP-71, decision 3)", () => {
   // The board: 46 months of a measured goal.
   test("a 46-month table starts on the goal's own page, with rows under its label, not on a fresh page", async ({
     person, browser, baseURL, db,
@@ -221,20 +221,20 @@ test.describe("the paper report: a «por mes» table of 20 rows or more starts w
     });
   });
 
-  // The boundary: 19 printed rows keep today's whole block; 20 flow.
-  test("19 printed rows stay whole: label, every row and the months-left-out line on one page", async ({
+  // The boundary: 14 printed rows keep today's whole block; 15 flow.
+  test("14 printed rows stay whole: label, every row and the months-left-out line on one page", async ({
     person, browser, baseURL, db,
   }) => {
-    await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 19, measured: true, tag: "m19" }, (w) => {
-      expect(new Set(w.rows.map((row) => row.page)), "all 19 rows on one page").toEqual(new Set([w.labelPage]));
+    await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 14, measured: true, tag: "m14" }, (w) => {
+      expect(new Set(w.rows.map((row) => row.page)), "all 14 rows on one page").toEqual(new Set([w.labelPage]));
       expect(w.pages[w.labelPage].some((text) => text.includes("sin monto")), "months-left-out line on that page").toBe(true);
     });
   });
 
-  test("20 printed rows flow: the label is on the goal's own page, not pushed to a new one", async ({
+  test("15 printed rows flow: the label is on the goal's own page, not pushed to a new one", async ({
     person, browser, baseURL, db,
   }) => {
-    await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 20, measured: true, tag: "m20" }, (w) => {
+    await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 15, measured: true, tag: "m15" }, (w) => {
       expect(w.labelPage, `label on page ${w.labelPage + 1}, the goal's name on page ${w.namePage + 1}`).toBe(w.namePage);
       expect(w.rows[0].page, "label glued to its first row").toBe(w.labelPage);
     });
@@ -263,8 +263,8 @@ test.describe("the paper report: a «por mes» table of 20 rows or more starts w
     });
   });
 
-  test("a no-measure goal of 19 months stays whole on one page", async ({ person, browser, baseURL, db }) => {
-    await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 19, measured: false, tag: "s19" }, (w) => {
+  test("a no-measure goal of 14 months stays whole on one page", async ({ person, browser, baseURL, db }) => {
+    await withGoal({ person, browser, baseURL: baseURL! , db }, { months: 14, measured: false, tag: "s14" }, (w) => {
       expect(new Set(w.rows.map((row) => row.page))).toEqual(new Set([w.labelPage]));
       expect(w.pages[w.labelPage].some((text) => text.includes("sin tareas"))).toBe(true);
     });
@@ -274,8 +274,9 @@ test.describe("the paper report: a «por mes» table of 20 rows or more starts w
 // Module 803 (decision of 2026-10-10, after the train-6 critic): a goal whose table prints whole keeps its head with it.
 // Open tasks of a goal before it slide the page cut over the head; across enough of them it falls between head and label.
 test.describe("the paper report: a goal whose table prints whole keeps its head with it when the goal fits a page (803)", () => {
-  for (const above of range(40))
-  test(`12-month goal under another goal's ${above} open tasks: its name is on the page of its «por mes» label`, async ({
+  for (const months of [12, 16, 19])
+  for (const above of range(months === 12 ? 40 : 24))
+  test(`${months}-month goal under another goal's ${above} open tasks: its name is on the page of its «por mes» label`, async ({
     person, browser, baseURL, db,
   }) => {
     const [filler] = await db<{ id: string }[]>`
@@ -291,7 +292,7 @@ test.describe("the paper report: a goal whose table prints whole keeps its head 
       `;
     }
     try {
-      await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 12, measured: true, tag: `h12x${above}` }, (w) => {
+      await withGoal({ person, browser, baseURL: baseURL!, db }, { months, measured: true, tag: `h${months}x${above}` }, (w) => {
         expect(w.labelPage, `label on page ${w.labelPage + 1}, the goal's name on page ${w.namePage + 1}`).toBe(w.namePage);
         expect(w.rows[0].page, "and its first row with the label").toBe(w.labelPage);
       });

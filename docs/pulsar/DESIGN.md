@@ -1149,8 +1149,8 @@ Taken by the user the same evening, on the critic's four questions. Boards `Impo
 - **(2) A first line that starts with «pulsar ·» and is not «pulsar · plantilla 1» is refused here, never sent to the
   model.** The message names the line: «La primera línea va como «pulsar · plantilla 1».» Text that does not start with
   «pulsar ·» still goes to the AI reading.
-- **(3) Label, table and months-left-out line stay together only when the table fits a page.** A table of 20 rows or more
-  starts on the page it reaches and flows; its label stays glued to its first rows. Refines decision (2) of the train-4
+- **(3) Label, table and months-left-out line stay together only when the table fits a page.** A table of 15 rows or more (20,
+  lowered to 15 after the train-6 critic) starts on the page it reaches and flows; its label stays glued to its first rows. Refines decision (2) of the train-4
   critic for long tables only.
 - **(4) Tapping an error selects its line in the box.** After a reading with errors, focus goes to the list; each error is
   a control that selects its line in the textarea and scrolls it into view. No line-number gutter.
@@ -1159,8 +1159,10 @@ Taken by the user the same evening, on the critic's four questions. Boards `Impo
 
 Taken by the user the same evening. No board: they move a page break and name a cause; nothing new is drawn.
 
-- **A goal whose «por mes» table prints whole (under 20 rows) keeps its name, measure line and figures on the table's
-  page.** The head never ends a page without its table. Tables of 20 rows or more do not change.
+- **A goal whose «por mes» table prints whole (8 to 19 rows) keeps its name, measure line and figures on the table's
+  page.** The head never ends a page without its table.
+- **A «por mes» table of 15 printed rows or more flows (was 20): a goal's head never ends a page alone.** Taken by the
+  user 2026-10-10.
 - **An over-long goal name says so:** «El nombre de la meta va en 120 caracteres o menos.» It no longer reads «Falta el
   nombre de la meta».
 - **Accepted as is:** a long table's last page may hold one row, its head and the months-left-out line.
