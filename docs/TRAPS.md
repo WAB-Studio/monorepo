@@ -3083,3 +3083,24 @@ visit to `/registro` alone otherwise never installed the dictionary offline (RNL
 - Each module's own suite stayed green; only the train's CI run caught them. Measured 2026-10-10, train t3 (#566).
 - Grep `recordSchema`, `foreign` and `/api/log/sync` routes in `apps/voyager/e2e` in the same module that changes the wire.
 
+
+## Chromium print ignores `break-*: avoid` between siblings
+- `page.pdf()` (Chromium) ignores `break-before/after: avoid` between a `<table>`'s last row and the block after it, and
+  between grid items. Wrappers (grid, flex, padded box, second `tbody`) did not help.
+- What it honours: `break-inside: avoid` on the container, and `break-before: avoid` on a row inside the same `tbody`.
+- So pulsar's months-left-out line is the table's last `<tr data-row="months-out">` (`Table` prop `after`,
+  `apps/pulsar/components/ui/table.tsx`), and a goal's head stays with its table through `PrintGoal whole`.
+- Measured 2026-10-10, modules 802 and 803: a 26-position sweep left the line alone at 2 cuts, and a 48-test sweep left
+  the head alone at 8, until moved inside. Prove a break rule with a sweep that moves the cut, never one PDF.
+
+## Killing `gh pr checks --watch` lets the command after it run
+- `gh pr checks <n> --watch; gh pr merge <n> --squash` merges the moment the watcher dies, checks or not.
+- Measured 2026-10-10: #572 merged `UNSTABLE` while 8 checks were pending, because the watcher was killed to reorder.
+- Chain the merge with `&&` on the watcher's exit, or merge in a separate call after reading the checks.
+
+## A handoff's list of pending migrations can be short
+- Count against the journal, not the handoff: `meta/_journal.json` entries vs `select count(*)` of the app's
+  `drizzle.__drizzle_migrations*` table.
+- Orbit's table holds one stray row from 2026-09-11 (a renumbered migration), so its count runs one above the journal.
+- Measured 2026-10-10: the handoff named orbit 0050; 0049 was also unapplied in production. Both went in with the deploy.
+- `npm run db:migrate` against the remote is refused by the auto-mode classifier: the user runs it with `!`.
