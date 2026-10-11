@@ -28,8 +28,6 @@ export const registrationSchema = z.object({
     .optional(),
 });
 
-export type Registration = z.infer<typeof registrationSchema>;
-
 export function redirectAllowed(client: { redirectUris: readonly string[] }, uri: string): boolean {
   return client.redirectUris.includes(uri);
 }

@@ -1,22 +1,29 @@
-import { z } from "zod";
+import "server-only";
 
 import { env } from "@/lib/env";
-import type { TranslationResult } from "@/lib/translate/types";
+import { providerFetch } from "@/lib/provider/fetch";
+import { translateRequestSchema, type TranslationResult } from "@/lib/translate/types";
+import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { MODEL_NAME } from "@/lib/word/model";
+import { claimDailyCall } from "@/lib/word/spend";
 
 // The word path never reaches this route (RL-09): it exists for the sentence
 // path alone, and only when the device offers no translator of its own.
 export const dynamic = "force-dynamic";
 
-// Shared with `network.ts`, so the body a `fetch` sends is exactly the body
-// this handler accepts — one schema, not two hand-kept in sync.
-export const translateRequestSchema = z.object({
-  text: z.string().min(1).max(1000),
-});
+// The model call may wait its full timeout before MyMemory is tried.
+export const maxDuration = 40;
 
 // MyMemory's endpoint and language pair, the one constant a provider swap
 // touches. English to Spanish is fixed for this slice; direction is not a
 // parameter the route accepts.
 const MYMEMORY_ENDPOINT = "https://api.mymemory.translated.net/get";
+
+// Half the OpenAI routes' 20 s: a sentence the reader is waiting on falls to
+// RL-37's per-word answer sooner.
+const MYMEMORY_TIMEOUT_MS = 10_000;
+
+const MODEL_TIMEOUT_MS = 20_000;
 
 type MyMemoryMatch = {
   translation?: string;
@@ -95,7 +102,7 @@ function bestAlternativeTranslation(source: string, matches: MyMemoryMatch[] | u
 // `matches` is even read: `responseStatus` already said the whole reply is
 // not to be trusted, so there is nothing in it worth falling back to.
 //
-// Below that, an unusable top pick is not the whole reply's failure — RL-49,
+// Below that, an unusable top pick is not the whole reply's failure — RL-53,
 // measured live: MyMemory's best-scoring match for "the cat sat on the mat"
 // is `translatedText: ""`, while a lower-scoring entry in `matches` answers
 // the sentence in full. That array is checked with the same filter before
@@ -105,9 +112,13 @@ async function translateWithProvider(text: string): Promise<string> {
   if (env.TRANSLATE_MYMEMORY_EMAIL) params.set("de", env.TRANSLATE_MYMEMORY_EMAIL);
   if (env.TRANSLATE_MYMEMORY_KEY) params.set("key", env.TRANSLATE_MYMEMORY_KEY);
 
-  const response = await fetch(`${MYMEMORY_ENDPOINT}?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error("MyMemory responded with an error status");
+  const response = await providerFetch(
+    `${MYMEMORY_ENDPOINT}?${params.toString()}`,
+    {},
+    { name: "mymemory", timeoutMs: MYMEMORY_TIMEOUT_MS },
+  );
+  if (!response) {
+    throw new Error("MyMemory failed, timed out or responded with an error status");
   }
 
   const payload = (await response.json()) as MyMemoryResponse;
@@ -128,6 +139,44 @@ async function translateWithProvider(text: string): Promise<string> {
   throw new Error("MyMemory returned no usable translation");
 }
 
+// RL-60: the model translates first, inside the daily cap the word routes
+// share. Null on any reason not to answer (no key, no cap, cap spent, failure,
+// empty or echoed reply) so the caller falls to MyMemory.
+async function translateWithModel(text: string): Promise<string | null> {
+  const apiKey = env.OPENAI_API_KEY;
+  if (!apiKey || !env.WORD_TEXT_DAILY_CALL_CAP) return null;
+  if (!(await claimDailyCall(env.WORD_TEXT_DAILY_CALL_CAP))) return null;
+  const response = await providerFetch(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        reasoning_effort: "low",
+        max_completion_tokens: 2000,
+        messages: [
+          {
+            role: "system",
+            content: "Translate the English sentence into Spanish. Reply with the translation only; add no words.",
+          },
+          { role: "user", content: text },
+        ],
+      }),
+    },
+    { name: "openai-translate", timeoutMs: MODEL_TIMEOUT_MS },
+  );
+  if (!response) return null;
+  try {
+    const payload = (await response.json()) as { choices?: { message?: { content?: unknown } }[] };
+    const content = payload.choices?.[0]?.message?.content;
+    const out = typeof content === "string" ? content.trim() : "";
+    return out && !isEcho(text, out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request): Promise<Response> {
   let raw: unknown;
   try {
@@ -141,8 +190,17 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "invalid" }, { status: 400 });
   }
 
+  // Per caller, its own `translate:` row, so a caller's sentences never eat
+  // into their word lookups. With no key (no salt, no address) the route
+  // stays open: an unset variable must not switch RL-09 off. Refused before
+  // MyMemory is reached; the client reads 429 as any other failure (RL-37).
+  const client = scopedClientKey("translate", request.headers);
+  if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {
+    return Response.json({ error: "rateLimited" }, { status: 429 });
+  }
+
   try {
-    const text = await translateWithProvider(parsed.data.text);
+    const text = (await translateWithModel(parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
     const result: TranslationResult = { text, origin: "network" };
     return Response.json(result, { status: 200 });
   } catch {

@@ -8,7 +8,6 @@ import { measureOf } from "@/lib/day/derive";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
 import {
   toCadence,
   toDeclaredFact,
@@ -18,10 +17,14 @@ import {
   type PhaseRow,
 } from "@/lib/queries/rows";
 import { readEvidenceOutcome } from "@/lib/queries/day";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import { dayBefore } from "@/lib/day/weeks";
-import { estimateFacts, monthList, type Task } from "@/lib/plan/carry";
+import { estimateFacts } from "@/lib/plan/carry";
+import { fillPlan, type PlanInput, type PlanTask, type Roadmap } from "@/lib/plan/roadmap";
+import { planMonthList } from "@/lib/plan/roadmap-read";
 import {
   monthLine,
   monthOf,
@@ -49,6 +52,10 @@ export type GoalRow = {
   // raw select and `queryGoalRow`'s `to_jsonb(g)` both fill it, so one type
   // covers a single goal and a list of them alike.
   archived_at: string | null;
+  // Optional so a caller that builds a row by hand keeps compiling; both ride
+  // in on `to_jsonb(g)`.
+  rhythm?: number | null;
+  plan_seen?: string | null;
 };
 
 // `source_key`, `source_unit` and `source_label_key` ride in from the join to
@@ -82,7 +89,6 @@ type GoalQueryRow = {
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
-  shifts: string[];
 };
 
 // A one-off of the goal; `done_on` is the day of its own fact, null while
@@ -98,6 +104,10 @@ export type TaskRow = {
   // The id of its own fact, what `undoFact` takes back; null while undone.
   fact_id?: string | null;
   note: string | null;
+  // All three ride in on `to_jsonb(o)`.
+  in_plan?: boolean;
+  position?: number;
+  created_at?: string;
 };
 
 // What a commitment reads as on the goal's own screen: its cadence and what
@@ -114,7 +124,7 @@ export type GoalCommitment = {
   // `satisfiedBy.kind === "evidence"` — the goal's screen reads the source's
   // name from `sources.json` under this key, never a sentence stored here.
   sourceLabelKey: SourceKey | null;
-  // Distinct days this commitment has a declared fact on (module 18's retire
+  // Distinct days this commitment has a declared fact on (the retire
   // sheet: "los N días en que lo hiciste" — RP-13 says the days already done
   // stay done). Counted here, off `row.facts` the goal statement already
   // carries whole, never a second round trip and never a subselect: an
@@ -165,10 +175,34 @@ export type GoalView = {
   // Every month of the span, a month with nothing included (RP-16).
   months: MonthRow[];
   budgets: MonthBudget[];
-  tasks: Task[];
-  // The months of this goal already shifted (RP-48).
-  shifts: string[];
+  tasks: PlanTask[];
+  // Units a month the person plans at (RP-52); null falls back to the budgets.
+  rhythm: number | null;
+  // The month whose notice the person dismissed (RP-53).
+  planSeen: string | null;
+  // What the plan reads: the tasks, the amounts and the span, as of `today`.
+  plan: PlanInput;
+  roadmap: Roadmap;
 };
+
+// A one-off as the plan reads it. A row without `created_at` counts as made
+// the day the goal opened.
+function toPlanTask(task: TaskRow, openedOn: string): PlanTask {
+  return {
+    id: task.id,
+    parentId: task.parent_id,
+    name: task.name,
+    plannedMonth: task.planned_month,
+    day: task.day,
+    estimate: task.estimate,
+    doneOn: task.done_on,
+    factId: task.fact_id ?? null,
+    note: task.note,
+    inPlan: task.in_plan ?? false,
+    position: task.position ?? 0,
+    createdOn: task.created_at ? civilDateInZone(new Date(task.created_at)) : openedOn,
+  };
+}
 
 export type GoalSummary = {
   id: string;
@@ -180,8 +214,8 @@ export type GoalSummary = {
 };
 
 /**
- * One statement, seven subqueries: the goal row scoped by id, and every phase,
- * commitment, fact, month budget, one-off and month shift that name it — unfiltered by `retired_at` or by day, so
+ * One statement, six subqueries: the goal row scoped by id, and every phase,
+ * commitment, fact, month budget, one-off that name it — unfiltered by `retired_at` or by day, so
  * a goal's screen reads its whole history in the one round trip. RLS alone
  * narrows every row to the caller's own (RNP-05); `goalId` alone would let a
  * caller read a goal id they merely guessed, so `goal` still comes back
@@ -217,10 +251,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                  'fact_id', (select f.id from "goals"."facts" f where f.one_off_id = o.id limit 1)
                ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
-         where o.goal_id = ${goalId}) as tasks,
-      (select coalesce(json_agg(m.month order by m.month), '[]'::json)
-         from "goals"."month_shifts" m
-         where m.goal_id = ${goalId}) as shifts
+         where o.goal_id = ${goalId}) as tasks
   `);
 
   return row;
@@ -254,11 +285,6 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
   return counts;
 }
 
-type EvidenceOutcome = {
-  status: "read" | "unreadable";
-  bySourceKey: Record<string, EvidenceDay[]>;
-};
-
 /**
  * The goal's own span, as two `SQL` fragments rather than two values: the
  * reading transaction opens blind, in the same `Promise.all` as the goals
@@ -284,30 +310,10 @@ function goalSpan(goalId: string): { from: SQL; to: SQL } {
     // leaves the statement that needs it.
     from: sql`(select (g.created_at at time zone ${TIME_ZONE})::date
                  from "goals"."goals" g where g.id = ${goalId})`,
-    // `horizon` is already a civil date (RP-11): no zone conversion needed.
-    to: sql`(select g.horizon from "goals"."goals" g where g.id = ${goalId})`,
+    // `horizon` is the first day after the goal (RP-11), already a civil date:
+    // the span ends the day before it.
+    to: sql`(select g.horizon - 1 from "goals"."goals" g where g.id = ${goalId})`,
   };
-}
-
-// One query per known source (today, exactly one), independent of which of
-// the goal's own commitments actually reference it — the same shape `lib/
-// queries/day.ts` and `lib/queries/week.ts` run, bounded to the goal's own
-// span rather than one day or one week.
-async function queryEvidenceBySource(
-  tx: Transaction,
-  personId: string,
-  goalId: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-  const { from, to } = goalSpan(goalId);
-
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from, to, zone: TIME_ZONE, tx });
-  }
-
-  return bySourceKey;
 }
 
 // The source keys a goal's own evidence-satisfied commitments name, in its
@@ -315,7 +321,7 @@ async function queryEvidenceBySource(
 // `evidenceDaysForMeasure` both apply, by source key rather than by
 // commitment: two commitments naming the same source must not sum its rows
 // twice.
-function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<string> {
+export function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<string> {
   if (!goal.measure_unit) return new Set();
   return new Set(
     commitments
@@ -330,8 +336,7 @@ function matchingSourceKeys(goal: GoalRow, commitments: CommitmentRow[]): Set<st
 }
 
 /**
- * The evidence half of `measureTotal` and `weeks` alike (RP-14, decided
- * 2026-09-22 — `docs/pulsar/SPEC.md`; RP-17): a quantity in the goal's own
+ * The evidence half of `measureTotal` and `weeks` alike (RP-14, RP-17): a quantity in the goal's own
  * measure unit feeds it whether a fact declared it or a source recorded it,
  * and evidence never writes a fact (RP-05), so this is the only place that
  * quantity is ever read. Only a commitment that is both evidence-satisfied
@@ -372,7 +377,8 @@ export function goalFigures(input: {
   evidence: Record<string, EvidenceDay[]> | null;
   today: string;
 }): {
-  tasks: Task[];
+  tasks: PlanTask[];
+  plan: PlanInput;
   measureTotal: number;
   months: MonthRow[];
   month: GoalView["month"];
@@ -390,19 +396,11 @@ export function goalFigures(input: {
   // The same civil-day conversion `goalSpan`'s own SQL runs
   // (`(g.created_at at time zone TIME_ZONE)::date`), read here in JS off the
   // one row this statement already carries: week 1 opens the day the goal
-  // was created (decided by the user 2026-09-28), never a second query.
+  // was created, never a second query.
   const openedOn = civilDateInZone(new Date(goal.created_at));
-  const tasks: Task[] = input.tasks.map((task) => ({
-    id: task.id,
-    parentId: task.parent_id,
-    name: task.name,
-    plannedMonth: task.planned_month,
-    day: task.day,
-    estimate: task.estimate,
-    doneOn: task.done_on,
-    factId: task.fact_id ?? null,
-    note: task.note,
-  }));
+  const tasks = input.tasks.map((task) => toPlanTask(task, openedOn));
+  const rhythm = goal.rhythm ?? null;
+  const plan: PlanInput = { rhythm, budgets, tasks, openedOn, horizon: goal.horizon, today };
   // A done task's estimate counts as declared quantity (RP-36): feeds the
   // measure alone, never a commitment's slot.
   const measureFacts = [...facts, ...estimateFacts(tasks, goal.measure_unit)];
@@ -419,6 +417,7 @@ export function goalFigures(input: {
     horizon: goal.horizon,
     today,
     budgets,
+    rhythm,
     reached: reachedByMonth({ unit: goal.measure_unit, facts: measureFacts, evidence: evidenceDays }),
   });
   const thisMonth = months.find((entry) => entry.current);
@@ -432,6 +431,7 @@ export function goalFigures(input: {
             today,
             budget: budgets.find((budget) => budget.month === monthOf(today)) ?? null,
             reached: thisMonth.reached,
+            rhythm,
           }),
         };
 
@@ -447,6 +447,7 @@ export function goalFigures(input: {
 
   return {
     tasks,
+    plan,
     measureTotal: declaredTotal + evidenceTotal,
     months,
     month,
@@ -484,7 +485,10 @@ export async function loadGoal(
 
   const [row, evidenceOutcome] = await Promise.all([
     withGoalsDb((tx) => queryGoalRow(tx, goalId)),
-    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, goalId)).then(
+    withReadingDb((tx) => {
+      const { from, to } = goalSpan(goalId);
+      return queryEvidenceBySource(tx, person.id, from, to);
+    }).then(
       (bySourceKey): EvidenceOutcome => ({ status: "read", bySourceKey }),
       (): EvidenceOutcome => ({ status: "unreadable", bySourceKey: {} }),
     ),
@@ -497,7 +501,7 @@ export async function loadGoal(
   const commitments = row.commitments.map((commitment) =>
     toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
   );
-  const { tasks, measureTotal, months, month: currentMonth, weeks } = goalFigures({
+  const { tasks, plan, measureTotal, months, month: currentMonth, weeks } = goalFigures({
     goal: row.goal,
     phases,
     commitments: row.commitments,
@@ -526,7 +530,10 @@ export async function loadGoal(
     months,
     budgets: row.budgets,
     tasks,
-    shifts: row.shifts,
+    rhythm: row.goal.rhythm ?? null,
+    planSeen: row.goal.plan_seen ?? null,
+    plan,
+    roadmap: fillPlan(plan),
   };
 }
 
@@ -580,6 +587,7 @@ export type MetasMonth =
 export type MetasOpenGoal = GoalSummary & { month: MetasMonth | null };
 
 type MetasRow = GoalRow & {
+  created_at: string;
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
@@ -605,6 +613,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
     withGoalsDb((tx) =>
       tx.execute<MetasRow>(sql`
         select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
+          g.rhythm, g.created_at,
           (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                      'commitment_unit', c.unit
                    )), '[]'::json)
@@ -614,7 +623,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
                and f.day between ${month}::date and ${today}::date) as facts,
           (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
              from "goals"."month_budgets" b
-             where b.goal_id = g.id and b.month = ${month}::date) as budgets,
+             where b.goal_id = g.id) as budgets,
           (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                      'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
                    ) order by o.position, o.created_at, o.id), '[]'::json)
@@ -636,19 +645,19 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
 
   const toMonth = (row: MetasRow): MetasMonth | null => {
     const unit = row.measure_unit;
-    const tasks: Task[] = row.tasks.map((task) => ({
-      id: task.id,
-      parentId: task.parent_id,
-      name: task.name,
-      plannedMonth: task.planned_month,
-      day: task.day,
-      estimate: task.estimate,
-      doneOn: task.done_on,
-      factId: null,
-      note: task.note,
-    }));
+    const openedOn = civilDateInZone(new Date(row.created_at));
+    const tasks = row.tasks.map((task) => toPlanTask(task, openedOn));
+    const rhythm = row.rhythm ?? null;
+    const plan: PlanInput = {
+      rhythm,
+      budgets: row.budgets,
+      tasks,
+      openedOn,
+      horizon: row.horizon,
+      today,
+    };
     if (unit === null) {
-      const items = monthList(tasks, month, today);
+      const items = planMonthList(plan, month);
       if (items.length === 0) return null;
       return { kind: "tasks", month, done: items.filter((item) => item.done).length, total: items.length };
     }
@@ -661,7 +670,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
       facts: [...declared, ...doneTasks],
       evidence: evidenceDaysFor(unit, row.measure_sources, evidenceOutcome.bySourceKey),
     }).get(month) ?? 0;
-    const planned = row.budgets.find((budget) => budget.month === month)?.amount ?? null;
+    const planned = row.budgets.find((budget) => budget.month === month)?.amount ?? rhythm;
     if (planned === null && reached === 0) return null;
     return { kind: "amount", month, planned, reached };
   };

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { readFileSync } from "node:fs";
 import { parseTemplate } from "./template";
-import { draftRefusals, importDraftJsonSchema, importDraftSchema, strayEstimates, withoutStrayEstimates, type ImportDraft } from "./draft";
+import { draftRefusals, importDraftJsonSchema, importDraftSchema, inMinutes, phaseCuts, phaseDrops, strayEstimates, withCutPhases, withoutStrayEstimates, type ImportDraft } from "./draft";
 
 const TODAY = "2026-10-15";
 
@@ -11,6 +11,7 @@ function goal(over: Partial<ImportDraft["goals"][number]> = {}): ImportDraft["go
   return {
     name: "IA aplicada",
     horizon: "2027-10-01",
+    rhythm: null,
     measure: { name: "horas de estudio", unit: "minutos" },
     phases: [{ aim: "Evals", startsOn: "2026-10-01", endsOn: "2026-12-31" }],
     months: [{ month: "2026-10", amount: 720 }],
@@ -294,4 +295,90 @@ test("importDraftSchema: a task and a sub-task take a note judged by the note's 
 
 test("importDraftJsonSchema: holds no note key, so the model proposes none", () => {
   assert.equal(JSON.stringify(importDraftJsonSchema).includes('"note"'), false);
+});
+
+const phaseOf = (aim: string, startsOn: string, endsOn: string) => ({ aim, startsOn, endsOn });
+const OPENS = "2026-10-06";
+
+test("phaseCuts and withCutPhases: a phase that starts before the goal opens begins that day and is listed", () => {
+  const raw = draft(goal({ phases: [phaseOf("Evals", "2026-10-01", "2026-12-31")] }));
+  assert.deepEqual(phaseCuts(raw, OPENS), [{ path: "goals.0.phases.0", aim: "Evals", from: OPENS }]);
+  assert.deepEqual(withCutPhases(raw, OPENS).goals[0].phases, [phaseOf("Evals", OPENS, "2026-12-31")]);
+  assert.deepEqual(phaseCuts(withCutPhases(raw, OPENS), OPENS), []);
+});
+
+test("phaseCuts and withCutPhases: a phase wholly before the goal opens is dropped and listed", () => {
+  const raw = draft(goal({ phases: [phaseOf("Vieja", "2026-08-01", "2026-09-30"), phaseOf("Viva", "2026-10-06", "2026-12-31")] }));
+  assert.deepEqual(phaseDrops(raw, OPENS), [{ path: "goals.0.phases.0", aim: "Vieja" }]);
+  assert.deepEqual(phaseCuts(raw, OPENS), []);
+  assert.deepEqual(withCutPhases(raw, OPENS).goals[0].phases, [phaseOf("Viva", "2026-10-06", "2026-12-31")]);
+});
+
+test("phaseCuts: two phases cut in one goal, each listed under its own index", () => {
+  const raw = draft(goal({ phases: [phaseOf("A", "2026-09-01", "2026-10-06"), phaseOf("B", "2026-10-01", "2026-12-31")] }));
+  assert.deepEqual(phaseCuts(raw, OPENS), [
+    { path: "goals.0.phases.0", aim: "A", from: OPENS },
+    { path: "goals.0.phases.1", aim: "B", from: OPENS },
+  ]);
+  assert.deepEqual(withCutPhases(raw, OPENS).goals[0].phases, [phaseOf("A", OPENS, "2026-10-06"), phaseOf("B", OPENS, "2026-12-31")]);
+});
+
+test("phaseCuts: a phase starting on the day or later is untouched, and so is the rest of the draft", () => {
+  const raw = draft(goal({ phases: [phaseOf("Hoy", OPENS, "2026-11-30"), phaseOf("Luego", "2026-12-01", "2027-01-31")] }));
+  assert.deepEqual(phaseCuts(raw, OPENS), []);
+  assert.deepEqual(phaseDrops(raw, OPENS), []);
+  assert.deepEqual(withCutPhases(raw, OPENS), raw);
+});
+
+test("phaseDrops: a phase ending on the day the goal opens is kept, one ending the day before is dropped, and drops are exactly the phases withCutPhases removes", () => {
+  const raw = draft(
+    goal({
+      phases: [
+        phaseOf("Ayer", "2026-09-01", "2026-10-05"),
+        phaseOf("Hoy", "2026-09-20", OPENS),
+        phaseOf("Luego", "2026-10-07", "2026-12-31"),
+      ],
+    }),
+  );
+  assert.deepEqual(phaseDrops(raw, OPENS), [{ path: "goals.0.phases.0", aim: "Ayer" }]);
+  const kept = withCutPhases(raw, OPENS).goals[0].phases.map((p) => p.aim);
+  assert.deepEqual(kept, ["Hoy", "Luego"]);
+  const dropped = new Set(phaseDrops(raw, OPENS).map((d) => d.aim));
+  assert.deepEqual(
+    raw.goals[0].phases.map((p) => p.aim).filter((aim) => !kept.includes(aim)),
+    [...dropped],
+  );
+});
+
+test("inMinutes: a goal measured in hours becomes minutes, figures x60, once", () => {
+  const hours = goal({
+    measure: { name: "estudio", unit: "horas" },
+    months: [{ month: "2026-10", amount: 12 }],
+    commitments: [{ name: "Tema", cadenceKind: "daily", cadenceWeekdays: null, cadenceN: null, satisfaction: "quantity", targetQuantity: 2, unit: "horas" }],
+    tasks: [{ name: "Leer", month: "2026-10", estimate: 3, children: [{ name: "Cap", estimate: 1 }] }],
+  });
+  const once = inMinutes(draft(hours));
+  const [g] = once.goals;
+  assert.equal(g.measure?.unit, "minutos");
+  assert.equal(g.months[0].amount, 720);
+  assert.equal(g.tasks[0].estimate, 180);
+  assert.equal(g.tasks[0].children[0].estimate, 60);
+  assert.equal(g.commitments[0].targetQuantity, 120);
+  assert.equal(g.commitments[0].unit, "minutos");
+  assert.deepEqual(inMinutes(once), once);
+  assert.deepEqual(inMinutes(draft(goal())), draft(goal()));
+});
+
+test("strayEstimates: a figure in a goal not measured in time is dropped with its own notice", () => {
+  const km = goal({
+    measure: { name: "distancia", unit: "km" },
+    tasks: [{ name: "Correr", month: "2026-10", estimate: 5, children: [] }],
+  });
+  const raw = draft(km);
+  assert.deepEqual(strayEstimates(raw), [{ path: "goals.0.tasks.0", key: "import.notices.estimateDroppedNotTime" }]);
+  const kept = withoutStrayEstimates(raw);
+  assert.equal(kept.goals[0].tasks.length, 1);
+  assert.equal(kept.goals[0].tasks[0].estimate, null);
+  assert.deepEqual(strayEstimates(kept), []);
+  assert.equal(strayEstimates(draft(unmeasured()))[0].key, "import.notices.estimateDropped");
 });

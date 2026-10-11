@@ -1,4 +1,6 @@
-import { isTimeUnit, parseTime } from "@/lib/units/time";
+import { isTimeUnit, parseTime, storedMeasure } from "@/lib/units/time";
+
+import { GOAL_NAME_MAX } from "@/lib/validation/plan";
 
 import { importDraftSchema, type ImportDraft } from "./draft";
 
@@ -8,7 +10,11 @@ export const TEMPLATE_HEADER = "pulsar · plantilla 1";
 export type TemplateResult =
   | { matched: false }
   | { matched: true; draft: ImportDraft }
-  | { matched: true; error: { line: number; expected: string } };
+  | { matched: true; error: TemplateError; errors: TemplateError[]; cut: boolean };
+
+// `cut` means the reading stopped at a head line or the first line, so `errors` holds that one alone.
+// `expected` is a catalogue key; `unit` fills the sentence that names the goal's own.
+export type TemplateError = { line: number; expected: string; unit?: string };
 
 type Goal = ImportDraft["goals"][number];
 type Commitment = Goal["commitments"][number];
@@ -16,16 +22,27 @@ type Task = Goal["tasks"][number];
 
 // The form of a line, shown as `expected`: syntax, not prose.
 const FORMS = {
-  goal: "# nombre",
-  horizon: "horizonte: AAAA-MM-DD",
-  measure: "medida: nombre · unidad",
-  section: "## Fases, ## Meses, ## Compromisos o ## Tareas",
-  phase: "- AAAA-MM-DD a AAAA-MM-DD · objetivo",
-  month: "- AAAA-MM · monto",
-  commitment: "- nombre · cadencia · toque o monto",
-  task: "- AAAA-MM · nombre, o - AAAA-MM · monto · nombre",
-  child: "  - nombre, o   - monto · nombre",
-  note: "  nota: texto, o     nota: texto",
+  goal: "import.errors.form.goal",
+  goalLong: "import.errors.form.goalLong",
+  horizon: "import.errors.form.horizon",
+  measure: "import.errors.form.measure",
+  rhythmPlace: "import.errors.form.rhythmPlace",
+  rhythmUnit: "import.errors.form.rhythmUnit",
+  rhythmAmount: "import.errors.form.rhythmAmount",
+  firstLine: "import.errors.form.firstLine",
+  section: "import.errors.form.section",
+  phase: "import.errors.form.phase",
+  month: "import.errors.form.month",
+  monthUnit: "import.errors.form.monthUnit",
+  monthTime: "import.errors.form.monthTime",
+  monthWhole: "import.errors.form.monthWhole",
+  commitment: "import.errors.form.commitment",
+  commitmentUnit: "import.errors.form.commitmentUnit",
+  commitmentTime: "import.errors.form.commitmentTime",
+  estimateNotTime: "import.errors.estimateNotTime",
+  task: "import.errors.form.task",
+  child: "import.errors.form.child",
+  note: "import.errors.form.note",
 } as const;
 
 const SECTIONS = { "## Fases": "phases", "## Meses": "months", "## Compromisos": "commitments", "## Tareas": "tasks" } as const;
@@ -61,17 +78,43 @@ function parseAmount(text: string, timeUnit: boolean): number | null {
   return /^\d+$/.test(t) ? Number(t) : null;
 }
 
+// A month's amount may carry the goal's own unit: "8 km", "8km", "8 KM".
+function parseUnitAmount(text: string, unit: string): number | null {
+  const m = /^(\d+)\s*(\S.*)$/.exec(text.trim());
+  return m && m[2].trim().toLowerCase() === unit.trim().toLowerCase() ? Number(m[1]) : null;
+}
+
 type Spot = { line: number; expected: string };
+
+// The parts of a goal that its head lines write.
+const HEAD_FIELDS = new Set(["name", "horizon", "measure", "rhythm"]);
+
+// A head line the reader cannot take stops the reading: nothing below it is judged.
+function cut(line: number, expected: string): TemplateResult {
+  const error: TemplateError = { line, expected };
+  return { matched: true, error, errors: [error], cut: true };
+}
 
 export function parseTemplate(text: string): TemplateResult {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).map((l) => l.trimEnd());
   const first = lines.findIndex((l) => l.trim() !== "");
-  if (first === -1 || lines[first] !== TEMPLATE_HEADER) return { matched: false };
+  if (first === -1) return { matched: false };
+  if (lines[first] !== TEMPLATE_HEADER) {
+    return lines[first].startsWith("pulsar ·") ? cut(first + 1, FORMS.firstLine) : { matched: false };
+  }
 
-  const fail = (line: number, expected: string): TemplateResult => ({
-    matched: true,
-    error: { line, expected },
-  });
+  const errors: TemplateError[] = [];
+  const report = (line: number, expected: string, unit?: string) => {
+    errors.push(unit === undefined ? { line, expected } : { line, expected, unit });
+  };
+  // One line says one thing; the list is in the text's order.
+  const finish = (): TemplateResult => {
+    const seen = new Set<number>();
+    const list = errors.filter((e) => !seen.has(e.line) && seen.add(e.line)).sort((a, b) => a.line - b.line);
+    return { matched: true, error: list[0], errors: list, cut: false };
+  };
+  // A goal measured in something else than time keeps no figure on a task.
+  const isFigure = (text: string) => parseAmount(text, false) !== null || parseAmount(text, true) !== null;
 
   const goals: Goal[] = [];
   // Where each part of the draft was written, so a schema issue finds its line.
@@ -82,32 +125,67 @@ export function parseTemplate(text: string): TemplateResult {
   // Where a `nota:` line may land: the task just read, or its latest sub-task.
   let noteOwner: { depth: 2 | 4; into: { note?: string | null } } | null = null;
   let needsHorizon: { line: number } | null = null;
+  // Whether the line just read was `medida:`, the only place `ritmo:` may follow.
+  let afterMeasure = false;
+  // After a bad `## ` line, its items are not read: each would repeat one mistake.
+  let skipping = false;
+  // A broken task or sub-task keeps the lines under it from being read as another's.
+  let brokenTask = false;
+  let brokenChild = false;
 
   for (let i = first + 1; i < lines.length; i++) {
     const line = lines[i];
     const n = i + 1;
     if (line.trim() === "") continue;
+    const followsMeasure = afterMeasure;
+    afterMeasure = false;
     const g = goals.length - 1;
     const goal = goals[g] as Goal | undefined;
     const at = `goals.${g}`;
 
     if (line.startsWith("# ")) {
-      if (needsHorizon) return fail(needsHorizon.line, FORMS.horizon);
+      if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
       const name = line.slice(2).trim();
-      goals.push({ name, horizon: "", measure: null, phases: [], months: [], commitments: [], tasks: [] });
+      goals.push({ name, horizon: "", measure: null, rhythm: null, phases: [], months: [], commitments: [], tasks: [] });
       spots.set(`goals.${g + 1}`, { line: n, expected: FORMS.goal });
+      if (name.length > GOAL_NAME_MAX) spots.set(`goals.${g + 1}.name`, { line: n, expected: FORMS.goalLong });
       needsHorizon = { line: n };
       section = null;
+      skipping = false;
+      brokenTask = false;
+      brokenChild = false;
       lastTask = null;
       noteOwner = null;
       continue;
     }
-    if (!goal) return fail(n, FORMS.goal);
+    if (!goal) return cut(n, FORMS.goal);
+
+    if (line.startsWith("ritmo:")) {
+      const minutes = goal.measure !== null && isTimeUnit(goal.measure.unit) ? /^ritmo: (.+)$/.exec(line) : null;
+      const amount = followsMeasure && section === null && minutes ? parseTime(minutes[1]) : null;
+      if (amount === null) {
+        const expected =
+          goal.measure === null || !isTimeUnit(goal.measure.unit)
+            ? FORMS.rhythmUnit
+            : followsMeasure && section === null ? FORMS.rhythmAmount : FORMS.rhythmPlace;
+        // Only a `ritmo:` among the head lines cuts; one under a section is a stray line like any other.
+        if (section === null) return cut(n, expected);
+        report(n, expected);
+        continue;
+      }
+      goal.rhythm = amount;
+      spots.set(`${at}.rhythm`, { line: n, expected: FORMS.rhythmPlace });
+      continue;
+    }
 
     const note = /^( {2}| {4})nota:(?: (.*))?$/.exec(line);
     if (note) {
       const depth = note[1].length as 2 | 4;
-      if (section !== "tasks" || noteOwner === null || noteOwner.depth !== depth) return fail(n, FORMS.note);
+      if (skipping || brokenTask || (brokenChild && depth === 4)) continue;
+      if (section !== "tasks" || noteOwner === null || noteOwner.depth !== depth) {
+        report(n, FORMS.note);
+        continue;
+      }
       const into = noteOwner.into;
       into.note = into.note === undefined ? (note[2] ?? "") : `${into.note}\n${note[2] ?? ""}`;
       const key = `${depth === 2 ? lastTaskPath : `${lastTaskPath}.children.${lastTask!.children.length - 1}`}.note`;
@@ -125,60 +203,121 @@ export function parseTemplate(text: string): TemplateResult {
       }
       const measure = /^medida: (.+?) · (.+)$/.exec(line);
       if (measure) {
-        goal.measure = { name: measure[1].trim(), unit: measure[2].trim() };
+        goal.measure = { name: measure[1].trim(), unit: storedMeasure(measure[2].trim(), null).unit };
         spots.set(`${at}.measure`, { line: n, expected: FORMS.measure });
+        afterMeasure = true;
         continue;
       }
+      if (line.startsWith("medida:")) return cut(n, FORMS.measure);
+      if (line.startsWith("horizonte:")) return cut(n, FORMS.horizon);
     }
 
     if (line.startsWith("## ")) {
       const next = SECTIONS[line as keyof typeof SECTIONS];
-      if (!next) return fail(n, FORMS.section);
-      if (needsHorizon) return fail(needsHorizon.line, FORMS.horizon);
-      section = next;
+      if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
       lastTask = null;
       noteOwner = null;
+      brokenTask = false;
+      brokenChild = false;
+      if (!next) {
+        report(n, FORMS.section);
+        section = null;
+        skipping = true;
+        continue;
+      }
+      skipping = false;
+      section = next;
       continue;
     }
-    if (section === null) return fail(n, needsHorizon ? FORMS.horizon : FORMS.section);
+    if (skipping) continue;
+    if (section === null) {
+      if (needsHorizon) return cut(n, FORMS.horizon);
+      report(n, FORMS.section);
+      continue;
+    }
 
     const timeUnit = goal.measure !== null && isTimeUnit(goal.measure.unit);
 
     // A sub-task sits exactly two spaces in, under its task and nowhere else.
     const child = /^ {2}- (.+)$/.exec(line);
     if (child) {
-      if (section !== "tasks" || lastTask === null) return fail(n, FORMS.task);
+      if (brokenTask) continue;
+      if (section !== "tasks" || lastTask === null) {
+        report(n, FORMS.task);
+        continue;
+      }
       const parts = child[1].split(" · ");
       const amount = parts.length > 1 ? parseAmount(parts[0], timeUnit) : null;
-      if (parts.length > 1 && amount === null) return fail(n, FORMS.child);
+      // The figure is dropped, the line is still read: its name and its notes count.
+      const stray = !timeUnit && goal.measure !== null && parts.length > 1 && isFigure(parts[0]);
+      if (stray) report(n, FORMS.estimateNotTime);
+      else if (parts.length > 1 && amount === null) {
+        report(n, FORMS.child);
+        noteOwner = null;
+        brokenChild = true;
+        continue;
+      }
+      brokenChild = false;
       const index = lastTask.children.length;
-      lastTask.children.push({ name: parts.length > 1 ? parts.slice(1).join(" · ").trim() : parts[0].trim(), estimate: amount });
+      lastTask.children.push({ name: parts.length > 1 ? parts.slice(1).join(" · ").trim() : parts[0].trim(), estimate: stray ? null : amount });
       spots.set(`${lastTaskPath}.children.${index}`, { line: n, expected: FORMS.child });
       noteOwner = { depth: 4, into: lastTask.children[index] };
       continue;
     }
 
     const item = /^- (.+)$/.exec(line);
-    if (!item) return fail(n, section === "tasks" && /^\s+- /.test(line) ? FORMS.child : FORMS[singular(section)]);
+    if (!item) {
+      report(n, section === "tasks" && /^\s+- /.test(line) ? FORMS.child : FORMS[singular(section)]);
+      continue;
+    }
     const parts = item[1].split(" · ").map((p) => p.trim());
     const spot = (key: string, expected: string) => spots.set(`${at}.${key}.${goal[section!].length - 1}`, { line: n, expected });
 
     if (section === "phases") {
       const m = /^(\d{4}-\d{2}-\d{2}) a (\d{4}-\d{2}-\d{2}) · (.+)$/.exec(item[1]);
-      if (!m) return fail(n, FORMS.phase);
+      if (!m) {
+        report(n, FORMS.phase);
+        continue;
+      }
       goal.phases.push({ startsOn: m[1], endsOn: m[2], aim: m[3].trim() });
       spot("phases", FORMS.phase);
     } else if (section === "months") {
-      const amount = parts.length === 2 ? parseAmount(parts[1], timeUnit) : null;
-      if (amount === null) return fail(n, FORMS.month);
+      const unit = goal.measure !== null && !timeUnit ? goal.measure.unit : null;
+      const amount = parts.length === 2
+        ? parseAmount(parts[1], timeUnit) ?? (unit === null ? null : parseUnitAmount(parts[1], unit))
+        : null;
+      if (amount === null) {
+        // A decimal is a whole-number mistake; a number with another unit after it is a unit mistake.
+        if (unit !== null && parts.length === 2 && /^\d+[.,]\d/.test(parts[1])) report(n, FORMS.monthWhole, unit);
+        else if (parts.length === 2 && /^\d+\s*\S/.test(parts[1])) {
+          if (unit !== null) report(n, FORMS.monthUnit, unit);
+          else if (timeUnit) report(n, FORMS.monthTime, goal.measure!.unit);
+          else report(n, FORMS.month);
+        } else report(n, FORMS.month);
+        continue;
+      }
       goal.months.push({ month: parts[0], amount });
       spot("months", FORMS.month);
     } else if (section === "commitments") {
       const cadence = parts.length === 3 ? parseCadence(parts[1]) : null;
-      if (cadence === null) return fail(n, FORMS.commitment);
+      if (cadence === null) {
+        report(n, FORMS.commitment);
+        continue;
+      }
       const tap = parts[2].toLowerCase() === "toque";
-      const target = tap ? null : goal.measure ? parseAmount(parts[2], timeUnit) : null;
-      if (!tap && target === null) return fail(n, FORMS.commitment);
+      const unit = goal.measure !== null && !timeUnit ? goal.measure.unit : null;
+      const target = tap
+        ? null
+        : goal.measure
+          ? parseAmount(parts[2], timeUnit) ?? (unit === null ? null : parseUnitAmount(parts[2], unit))
+          : null;
+      if (!tap && target === null) {
+        const figure = goal.measure !== null && /^\d+\s*\S/.test(parts[2]);
+        if (figure && unit !== null) report(n, FORMS.commitmentUnit, unit);
+        else if (figure) report(n, FORMS.commitmentTime, goal.measure!.unit);
+        else report(n, FORMS.commitment);
+        continue;
+      }
       goal.commitments.push({
         name: parts[0],
         ...cadence,
@@ -188,13 +327,22 @@ export function parseTemplate(text: string): TemplateResult {
       });
       spot("commitments", FORMS.commitment);
     } else {
-      if (parts.length < 2) return fail(n, FORMS.task);
+      const stray = !timeUnit && goal.measure !== null && parts.length > 2 && isFigure(parts[1]);
       const amount = parts.length > 2 ? parseAmount(parts[1], timeUnit) : null;
-      if (parts.length > 2 && amount === null) return fail(n, FORMS.task);
+      if (parts.length < 2 || (parts.length > 2 && amount === null && !stray)) {
+        report(n, FORMS.task);
+        lastTask = null;
+        noteOwner = null;
+        brokenTask = true;
+        continue;
+      }
+      if (stray) report(n, FORMS.estimateNotTime);
+      brokenTask = false;
+      brokenChild = false;
       const task: Task = {
         month: parts[0],
         name: parts.length > 2 ? parts.slice(2).join(" · ") : parts[1],
-        estimate: amount,
+        estimate: stray ? null : amount,
         children: [],
       };
       goal.tasks.push(task);
@@ -205,21 +353,30 @@ export function parseTemplate(text: string): TemplateResult {
     }
   }
 
-  if (needsHorizon) return fail(needsHorizon.line, FORMS.horizon);
-  if (goals.length === 0) return fail(first + 2, FORMS.goal);
+  if (needsHorizon) return cut(needsHorizon.line, FORMS.horizon);
+  if (goals.length === 0) return cut(first + 2, FORMS.goal);
 
   const parsed = importDraftSchema.safeParse({ goals });
-  if (parsed.success) return { matched: true, draft: parsed.data };
+  if (parsed.success && errors.length === 0) return { matched: true, draft: parsed.data };
 
   // The nearest enclosing item names the line: a path is walked up until a
   // part of the draft written on some line matches.
-  const path = parsed.error.issues[0].path.map(String);
-  for (let k = path.length; k >= 0; k--) {
-    const spot = spots.get(path.slice(0, k).join("."));
-    if (spot) return fail(spot.line, spot.expected);
+  if (!parsed.success) {
+    const head: Spot[] = [];
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.map(String);
+      let spot: Spot | undefined;
+      for (let k = path.length; k >= 0 && !spot; k--) spot = spots.get(path.slice(0, k).join("."));
+      spot ??= spots.get(`goals.${goals.length - 1}`)!;
+      if (HEAD_FIELDS.has(path[2])) head.push(spot);
+      report(spot.line, spot.expected);
+    }
+    if (head.length > 0) {
+      const [earliest] = head.sort((a, b) => a.line - b.line);
+      return cut(earliest.line, earliest.expected);
+    }
   }
-  const last = spots.get(`goals.${goals.length - 1}`)!;
-  return fail(last.line, last.expected);
+  return finish();
 }
 
 function singular(section: Section): "phase" | "month" | "commitment" | "task" {

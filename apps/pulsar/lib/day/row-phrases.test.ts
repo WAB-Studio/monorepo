@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { cadencePhrase, flexibleWords, metPhrase, phaseLine, phasePositions, rowMeta } from "./row-phrases";
+import { weekdaysSentence, cadencePhrase, flexibleWords, metPhrase, phaseLine, partialPair, phasePositions, rowMeta, type RowMetaPart } from "./row-phrases";
 
 const names = {
-  weekdayShort: ["L", "M", "X", "J", "V", "S", "D"],
+  weekdayShort: ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
   weekdayPlural: ["lunes", "martes", "miércoles", "jueves", "viernes", "sábados", "domingos"],
 };
 const catalogue: Record<string, string> = {
+  "day.cadence.everyDay": "todos los días",
   "day.cadence.onlyWeekday": "solo los {weekday}",
   "day.cadence.timesPerWeek": "{count} veces por semana",
   "day.cadence.timesPerMonth": "{count} veces al mes",
@@ -18,15 +20,44 @@ function translate(key: string, values: Record<string, string | number> = {}): s
   return catalogue[key].replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]));
 }
 
-test("a daily cadence and every 1 day say nothing", () => {
-  assert.equal(cadencePhrase(translate, { kind: "daily" }, names), null);
+test("a daily cadence reads «todos los días»; every 1 day says nothing", () => {
+  assert.equal(cadencePhrase(translate, { kind: "daily" }, names), "todos los días");
   assert.equal(cadencePhrase(translate, { kind: "every_n_days", n: 1, anchor: "2026-09-01" }, names), null);
 });
 
 test("one weekday reads «solo los martes», several read their letters", () => {
   assert.equal(cadencePhrase(translate, { kind: "weekdays", days: [2] }, names), "solo los martes");
   assert.equal(cadencePhrase(translate, { kind: "weekdays", days: [6] }, names), "solo los sábados");
-  assert.equal(cadencePhrase(translate, { kind: "weekdays", days: [1, 4] }, names), "L, J");
+});
+
+// The joiner of the days is the catalogue's own word, never a literal in code: the test reads the real
+// messages/es/day.json, so it follows whatever key the catalogue gives it.
+const dayMessages = JSON.parse(readFileSync(new URL("../../messages/es/day.json", import.meta.url), "utf8"));
+function realTranslate(key: string, values: Record<string, string | number> = {}): string {
+  const leaf = key.replace(/^day\./, "").split(".").reduce((node: unknown, part) => (node as Record<string, unknown> | undefined)?.[part], dayMessages as unknown);
+  assert.equal(typeof leaf, "string", `${key} is no message in messages/es/day.json`);
+  return (leaf as string).replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]));
+}
+const days = (list: number[]) => cadencePhrase(realTranslate, { kind: "weekdays", days: list }, names);
+
+test("two days read in three letters joined by «y»", () => {
+  assert.equal(days([2, 4]), "mar y jue");
+  assert.equal(days([1, 4]), "lun y jue");
+});
+
+test("three or more days read as a sentence: commas, then «y» before the last", () => {
+  assert.equal(days([1, 3, 5]), "lun, mié y vie");
+  assert.equal(days([1, 2, 3, 4]), "lun, mar, mié y jue");
+});
+
+test("seven weekdays read «todos los días»", () => {
+  assert.equal(days([1, 2, 3, 4, 5, 6, 7]), "todos los días");
+});
+
+test("six weekdays read as a list, never «todos los días»", () => {
+  assert.equal(days([1, 2, 3, 4, 5, 6]), "lun, mar, mié, jue, vie y sáb");
+  assert.equal(days([6, 2, 5, 1, 4, 3]), "lun, mar, mié, jue, vie y sáb");
+  assert.equal(days([7, 6, 5, 4, 3, 2]), "mar, mié, jue, vie, sáb y dom");
 });
 
 test("a weekly, monthly and every-n-days cadence name their count", () => {
@@ -105,6 +136,8 @@ const rowCatalogue: Record<string, string> = {
 };
 const rowTranslate = (key: string, values: Record<string, string | number> = {}) =>
   rowCatalogue[key].replace(/\{(\w+)\}/g, (_, name: string) => String(values[name]));
+const line = (parts: RowMetaPart[] | undefined) => parts?.map((part) => ("figure" in part ? part.figure : part.text)).join("");
+const figures = (parts: RowMetaPart[] | undefined) => parts?.flatMap((part) => ("figure" in part ? [part.figure] : []));
 const base = {
   kind: "tap" as const,
   done: false,
@@ -117,52 +150,119 @@ const base = {
 };
 
 test("a done tap or quantity row says «lo dijiste tú» after its hour", () => {
-  assert.equal(rowMeta(rowTranslate, { ...base, done: true, writtenTime: "07:40" }), "10 min · 07:40 · lo dijiste tú");
+  assert.equal(line(rowMeta(rowTranslate, { ...base, done: true, writtenTime: "07:40" })), "10 min · 07:40 · lo dijiste tú");
   assert.equal(
-    rowMeta(rowTranslate, { ...base, kind: "quantity", done: true, amount: "25 minutos", writtenTime: "07:40", writtenLabel: "anotado el lunes 21" }),
+    line(rowMeta(rowTranslate, { ...base, kind: "quantity", done: true, amount: "25 minutos", writtenTime: "07:40", writtenLabel: "anotado el lunes 21" })),
     "25 minutos · 07:40 · lo dijiste tú · anotado el lunes 21",
   );
 });
 
-test("an unmarked quantity row says «pide el número» right after its target, before progress", () => {
-  assert.equal(rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min" }), "3 min · pide el número");
+test("an unmarked quantity row never says «pide el número»: its target, then progress", () => {
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min" })), "3 min");
   assert.equal(
-    rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min", status: "0 de 3 esta semana" }),
-    "3 min · pide el número · 0 de 3 esta semana",
+    line(rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min", status: "0 de 3 esta semana" })),
+    "3 min · 0 de 3 esta semana",
   );
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "quantity", cadenceText: "mar y jue", amount: "2 h" })), "mar y jue · 2 h");
 });
 
 test("an unmarked tap row says neither", () => {
-  assert.equal(rowMeta(rowTranslate, base), "10 min");
+  assert.equal(line(rowMeta(rowTranslate, base)), "10 min");
 });
 
 test("an evidence row says neither, done or not", () => {
-  assert.equal(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", done: true, writtenTime: "07:40" }), "Anki · 07:40");
-  assert.equal(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki" }), "Anki");
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", done: true, writtenTime: "07:40" })), "Anki · 07:40");
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki" })), "Anki");
+});
+
+const evidenceRow = { ...base, kind: "evidence" as const, cadenceText: "3 veces por semana", amount: "Anki" };
+
+test("an unmet evidence row says what it asks, before", () => {
+  const meta = line(rowMeta(rowTranslate, { ...evidenceRow, evidence: { asks: "1 búsqueda", got: null, source: "diccionario" } }));
+  assert.equal(meta, "1 búsqueda");
+});
+
+test("a met evidence row says what it got, then its source", () => {
+  const meta = line(rowMeta(rowTranslate, { ...evidenceRow, done: true, evidence: { asks: "1 búsqueda", got: "3 búsquedas", source: "diccionario" } }));
+  assert.equal(meta, "3 búsquedas · diccionario");
+  assert.equal(line(rowMeta(rowTranslate, { ...evidenceRow, done: true, evidence: { asks: "1 búsqueda", got: "3 búsquedas", source: null } })), "3 búsquedas");
+});
+
+test("an evidence row never shows its source before it is met", () => {
+  const meta = line(rowMeta(rowTranslate, { ...evidenceRow, evidence: { asks: "1 búsqueda", got: null, source: "diccionario" } }));
+  assert.ok(!meta?.includes("diccionario"));
 });
 
 test("a quiet row says neither", () => {
-  assert.equal(rowMeta(rowTranslate, { ...base, quiet: true, done: true, status: "cumplida esta semana · 1 de 1" }), "10 min · cumplida esta semana · 1 de 1");
-  assert.equal(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true }), "10 min");
+  assert.equal(line(rowMeta(rowTranslate, { ...base, quiet: true, done: true, status: "cumplida esta semana · 1 de 1" })), "10 min · cumplida esta semana · 1 de 1");
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true })), "10 min");
 });
 
 const partial = { logged: "1 min", target: "3 min" };
 
 test("a quantity row logged under its target reads what it holds, its hour and «lo dijiste tú»", () => {
   const row = { ...base, kind: "quantity" as const, amount: "3 min", writtenTime: "09:22", partial };
-  assert.equal(rowMeta(rowTranslate, row), "1 min de 3 min · 09:22 · lo dijiste tú");
+  assert.equal(line(rowMeta(rowTranslate, row)), "1 min de 3 min · 09:22 · lo dijiste tú");
   assert.equal(
-    rowMeta(rowTranslate, { ...row, writtenLabel: "anotado el lunes 21" }),
+    line(rowMeta(rowTranslate, { ...row, writtenLabel: "anotado el lunes 21" })),
     "1 min de 3 min · 09:22 · lo dijiste tú · anotado el lunes 21",
   );
 });
 
 test("a partial row never asks for the number again", () => {
-  const meta = rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min", writtenTime: "09:22", partial });
+  const meta = line(rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min", writtenTime: "09:22", partial }));
   assert.equal(meta?.includes("pide el número"), false);
 });
 
 test("a partial quiet or evidence row keeps its own line", () => {
-  assert.equal(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true, partial }), "10 min");
-  assert.equal(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", partial }), "Anki");
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "quantity", quiet: true, partial })), "10 min");
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", partial })), "Anki");
+});
+
+test("a partial row sets only its figures and times apart: the words stay text", () => {
+  const row = { ...base, kind: "quantity" as const, amount: "10 min", writtenTime: "17:15", partial: { logged: "5", target: "10 min" } };
+  const parts = rowMeta(rowTranslate, row);
+  assert.deepEqual(figures(parts), ["5", "10 min", "17:15"]);
+  assert.equal(line(parts), "5 de 10 min · 17:15 · lo dijiste tú");
+  assert.deepEqual(parts?.filter((part) => "text" in part).map((part) => (part as { text: string }).text), [
+    " de ",
+    " · ",
+    " · ",
+    "lo dijiste tú",
+  ]);
+});
+
+test("an unmarked quantity row draws its target as a figure", () => {
+  const parts = rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min" });
+  assert.deepEqual(figures(parts), ["3 min"]);
+});
+
+test("an evidence source and a status are text, never a figure", () => {
+  assert.deepEqual(figures(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", status: "1 de 3 esta semana" })), []);
+});
+
+test("a partial in kilometres says the unit once; a time pair is as it was", () => {
+  assert.deepEqual(partialPair("7 kilómetros", "90 kilómetros", "kilómetros"), { logged: "7", target: "90 kilómetros" });
+  assert.deepEqual(partialPair("1 kilómetro", "90 kilómetros", "kilómetros"), { logged: "1", target: "90 kilómetros" });
+  assert.deepEqual(partialPair("5 min", "10 min", "min"), { logged: "5", target: "10 min" });
+  assert.deepEqual(partialPair("1 h 05 min", "2 h", "min"), { logged: "1 h 05 min", target: "2 h" });
+});
+
+test("days stored out of order read Monday first", () => {
+  assert.equal(days([6, 1]), "lun y sáb");
+  assert.equal(days([7, 3, 1]), "lun, mié y dom");
+});
+
+const fullNames = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+
+test("weekdaysSentence sorts Monday first and joins with commas and «y»", () => {
+  assert.equal(weekdaysSentence(realTranslate, [7, 3, 1], fullNames), "lunes, miércoles y domingo");
+  assert.equal(weekdaysSentence(realTranslate, [6, 2], fullNames), "martes y sábado");
+  assert.equal(weekdaysSentence(realTranslate, [4], fullNames), "jueves");
+});
+
+test("weekdaysSentence leaves its input untouched", () => {
+  const stored = [7, 3, 1];
+  weekdaysSentence(realTranslate, stored, fullNames);
+  assert.deepEqual(stored, [7, 3, 1]);
 });

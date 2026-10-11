@@ -36,7 +36,7 @@ export const lookups = reading.table(
     normalised: text().notNull(),
     kind: text({ enum: ["word", "phrase"] }).notNull(),
     outcome: text({
-      enum: ["exact", "inflected", "miss", "translated", "untranslated"],
+      enum: ["exact", "inflected", "miss", "translated", "untranslated", "unlisted"],
     }).notNull(),
     headword: text(),
     rule: text(),
@@ -44,6 +44,11 @@ export const lookups = reading.table(
     // The translation taught to the reader, so `/registro` draws a row without
     // reopening the dictionary (RL-34). Bounded at 120: see module 23.
     translation: text(),
+    // What the network answered for a word the dictionary does not list (RL-62).
+    // Null on every other row and on a row an older client sent.
+    definition: text(),
+    exampleEn: text(),
+    exampleEs: text(),
     dictionaryReady: boolean().notNull(),
     // A sentence lookup only; a word lookup never touches the network and carries none.
     origin: text({ enum: ["device", "network"] }),
@@ -56,6 +61,9 @@ export const lookups = reading.table(
     check("lookups_local_id_positive", sql`${t.localId} > 0`),
     check("lookups_senses_non_negative", sql`${t.senses} >= 0`),
     check("lookups_translation_length", sql`length(${t.translation}) <= 120`),
+    check("lookups_definition_length", sql`length(${t.definition}) <= 500`),
+    check("lookups_example_en_length", sql`length(${t.exampleEn}) <= 500`),
+    check("lookups_example_es_length", sql`length(${t.exampleEs}) <= 500`),
     // `authUid` is `(select auth.uid())`: evaluated once per query, not once per row.
     pgPolicy("lookups_select_self", {
       for: "select",
@@ -65,7 +73,11 @@ export const lookups = reading.table(
     pgPolicy("lookups_insert_self", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`${authUid} = ${t.userId}`,
+      // A retired device's rows are refused here, not only in the route.
+      withCheck: sql`${authUid} = ${t.userId} and not exists (
+        select 1 from reading.devices d
+        where d.user_id = ${t.userId} and d.device_id = ${t.deviceId} and d.retired_at is not null
+      )`,
     }),
     // No UPDATE policy: a copied row is never edited (RL-24).
     // DELETE is scoped to the owner only; the statement that runs it narrows

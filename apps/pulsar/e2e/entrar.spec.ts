@@ -225,3 +225,21 @@ test("with no session, Hoy and Semana land on /entrar (RP-18)", async ({ browser
     await context.close();
   }
 });
+
+test("/entrar names the app and sits in the centred column at 1280 (318)", async ({
+  browser,
+  baseURL,
+}) => {
+  const context = await freshContext(browser, baseURL!);
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/entrar");
+    const title = page.getByRole("heading", { level: 1, name: account.title });
+    await expect(title).toBeVisible();
+    await expect(page.getByText(account.eyebrow, { exact: true })).toBeVisible();
+    expect((await title.boundingBox())!.x).toBeGreaterThanOrEqual(300);
+  } finally {
+    await context.close();
+  }
+});

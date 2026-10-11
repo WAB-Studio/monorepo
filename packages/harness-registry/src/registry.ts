@@ -114,11 +114,14 @@ export async function openRun(suite: Suite, sql: Sql): Promise<string> {
   return id;
 }
 
-// The run's id, or throws when `openRun` has not run. Callers never carry it by
-// hand: every write below stamps it from here, not from an argument.
+// The run's id: the one `openRun` opened here, else the one a parent process
+// exported in HARNESS_RUN_ID (a Playwright worker never opens its own). Throws
+// when neither exists. Callers never carry it by hand.
 export function runId(): string {
-  if (!currentRunId) throw new Error("openRun has not run in this process");
-  return currentRunId;
+  const inherited = process.env.HARNESS_RUN_ID?.trim();
+  const id = currentRunId ?? (inherited || undefined);
+  if (!id) throw new Error("openRun has not run in this process");
+  return id;
 }
 
 /**
@@ -193,6 +196,31 @@ export async function registeredIdentities(
           `;
 
   return rows.map((row) => row.user_id);
+}
+
+/**
+ * Records an OAuth client this run registered in `goals.oauth_clients`, stamped
+ * with this run's id, so the run's close or a later reap can drop it by registry
+ * rather than by its name or its address.
+ */
+export async function registerOAuthClient(sql: Sql, clientId: string): Promise<void> {
+  assertSuiteDatabase();
+  const run = runId();
+
+  await sql`
+    insert into harness.oauth_clients (client_id, run_id) values (${clientId}, ${run})
+  `;
+}
+
+// Every OAuth client id this run registered.
+export async function registeredOAuthClients(sql: Sql): Promise<string[]> {
+  const run = runId();
+
+  const rows = await sql<{ client_id: string }[]>`
+    select client_id from harness.oauth_clients where run_id = ${run}
+  `;
+
+  return rows.map((row) => row.client_id);
 }
 
 // Stops the heartbeat and stamps `finished_at`. Safe to call twice: the second

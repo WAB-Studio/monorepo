@@ -1,5 +1,7 @@
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
+
+import messages from "@/messages/es/week.json";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
@@ -20,12 +22,22 @@ const thisMonday = shift(today, -((civilDateToDate(today).getUTCDay() + 6) % 7))
 const lastMonday = shift(thisMonday, -7);
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
+const FULL_MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
 function rangeOf(monday: string): string {
   const sunday = shift(monday, 6);
-  const part = (day: string, withMonth: boolean) =>
-    `${Number(day.slice(8, 10))}${withMonth ? ` ${MONTHS[Number(day.slice(5, 7)) - 1]}` : ""}`;
-  const crosses = monday.slice(0, 7) !== sunday.slice(0, 7);
-  return `Del ${part(monday, crosses)} al ${part(sunday, crosses)}`;
+  const day = (d: string) => String(Number(d.slice(8, 10)));
+  const name = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
+  if (monday.slice(0, 7) !== sunday.slice(0, 7)) {
+    return messages.range.replace("{start}", `${day(monday)} ${name(monday)}`).replace("{end}", `${day(sunday)} ${name(sunday)}`);
+  }
+  return messages.rangeWithMonth
+    .replace("{start}", day(monday))
+    .replace("{end}", day(sunday))
+    .replace("{month}", FULL_MONTHS[Number(sunday.slice(5, 7)) - 1]);
 }
 
 const GOAL = "Inglés semana";
@@ -124,12 +136,18 @@ test("the phone footer names the partial apart from «hechos» and draws the fou
     await withPage(browser, baseURL, person, 390, async (page) => {
       await page.goto(`/semana?semana=${lastMonday}`);
       await expect(markOf(page, lastMonday)).toHaveAttribute("data-state", "partial");
-      // One 30 of 30 day, one 29 of 30: «hechos 1 de 7 · 1 en parte».
-      await expect(page.getByText("de 7 · 1 en parte", { exact: true })).toBeVisible();
-      // The figure is the done count alone: the partial day is not added to it.
-      const rest = page.getByText("de 7 · 1 en parte", { exact: true });
-      await expect(rest.locator("xpath=preceding-sibling::*[1]")).toHaveText("1");
-      await expect(rest.locator("xpath=preceding-sibling::*[2]")).toHaveText("hechos");
+      // One 30 of 30 day, one 29 of 30; the figures come from the catalogue.
+      const sum = page.locator("p").filter({ hasText: /^hechos \d+ de \d+ · \d+ en parte$/ }).filter({ visible: true });
+      await expect(sum).toHaveText(
+        messages.table.footerPartial.replace(/<\/?fig>/g, "").replace("{done}", "1").replace("{total}", "7").replace("{partial}", "1"),
+      );
+      // Only the figures are mono; the words stay Archivo.
+      await expect(sum.locator("span")).toHaveCount(3);
+      const family = (loc: Locator) => loc.evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(await family(sum)).not.toBe(await family(sum.locator("span").first()));
+      expect(await family(sum.locator("span").first())).toMatch(/mono/i);
+      expect(await family(sum)).not.toMatch(/mono/i);
+      await expect(page.getByText(/hechos/i).filter({ visible: true })).toHaveCount(1);
       const legend = page.getByTestId("week-legend");
       await expect(legend).toBeVisible();
       for (const word of ["hecho", "por evidencia", "en parte", "pendiente"]) {
@@ -205,7 +223,8 @@ for (const width of [390, 1280]) {
         // The key of the half dot shows on the phone even with no daily partial.
         if (width === 390) {
           await expect(page.getByTestId("week-legend").getByText("en parte", { exact: true })).toBeVisible();
-          await expect(page.getByText("en parte", { exact: false }).filter({ hasText: /de \d+ · / })).toHaveCount(0);
+          // The row asks all seven days, so the footer's sum counts it and names its partial (RP-01, RP-16).
+          await expect(page.getByText("hechos 0 de 7 · 1 en parte", { exact: true }).filter({ visible: true })).toHaveCount(1);
         }
       });
     } finally {
@@ -213,3 +232,41 @@ for (const width of [390, 1280]) {
     }
   });
 }
+
+// The phone footer counts the days that have come: a partial day still to come
+// is no partial yet (RP-16).
+async function seedDailyQuantity(db: postgres.Sql, person: Person, partialDays: string[]) {
+  const goalId = await seed(db, person, 40);
+  const [commitment] = await db<{ id: string }[]>`
+    select id from goals.commitments where goal_id = ${goalId}
+  `;
+  for (const day of partialDays) {
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${person.id}, ${goalId}, ${commitment.id}, ${day}::date, 29)
+    `;
+  }
+  return goalId;
+}
+
+test("at 390 the footer counts today's partial and not a partial day still to come (RP-16)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  const elapsed = ((civilDateToDate(today).getUTCDay() + 6) % 7) + 1;
+  test.skip(elapsed === 7, "domingo: no hay día por venir en la semana; m72 no se alcanza");
+  const goalId = await seedDailyQuantity(db, person, [today, shift(today, 1), shift(today, 2)]);
+  try {
+    await withPage(browser, baseURL, person, 390, async (page) => {
+      await page.goto(`/semana?semana=${thisMonday}`);
+      await expect(markOf(page, today)).toHaveAttribute("data-state", "partial");
+      await expect(
+        page.getByText(`hechos 0 de ${elapsed} · 1 en parte`, { exact: true }).filter({ visible: true }),
+      ).toHaveCount(1);
+    });
+  } finally {
+    await db`delete from goals.goals where id = ${goalId}`;
+  }
+});

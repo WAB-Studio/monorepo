@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 
-import { expect, test } from "./fixtures";
+import { confirmCopy, expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 import postgres from "postgres";
@@ -10,6 +10,7 @@ import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 import { verifyMagicLink } from "../lib/auth/verify-magic-link";
 import { DATABASE_VERSION } from "../lib/log/record";
+import { SYNC_DAILY_ROW_CAP } from "../lib/sync/protocol";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
 
@@ -72,6 +73,9 @@ async function seedLocalDatabase(
             request.transaction!
               .objectStore("lookups")
               .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
+          }
+          if (event.oldVersion < 3) {
+            request.transaction!.objectStore("lookups").createIndex("headword", "headword");
           }
         };
         request.onsuccess = () => {
@@ -261,8 +265,10 @@ test("RL-14: the word-path guard holds with the sync driver mounted in the layou
   const stray = requestsWhileTyping.filter((url) => !url.includes("/api/word/"));
   expect(stray, `requests foreign to decoration: ${JSON.stringify(stray)}`).toEqual([]);
 
-  // One settled word, never one request per keystroke.
+  // One settled word, never one request per keystroke — and not none: a
+  // decoration that never fires would pass a ceiling alone.
   const decoration = requestsWhileTyping.filter((url) => url.includes("/api/word/"));
+  expect(decoration.length, `decoration requests: ${JSON.stringify(decoration)}`).toBeGreaterThanOrEqual(1);
   expect(decoration.length).toBeLessThanOrEqual(2);
 });
 
@@ -287,6 +293,8 @@ test("RL-24: the copy fires on hide, never on a keystroke, and the request lands
       pulledThroughCursor: null,
       lastSyncedAt: null,
       enabled: true,
+      readerId: null,
+      retired: false,
     },
     lookups: [
       {
@@ -335,6 +343,9 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
   const readerEmail = `harness-reader-${readerId}@example.invalid`;
   const ownDeviceId = randomUUID();
   const foreignDeviceId = randomUUID();
+  // The server stores codes; the screen paints the words (RL-52, RNL-02).
+  const ownCode = "firefox:linux";
+  const foreignCode = "chrome:android";
   const ownLabel = "Firefox en Linux";
   const foreignLabel = "Chrome en Android";
 
@@ -368,8 +379,8 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
     // `foreign`'s `last_seen_at` is the more recent of the two, so the
     // server's own `order by last_seen_at desc` always lists it first.
     await sql`insert into reading.devices (user_id, device_id, label, last_seen_at) values
-      (${readerId}, ${ownDeviceId}, ${ownLabel}, now() - interval '1 hour'),
-      (${readerId}, ${foreignDeviceId}, ${foreignLabel}, now())`;
+      (${readerId}, ${ownDeviceId}, ${ownCode}, now() - interval '1 hour'),
+      (${readerId}, ${foreignDeviceId}, ${foreignCode}, now())`;
 
     // Lands a real session the way `mint-reader-session.ts` proved: a hash in
     // both `auth.users.recovery_token` and a matching `auth.one_time_tokens`
@@ -385,10 +396,10 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
       values
         (${randomUUID()}, ${readerId}, 'recovery_token', ${hash}, ${readerEmail}, now(), now())`;
 
-    // `/registro` never reads `sync`, so seeding it here cannot race the
-    // account screen's own mount effect the way seeding it on `/cuenta` would.
-    await page.goto("/registro");
-    await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
+    // Seeded from `/`: `/cuenta` and `/registro` both read `sync` on mount and
+    // would race this write.
+    await page.goto("/");
+    await expect(page.getByRole("textbox", { name: messages.search.label })).toBeVisible();
 
     await seedLocalDatabase(page, {
       sync: {
@@ -397,6 +408,8 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
         pulledThroughCursor: null,
         lastSyncedAt: null,
         enabled: true,
+        readerId: null,
+        retired: false,
       },
       lookups: Array.from({ length: 3 }, (_, index) => ({
         schema: 2,
@@ -445,6 +458,25 @@ test("RL-24: retiring a device drops its rows from the copy, never from the loca
 
     const recordsAfter = await countLocalRecords(page);
     expect(recordsAfter).toBe(recordsBefore);
+
+    // The retired device does not come back: not on the next list, and not
+    // through a round of its own either. This device never confirmed a copy
+    // for this reader (`readerId: null`), so opening /cuenta pulls nothing.
+    const openRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/log/sync")) openRequests.push(request.url());
+    });
+    await page.reload();
+    await expect(page.getByText(ownLabel)).toBeVisible();
+    await expect(page.getByText(foreignLabel)).toHaveCount(0);
+    await page.waitForTimeout(1500);
+    expect(openRequests, `pulls on opening an unconfirmed /cuenta: ${JSON.stringify(openRequests)}`).toHaveLength(0);
+    const syncAttempt = await page.request.post("/api/log/sync", { data: oneRowRound(foreignDeviceId) });
+    expect(syncAttempt.status()).toBe(409);
+    const [{ foreignRows }] = await sql<{ foreignRows: number }[]>`
+      select count(*)::int as "foreignRows" from reading.lookups
+      where user_id = ${readerId} and device_id = ${foreignDeviceId}`;
+    expect(foreignRows, "the retired device's rows returned to the copy").toBe(0);
   } finally {
     await sql`delete from harness.identities where user_id = ${readerId}`;
     await sql`delete from auth.users where id = ${readerId}`;
@@ -558,7 +590,7 @@ test("RL-24: a request whose top-level deviceId disagrees with its rows never se
   }
 });
 
-test("RL-30: opening /cuenta with a fresh session turns the copy on and fires it, with no button and no counts drawn", async ({
+test("RL-52: opening /cuenta with a fresh session copies nothing; the tap turns the copy on for that reader and fires it", async ({
   page,
 }) => {
   test.setTimeout(45_000);
@@ -571,23 +603,34 @@ test("RL-30: opening /cuenta with a fresh session turns the copy on and fires it
   try {
     await signInAs(page, hash);
 
-    // The one round trip `syncNow()` makes even with nothing local to push:
-    // a fresh device still pulls whatever the account already holds.
-    // `lastSyncedAt` is only written once the response lands (`driver.ts`'s
-    // own `writeSyncState` call), so this waits for the response, not the
-    // request going out.
-    const syncResponse = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
+    const syncRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/log/sync")) syncRequests.push(request.url());
+    });
+
     await page.goto("/cuenta");
     await expect(page.getByRole("heading", { name: messages.account.title })).toBeVisible();
+    await page.waitForTimeout(1500);
+    // The mount alone neither turns the copy on nor sends: RL-30's behaviour is gone.
+    expect(syncRequests, `requests before the tap: ${JSON.stringify(syncRequests)}`).toHaveLength(0);
+    const before = await readSyncRow(page);
+    expect(before?.enabled ?? false, `sync row before the tap: ${JSON.stringify(before)}`).toBe(false);
+
+    // The one round trip `syncNow()` makes even with nothing local to push:
+    // a fresh device still pulls whatever the account already holds.
+    // `lastSyncedAt` is only written once the response lands.
+    const syncResponse = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
+    await confirmCopy(page);
     await syncResponse;
     await page.waitForTimeout(500);
 
     const row = await readSyncRow(page);
     expect(row?.enabled, `sync row: ${JSON.stringify(row)}`).toBe(true);
+    expect(row?.readerId, `sync row: ${JSON.stringify(row)}`).toBe(readerId);
     expect(row?.lastSyncedAt, `sync row: ${JSON.stringify(row)}`).not.toBeNull();
+    expect(syncRequests).toHaveLength(1);
 
-    // RL-23's consent button is gone, not hidden: no control ever names two
-    // figures for the reader to weigh.
+    // RL-23's consent button stays gone: no control names two figures to weigh.
     await expect(page.getByRole("button", { name: /suben.*bajan/ })).toHaveCount(0);
   } finally {
     await dropReaderIdentity(sql, readerId);
@@ -596,7 +639,7 @@ test("RL-30: opening /cuenta with a fresh session turns the copy on and fires it
   }
 });
 
-test("RL-30, RNL-09: signing out disables the copy, drops the box's stored query, and a later hidden tab reaches /api/log/sync no more", async ({
+test("RL-52, RNL-09: signing out disables the copy, drops the box's stored query, and a later hidden tab reaches /api/log/sync no more", async ({
   page,
 }) => {
   test.setTimeout(45_000);
@@ -609,10 +652,22 @@ test("RL-30, RNL-09: signing out disables the copy, drops the box's stored query
   try {
     await signInAs(page, hash);
 
-    const firstSync = page.waitForRequest((request) => request.url().includes("/api/log/sync"));
+    const firstSync = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
     await page.goto("/cuenta");
+    await confirmCopy(page);
     await firstSync;
     await page.waitForTimeout(500);
+
+    // Opening /cuenta again with the copy confirmed pulls exactly once.
+    const reopenRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/log/sync")) reopenRequests.push(request.url());
+    });
+    const reopened = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
+    await page.reload();
+    await reopened;
+    await page.waitForTimeout(1500);
+    expect(reopenRequests, `pulls on reopening: ${JSON.stringify(reopenRequests)}`).toHaveLength(1);
 
     // The leak the module 8 validator drove: a word looked up before
     // signing out must not pre-fill `Buscar` for whoever opens this tab
@@ -627,6 +682,8 @@ test("RL-30, RNL-09: signing out disables the copy, drops the box's stored query
 
     const row = await readSyncRow(page);
     expect(row?.enabled, `sync row after sign-out: ${JSON.stringify(row)}`).toBe(false);
+    // The same reader coming back confirms and keeps their device and cursors.
+    expect(row?.readerId, `sync row after sign-out: ${JSON.stringify(row)}`).toBe(readerId);
 
     const syncRequests: string[] = [];
     page.on("request", (request) => {
@@ -735,4 +792,82 @@ test("RL-49: verifyMagicLink calls verifyOtp exactly once and names the reason, 
   }, undefined);
   expect(successCalls, "verifyOtp calls for a successful verification").toBe(1);
   expect(success).toEqual({ ok: true, user: { id: "reader-1" } });
+});
+
+function oneRowRound(deviceId: string) {
+  return {
+    deviceId,
+    since: null,
+    rows: [
+      {
+        deviceId,
+        localId: 1,
+        at: Date.now(),
+        text: "status-guard",
+        normalised: "status-guard",
+        kind: "word",
+        outcome: "miss",
+        headword: null,
+        rule: null,
+        senses: 0,
+        translation: null,
+        dictionaryReady: true,
+        origin: null,
+        recordSchema: DATABASE_VERSION,
+      },
+    ],
+  };
+}
+
+test("RL-24: a round from a retired device answers 409 retired and writes nothing", async ({ page }) => {
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const runId = await openRun("e2e", sql);
+  const { id: readerId, hash } = await mintReaderIdentity(sql, runId);
+  const retired = randomUUID();
+
+  try {
+    await sql`insert into reading.devices (user_id, device_id, label, retired_at)
+      values (${readerId}, ${retired}, 'unknown:unknown', now())`;
+    await signInAs(page, hash);
+
+    const response = await page.request.post("/api/log/sync", { data: oneRowRound(retired) });
+    expect(response.status()).toBe(409);
+    expect(await response.json()).toEqual({ error: "retired" });
+
+    const [{ count }] = await sql<{ count: string }[]>`
+      select count(*)::text as count from reading.lookups where user_id = ${readerId}`;
+    expect(count).toBe("0");
+  } finally {
+    await dropReaderIdentity(sql, readerId);
+    await closeRun(sql);
+    await sql.end();
+  }
+});
+
+test("RL-22: a round past the reader's daily row cap answers 429 quota and writes nothing", async ({ page }) => {
+  const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const runId = await openRun("e2e", sql);
+  const { id: readerId, hash } = await mintReaderIdentity(sql, runId);
+  const seeded = randomUUID();
+
+  try {
+    // Today's full cap, already received from another of the reader's devices.
+    await sql`insert into reading.lookups
+      (user_id, device_id, local_id, at, text, normalised, kind, outcome, senses, dictionary_ready, record_schema)
+      select ${readerId}::uuid, ${seeded}::uuid, n, now(), 'x', 'x', 'word', 'exact', 0, true, ${DATABASE_VERSION}::smallint
+      from generate_series(1, ${SYNC_DAILY_ROW_CAP}::int) as n`;
+    await signInAs(page, hash);
+
+    const response = await page.request.post("/api/log/sync", { data: oneRowRound(randomUUID()) });
+    expect(response.status()).toBe(429);
+    expect(await response.json()).toEqual({ error: "quota" });
+
+    const [{ count }] = await sql<{ count: string }[]>`
+      select count(*)::text as count from reading.lookups where user_id = ${readerId}`;
+    expect(count).toBe(String(SYNC_DAILY_ROW_CAP));
+  } finally {
+    await dropReaderIdentity(sql, readerId);
+    await closeRun(sql);
+    await sql.end();
+  }
 });

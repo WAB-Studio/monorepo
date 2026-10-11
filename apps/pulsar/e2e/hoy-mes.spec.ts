@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
-// `HoyMes.dc.html`, `HoyMesBajo.dc.html` (module 135): Hoy says each goal's
+// `HoyMes.dc.html`, `HoyMesBajo.dc.html`: Hoy says each goal's
 // month amount in hours and minutes, and from the 20th a goal under 60 % says
 // its pace. The pace branch follows the clock the app reads, so both branches
 // are written and the one true today is asserted.
@@ -108,7 +108,12 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     // 90 this week, or the whole 405 in the first days of a month.
     const inWeek = weekOf(today).includes(monthStart);
     await lines(inWeek ? 1 : 0);
-    if (!inWeek) await expect(seen("1 h 30 min")).toHaveCount(1);
+    if (!inWeek) {
+      // Two honest places: the card's week figure and the done row's own line
+      // «1 h 30 min · 19:52 · lo dijiste tú», a mono figure since 367.
+      await expect(seen("1 h 30 min")).toHaveCount(2);
+      await expect(seen("esta semana").locator("xpath=preceding-sibling::*[1]").filter({ hasText: /^1 h 30 min$/ })).toHaveCount(1);
+    }
 
     // Never on a past day (the ended line's own guard).
     await page.goto(`/dia/${plusDays(-1)}`);
@@ -123,7 +128,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
   }
 });
 
-// `HoyTareaMes.dc.html` (module 177, RP-31): under «este mes» each goal's line
+// `HoyTareaMes.dc.html` (RP-31): under «este mes» each goal's line
 // is followed by its next task of the month, its estimate and a mark that
 // completes it; the next one takes its place.
 test("Hoy draws the goal's next task of the month under its line, completes it, and draws none on a past day", async ({

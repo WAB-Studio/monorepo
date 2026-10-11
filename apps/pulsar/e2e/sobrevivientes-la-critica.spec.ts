@@ -5,9 +5,7 @@ import { addWeeksToCivilDate, civilDateToDate, dateToCivilDate, todayInZone, wee
 
 import { test, expect } from "./fixtures";
 
-// Assertions the mutator's survivors of «la crítica» slice (2026-09-28) asked
-// for, written from the contract. Every row is seeded under this identity and
-// deleted by id in `finally`.
+// Every row is seeded under this identity and deleted by id in `finally`.
 // Paths by day: none; the goals open 6 and 3 days before today, in any week.
 
 function shiftDay(day: string, days: number): string {
@@ -243,7 +241,7 @@ test("the goal screen reads its last day, the Sunday before the horizon (RP-11)"
   }
 });
 
-test("dating a dayless one-off offers no «sin día» and no date before today (RP-21, RP-19)", async ({
+test("dating a dayless one-off offers no «sin día» and no date before today (RP-59, RP-19)", async ({
   page,
   db,
   personId,
@@ -255,6 +253,7 @@ test("dating a dayless one-off offers no «sin día» and no date before today (
   try {
     await page.goto("/sueltas");
     await page.getByRole("button", { name, exact: true }).click();
+    await page.getByRole("button", { name: "Darle un día" }).click();
     await expect(page.getByRole("radio", { name: "hoy" })).toBeVisible();
     await expect(page.getByRole("radio", { name: "sin día" })).toHaveCount(0);
 

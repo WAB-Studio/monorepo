@@ -12,9 +12,4 @@
     gap: 10px;
     margin-block-start: 8px;
   }
-
-  /* Outranks the button's own full-width rule. */
-  .actions.actions.actions > * {
-    inline-size: auto;
-  }
 }

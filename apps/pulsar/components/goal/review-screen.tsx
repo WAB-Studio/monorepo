@@ -1,11 +1,18 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { civilDateToDate } from "@/lib/zone";
+import { shortMonth } from "@/lib/dates/short-month";
 import { loadGoal } from "@/lib/queries/goal";
-import { Page, ScreenHeader, Table, Text, type TableRow } from "@/components/ui";
+import { isTimeUnit } from "@/lib/units/time";
+import { Page, ScreenHeader, Section, Table, Text, type TableRow } from "@/components/ui";
 
-const spanFormat = new Intl.DateTimeFormat("es", { day: "numeric", month: "short", timeZone: "UTC" });
+// «21–27 sep», «31 ago–6 sep».
+function weekSpan(startsOn: string, endsOn: string): string {
+  const startDay = Number(startsOn.slice(8, 10));
+  const endDay = Number(endsOn.slice(8, 10));
+  if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return `${startDay}–${endDay} ${shortMonth(endsOn)}`;
+  return `${startDay} ${shortMonth(startsOn)}–${endDay} ${shortMonth(endsOn)}`;
+}
 
 /**
  * `RevisionAncha.dc.html` (RP-17): the goal's own
@@ -31,9 +38,11 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
     return (
       <Page width="full">
         <ScreenHeader title={t("goal.review.title")} back={back} />
-        <Text as="p" tone="secondary">
-          {t("goal.review.noMeasure")}
-        </Text>
+        <Section as="div">
+          <Text as="p" variant="sentence">
+            {t("goal.review.noMeasure")}
+          </Text>
+        </Section>
       </Page>
     );
   }
@@ -45,13 +54,15 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
     t("goal.review.columns.note"),
   ];
 
-  const rows: TableRow[] = goal.weeks.map((week) => {
+  // The phase is named where it starts, not on every week it spans.
+  const rows: TableRow[] = goal.weeks.map((week, index) => {
+    const phase = week.phaseName !== goal.weeks[index - 1]?.phaseName ? (week.phaseName ?? "") : "";
     const note = week.current ? t("goal.review.current") : "";
     return {
       key: String(week.index),
-      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, week.phaseName ?? "", note],
+      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, phase, note],
       note: note || undefined,
-      detail: spanFormat.formatRange(civilDateToDate(week.startsOn), civilDateToDate(week.endsOn)),
+      detail: weekSpan(week.startsOn, week.endsOn),
     };
   });
 
@@ -59,11 +70,12 @@ export async function ReviewScreen({ goalId }: { goalId: string }) {
 
   return (
     <Page width="full">
-      <ScreenHeader
-        title={t("goal.review.title")}
-        back={back}
-        meta={t("goal.review.measure", { unit: goal.measureUnit })}
-      />
+      <ScreenHeader title={t("goal.review.title")} back={back} />
+      <Text as="p" variant="sentence">
+        {isTimeUnit(goal.measureUnit)
+          ? t("goal.review.measureTime")
+          : t("goal.review.measure", { unit: goal.measureUnit })}
+      </Text>
       <Table
         caption={t("goal.review.caption")}
         columns={columns}

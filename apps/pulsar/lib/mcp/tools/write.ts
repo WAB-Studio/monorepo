@@ -1,13 +1,12 @@
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { acceptShift } from "@/app/actions/shift";
 import { setMonthBudget } from "@/app/actions/budgets";
 import { declareFact } from "@/app/actions/facts";
 import {
   completeOneOff,
   createOneOff,
-  moveTaskToMonth,
+  fixTask,
   scheduleOneOff,
   setOneOffNote,
 } from "@/app/actions/one-offs";
@@ -19,6 +18,7 @@ import {
   renameGoal,
   retireCommitment,
 } from "@/app/actions/plan";
+import { pgCode } from "@/lib/db-error";
 import { errorOf } from "@/lib/mcp/errors";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
 import { actAs } from "@/lib/session";
@@ -57,8 +57,8 @@ async function run(ctx: ServerContext, act: () => Promise<ActResult>): Promise<C
   try {
     return answer(await actAs(person, act));
   } catch (error) {
-    // The cause stays in the server's log; the caller reads only the sentence.
-    console.error("mcp write tool failed:", error instanceof Error ? error.message : String(error));
+    // The name and the SQLSTATE only: a driver's message carries the query and its parameters (RNP-15).
+    console.error("mcp write tool failed:", error instanceof Error ? error.name : "unknown", pgCode(error) ?? "");
     return answer({ ok: false, error: "mcp.errors.unknown" });
   }
 }
@@ -95,7 +95,6 @@ export function registerWriteTools(server: McpServer): void {
       one_off_id: id.optional(),
       quantity: count.optional(),
       note: text.optional(),
-      replace: z.boolean().optional(),
       day: day.optional(),
     },
     (input) => declareFact(input as Parameters<typeof declareFact>[0]),
@@ -115,6 +114,7 @@ export function registerWriteTools(server: McpServer): void {
       planned_month: month.optional(),
       parent_id: id.optional(),
       note: text.optional(),
+      in_plan: z.boolean().optional(),
     },
     // The schema takes a missing day as a refusal; a task with none is dayless.
     (input) => createOneOff({ day: null, ...input } as Parameters<typeof createOneOff>[0]),
@@ -164,12 +164,13 @@ export function registerWriteTools(server: McpServer): void {
     moveHorizon(input as Parameters<typeof moveHorizon>[0]),
   );
 
-  tool("accept_shift", { goal_id: id, month }, (input) =>
-    acceptShift(input as Parameters<typeof acceptShift>[0]),
+  // Fixing never changes the goal's rhythm (RP-56): the act takes a task and a month alone.
+  tool("fix_task", { one_off_id: id, month }, (input) =>
+    fixTask({ oneOffId: input.oneOffId, month: input.month } as Parameters<typeof fixTask>[0]),
   );
 
-  tool("move_task_to_month", { one_off_id: id, month }, (input) =>
-    moveTaskToMonth(input as Parameters<typeof moveTaskToMonth>[0]),
+  tool("unfix_task", { one_off_id: id }, (input) =>
+    fixTask({ oneOffId: input.oneOffId, month: null } as Parameters<typeof fixTask>[0]),
   );
 
   tool("create_goal", { name: text, horizon: day }, (input) =>

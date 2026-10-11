@@ -20,15 +20,14 @@ export type ScheduleSheetProps = {
   onOpenChange: (open: boolean) => void;
   oneOffId: string;
   name: string;
-  onDelete: () => void;
   // Set for a one-off that already has a day: the sheet moves it instead of
   // giving it one (`SueltaMover.dc.html`).
   current?: { day: string; label: string };
 };
 
 /**
- * `SueltaDarDia.dc.html` (RP-21): «para cuándo» without «sin día», the way
- * to give the one-off that day, and the way to the delete sheet. With
+ * `SueltaDarDia.dc.html` (RP-59): «para cuándo» without «sin día» and the way
+ * to give the one-off that day; deleting lives in its own sheet. With
  * `current` it is `SueltaMover.dc.html`: the day it has now, «Moverla».
  */
 export function ScheduleSheet({
@@ -36,13 +35,18 @@ export function ScheduleSheet({
   onOpenChange,
   oneOffId,
   name,
-  onDelete,
   current,
 }: ScheduleSheetProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [choice, setChoice] = useState<DayChoiceValue>(
-    current ? { kind: "other", date: current.day } : DEFAULT_DAY_CHOICE,
+    !current
+      ? DEFAULT_DAY_CHOICE
+      : current.day > todayInZone()
+        ? { kind: "other", date: current.day }
+        : current.day === todayInZone()
+          ? { kind: "tomorrow", date: current.day }
+          : { kind: "today", date: current.day },
   );
   const [error, setError] = useState<MessageKey | null>(null);
 
@@ -87,11 +91,14 @@ export function ScheduleSheet({
           setError(null);
         }}
         allowNone={false}
+        // A task of today has no «hoy» to move to; a carried one does, and
+        // a later one (`/sueltas`) keeps it.
+        allowToday={!current || current.day !== todayInZone()}
         min={todayInZone()}
         error={dateError}
       />
       {otherError ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" tone="muted" variant="sentence">
           {t(otherError)}
         </Text>
       ) : null}
@@ -103,11 +110,6 @@ export function ScheduleSheet({
           {t(current ? "oneOffs.schedule.stay" : "oneOffs.schedule.keep")}
         </Button>
       </SheetActions>
-      <Button tap={44} variant="ghost" onClick={onDelete} disabled={pending}>
-        <Text variant="meta" tone="muted">
-          {t("oneOffs.schedule.delete")}
-        </Text>
-      </Button>
     </Sheet>
   );
 }

@@ -94,6 +94,9 @@ async function seedRows(page: Page, count: number): Promise<void> {
               .objectStore("lookups")
               .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
           }
+          if (event.oldVersion < 3) {
+            request.transaction!.objectStore("lookups").createIndex("headword", "headword");
+          }
         };
         request.onsuccess = () => {
           const db = request.result;
@@ -167,7 +170,7 @@ test("10,003 rows export whole, and the file round-trips through JSON exactly", 
   // The envelope stays at 1 and the row schema moves with the store: a reader
   // that only knows version 1 still parses the file (plan, decision 10).
   expect(exported.exportSchema).toBe(1);
-  expect(exported.recordSchema).toBe(2);
+  expect(exported.recordSchema).toBe(3);
   expect(typeof exported.exportedAt).toBe("number");
   expect(exported.rows).toHaveLength(10_003);
   expect(exported.rows).toEqual(rawRows);
@@ -185,6 +188,10 @@ test("the nav reaches /registro, which counts what was searched and exports it",
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("apple");
+  // A lookup is recorded only once its answer has settled: clearing the box
+  // earlier supersedes the query before it resolves, and nothing is logged.
+  // Under load the answer lands tens of milliseconds after the next fill.
+  await expect(page.getByRole("heading", { name: "apple" })).toBeVisible();
   await searchBox.fill("");
   await page.waitForTimeout(300);
 
@@ -268,5 +275,6 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
 
   // One settled word, never one request per keystroke.
   const decoration = requestsWhileTyping.filter((url) => url.includes("/api/word/"));
+  expect(decoration.length, "decoration never asked").toBeGreaterThanOrEqual(1);
   expect(decoration.length).toBeLessThanOrEqual(2);
 });

@@ -39,7 +39,7 @@
  * too (and, as it happens, also breaks the no-session guard, which is what
  * `P34` below catches). `verifiedClaims` is the one thing genuinely out of
  * reach here — it needs `next/headers`'s `cookies()`, which throws outside a
- * request (the same wall module 3's own validator hit for orbit) — so
+ * request (the same wall orbit hit) — so
  * `@repo/supabase-auth` is mocked with `node:test`'s `mock.module`
  * (`--experimental-test-module-mocks`, the same flag `check:unit` already
  * runs under) to hand back a canned session without ever calling
@@ -96,7 +96,7 @@ async function attempt(
 }
 
 // The same shape as `attempt`, keeping the rows a successful statement
-// `returning`s — module 37's own checks need to read back what a rename or
+// `returning`s — the rename and archive checks need to read back what a rename or
 // an archive actually wrote, not only whether it was refused. Also what
 // keeps this suite from crashing outright when run *before* `0004` is
 // applied: `archived_at` does not exist yet, so a bare `update ... set
@@ -159,7 +159,7 @@ type Fixtures = {
 
 // One row of each of the four nouns, plus a phase, for a subject already
 // settled into its own context — enough for every cross-identity check below,
-// `phases` and `commitments` included (module 27's hole: "driven through the
+// `phases` and `commitments` included ("driven through the
 // door at all").
 async function seedFixtures(tx: postgres.TransactionSql, userId: string): Promise<Fixtures> {
   const [goal] = await tx<{ id: string }[]>`
@@ -232,7 +232,7 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
       assert("P05", foreignOneOff.length === 0, `another person's one-off, rows visible = ${foreignOneOff.length}`);
 
       // -- cross-identity INSERT refused by `WITH CHECK`, one per owned table:
-      // module 21 named this for `facts` alone, module 27's hole names it as
+      // it was first named for `facts` alone, then as
       // structurally unseen everywhere else `WITH CHECK` also guards --
       const insertGoal = await attempt(
         tx,
@@ -305,7 +305,7 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
       );
 
       // `phases` holds a `phases_delete_self` policy but no `UPDATE` grant at
-      // all — driving it for real, per module 27's hole, is what turns that
+      // all — driving it for real, is what turns that
       // gap from a claim in the migration into a measurement.
       const updatePhase = await attempt(tx, (sp) => sp`update goals.phases set aim = 'cambiada' where id = ${a.phaseId}`);
       assert("P14", updatePhase.code === "42501", `update a phase at all, sqlstate = ${updatePhase.code ?? "none"}`);
@@ -320,7 +320,7 @@ async function checkPoliciesAndGrants(sql: postgres.Sql): Promise<void> {
         `update goal's measure pair, sqlstate = ${updateGoalMeasure.code ?? "none (succeeded)"}`,
       );
 
-      // Module 37 (RP-23): `name` is now grantable to the owner alone — the
+      // RP-23: `name` is now grantable to the owner alone — the
       // grant `0004_melodic_dreadnoughts.sql` adds, proved here rather than
       // only in `checkGoalRenameArchiveGrant` below, so a regression to
       // "column not granted" still turns this very P-number red. Red before
@@ -482,7 +482,7 @@ async function checkSettleMechanism(): Promise<void> {
 
   // Without a session: the guard must throw before `sql.begin` ever runs, so
   // zero statements reach the wire — read from this pool's own instrumented
-  // log, not inferred from a flat log's first "begin" (module 27's hole:
+  // log, not inferred from a flat log's first "begin" (
   // that method cannot tell one transaction's statements from another's).
   const sentBefore = wire.length;
   let threw = false;
@@ -501,7 +501,7 @@ async function checkSettleMechanism(): Promise<void> {
   await sql.end();
 }
 
-// Module 27's hole: a statement count must read its own connection, not
+// a statement count must read its own connection, not
 // assume the first "begin" in a merged log belongs to the transaction under
 // test. Two real, concurrently open connections (`max: 1` each, run
 // interleaved) prove the technique: every entry in one client's own debug log
@@ -559,7 +559,7 @@ async function checkStatementAttributionByConnection(): Promise<void> {
   await sqlB.end();
 }
 
-// Module 27's hole: the real `@supabase/supabase-js` client, not a stub whose
+// the real `@supabase/supabase-js` client, not a stub whose
 // notion of "verified" is an environment variable.
 async function checkRealClientRejectsBadTokens(): Promise<void> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -650,9 +650,9 @@ async function checkRealDoor(): Promise<void> {
 
 // Read the grant back from the catalogue, never from the migration file:
 // `facts` carried DELETE from 0000 ("undoing a tap is a delete of the whole
-// row"), `one_offs` from module 25 and `month_budgets` from 0007 (a month
+// row"), `one_offs` from its own migration and `month_budgets` from 0007 (a month
 // amount is removed, and moved by delete and insert). `goals`, `phases`,
-// `commitments`, `month_shifts` and `model_calls` carry none. Takes any
+// `commitments` and `model_calls` carry none. Takes any
 // executor so a mutant run can read it inside its own rollback.
 async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
   const grants = await q<{ table_name: string }[]>`
@@ -666,7 +666,7 @@ async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Pr
   );
 }
 
-// Module 25's own grant (RP-22): `one_offs_delete_self` (0000) stood inert
+// RP-22: `one_offs_delete_self` (0000) stood inert
 // until this migration's `GRANT DELETE`. Own connection, own transaction,
 // own forced rollback — nothing this seeds survives it, the same shape as
 // `checkPoliciesAndGrants`.
@@ -725,12 +725,10 @@ async function checkOneOffDeleteGrant(): Promise<void> {
   await sql.end();
 }
 
-// Round 2, 2026-09-28: an independent validator drove a bare `DELETE` under
-// a settled session, no server action in the way, and an own one-off that
-// carried a fact went — the invariant lived in `deleteOneOff`'s own check
-// alone, never in the grant layer. `one_offs_delete_self`'s own `USING`
-// (migration 0002) is what closes that: this drives the very same bare
-// statement the validator did, never `deleteOneOff`, so a regression in any
+// The invariant "an own one-off that carries a fact is not deleted" lives in
+// `deleteOneOff`'s own check, not in the grant layer. `one_offs_delete_self`'s
+// `USING` (migration 0002) is what closes that for a bare `DELETE` under a
+// settled session: this drives that statement, never `deleteOneOff`, so a regression in any
 // future writer is caught here too, not only in this app's own action.
 async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
@@ -775,7 +773,7 @@ async function checkOneOffWithFactRefusedByPolicy(): Promise<void> {
   await sql.end();
 }
 
-// Module 37 (RP-23, RP-24): the grant `0004_melodic_dreadnoughts.sql` adds —
+// RP-23, RP-24: the grant `0004_melodic_dreadnoughts.sql` adds —
 // `UPDATE (name, archived_at)` on `goals.goals`, to the owner alone — driven
 // for real rather than read from the migration. Own connection, own
 // transaction, own forced rollback, the same shape as `checkOneOffDeleteGrant`.
@@ -857,7 +855,7 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
       );
 
       // -- the owner cannot move `user_id`, `horizon` or `created_at`
-      // through this grant: neither column is ever named in it (`horizon` left it with module 63) --
+      // through this grant: neither column is ever named in it (`horizon` left it later) --
       await enterUserContext(tx, subject);
       const changeUserId = await attempt(
         tx,
@@ -865,7 +863,7 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
       );
       assert("P46", changeUserId.code === "42501", `owner updates goal.user_id, sqlstate = ${changeUserId.code ?? "none"}`);
 
-      // Module 63 (RP-25) grants `horizon` to the owner: it moves.
+      // (RP-25) grants `horizon` to the owner: it moves.
       const changeHorizon = await attempt(
         tx,
         (sp) => sp`update goals.goals set horizon = '2099-01-01' where id = ${goal.id}`,
@@ -899,9 +897,9 @@ async function checkGoalRenameArchiveGrant(): Promise<void> {
   const updatable = columns.map((row) => row.column_name).sort();
   assert(
     "P49",
-    updatable.length === 5 &&
+    updatable.length === 7 &&
       updatable.join(",") ===
-        ["archived_at", "horizon", "measure_name", "measure_unit", "name"].sort().join(","),
+        ["archived_at", "horizon", "measure_name", "measure_unit", "name", "plan_seen", "rhythm"].sort().join(","),
     `columns of goals.goals updatable by authenticated = ${updatable.join(", ") || "none"}`,
   );
 
@@ -913,7 +911,7 @@ function dayAfter(day: string, n: number): string {
   return civilDateInZone(new Date(civilDateToDate(day).getTime() + n * 86_400_000));
 }
 
-// Module 63 (RP-21, RP-25): `0005` grants `UPDATE (day)` on `one_offs` and
+// RP-59, RP-25: `0005` grants `UPDATE (day)` on `one_offs` and
 // `UPDATE (horizon)` on `goals`, and bounds the one-off's with
 // `one_offs_update_self`. Driven bare under a settled session, own
 // transaction, forced rollback.
@@ -991,7 +989,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set name = 'otro' where id = ${dayless.id}`,
       );
-      assert("P54", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+      assert("P54", renames.code === undefined, `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
 
       const movesHorizon = await attemptRows<{ id: string }>(
         tx,
@@ -1037,16 +1035,17 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
   const oneOffUpdatable = oneOffCols.map((r) => r.column_name).sort();
   assert(
     "P58",
-    oneOffUpdatable.join(",") === "day,note,planned_month",
+    oneOffUpdatable.join(",") === "day,estimate,name,note,planned_month",
     `columns of goals.one_offs updatable by authenticated = ${oneOffUpdatable.join(", ") || "none"}`,
   );
 
   await sql.end();
 }
 
-// Module 73 (RP-21): `one_offs_update_self` lets a one-off dated after the
-// person's Bogota today move, and refuses today, the past, a fact and a
-// stranger. Driven bare under a settled session, forced rollback.
+// A one-off's `day` changes on any row with no fact, dated today, in the past
+// or ahead; a fact or a stranger refuses it. `planned_month` moves only while
+// the row is undated or dated after the person's Bogota today. Driven bare
+// under a settled session, forced rollback.
 async function checkScheduledOneOffMoveByZone(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
   const subject = randomUUID();
@@ -1062,16 +1061,27 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
       await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
 
       await enterUserContext(tx, subject);
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon)
+        values (${subject}, 'meta', '2027-12-31') returning id`;
       const make = async (name: string, day: string): Promise<string> => {
         const [row] = await tx<{ id: string }[]>`
           insert into goals.one_offs (user_id, name, day) values (${subject}, ${name}, ${day}) returning id`;
+        return row.id;
+      };
+      // A month task that also carries a day: the only shape `planned_month` can move on.
+      const makeMonthTask = async (name: string, day: string): Promise<string> => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into goals.one_offs (user_id, goal_id, name, planned_month, day)
+          values (${subject}, ${goal.id}, ${name}, '2026-10-01', ${day}) returning id`;
         return row.id;
       };
       const onToday = await make("hoy", today);
       const yesterday = await make("ayer", dayAfter(today, -1));
       const withFact = await make("con hecho", dayAfter(today, 2));
       await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${withFact}, ${today})`;
-      const onUtcDay = await make("dia utc", utcDay);
+      const monthOnToday = await makeMonthTask("mes hoy", today);
+      const monthOnUtcDay = await makeMonthTask("mes dia utc", utcDay);
 
       await enterUserContext(tx, intruder);
       const [theirs] = await tx<{ id: string }[]>`
@@ -1085,8 +1095,8 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
         );
 
       const cases: [string, string, number][] = [
-        ["P59", onToday, 0],
-        ["P60", yesterday, 0],
+        ["P59", onToday, 1],
+        ["P60", yesterday, 1],
         ["P61", withFact, 0],
         ["P62", theirs.id, 0],
       ];
@@ -1096,31 +1106,36 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
         assert(
           label,
           result.code === undefined && result.rows.length === expected,
-          `own ${what} one-off moves (today = ${today}), sqlstate = ${result.code ?? "none"}, rows = ${result.rows.length}`,
+          `own ${what} one-off takes a day (today = ${today}), expected rows = ${expected}, sqlstate = ${result.code ?? "none"}, rows = ${result.rows.length}`,
         );
       }
 
       // Only when UTC has already turned the page (19:00-24:00 Bogota) does
       // the UTC day differ from Bogota's; otherwise it is today's case again.
       const utcDiffers = utcDay !== today;
-      const utc = await moveRows(onUtcDay);
+      const moveMonth = (id: string) =>
+        attemptRows<{ id: string }>(
+          tx,
+          (sp) => sp`update goals.one_offs set planned_month = '2026-12-01' where id = ${id} returning id`,
+        );
+      const utc = await moveMonth(monthOnUtcDay);
       assert(
         "P63",
         utc.code === undefined && utc.rows.length === (utcDiffers ? 1 : 0),
-        `one-off dated on the UTC day ${utcDay} (Bogota today ${today}, differs = ${utcDiffers}) moves, rows = ${utc.rows.length}`,
+        `month task dated on the UTC day ${utcDay} (Bogota today ${today}, differs = ${utcDiffers}) takes another month, rows = ${utc.rows.length}`,
       );
 
       // The session's own zone moved far east: `current_date` follows it, the
-      // policy must not. Differs from Bogota's day from 05:00 Bogota on.
+      // trigger's month rule must not. Differs from Bogota's day from 05:00 Bogota on.
       await tx`select set_config('TimeZone', 'Pacific/Kiritimati', true)`;
       const [{ far }] = await tx<{ far: string }[]>`select current_date::text as far`;
-      const tomorrow = await make("manana", dayAfter(today, 1));
-      const farToday = await moveRows(onToday);
-      const farTomorrow = await moveRows(tomorrow);
+      const monthTomorrow = await makeMonthTask("mes manana", dayAfter(today, 1));
+      const farToday = await moveMonth(monthOnToday);
+      const farTomorrow = await moveMonth(monthTomorrow);
       assert(
         "P66",
         farToday.rows.length === 0 && farTomorrow.rows.length === 1,
-        `session zone Kiritimati (current_date ${far}, Bogota ${today}): dated today rows = ${farToday.rows.length}, dated Bogota-tomorrow rows = ${farTomorrow.rows.length}`,
+        `session zone Kiritimati (current_date ${far}, Bogota ${today}): month task dated today takes another month, rows = ${farToday.rows.length}; dated Bogota-tomorrow rows = ${farTomorrow.rows.length}`,
       );
       await tx`select set_config('TimeZone', 'UTC', true)`;
 
@@ -1128,7 +1143,7 @@ async function checkScheduledOneOffMoveByZone(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set name = 'otro' where id = ${onToday}`,
       );
-      assert("P64", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+      assert("P64", renames.code === undefined, `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
 
       throw forcedRollback;
     })
@@ -1185,16 +1200,15 @@ async function privilegesOf(
     .join(" ");
 }
 
-// Module 124: what 0007 grants on the three plan tables and on `one_offs`,
+// What 0007 grants on the three plan tables and on `one_offs`,
 // read from the catalogue. Takes any executor so a mutant run can read it
 // inside its own rollback.
 async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.TransactionSql): Promise<void> {
   const expected: [string, string, string][] = [
     ["P108", "month_budgets", "DELETE INSERT(amount,goal_id,month,user_id) SELECT UPDATE(amount)"],
-    ["P109", "month_shifts", "INSERT(goal_id,month,user_id) SELECT"],
     ["P110", "model_calls", "INSERT(model,source,user_id) SELECT UPDATE(input_tokens,outcome,output_tokens)"],
-    // 0008: a phase moves in time with a shift (RP-34) and never changes its aim.
-    ["P113", "phases", "INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT UPDATE(ends_on,starts_on)"],
+    // 0015 took the UPDATE 0008 gave: a phase is written once.
+    ["P113", "phases", "INSERT(aim,ends_on,goal_id,id,starts_on,user_id) SELECT"],
   ];
   for (const [label, table, wanted] of expected) {
     const authenticated = await privilegesOf(q, table, "authenticated");
@@ -1207,27 +1221,31 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
     );
   }
 
+  // 0015 dropped the table with its two grants and its two policies.
+  const [shifts] = await q<{ gone: boolean }[]>`select to_regclass('goals.month_shifts') is null as gone`;
+  assert("P109", shifts.gone, `goals.month_shifts is gone: ${shifts.gone}`);
+
   const oneOffs = await privilegesOf(q, "one_offs", "authenticated");
   assert(
     "P111",
     oneOffs ===
-      "DELETE INSERT(day,estimate,goal_id,id,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,note,planned_month)",
+      "DELETE INSERT(day,estimate,goal_id,id,in_plan,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,estimate,name,note,planned_month)",
     `one_offs: authenticated = ${oneOffs || "none"}`,
   );
 
   const policies = await q<{ tablename: string; count: number }[]>`
     select tablename, count(*)::int as count from pg_policies
-    where schemaname = 'goals' and tablename in ('month_budgets', 'month_shifts', 'model_calls', 'one_offs', 'phases')
+    where schemaname = 'goals' and tablename in ('month_budgets', 'model_calls', 'one_offs', 'phases')
     group by tablename order by tablename`;
   const counts = policies.map((r) => `${r.tablename}=${r.count}`).join(",");
   assert(
     "P112",
-    counts === "model_calls=3,month_budgets=4,month_shifts=2,one_offs=4,phases=4",
+    counts === "model_calls=3,month_budgets=4,one_offs=4,phases=2",
     `policies per table = ${counts || "none"}`,
   );
 }
 
-// Module 124 (RP-28, RP-30, RP-31, RP-34, RNP-13): every rule 0007 writes,
+// RP-28, RP-30, RP-31, RNP-13: every rule 0007 writes,
 // driven bare under a settled session, own transaction, forced rollback. The
 // row-to-row rules on `one_offs` and `facts` live in policies alone, so each
 // refusal below isolates one clause: the parent differs from a good one in
@@ -1342,8 +1360,8 @@ async function checkPlanByMonth(): Promise<void> {
       };
       const parent = await monthTask("padre", goal.id);
       const [datedParent] = await tx<{ id: string }[]>`
-        insert into goals.one_offs (user_id, goal_id, name, planned_month, day)
-        values (${subject}, ${goal.id}, 'padre con dia', '2026-10-01', '2026-10-05') returning id`;
+        insert into goals.one_offs (user_id, goal_id, name, day)
+        values (${subject}, ${goal.id}, 'padre con dia', '2026-10-05') returning id`;
       const [estimatedParent] = await tx<{ id: string }[]>`
         insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
         values (${subject}, ${goal.id}, 'padre con estimado', '2026-10-01', 60) returning id`;
@@ -1426,7 +1444,7 @@ async function checkPlanByMonth(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set estimate = 90 where id = ${childId}`,
       );
-      assert("P88", setsEstimate.code === "42501", `update one_offs.estimate, sqlstate = ${setsEstimate.code ?? "none"}`);
+      assert("P88", setsEstimate.code === undefined, `update one_offs.estimate, sqlstate = ${setsEstimate.code ?? "none"}`);
       const setsParent = await attempt(
         tx,
         (sp) => sp`update goals.one_offs set parent_id = null where id = ${childId}`,
@@ -1466,30 +1484,14 @@ async function checkPlanByMonth(): Promise<void> {
         `delete a parent with undone sub-tasks, rows = ${emptyGoes.count}, sub-tasks left = ${orphans.length}`,
       );
 
-      // -- month_shifts: an act, written once --
-      const [shift] = await tx<{ id: string }[]>`
-        insert into goals.month_shifts (user_id, goal_id, month)
-        values (${subject}, ${goal.id}, '2026-09-01') returning id`;
-      const ownShift = await tx<{ id: string }[]>`select id from goals.month_shifts where id = ${shift.id}`;
-      assert("P95", ownShift.length === 1, `own shift, rows visible = ${ownShift.length}`);
-
-      const shiftTwice = await attempt(
+      // -- month_shifts: gone with 0015, every statement finds no table --
+      const shiftRead = await attempt(tx, (sp) => sp`select id from goals.month_shifts`);
+      assert("P95", shiftRead.code === "42P01", `read a shift, sqlstate = ${shiftRead.code ?? "none"}`);
+      const shiftWrite = await attempt(
         tx,
         (sp) => sp`insert into goals.month_shifts (user_id, goal_id, month) values (${subject}, ${goal.id}, '2026-09-01')`,
       );
-      assert("P96", shiftTwice.code === "23505", `second shift for one month, sqlstate = ${shiftTwice.code ?? "none"}`);
-      const shiftMidMonth = await attempt(
-        tx,
-        (sp) => sp`insert into goals.month_shifts (user_id, goal_id, month) values (${subject}, ${goal.id}, '2026-08-15')`,
-      );
-      assert("P97", shiftMidMonth.code === "23514", `shift on the 15th, sqlstate = ${shiftMidMonth.code ?? "none"}`);
-      const shiftUpdate = await attempt(
-        tx,
-        (sp) => sp`update goals.month_shifts set month = '2026-08-01' where id = ${shift.id}`,
-      );
-      assert("P98", shiftUpdate.code === "42501", `update a shift, sqlstate = ${shiftUpdate.code ?? "none"}`);
-      const shiftDelete = await attempt(tx, (sp) => sp`delete from goals.month_shifts where id = ${shift.id}`);
-      assert("P99", shiftDelete.code === "42501", `delete a shift, sqlstate = ${shiftDelete.code ?? "none"}`);
+      assert("P96", shiftWrite.code === "42P01", `write a shift, sqlstate = ${shiftWrite.code ?? "none"}`);
 
       // -- model_calls: the day is the zone's, and the count never drops --
       const [call] = await tx<{ id: string; day: string }[]>`
@@ -1522,40 +1524,31 @@ async function checkPlanByMonth(): Promise<void> {
       );
       assert("P104", badSource.code === "23514", `a call from source 'x', sqlstate = ${badSource.code ?? "none"}`);
 
-      // -- phases: dates move, nothing else does (0008) --
+      // -- phases: written once, no UPDATE grant at all (0015 took 0008's) --
       const [shiftable] = await tx<{ id: string }[]>`
         insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
         values (${subject}, ${goal.id}, 'fase corrible', '2026-12-01', '2026-12-31') returning id`;
-      const phaseMoves = await attemptRows<{ id: string }>(
+      const phaseMoves = await attempt(
         tx,
-        (sp) => sp`update goals.phases set starts_on = '2027-01-01', ends_on = '2027-01-31'
-          where id = ${shiftable.id} returning id`,
+        (sp) => sp`update goals.phases set starts_on = '2027-01-01', ends_on = '2027-01-31' where id = ${shiftable.id}`,
       );
-      assert(
-        "P114",
-        phaseMoves.code === undefined && phaseMoves.rows.length === 1,
-        `own phase's dates move, sqlstate = ${phaseMoves.code ?? "none"}, rows = ${phaseMoves.rows.length}`,
-      );
+      assert("P114", phaseMoves.code === "42501", `own phase's dates move, sqlstate = ${phaseMoves.code ?? "none"}`);
       const phaseAim = await attempt(tx, (sp) => sp`update goals.phases set aim = 'otra' where id = ${shiftable.id}`);
       assert("P115", phaseAim.code === "42501", `update phases.aim, sqlstate = ${phaseAim.code ?? "none"}`);
       const phaseBackwards = await attempt(
         tx,
         (sp) => sp`update goals.phases set ends_on = '2026-12-31' where id = ${shiftable.id}`,
       );
-      assert("P116", phaseBackwards.code === "23514", `a phase ending before it starts, sqlstate = ${phaseBackwards.code ?? "none"}`);
+      assert("P116", phaseBackwards.code === "42501", `a phase's end moves, sqlstate = ${phaseBackwards.code ?? "none"}`);
 
       await enterUserContext(tx, intruder);
-      const foreignPhase = await attemptCount(
+      const foreignPhase = await attempt(
         tx,
         (sp) => sp`update goals.phases set starts_on = '2027-02-01', ends_on = '2027-02-28' where id = ${shiftable.id}`,
       );
-      assert(
-        "P117",
-        foreignPhase.code === undefined && foreignPhase.count === 0,
-        `another person's phase dates move, sqlstate = ${foreignPhase.code ?? "none"}, rows = ${foreignPhase.count}`,
-      );
-      const foreignShift = await tx<{ id: string }[]>`select id from goals.month_shifts where id = ${shift.id}`;
-      assert("P105", foreignShift.length === 0, `another person's shift, rows visible = ${foreignShift.length}`);
+      assert("P117", foreignPhase.code === "42501", `another person's phase dates move, sqlstate = ${foreignPhase.code ?? "none"}`);
+      const foreignShift = await attempt(tx, (sp) => sp`select id from goals.month_shifts`);
+      assert("P105", foreignShift.code === "42P01", `another person reads a shift, sqlstate = ${foreignShift.code ?? "none"}`);
       const foreignCall = await tx<{ id: string }[]>`select id from goals.model_calls where id = ${call.id}`;
       assert("P106", foreignCall.length === 0, `another person's call, rows visible = ${foreignCall.length}`);
       const foreignAnswer = await attemptCount(
@@ -1579,7 +1572,7 @@ async function checkPlanByMonth(): Promise<void> {
   await sql.end();
 }
 
-// Module 181 (RP-38, RP-41, RNP-14, RNP-15): the key and the connection the
+// RP-38, RP-60, RNP-14, RNP-15: the key and the connection the
 // AI door opens with — 0009's grants, policies and four functions, driven as
 // the roles that would break them. Own transaction, forced rollback.
 // `AI_DOOR_MUTANT_SQL`, when set, runs inside that same transaction before
@@ -1610,7 +1603,7 @@ async function checkAiDoor(): Promise<void> {
         [
           "P118",
           "access_tokens",
-          "INSERT(hint,name,token_hash,user_id) SELECT(created_at,expires_at,hint,id,kind,last_used_at,name,revoked_at,user_id) UPDATE(revoked_at)",
+          "INSERT(hint,name,token_hash,user_id) SELECT(created_at,expires_at,hint,id,kind,last_used_at,name,redirect_uri,revoked_at,user_id) UPDATE(revoked_at)",
         ],
         ["P119", "oauth_clients", "SELECT(client_name,id,redirect_uris)"],
         ["P120", "oauth_codes", "INSERT(client_id,code_challenge,code_hash,redirect_uri,resource,user_id)"],
@@ -1934,8 +1927,8 @@ async function checkAiDoor(): Promise<void> {
   await sql.end();
 }
 
-// Module 237 (RP-45): `0011` adds `note`, loosens `one_offs_update_self` to the
-// own row and moves RP-21's day/month rule into the `one_offs_guard_day`
+// RP-45: `0011` adds `note`, loosens `one_offs_update_self` to the
+// own row and moves RP-59's day/month rule into the `one_offs_guard_day`
 // trigger, which skips the row. Driven bare under a settled session.
 async function checkTaskNote(): Promise<void> {
   const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
@@ -1996,7 +1989,7 @@ async function checkTaskNote(): Promise<void> {
       assert(
         "P162",
         doneDay.code === undefined && doneDay.rows.length === 0,
-        `done one-off takes a day, sqlstate = ${doneDay.code ?? "none"}, rows = ${doneDay.rows.length}`,
+        `done one-off refuses a day, sqlstate = ${doneDay.code ?? "none"}, rows = ${doneDay.rows.length}`,
       );
 
       const doneMonth = await attemptRows<{ id: string }>(
@@ -2015,8 +2008,8 @@ async function checkTaskNote(): Promise<void> {
       );
       assert(
         "P164",
-        pastDay.code === undefined && pastDay.rows.length === 0,
-        `past-dated one-off takes a day, sqlstate = ${pastDay.code ?? "none"}, rows = ${pastDay.rows.length}`,
+        pastDay.code === undefined && pastDay.rows.length === 1,
+        `past-dated one-off with no fact takes a day, sqlstate = ${pastDay.code ?? "none"}, rows = ${pastDay.rows.length}`,
       );
 
       const foreignNote = await attemptRows<{ id: string }>(
@@ -2081,7 +2074,7 @@ async function checkTaskNote(): Promise<void> {
         tx,
         (sp) => sp`update goals.one_offs set name = 'otro' where id = ${done.id}`,
       );
-      assert("P172", renames.code === "42501", `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
+      assert("P172", renames.code === undefined, `update one_offs.name, sqlstate = ${renames.code ?? "none"}`);
 
       await tx`select set_config('role', 'anon', true)`;
       const anonNote = await attempt(
@@ -2279,6 +2272,340 @@ async function checkGoalAndOneOffPositionPerPerson(): Promise<void> {
   await sql.end();
 }
 
+// RP-50 to RP-55: `0013` flags plan tasks, grants `name` and
+// `estimate` an UPDATE guarded by `one_offs_guard_day`, and adds `rhythm` and
+// `plan_seen` to goals. Driven bare, own transaction, forced rollback.
+async function checkRoadmapSchema(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      const [bare] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'sin medida', '2027-12-31') returning id`;
+      const [measured] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit)
+        values (${subject}, 'con medida', '2027-12-31', 'horas', 'h') returning id`;
+      const [theirGoal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${intruder}, 'ajena', '2027-12-31') returning id`;
+      const [theirs] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month) values (${intruder}, ${theirGoal.id}, 'ajena', '2026-11-01') returning id`;
+
+      await enterUserContext(tx, subject);
+      const [fixed] = await tx<{ id: string; in_plan: boolean }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${subject}, ${measured.id}, 'fijada', '2026-11-01') returning id, in_plan`;
+      assert("P190", fixed.in_plan === true, `insert naming planned_month lands in_plan, got ${fixed.in_plan}`);
+
+      const [suelta] = await tx<{ id: string; in_plan: boolean }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, day)
+        values (${subject}, ${measured.id}, 'suelta', current_date + 1) returning id, in_plan`;
+      assert("P191", suelta.in_plan === false, `insert with neither month nor parent stays out, got ${suelta.in_plan}`);
+
+      const [unfixed] = await tx<{ id: string; in_plan: boolean }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, in_plan)
+        values (${subject}, ${measured.id}, 'colocada', true) returning id, in_plan`;
+      assert("P192", unfixed.in_plan === true, `insert naming in_plan keeps it, got ${unfixed.in_plan}`);
+
+      const underUnfixed = await attemptRows<{ id: string; in_plan: boolean }>(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id)
+          values (${subject}, ${measured.id}, 'hija', ${unfixed.id}) returning id, in_plan`,
+      );
+      assert(
+        "P193",
+        underUnfixed.code === undefined && underUnfixed.rows[0]?.in_plan === true,
+        `sub-task under an unfixed plan task is admitted and in plan, sqlstate = ${underUnfixed.code ?? "none"}`,
+      );
+
+      const underSuelta = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, goal_id, name, parent_id)
+          values (${subject}, ${measured.id}, 'hija de suelta', ${suelta.id}) returning id`,
+      );
+      assert("P194", underSuelta.code === "42501", `sub-task under a suelta, sqlstate = ${underSuelta.code ?? "none"}`);
+
+      // A plan task may take a day (scheduleOneOff); only a goalless one is out of the plan.
+      const goallessInPlan = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`insert into goals.one_offs (user_id, name, in_plan)
+          values (${subject}, 'sin meta', true) returning id`,
+      );
+      assert("P195", goallessInPlan.code === "23514", `in_plan with no goal, sqlstate = ${goallessInPlan.code ?? "none"}`);
+
+      const [done] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${subject}, ${measured.id}, 'hecha', '2026-11-01') returning id`;
+      await tx`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${done.id}, '2026-09-22')`;
+
+      const renamed = await attemptRows<{ name: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'nueva' where id = ${fixed.id} returning name`,
+      );
+      assert(
+        "P196",
+        renamed.code === undefined && renamed.rows.length === 1 && renamed.rows[0].name === "nueva",
+        `own undone task takes a name, sqlstate = ${renamed.code ?? "none"}, rows = ${renamed.rows.length}`,
+      );
+
+      const reestimated = await attemptRows<{ estimate: number }>(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 3 where id = ${fixed.id} returning estimate`,
+      );
+      assert(
+        "P197",
+        reestimated.code === undefined && reestimated.rows.length === 1 && reestimated.rows[0].estimate === 3,
+        `own undone task takes an estimate, sqlstate = ${reestimated.code ?? "none"}, rows = ${reestimated.rows.length}`,
+      );
+
+      const doneEstimate = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 4 where id = ${done.id} returning id`,
+      );
+      assert(
+        "P198",
+        doneEstimate.code === undefined && doneEstimate.rows.length === 0,
+        `estimate on a done task, sqlstate = ${doneEstimate.code ?? "none"}, rows = ${doneEstimate.rows.length}`,
+      );
+
+      const parentEstimate = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set estimate = 4 where id = ${unfixed.id} returning id`,
+      );
+      assert(
+        "P199",
+        parentEstimate.code === undefined && parentEstimate.rows.length === 0,
+        `estimate on a parent, sqlstate = ${parentEstimate.code ?? "none"}, rows = ${parentEstimate.rows.length}`,
+      );
+
+      const doneName = await attemptRows<{ name: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'hecha y renombrada' where id = ${done.id} returning name`,
+      );
+      assert(
+        "P200",
+        doneName.code === undefined && doneName.rows.length === 1,
+        `name on a done task, sqlstate = ${doneName.code ?? "none"}, rows = ${doneName.rows.length}`,
+      );
+
+      const theirName = await attemptCount(
+        tx,
+        (sp) => sp`update goals.one_offs set name = 'robada', estimate = 2 where id = ${theirs.id}`,
+      );
+      assert("P201", theirName.code === undefined && theirName.count === 0, `another person's row, sqlstate = ${theirName.code ?? "none"}, count = ${theirName.count}`);
+
+      const flip = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.one_offs set in_plan = true where id = ${suelta.id} returning id`,
+      );
+      assert("P202", flip.code === "42501", `update one_offs.in_plan, sqlstate = ${flip.code ?? "none"}`);
+
+      const bareRhythm = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.goals set rhythm = 5 where id = ${bare.id} returning id`,
+      );
+      assert("P203", bareRhythm.code === "23514", `rhythm on a goal with no measure, sqlstate = ${bareRhythm.code ?? "none"}`);
+
+      const rhythm = await attemptRows<{ rhythm: number }>(
+        tx,
+        (sp) => sp`update goals.goals set rhythm = 5 where id = ${measured.id} returning rhythm`,
+      );
+      assert("P204", rhythm.code === undefined && rhythm.rows[0]?.rhythm === 5, `rhythm on a measured goal, sqlstate = ${rhythm.code ?? "none"}`);
+
+      const badSeen = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.goals set plan_seen = '2026-11-15' where id = ${measured.id} returning id`,
+      );
+      assert("P205", badSeen.code === "23514", `plan_seen off the first day, sqlstate = ${badSeen.code ?? "none"}`);
+
+      const seen = await attemptRows<{ id: string }>(
+        tx,
+        (sp) => sp`update goals.goals set plan_seen = '2026-11-01' where id = ${measured.id} returning id`,
+      );
+      assert("P206", seen.code === undefined && seen.rows.length === 1, `plan_seen on the first day, sqlstate = ${seen.code ?? "none"}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  // The data move: nothing with a month or a parent is left outside the plan.
+  const [{ n }] = await sql<{ n: string }[]>`
+    select count(*)::text as n from goals.one_offs
+    where (planned_month is not null or parent_id is not null) and not in_plan`;
+  assert("P207", Number(n) === 0, `rows with a month or a parent outside the plan, got ${n}`);
+
+  await sql.end();
+}
+
+// RP-19, RP-22, RP-38, RP-60, RNP-19: what 0015 leaves, read from
+// the catalogue and driven as `authenticated`. Own transaction, forced rollback.
+async function checkAuditoria0015(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      const [index] = await tx<{ def: string }[]>`
+        select indexdef as def from pg_indexes
+        where schemaname = 'goals' and tablename = 'facts' and indexname = 'facts_one_off_unique'`;
+      assert(
+        "P208",
+        !!index && index.def.includes("UNIQUE") && index.def.includes("(one_off_id)") && index.def.includes("one_off_id IS NOT NULL"),
+        `facts_one_off_unique = ${index?.def ?? "missing"}`,
+      );
+
+      const deletes = await tx<{ policyname: string }[]>`
+        select policyname from pg_policies
+        where schemaname = 'goals' and policyname in ('goals_delete_self', 'commitments_delete_self', 'phases_delete_self', 'phases_update_self')`;
+      assert("P209", deletes.length === 0, `policies left without a grant = ${deletes.map((r) => r.policyname).join(", ") || "none"}`);
+
+      const fns = await tx<{ name: string; src: string; secdef: boolean; config: string[] | null; auth: boolean; anon: boolean; svc: boolean }[]>`
+        select p.proname as name, p.prosrc as src, p.prosecdef as secdef, p.proconfig as config,
+          has_function_privilege('authenticated', p.oid, 'execute') as auth,
+          has_function_privilege('anon', p.oid, 'execute') as anon,
+          has_function_privilege('service_role', p.oid, 'execute') as svc
+        from pg_proc p
+        where p.pronamespace = 'goals'::regnamespace
+          and p.proname in ('person_for_token', 'oauth_refresh_token', 'oauth_client_by_metadata_url')
+        order by p.proname`;
+      const shape = fns.map((f) => `${f.name}:${f.secdef ? "definer" : "invoker"}:${(f.config ?? []).join("|")}:${f.auth || f.anon || f.svc ? "open" : "closed"}:${f.src.includes("90 days") ? "90" : "-"}`).join(" ");
+      assert(
+        "P210",
+        shape ===
+          'oauth_client_by_metadata_url:definer:search_path="":closed:- oauth_refresh_token:definer:search_path="":closed:90 person_for_token:definer:search_path="":closed:90',
+        shape || "no functions",
+      );
+
+      await tx`insert into auth.users (id) values (${subject})`;
+      const [goal] = await tx<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon) values (${subject}, 'una vez', '2027-12-31') returning id`;
+      const [suelta] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, day) values (${subject}, ${goal.id}, 'suelta', current_date) returning id`;
+      const [other] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, day) values (${subject}, ${goal.id}, 'otra', current_date) returning id`;
+      await enterUserContext(tx, subject);
+
+      const first = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${suelta.id}, current_date)`,
+      );
+      assert("P211", first.code === undefined, `first fact of a one-off, sqlstate = ${first.code ?? "none"}`);
+      const second = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${suelta.id}, current_date - 1)`,
+      );
+      assert("P212", second.code === "23505", `second fact of the same one-off, sqlstate = ${second.code ?? "none"}`);
+      const otherOne = await attempt(
+        tx,
+        (sp) => sp`insert into goals.facts (user_id, one_off_id, day) values (${subject}, ${other.id}, current_date)`,
+      );
+      assert("P213", otherOne.code === undefined, `a fact of another one-off, sqlstate = ${otherOne.code ?? "none"}`);
+
+      const lookup = await attempt(
+        tx,
+        (sp) => sp`select * from goals.oauth_client_by_metadata_url('https://x.example.invalid/meta')`,
+      );
+      assert("P214", lookup.code === "42501", `authenticated reads a client by URL, sqlstate = ${lookup.code ?? "none"}`);
+
+      const [commitment] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
+        values (${subject}, ${goal.id}, 'Tocar', 'daily', 'tap') returning id`;
+      for (const [code, back] of [["P215", 2], ["P216", 3]] as const) {
+        const written = await attempt(
+          tx,
+          (sp) => sp`insert into goals.facts (user_id, commitment_id, day) values (${subject}, ${commitment.id}, current_date - ${back}::int)`,
+        );
+        assert(code, written.code === undefined, `commitment fact ${back - 1} (one_off_id null), sqlstate = ${written.code ?? "none"}`);
+      }
+      const nulls = await tx<{ n: number }[]>`
+        select count(*)::int as n from goals.facts where user_id = ${subject} and one_off_id is null`;
+      assert("P217", nulls[0].n === 2, `facts with a null one_off_id = ${nulls[0].n}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
+// 0016 (RP-60): who reads and who writes the address a connection returns to,
+// and who may call the lapse rule. Own transaction, forced rollback.
+async function checkConnectionHost0016(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const subject = randomUUID();
+  const intruder = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+  const mutant = process.env.CONNECTION_HOST_MUTANT_SQL;
+  const callback = "https://claude.ai/api/mcp/auth_callback";
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${subject}), (${intruder})`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into goals.access_tokens (user_id, kind, name, token_hash, expires_at, redirect_uri)
+        values (${subject}, 'oauth', 'Claude', ${sha256()}, now() + interval '1 hour', ${callback}) returning id`;
+      if (mutant) {
+        console.log(`MUTANT  ${mutant.replace(/\s+/g, " ").slice(0, 140)}`);
+        await tx.unsafe(mutant);
+      }
+
+      await enterUserContext(tx, subject);
+      const own = await attemptRows<{ redirect_uri: string }>(
+        tx,
+        (sp) => sp`select redirect_uri from goals.access_tokens where id = ${row.id}`,
+      );
+      assert(
+        "P218",
+        own.code === undefined && own.rows.length === 1 && own.rows[0].redirect_uri === callback,
+        `owner reads the address, sqlstate = ${own.code ?? "none"}, rows = ${own.rows.length}`,
+      );
+      const rewrite = await attempt(tx, (sp) => sp`update goals.access_tokens set redirect_uri = 'https://x.example.invalid' where id = ${row.id}`);
+      assert("P219", rewrite.code === "42501", `update redirect_uri, sqlstate = ${rewrite.code ?? "none"}`);
+      const forged = await attempt(
+        tx,
+        (sp) => sp`insert into goals.access_tokens (user_id, name, token_hash, hint, redirect_uri)
+          values (${subject}, 'llave', ${sha256()}, 'abcd', 'https://x.example.invalid')`,
+      );
+      assert("P220", forged.code === "42501", `insert with redirect_uri, sqlstate = ${forged.code ?? "none"}`);
+
+      await enterUserContext(tx, intruder);
+      const foreign = await attemptRows<{ redirect_uri: string }>(
+        tx,
+        (sp) => sp`select redirect_uri from goals.access_tokens where id = ${row.id}`,
+      );
+      assert("P221", foreign.code === undefined && foreign.rows.length === 0, `another person reads the address, rows = ${foreign.rows.length}`);
+
+      await tx`reset role`;
+      const [fn] = await tx<{ auth: boolean; anon: boolean; svc: boolean; pub: boolean }[]>`
+        select has_function_privilege('authenticated', p.oid, 'execute') as auth,
+          has_function_privilege('anon', p.oid, 'execute') as anon,
+          has_function_privilege('service_role', p.oid, 'execute') as svc,
+          exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0) as pub
+        from pg_proc p
+        where p.pronamespace = 'goals'::regnamespace and p.proname = 'access_token_lapses_at'`;
+      assert(
+        "P222",
+        !!fn && fn.auth && !fn.anon && !fn.svc && !fn.pub,
+        `access_token_lapses_at: authenticated = ${fn?.auth}, anon = ${fn?.anon}, service_role = ${fn?.svc}, public = ${fn?.pub}`,
+      );
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+
+  await sql.end();
+}
+
 async function main(): Promise<void> {
   assertSuiteDatabase();
   const sql = postgres(DATABASE_URL!, {
@@ -2306,6 +2633,9 @@ async function main(): Promise<void> {
   await checkPlanOrderBackfillTieBreak();
   await checkCommitmentPositionPerPerson();
   await checkGoalAndOneOffPositionPerPerson();
+  await checkRoadmapSchema();
+  await checkAuditoria0015();
+  await checkConnectionHost0016();
 
   if (failed) process.exit(1);
 }

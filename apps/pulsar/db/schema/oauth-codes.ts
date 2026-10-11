@@ -6,7 +6,7 @@ import { goalsSchema } from "./_schema";
 import { accessTokens, bytea } from "./access-tokens";
 import { oauthClients } from "./oauth-clients";
 
-// An authorization code the consent issued (RP-41). Stored as a fingerprint,
+// An authorization code the consent issued (RP-60). Stored as a fingerprint,
 // redeemed once by `goals.oauth_exchange_code`.
 export const oauthCodes = goalsSchema.table(
   "oauth_codes",

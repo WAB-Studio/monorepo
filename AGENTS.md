@@ -21,6 +21,10 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   `validator` judges one assignment and `auditor` judges the code. Neither ever says the app is thin.
 - Dispatch the `tester` when a module's proof matters more than its code. It writes the tests from
   the contract, never from the implementation, and shows every one of them red under a named mutation.
+- Dispatch the `tester` before the `worker` on every module that draws or changes a screen. It writes the
+  plan's Done table red; the worker makes it green. Decided by the user 2026-10-06, after four modules in
+  one evening went worker → validator → worker over clauses nobody had tested. Except a module that only
+  changes words on an existing line: see `## Verification`.
 - Dispatch the `mutator` before closing a slice, once the validator is green. It breaks the lines the
   branch itself changed and reports what no suite noticed. A survivor is a regression that ships in
   silence.
@@ -99,7 +103,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 ### The canvases
 
-- `apps/voyager` — «Diccionario de lectura», https://claude.ai/code/artifact/92f7291c-d0f3-4134-b652-be4affe98521
+- `apps/voyager` — «Diccionario de lectura», https://claude.ai/artifact/K9acY69gRz13JPtAn7GWwz (the old `claude.ai/code/artifact/92f7…` link opens the same canvas)
 - `apps/pulsar` — «Bitácora de metas», https://claude.ai/artifact/5ZNtobfQDzeBNFcEMs38Qp
 - `apps/portal` — «Universo», https://claude.ai/artifact/RqkVpe5eP47Qu4S9YbC3GZ
 - `apps/orbit` — **none yet.** Its screens were built before this rule. The next orbit screen opens
@@ -119,9 +123,9 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 
 ## Parallel tracks
 
-- Lane 1 is this checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`. Lanes 2 to 5 may run
-  e2e specs; lanes 6 and up take only work with no e2e (docs, words, pure functions, `check:*`).
-  Decided by the user 2026-10-05. The cap is RAM and the shared Auth, not the lane count.
+- Lane 1 is this checkout; lanes 2 and up are worktrees at `../<checkout>-l<n>`. Lanes 2 to 6 may run
+  e2e specs; lanes 7 and up take only work with no e2e (docs, words, pure functions, `check:*`).
+  Decided by the user 2026-10-05, raised from four to five lanes 2026-10-06. The cap is RAM and the shared Auth, not the lane count.
 - A lane's port comes from its app: finances on :300<n-1>, reading on :310<n-1>. They never collide.
 - Run an app's npm scripts from its own directory, `apps/orbit`, or from the root with `-w apps/orbit`.
 - Open a lane: `scripts/worktree.sh <lane> <branch> [base] [--app <name>]`. It costs 4 seconds.
@@ -147,8 +151,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Run `npm install` at a lane's root when a workspace package landed after the lane was opened. The
   lane copied `node_modules` at birth, so the new package has no link and `typecheck` fails there
   while the main checkout and CI are clean. It is not a real red.
-- Run at most four suites at once. Decided by the user 2026-10-05: 15 GB, 7 GB still free with three running.
-  Drop back to three when `free -g` shows under 2 GB available with four up.
+- Run at most five suites at once. Decided by the user 2026-10-05 (four) and 2026-10-06 (five): 15 GB, 7 GB still
+  free with three running. Drop back one when `free -g` shows under 2 GB available.
 - Never run two agents that write `reading.word_texts` or spend `reading.model_spend` at once.
   `HARNESS_LANE` does not scope those tables: they are global, and two honest reports then
   contradict each other. See `docs/TRAPS.md`, "One database behind every harness lane".
@@ -158,7 +162,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   `--app voyager` copies no `apps/orbit/.env.local`, so `npm run harness:census -w apps/orbit` dies on
   a missing env file there. Both checkouts share one database, so the number is the same.
 - Run the RNF-09 timing alone: it lives in `check:http` and `check:queries`, and a second lane inflates it.
-- Copy the lane's report out before you drop it: `cp ../finances-app-l<n>/private/reportes/*.md private/reportes/`.
+- Copy everything an agent left in the lane's `private/` before you drop it: reports, logs a handoff cites and captures (`cp -r ../finances-app-l<n>/private/{reportes,ux-*} private/`). `worktree remove --force` deletes them. Measured 2026-10-06: 144 captures of two UX critics went with lanes 3 and 6.
 - Free the lane's port with `fuser -k <port>/tcp`. Never `pkill -f` a path: the pattern matches your own shell.
 - Drop the worktree when its branch lands: `git worktree remove ../finances-app-l<n> --force`.
 - Forbid a file to every live lane the moment you hand it out, not only to the lanes you open next.
@@ -223,6 +227,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   day: this checkout's `main` had sat at the 2026-09-10 merge for nine days, 81 commits behind, and
   a session reported `integracion` as 93 commits ahead of `main` when it was 14.
 - Delete a branch the day its PR merges. Report it.
+- Delete it only after `gh pr view <n> --json state` reads `MERGED`. Never chain the delete after `gh pr merge` in one
+  command: on 2026-10-09 a merge refused on a conflict still deleted #526's branch, and GitHub closed the PR.
 - Do git work without asking: commit, push, open a PR, merge, delete a branch. Report it.
 - Commit and push a worker's branch from the main session when the environment denied the worker's
   commit or push. A working branch only, never `main` or `integracion`; say it in the report. Decided by
@@ -262,8 +268,18 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
     the pull request — never locally.** A red there is fixed on the branch before it merges. A chosen
     list missed `deshacer.spec.ts` and `cifra-unidad.spec.ts` on 2026-09-30; CI is what caught them.
 - Have the worker save every check's output to a file under the lane's `private/` and name the paths.
-  The validator reads those logs, re-runs only the module's own tests and mutations, and asks of each
-  assertion whether it can fail. It never re-runs a suite the worker already logged green.
+  The validator reads those logs, re-runs only the module's own tests, and asks of each assertion
+  whether it can fail. It never re-runs a suite the worker logged green, nor a mutation the worker
+  logged red: it checks that log ran the right code. Decided by the user 2026-10-10.
+- Give a module that only changes words on a line that already exists one agent for tests and code:
+  it writes the Done table red first, then makes it green. Keep the separate `tester` for any new
+  form. Decided by the user 2026-10-10.
+- Run a mutation against the one test that kills it (`spec:line` or `-g`), never the module's suite.
+  Wait for the server to answer, never a fixed `sleep`. Run the suite once, over the final code.
+  Measured 2026-10-10: module 702 spent ~36 s of each ~50 s mutation cycle on 59 tests and 8 s asleep.
+- Drive pulsar's mutations against `next build` + `next start`, never `next dev`, never `rm -rf .next`.
+  Decided by the user 2026-10-10 and proved on module 723 the same day: 30 tests alike under both, the one
+  difference a cold `next dev` compile; the specs took 57 s on the build and 2.4 min on dev.
 - Run at most two whole suites at once against the remote pool: a third exhausts it (`EMAXCONNSESSION`,
   15 clients). CI and the lanes run on local stacks and do not count.
 - Run a new spec under `pulsar-e2e` on its pull request before calling it green. A spec that measures
@@ -275,6 +291,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   when that run's `pulsar-e2e` is green. Measured 2026-10-05: it caught tren 4's rail duplicates after the merge and
   tren 5's `week.today` before it. Fix a red on `integracion` before anything else. **`integracion` → `main` only
   with the whole suite green.**
+- Fire it too on any single pulsar PR that touches `messages/`, the template or a screen. Measured 2026-10-09: 584
+  added `ritmo:` to the template's example, merged on the PR checks, and left `importar.spec.ts` red on `integracion` for a session.
 - Ship modules that share no file as one train: one branch merging them, one PR, one CI run. A red spec
   names its module.
 - **Orbit's `e2e` is informative, not blocking.** No check is required by `main`'s ruleset — verified
@@ -282,6 +300,8 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
   lockfile, and always on the push to `main`. Merge on `typecheck`, `lint` and `voyager-e2e`; read a
   red on `main` and fix forward. Waiting on it by choice is what cost this session its afternoon, not
   the suite.
+- **`voyager-e2e` runs on a pull request only when it reaches `apps/voyager`, `packages/`, the lockfile
+  or `ci.yml`,** and always on a push. Skipped, it does not block the merge. Decided by the user 2026-10-10.
 - The suite is 17 minutes and **1043 of its 1099 seconds are the suite itself** — setup is 48. There
   is nothing to shave there. Make it run less, or shard it across harness lanes. Never micro-optimise
   the install.
@@ -376,6 +396,7 @@ Contract: `docs/SPEC.md` §1. Model and invariants: §2. Stack: §4. Flows: `doc
 - Validate on the server with the same Zod schema that validates the form.
 - Move every interface string into next-intl. Hardcoding is forbidden.
 - Compose a screen from `components/ui` and its props. Never write a utility class outside it.
+- Count an inline `style={{…}}` and a CSS module outside `components/ui` as a utility class. Decided by the user 2026-10-08.
 - Reach `localStorage`, `sessionStorage` and IndexedDB from `lib/` alone. A screen that needs one
   gets a function there. Never silence the lint rule with a disable. Decided by the user 2026-09-19.
 - Add a prop to the primitive when a screen needs a variant. Never patch one from outside.

@@ -1,9 +1,10 @@
 import { test, expect } from "./fixtures";
+import month from "../messages/es/month.json";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `Meses.dc.html`, `MesesEscritorio`, `MesPlan.dc.html` (module 138, RP-28,
+// `Meses.dc.html`, `MesesEscritorio`, `MesPlan.dc.html` (RP-28,
 // RP-32, RP-35): a goal read month by month, and the sheet that sets,
 // changes and removes a month's amount.
 
@@ -28,6 +29,9 @@ function label(month: string): string {
 
 const thisMonth = monthOf(todayInZone());
 const lastMonth = monthOf(dayBefore(thisMonth));
+// A closed month says where its share went: the month after it.
+const carried = (percent: number) =>
+  month.months.carriedTo.replace("{percent}", String(percent)).replace("{month}", label(thisMonth));
 const followingMonth = nextMonth(thisMonth);
 const horizon = nextMonth(followingMonth);
 const seg = (month: string) => month.slice(0, 7);
@@ -90,11 +94,11 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(last).toContainText(label(lastMonth));
     await expect(last).toContainText("1 h 40 min");
     await expect(last).toContainText("de 10 h");
-    await expect(last).toContainText("se arrastró 66 %");
+    await expect(last).toContainText(carried(66));
     // The whole row is the one link; no year, and the state sits under the name, never in the note.
     await expect(last.getByRole("link")).toHaveCount(1);
     await expect(last).not.toContainText(lastMonth.slice(0, 4));
-    await expect(last.locator("span").filter({ hasText: /^se arrastró 66 %$/ })).toHaveCount(1);
+    await expect(last.locator("span").filter({ hasText: new RegExp(`^${carried(66)}$`) })).toHaveCount(1);
     // A closed month's amount is text, never a door to the sheet.
     await expect(last.getByText("de 10 h", { exact: true })).toBeVisible();
     await expect(page.locator("main a[href*=planear]:visible")).toHaveCount(0);
@@ -106,7 +110,7 @@ test("the months read planned, reached and the share carried; the sheet sets, ch
     await expect(current).toContainText(label(thisMonth));
     await expect(current).toContainText("en curso");
     await expect(current).toContainText("sin monto");
-    await expect(current).not.toContainText("se arrastró");
+    await expect(current).not.toContainText(carried(66).replace("66 %", "").replace(label(thisMonth), "").trim());
     // A month with nothing is still a row, and says so, and carries no share.
     await expect(items.nth(2)).toContainText(label(followingMonth));
     await expect(items.nth(2)).toContainText("sin monto");
@@ -200,6 +204,8 @@ test("?planear= opens the sheet on that month and ignores a month outside the sp
 
     // Nothing is planned anywhere: the empty face names the way in.
     await expect(page.getByText(/^Ningún mes tiene monto/)).toBeVisible();
+    // A sentence, never a figure: Archivo, not mono.
+    expect(await page.getByText(/^Ningún mes tiene monto/).evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
     await page.getByRole("link", { name: `Planear ${label(thisMonth)}` }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
   } finally {
@@ -271,8 +277,8 @@ test("a goal with no measure lists every month of its span with its task count, 
     const current = page.locator("li[data-current]");
     await expect(current).toContainText(label(thisMonth));
     await expect(current).toContainText("en curso");
-    // The sub-task is no row of its own: two top-level tasks, not three.
-    await expect(current).toContainText("2 tareas");
+    // The sub-task is no row of its own; last month's undone task rides into this one (RP-31).
+    await expect(current).toContainText("3 tareas");
     await expect(items.nth(2)).toContainText(label(followingMonth));
     await expect(items.nth(2)).toContainText("sin tareas");
     // No figure, no amount, no door to the sheet.
@@ -332,79 +338,58 @@ test("a closed month's amount is text and ?planear= on it mounts no sheet; this 
   }
 });
 
-test("the closed month's row offers «correr el plan un mes» only over half carried; its sheet lists the moves; accepting moves next month's amount and the line is gone on reload (RP-48)", async ({
+test("a future month with no amount of its own reads the rhythm; one with its own reads that (RP-32, RP-50)", async ({
   person,
   browser,
   baseURL,
   db,
 }) => {
-  const stamp = Date.now();
-  const insertTask = async (goalId: string, name: string, month: string, estimate: number, doneOn: string | null) => {
-    const [row] = await db<{ id: string }[]>`
-      insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-      values (${person.id}, ${goalId}, ${name}, ${month}::date, ${estimate}) returning id
-    `;
-    if (doneOn !== null) {
-      await db`
-        insert into goals.facts (user_id, goal_id, one_off_id, day)
-        values (${person.id}, ${goalId}, ${row.id}, ${doneOn}::date)
-      `;
-    }
-  };
-  const budget = (goalId: string, month: string, amount: number) => db`
+  const goalId = await seedGoal(db, person.id, `Meta ritmo ${Date.now()}`);
+  await db`update goals.goals set rhythm = 300 where id = ${goalId}`;
+  await db`
     insert into goals.month_budgets (user_id, goal_id, month, amount)
-    values (${person.id}, ${goalId}, ${month}::date, ${amount})
+    values (${person.id}, ${goalId}, ${thisMonth}::date, 600)
   `;
-  const moved = await seedGoal(db, person.id, `Meta corre ${stamp}`);
-  await budget(moved, thisMonth, 600);
-  await budget(moved, followingMonth, 300);
-  await insertTask(moved, `Sigue ${stamp}`, lastMonth, 100, null);
-  await insertTask(moved, `Se mueve ${stamp}`, thisMonth, 60, null);
-  const half = await seedGoal(db, person.id, `Meta mitad ${stamp}`);
-  await insertTask(half, `Hecha ${stamp}`, lastMonth, 100, `${lastMonth.slice(0, 8)}15`);
-  await insertTask(half, `Falta ${stamp}`, lastMonth, 100, null);
-
-  const action = "correr el plan un mes";
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
     const page = await context.newPage();
     await page.setViewportSize({ width: 360, height: 740 });
-
-    await page.goto(`/metas/${half}/meses`);
-    await expect(page.getByRole("listitem").first()).toContainText("se arrastró 50 %");
-    await expect(page.getByRole("button", { name: action })).toHaveCount(0);
-
-    await page.goto(`/metas/${moved}/meses`);
+    await page.goto(`/metas/${goalId}/meses`);
     const items = page.getByRole("listitem");
-    await expect(items.nth(0)).toContainText("se arrastró 100 %");
-    // One trigger under the list, never inside a row (a row is a link).
-    await expect(items.getByRole("button", { name: action })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: action })).toHaveCount(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await expect(items).toHaveCount(3);
+    await expect(items.nth(1)).toContainText("de 10 h");
+    await expect(items.nth(2)).toContainText(label(followingMonth));
+    await expect(items.nth(2)).toContainText("5 h");
+    await expect(items.nth(2)).not.toContainText("sin monto");
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
 
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await expect(page.getByRole("button", { name: action })).toBeVisible();
+test("a closed month over half carried offers no shift line, in the list or anywhere (RP-50)", async ({
+  person,
+  browser,
+  baseURL,
+  db,
+}) => {
+  const goalId = await seedGoal(db, person.id, `Meta sin corrimiento ${Date.now()}`);
+  await db`
+    insert into goals.month_budgets (user_id, goal_id, month, amount)
+    values (${person.id}, ${goalId}, ${thisMonth}::date, 600), (${person.id}, ${goalId}, ${lastMonth}::date, 600)
+  `;
+  await db`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+    values (${person.id}, ${goalId}, 'Sigue', ${lastMonth}::date, 100)
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
     await page.setViewportSize({ width: 360, height: 740 });
-
-    await page.getByRole("button", { name: action }).click();
-    const sheet = page.getByRole("dialog");
-    await expect(sheet.getByRole("heading", { name: "Correr un mes lo que sigue" })).toBeVisible();
-    await expect(sheet.getByText("1 tarea planeada")).toBeVisible();
-    await expect(sheet.getByText(/^montos de /)).toBeVisible();
-    await sheet.getByRole("button", { name: "Correr un mes" }).click();
-    await expect(sheet).toHaveCount(0);
-    await expect(page.getByRole("button", { name: action })).toHaveCount(0);
-
-    await page.reload();
-    await expect(page.getByRole("button", { name: action })).toHaveCount(0);
-    const budgets = await db<{ month: string; amount: number }[]>`
-      select to_char(month, 'YYYY-MM') as month, amount from goals.month_budgets
-      where goal_id = ${moved} order by month
-    `;
-    expect(budgets.map((b) => `${b.month}:${b.amount}`)).toEqual([
-      `${seg(followingMonth)}:600`,
-      `${seg(nextMonth(followingMonth))}:300`,
-    ]);
+    await page.goto(`/metas/${goalId}/meses`);
+    await expect(page.getByRole("listitem").first()).toContainText(carried(100));
+    await expect(page.getByRole("button", { name: "correr el plan un mes" })).toHaveCount(0);
+    await expect(page.getByText(/correr/i)).toHaveCount(0);
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;

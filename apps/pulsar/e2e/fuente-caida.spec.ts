@@ -10,9 +10,19 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 // control drives the same seed on `PULSAR_BASE_URL`, the ordinary server.
 const LIVE = process.env.PULSAR_BASE_URL ?? "http://localhost:3200";
 
-const DAY_NOTE = "No pudimos leer una fuente. Lo que declaraste hoy sigue aquí.";
-const WEEK_NOTE = "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.";
-const GOAL_NOTE = "No pudimos leer una fuente. Lo declarado sigue aquí.";
+// FuenteCaidaPalabras: one notice, the same words on every screen (RP-07, RNP-10).
+// Literals on purpose: a spec that read them from the catalogue would pass on any text.
+const NOTE_TITLE = "No pudimos leer una fuente.";
+const NOTE_BODY = "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.";
+
+async function expectNote(page: Page, where: string): Promise<void> {
+  const note = page.getByRole("status").filter({ hasText: NOTE_TITLE });
+  await expect(note, `${where}: one status carries the notice`).toHaveCount(1);
+  await expect(note).toContainText(NOTE_TITLE);
+  await expect(note).toContainText(NOTE_BODY);
+  await expect(page.getByText("sigue aquí")).toHaveCount(0);
+  await expect(note).not.toContainText(/diccionario|lectura/i);
+}
 const FAILURE = "No se pudo abrir";
 
 // The Semana row's mark names its day in full («…, lunes 5: hecho»), read
@@ -24,7 +34,7 @@ function markDayLabel(civilDay: string): string {
   return `${WEEKDAY_LONG[weekdayIndex]} ${Number(civilDay.slice(8, 10))}`;
 }
 
-type Seed = { goalId: string; goalName: string; tapName: string; today: string };
+type Seed = { goalId: string; goalName: string; tapName: string; evidenceName: string; today: string };
 
 // A goal with a measure, a tap commitment declared today and an evidence one
 // on `reading_lookups`. Nothing under `reading.*` is written.
@@ -47,12 +57,13 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
     values (${person.id}, ${goal.id}, ${tapName}, 'daily', 'tap', now() - interval '20 days')
     returning id
   `;
+  const evidenceName = `Leída por la fuente ${stamp}`;
   await db`
     insert into goals.commitments
       (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
     values (
-      ${person.id}, ${goal.id}, ${`Leída por la fuente ${stamp}`}, 'daily', 'evidence',
-      (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
+      ${person.id}, ${goal.id}, ${evidenceName}, 'daily', 'evidence',
+      (select id from goals.evidence_sources where key = 'reading_lookups'), 3,
       now() - interval '20 days'
     )
   `;
@@ -60,7 +71,7 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
     insert into goals.facts (user_id, commitment_id, goal_id, day, written_at)
     values (${person.id}, ${tap.id}, ${goal.id}, ${today}, now())
   `;
-  return { goalId: goal.id, goalName, tapName, today };
+  return { goalId: goal.id, goalName, tapName, evidenceName, today };
 }
 
 async function settle(page: Page, content: string): Promise<void> {
@@ -77,10 +88,21 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       await page.goto("/");
       await settle(page, seeded.tapName);
 
-      await expect(page.getByText(DAY_NOTE, { exact: true })).toBeVisible();
+      await expectNote(page, "Hoy");
       const row = page.locator("button", { hasText: seeded.tapName });
       await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "declared");
       await expect(page.getByText(FAILURE)).toHaveCount(0);
+
+      // The unreadable source still lets the row say what it asks (RP-08), and
+      // never names a source it could not read. Literals on purpose.
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 844 });
+        const evidence = page.locator("button", { hasText: seeded.evidenceName }).locator("visible=true");
+        const meta = (await evidence.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
+        expect(meta, `at ${width}`).toBe("sin leer la fuente · pide 3 búsquedas");
+        expect(meta).not.toMatch(/diccionario|lectura|Reading/i);
+        await expect(evidence.locator("[data-state]")).not.toHaveAttribute("data-state", "evidence");
+      }
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -95,7 +117,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       await page.goto("/semana");
       await settle(page, seeded.goalName);
 
-      await expect(page.getByText(WEEK_NOTE, { exact: true })).toBeVisible();
+      await expectNote(page, "Semana");
       const mark = page
         .getByRole("main")
         .getByRole("img", { name: `${seeded.tapName}, ${markDayLabel(seeded.today)}: hecho`, exact: true });
@@ -115,8 +137,15 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       await page.goto(`/metas/${seeded.goalId}`);
       await settle(page, seeded.goalName);
 
-      await expect(page.getByText(GOAL_NOTE, { exact: true })).toBeVisible();
+      await expectNote(page, "Meta");
       await expect(page.getByText(FAILURE)).toHaveCount(0);
+
+      // `MetaTotal` (399): the total's own line stays, and today's note sits under it.
+      const since = page.locator("p", { hasText: /^en total, desde el / }).locator("visible=true");
+      await expect(since).toHaveCount(1);
+      const sinceBox = (await since.boundingBox())!;
+      const noteBox = (await page.getByRole("status").filter({ hasText: NOTE_TITLE }).boundingBox())!;
+      expect(noteBox.y).toBeGreaterThanOrEqual(sinceBox.y + sinceBox.height - 1);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -129,7 +158,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
     baseURL,
     db,
   }) => {
-    // `MetaMesSinEvidencia.dc.html` (module 136): 5 declared pages of a
+    // `MetaMesSinEvidencia.dc.html`: 5 declared pages of a
     // 12-page month, the reading source unreadable.
     const seeded = await seed(db, person);
     const monthStart = `${seeded.today.slice(0, 7)}-01`;
@@ -156,13 +185,13 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
         await page.goto(`/metas/${seeded.goalId}`);
         await settle(page, seeded.goalName);
 
-        const visible = (text: string) => page.getByText(text, { exact: true }).locator("visible=true");
-        await expect(
-          visible("solo lo que dijiste tú · no pudimos leer el diccionario de lectura"),
-        ).toHaveCount(1);
-        await expect(visible("de 12")).toHaveCount(1);
-        // The month block prints the bare figure; the total beside «mide en» keeps its unit.
-        await expect(visible("5")).toHaveCount(1);
+        // The block keeps saying it holds only what the person declared, never naming the source.
+        await expect(page.getByText(/^solo lo que dijiste tú/).locator("visible=true")).toHaveCount(1);
+        await expect(page.getByText(/^solo lo que dijiste tú/).locator("visible=true")).not.toContainText(/diccionario|lectura/i);
+        // Both figures of the month carry the unit (no-break space), as the total does.
+        const month = page.getByText(/^solo lo que dijiste tú/).locator("visible=true").locator("xpath=..");
+        await expect(month).toHaveCount(1);
+        await expect(month.locator("p").filter({ hasText: /^5\s.*de 12/ })).toHaveJSProperty("textContent", "5\u00a0páginas de 12\u00a0páginas");
         await expect(page.getByText(/llevas \d+ %|bajo el 60 %/).locator("visible=true")).toHaveCount(0);
         await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toBeVisible();
       }
@@ -190,21 +219,29 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
     try {
       const page = await context.newPage();
       const seamPage = await seamContext.newPage();
-      for (const [path, content, note] of [
-        ["/", seeded.tapName, DAY_NOTE],
-        ["/semana", seeded.goalName, WEEK_NOTE],
-        [`/metas/${seeded.goalId}`, seeded.goalName, GOAL_NOTE],
+      for (const [path, content] of [
+        ["/", seeded.tapName],
+        ["/semana", seeded.goalName],
+        [`/metas/${seeded.goalId}`, seeded.goalName],
       ]) {
         await seamPage.goto(path);
         await settle(seamPage, content);
-        await expect(seamPage.getByText(note, { exact: true }), `${path} on the seam server`).toBeVisible();
+        await expectNote(seamPage, `${path} on the seam server`);
 
         await page.goto(path);
         await settle(page, content);
-        for (const other of [DAY_NOTE, WEEK_NOTE, GOAL_NOTE]) {
-          await expect(page.getByText(other)).toHaveCount(0);
-        }
+        await expect(page.getByText(NOTE_TITLE)).toHaveCount(0);
         await expect(page.getByText(FAILURE)).toHaveCount(0);
+        if (path === "/") {
+          // Source read: the same figure, with no «sin leer».
+          for (const width of [390, 1440]) {
+            await page.setViewportSize({ width, height: 844 });
+            const row = page.locator("button", { hasText: seeded.evidenceName }).locator("visible=true");
+            const meta = (await row.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
+            expect(meta, `at ${width}`).toContain("3 búsquedas");
+            expect(meta).not.toContain("sin leer");
+          }
+        }
       }
     } finally {
       await seamContext.close();

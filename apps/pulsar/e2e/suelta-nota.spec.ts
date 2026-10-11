@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 import { monthOf } from "@/lib/plan/months";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// `HoyNota` and `SueltasNota` (module 246, RP-45): Hoy draws only the note's
+// `HoyNota` and `SueltasNota` (RP-45): Hoy draws only the note's
 // button on a one-off, `/sueltas` draws two lines of the text and the button;
 // both open 245's sheet, and the mark still lands in one tap (RNP-02).
 
@@ -107,7 +107,7 @@ test("Hoy draws the note's button on a one-off, pending or done, never its text;
       .locator("div")
       .filter({ has: page.getByRole("button", { name: `Escribir una nota en «${pendingName}»` }) })
       .last();
-    await ownRow.getByRole("button", { name: "Marcar como hecho", exact: true }).click();
+    await ownRow.getByRole("button", { name: `Marcar como hecho: ${pendingName}`, exact: true }).click();
     await expect
       .poll(async () => (await db`select 1 from goals.facts where one_off_id = ${pending.id}`).length)
       .toBe(1);
@@ -171,9 +171,17 @@ test("/sueltas draws two lines of the note under the name and its button; a row 
     const bare = page.getByRole("button", { name: `Escribir una nota en «${bareName}»` });
     await expect(bare.locator(GREEN)).toHaveCount(0);
 
-    // The row's name opens the day sheet, never the note's.
+    // The row's name opens its sheet, never the note's; its day is a row inside.
     await page.getByRole("button", { name: new RegExp(`^${bareName}`) }).first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Darle un día" }).click();
     await expect(page.getByRole("dialog")).toContainText("¿Para cuándo?");
+    // Radix registers the sheet's Escape layer in an effect after its DOM and
+    // focus exist; the open animation is the first thing that ends after it.
+    // Focus alone is no anchor: the closing task sheet still holds it.
+    await page
+      .getByRole("dialog")
+      .filter({ hasText: "¿Para cuándo?" })
+      .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toBeHidden();
 

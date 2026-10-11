@@ -1,4 +1,4 @@
-// Proves RP-39 and RP-46 at the door: `get_report` lists each goal's tasks as
+// Proves RP-39 and RP-49 at the door: `get_report` lists each goal's tasks as
 // 256 reads them — the carried one first, then the month's own in plan order,
 // done and not, every note — shaped in YYYY-MM and whole amounts. Rows are
 // planted by direct SQL with positions that run against creation order. Raw
@@ -32,7 +32,7 @@ type ReportTask = {
   children: { name: string; done: boolean; doneOn: string | null; estimate: Amount | null; note: string | null }[];
 };
 
-// Twenty tools at module 266; this module adds none.
+// Twenty tools here; this file adds none.
 const TOOL_COUNT = 20;
 let subject: Person;
 let goal: string;

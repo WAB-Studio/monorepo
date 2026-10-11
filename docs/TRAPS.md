@@ -11,7 +11,10 @@ holds only what a person could not guess from the code.
 
 Measured 2026-09-10, module 8 (the photo credits in `/cuenta`).
 
-`/api/word/photo` stores and returns **bare licence codes** — `by`, `by-sa`, `cc0`, `pdm`. The
+**Superseded as to its subject:** `/api/word/photo` and the credits list were removed with RL-36 (retired
+2026-09-14). The lesson below stands; the route no longer exists.
+
+The route stored and returned **bare licence codes** — `by`, `by-sa`, `cc0`, `pdm`. The
 component was supposed to turn those into a name a reader recognises, using the
 `account.info.photoLicence` map module 3 had already shipped. It never did: it interpolated
 `credit.licence` verbatim, so a real row rendered «osde8info · by-sa» where the board says
@@ -372,6 +375,15 @@ and `validator.ts`: both processes write the same files and the result is splice
 surfaces as exactly two bogus `TS1128` in generated files nobody edited. Stop the server, remove
 the directory, regenerate.
 
+### `next dev` keeps the old server code after a `git apply`
+
+A mutation applied with `git apply` to a server file (`lib/queries/*.ts`, an action) is not
+always picked up by a running `next dev`: the test stays green with the mutant in place. Only CSS
+reloaded reliably. Measured 2026-10-09 three times: module 643's `report.ts` mutants (even a
+`throw`) stayed green, and the validator of 642 saw m71 pass with the patch applied. Restart
+`next dev` after every `git apply`, or prove mutants on `next start` after a rebuild. A green
+under a mutant on a server you did not restart measures nothing.
+
 ## The harness
 
 ### Three layers plus the policies
@@ -484,6 +496,14 @@ HARNESS_LANE=2 HARNESS_BASE_URL=http://localhost:3001 \
 The helper in `e2e/accounts.spec.ts` strips `\D`, which takes the U+2212 minus along with the
 currency symbol. A sign asserted through it passes with the sign and without it. **Assert a sign
 against the raw `innerText`.**
+
+### Every lane commits as the global git identity
+
+A worktree reads the repository's config, and this repository had no `user.email` of its own,
+so every lane committed as the machine's global identity (`wilson@x`). Measured 2026-10-09: module
+660's first commit carried it and was amended. Since then `.git/config` sets `user.name wilson`
+and `user.email cxrkeybwp2004@gmail.com` locally, which every worktree inherits. Read
+`git config user.email` in a lane before its first commit; the global value is not this repo's.
 
 ### Dropping a worktree burns the report inside it
 
@@ -842,32 +862,17 @@ shows green for the wrong reason — which is exactly the failure a negative con
 
 ### The voyager suite drives the real decoration routes, and pays for them
 
-Counted 2026-09-11 across `apps/voyager/e2e`: **11 of the 19 spec files search for words and
-intercept nothing.** Only `export`, `speak`, `sync`, `url` and `word` call
-`page.route("**/api/word/photo", ...)`; `log.spec.ts` (15 tests), `registro.spec.ts` (12),
-`palabra-historial.spec.ts` (13), `sin-entrada.spec.ts` (9) and seven more do not. That is **79
-tests** reaching `/api/word/photo` and `/api/word/text` for real, on every run.
+**Superseded 2026-10-08.** Measured 2026-09-11, when `/api/word/photo` still existed: 79 tests reached
+it and `/api/word/text` for real on every run. That route went with RL-36 (2026-09-14). The cost it
+named stays true for the routes that remain and is now guarded in `apps/voyager/e2e/fixtures.ts`:
 
-What each run therefore does:
-
-- **Writes rows to the shared Postgres**, which is the user's production database. Measured that
-  day: three separate purges of 5, 4 and 4 rows, plus their bucket objects, all left by suites.
-  `reading.word_photos` has no expiry, so nothing removes them on its own.
-- **Spends the model's daily cap.** `/api/word/text` calls `gpt-5-nano`. The only thing standing
-  between a suite run and a real bill is a human remembering `OPENAI_API_KEY=""` as a process
-  override — a convention, never a guard.
-- **Puts an unbounded network call inside timing-sensitive tests.** `log.spec.ts:377` races an 800 ms
-  settle window against a killed tab; Openverse's latency lands in the middle of it. That spec fails
-  in CI on branches that touch no part of the log, and passes on one that does, which is the shape
-  of a race and not of a regression.
-
-`url.spec.ts` is the warning written in the file itself: it **defines** `stubDecorationRoutes` and
-calls it in one of its five tests.
-
-**The stub belongs in the fixture, not in each spec.** A spec that wants the real route should opt
-in and say why, the way `foto.spec.ts` does — it drives the real route deliberately, with two
-headwords chosen so nothing is written: `dog` is already cached and `grudge` is refused by the
-guard before Postgres.
+- `test`/`expect` imported from `./fixtures` intercept `/api/word/text`, `/api/word/unlisted` and
+  `/api/phrase/notes` and answer them deterministically, tagging each stub with `x-e2e-word-stub`.
+  A watchdog fails a spec that reached a real one without `allowRealWordRoute(route, reason)`.
+- A spec that imports `@playwright/test` directly skips the guard: those three routes then write
+  rows to the shared Postgres and spend the model's daily cap.
+- An unbounded network call inside a timing-sensitive test is a race, not a regression; keep real
+  routes out of any spec that races a settle window.
 
 ### Every worktree shares one stash, so a lane can pop another lane's work
 
@@ -1790,7 +1795,7 @@ peticiones** en el proyecto, repartidas así.
 
 | modelo | peticiones | ¿lo llama este repo? |
 |---|---:|---|
-| `gpt-5-nano` | 368 | sí, es `apps/voyager/lib/word/model.ts:11` |
+| `gpt-5-nano` | 368 | sí; hoy `lib/word/model.ts` usa `gpt-5-mini` y `lib/phrase/notes-model.ts` `gpt-5-nano` (2026-10-08) |
 | `gpt-4o-mini-transcribe` | 36 | no |
 | `gpt-realtime-mini` | 12 | no |
 | `gpt-4.1-nano` / `gpt-4.1-mini` | 4 | no |
@@ -1800,8 +1805,9 @@ peticiones** en el proyecto, repartidas así.
 tiempo real: esas 53 peticiones son de otra parte, y el CSV no las distingue porque todo cae bajo un
 `project_id` y una `api_key_id`.
 
-Y el desajuste no se queda ahí. El repo tiene **un solo sitio** que llama al modelo —
-`apps/voyager/app/api/word/text/route.ts:102` — y pide cupo en `lib/word/spend.ts` **antes** de
+Y el desajuste no se queda ahí. Al medir (2026-09-11) el repo tenía **un solo sitio** que llamaba al
+modelo; a 2026-10-08 son **tres rutas** —`app/api/word/text`, `app/api/word/unlisted` y
+`app/api/phrase/notes`— y cada una pide cupo en `lib/word/spend.ts` (`claimDailyCall`) **antes** de
 llamar, así que ninguna llamada queda sin contar. El 2026-09-10 `reading.model_spend` marcó
 `calls=19` y el CSV marca **346 peticiones de `gpt-5-nano` ese día**. Las otras 327 no salieron de
 aquí.
@@ -2580,17 +2586,24 @@ other's person. That reads as `no box`, an empty page or a `linkInvalid` on a pe
 
 ## `page.goto` returns with the loading fallback still standing
 
-Measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
-(`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a
-never-used lane. The failure's `error-context.md` showed `main` holding the `(app)/loading.tsx` skeleton
-beside the streamed page. The CI runner reaches the database slower, so `load` fires before the
-Suspense boundary swaps in the content; a box read straight after `goto` measures the skeleton or nothing.
-A fresh identity was not the cause.
+`load` fires with `(app)/loading.tsx` up; the real page sits in a hidden streamed `div` with no box. A box, a style or a
+count read straight after `goto`, `waitForURL` or `reload` measures the skeleton or nothing. `evaluate` waits for a node to
+attach, not to be visible.
 
-- Anchor every measuring spec on the settled page before its first box: a visible element of the
-  content and `await expect(page.locator("main")).toHaveCount(1)`.
-- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`,
-  from inside the repo) before guessing at a red the local suite does not show.
+- Footprint 1, measured 2026-09-29 in `pulsar-e2e` on CI: nine layout specs at 1024 and 1280 failed on `integracion`
+  (`no box`, widths of 0, ``locator('main') resolved to 2 elements``) and passed 182/0 locally and on a never-used lane. The
+  failure's `error-context.md` showed `main` holding the skeleton beside the streamed page. The runner reaches the database
+  slower, so the Suspense boundary swaps late. A fresh identity was not the cause.
+- Footprint 2, measured 2026-10-08 on CI run 37823517494, `[mobile] e2e/columnas-espacio.spec.ts:26`: `Expected: >= 4`,
+  `Received: 0` at `:33`; the 1024 twin passed 1.5 s earlier on the same shard. `siblingRects` ran `evaluate` right after
+  `goto` and the children were still zero-sized. Footprint: `private/ci-reds/425/columnas-espacio-footprint.txt` in the main
+  checkout. The same day: `metas-barrido:33`, `campo-chip:44-52`, `plan-ritmo:250` (`private/ci-reds/flakes-2026-10-08/`).
+- Do: call `settled(page)` from `e2e/fixtures.ts` before the first measure, or `visit(page, url)` for `goto` + `settled`.
+  `settled` is `expect(main).toHaveCount(1)`, then `toBeVisible()`, then `document.fonts.ready`. The count rule comes
+  first: a strict `main` locator throws on the two `main`s of the skeleton and the page.
+- Never retry, sleep or `waitForTimeout` to buy quiet. Save `private/playwright-results/` before rerunning.
+- Read the artifact `pulsar-playwright-results` (`gh run download <id> -n pulsar-playwright-results`, from inside the repo)
+  before guessing at a red the local suite does not show.
 
 ## A pulsar lane has no member identity, so `check:goal-actions` dies there
 
@@ -2613,6 +2626,9 @@ A fresh identity was not the cause.
   build, which has no badge, so it stayed green.
 - **Do.** Keep `devIndicators: { position: "bottom-right" }` in `apps/pulsar/next.config.ts`. Never set
   `devIndicators: false`: errors would stay, but the badge is how a dev sees a real issue count.
+- **Also on the phone.** Bottom-right is the Metas tab's corner at 360: a spec that taps it (`varias-metas.spec.ts:16`)
+  reads «`<nextjs-portal>` subtree intercepts pointer events» under `next dev`, with no error behind the badge.
+  Measured 2026-10-06. Run the e2e against `npm run build` + `next start`, as `playwright.config.ts` says; never click `force`.
 
 ## The `pulsar-e2e` queue holds one waiting run, and a newer one cancels it
 
@@ -2810,3 +2826,260 @@ branch could pass until it was restored.
 - Every local probe registered its own clean document, so nothing caught it before production. Measured 2026-10-06 by the
   user's first connection from claude.ai (module 200), fixed in module 287: ignore unknown grants, require the code grant.
 - Fetch the real document before trusting a schema that parses someone else's metadata.
+
+## Next's route announcer is an alert
+
+- `node_modules/next/dist/client/components/app-router-announcer.js` renders `<next-route-announcer>` with an open shadow
+  root holding `role="alert"`, filled with the new title after a client navigation. Playwright's `getByRole` pierces open
+  shadow roots, so it counts that node as an app alert.
+- Measured 2026-10-06: CI run 37524876363 failed `importar-revisar.spec.ts:84` at line 100,
+  `getByRole('alert').filter({ hasText: /\S/ })` counting 1. Locally it never reproduced: it is timing.
+- Count app alerts with `appAlerts(page)` from `apps/pulsar/e2e/fixtures.ts`, never `getByRole('alert')` on the page.
+  `anunciador.spec.ts` shows both counts after a client navigation.
+
+## A migration on the local stack reaches every lane
+
+- Every lane and every suite shares one local Postgres. A migration a roadmap lane applies changes the database under the
+  UX lanes too, whose branches know nothing of it.
+- Measured 2026-10-06: 0013 added `one_offs_in_plan_shape` (`not in_plan or (goal_id is not null and day is null)`). The
+  plan wrote that check; nothing built allowed it. `scheduleOneOff` already gives a month task a day, so four `check:plan`
+  tests and a UX lane's `suelta-nota` seed went red with 23514, and the migration's own worker never ran `check:plan`.
+- Grep every writer of a table (actions, seeds, probe fixtures) before adding a check to it. A check the plan names is a
+  claim about today's rows and acts; prove it against them.
+- Run every `check:*` that writes the table before applying the migration locally, not after.
+- A constraint changed after a local apply is altered by hand (`DROP CONSTRAINT` + `ADD CONSTRAINT`) in the same words as
+  the edited SQL, schema and snapshot. Drizzle will not re-run the file.
+
+## A lane's dev server started bare reads the remote project
+
+- `next dev` in a lane loads `apps/pulsar/.env.local`, which points at the remote project. The specs mint their
+  session on the local stack, so `/auth/confirm` refuses it and every spec reads `linkInvalid`.
+- Start a lane's server inside `scripts/supabase-local.sh exec`. Measured 2026-10-06: four agents on four lanes hit it
+  the same evening before each found it alone.
+
+## A machine crash leaves empty git objects
+
+- A WSL reset on 2026-10-06 left nine zero-byte files under `.git/objects`; a lane's `HEAD` then read `bad object`.
+- Find them with `find .git/objects -type f -empty`, move them out of `.git` (never delete), and `git fetch origin`:
+  every one of them was a pushed object and came back whole. An unpushed commit would not.
+- Restore every lane's tree after the crash too: a mutator's live mutant survives it uncommitted.
+
+## A whole-page absence on the shared person is a race
+
+- `personId` (`e2e/fixtures.ts`) is one person per lane, shared by both workers and every spec. A test that asserts
+  «nothing else is here» on it fails whenever another spec seeds for it at the same moment.
+- Assert an absence or an exact count only on the disposable `person`. Measured 2026-10-06: `dia-pasado.spec.ts:314`
+  and `dia-pasado-hechos.spec.ts:105` passed one CI run and failed the next on the same tree.
+- Match a date's words with `\p{L}` and the `u` flag, never `\w`: `\w` is ASCII and skips «miércoles» and «sábado»,
+  so on those days a header spec measured the «hechos 0 de 6» tally instead (75 px off, 2026-10-07). Drive the longest
+  date by rewriting the eyebrow's text, so the check never waits for a Wednesday.
+- Read `docs/pulsar/SPEC.md` before "fixing" an order a spec expects. On 2026-10-07 a red e2e asked «most recent
+  first» for `ended_this_week`; the query was changed to `horizon desc` and broke three `check:day`/`check:plan`
+  assertions that pin RP-47's plan order. The e2e followed a DESIGN line RP-47 had superseded; it was the spec that was wrong.
+  The e2e only failed from a Wednesday, the first weekday that draws two endings.
+
+## An advisory lock taken inside a statement does not refresh that statement's snapshot
+
+- `select pg_advisory_xact_lock(k)` in a CTE of the same `insert … select count(*)` waits for the lock, but the count reads
+  the snapshot taken when the statement began. The second of two racing uploads waits, then counts zero of the first's rows
+  and writes past the cap.
+- Count inside a `VOLATILE` plpgsql function that takes the lock first: under READ COMMITTED each statement in it takes a
+  fresh snapshot after the lock is granted. One round trip still.
+- Measured 2026-10-08: voyager `reading.sync_rows_today`; mutant «inline lock» left 4 rows for a cap of 2 (S22 in
+  `apps/voyager/scripts/check-sync.ts`).
+
+## A `using(true)` UPDATE policy hides behind the SELECT policy
+
+- An `UPDATE … WHERE col = x` or `… RETURNING` also needs the row visible under the SELECT policy, so a probe written that
+  way stays green when the UPDATE policy is `using(true)`.
+- Prove an UPDATE policy with an update that reads no column: no `WHERE`, no `RETURNING`, inside a savepoint.
+- Measured 2026-10-08: voyager S16 and G5 green under `devices_update_self using(true)`; G8 and the rewritten S16 red.
+
+## `gh api …/jobs/<id>/logs` refuses a log with terminal escapes
+
+- It exits with nothing unless given `--allow-escape-sequences`; a grep over its output then reads as «no failures».
+- `workflow_dispatch` reads the `ci.yml` of the ref it runs on: a throwaway mutation branch may cut it to the one job it
+  needs. Never merge such a branch.
+
+## A route a client file imports cannot import the database
+
+- A client component that imports a schema from `app/api/**/route.ts` pulls the whole route into the browser bundle. Once
+  that route imports `db/client.ts`, `next build` fails on `postgres` in the client graph; `next dev` serves it.
+- Keep a schema shared by client and server in a `lib/**/types.ts` with no server import. Measured 2026-10-08: voyager
+  513, `search-screen.tsx` → `network.ts` → `translate/route.ts` → `client-budget.ts` → `db/client.ts`.
+
+## Patching `Module._load` does not intercept `await import()`
+
+- A check that doubles a module by patching `Module._load` misses every dynamic `import()`: the real module loads. In
+  voyager's `check-sign-in-budget.ts` the real Supabase client loaded that way.
+- Double through `module.registerHooks` (Node 22+), which sees both `require` and `import`. Prove the double is the one
+  reached: make it throw when called.
+
+## A mutant that changes a key's hash leaves rows the cleanup cannot find
+
+- A check that deletes its rows by the key it computes cannot find rows a mutant wrote under another key. Measured
+  2026-10-08: voyager 514's mutation M4 left one `client_spend` row on the local stack.
+- After a mutation run, read the table for rows of the day, not for the check's own keys, and delete what is left.
+## A throwaway `ci.yml` cut by line count duplicates `jobs:`
+
+- `.github/workflows/ci.yml` carries a blank line and then `jobs:` at lines 10-11. A script that keeps `lines[:11]` and
+  appends one job writes `jobs:` twice, and `gh workflow run` answers 422.
+- Cut at the `jobs:` line by matching it, never by a fixed count. Measured 2026-10-08: voyager module 511's mutation
+  branches.
+
+## Un carril que cambia de rama sirve 404 en rutas que existen
+
+Un carril reutilizado guarda el `.next` del servidor que corrió la rama anterior. Con la rama nueva, `next dev`
+respondió 404 en `/metas/<id>/fases/nueva` y `/metas/<id>/compromisos/nuevo` para una meta que existía, y
+`fase-defecto.spec.ts` salió rojo sin defecto. Medido 2026-10-06 en el carril 6 (módulo 403).
+
+- Al cambiar la rama de un carril: `fuser -k <puerto>/tcp`, `rm -rf apps/<app>/.next`, y arrancar el servidor de nuevo.
+- Un 404 en una ruta que la rama sí tiene es primero esto, no un defecto.
+
+## Una mutación verde bajo `next dev` puede ser una mutación que el servidor nunca leyó
+
+`next dev` no recargó el archivo mutado en dos carriles el 2026-10-07 (399 en `goal-screen.tsx`, 407 en
+`lib/queries/one-offs.ts`): la primera ronda de mutaciones salió toda verde, por la razón equivocada.
+
+- Reinicia el servidor tras aplicar cada mutación: `fuser -k <puerto>/tcp` y arrancarlo de nuevo.
+- Un mutante que sobrevive bajo `next dev` no cuenta hasta que sobrevive con el servidor recién arrancado.
+
+### `suelta-nota.spec.ts:179` once kept the sheet open after Escape on mobile
+
+Measured 2026-10-08 on CI run 37820144006 (branch `pulsar-auditoria-puros`, which touched no one-off or dialog code):
+`[mobile] e2e/suelta-nota.spec.ts:124` failed at `:179`, `expect(getByRole('dialog')).toBeHidden()` — the Radix sheet
+(`data-state="open"`) stayed after `Escape`, 14 resolutions over 5 s. The rerun of that shard alone, same commit, passed.
+`integracion` passed the same spec at 8cc4e341.
+
+- Treat a second occurrence as a defect, not a flake: the step before opens «¿Para cuándo?» inside the sheet, and one
+  `Escape` may close only the inner step.
+- Never add a retry or a second `Escape` to buy quiet. Save `private/playwright-results/` first; the CI log is kept at
+  `private/ci-431-e2e4.log` in the main checkout.
+- Cause (module 443): the spec pressed `Escape` before the sheet settled. «Darle un día» closes the task sheet and opens
+  the schedule sheet in one tick; `toContainText('¿Para cuándo?')` passes once the new DOM exists, but Radix registers the
+  Escape layer in an effect that runs after it. A key sent in that gap is swallowed (a `keydown` dispatched from a
+  MutationObserver on that text left the sheet `open` 5 of 5 times); it did not reproduce in 90 plain runs, even at 6x CPU throttle.
+- The gap is 1-5 ms after the DOM (a keydown from a MutationObserver was lost at 0 and 1 ms, lost once in 8 at 5 ms, kept at
+  10 ms and later), so no person reaches it; it is a test defect. Focus is no anchor: it is already inside the new sheet at
+  the first mutation, and the closing task sheet keeps its dialog in the DOM. Anchor on the new sheet's open animation
+  (`getAnimations()` finished, 1 pending at the first mutation), never on its text or focus.
+
+
+## Seeding `sync` from `/registro` races its round on open
+
+Since 549 (#495), `/registro` mounts `<SyncOnOpen />`, which calls `syncNow()` on mount. A spec that opens `/registro` and then
+writes `sync` into IndexedDB races that round: the round reads the old state and writes a fresh one over the seed.
+
+- Measured 2026-10-09: 549 and 542 were each green alone. Once both were on `integracion`, `cuenta-copia.spec.ts:521` read a
+  new `deviceId` (run 37936876838) and `:477` uploaded the 2 seeded rows (run 37939348565). Different tests on different runs, one cause.
+- Seed `sync` from `/`, anchored on the search box, as `registro-copia.spec.ts` and `cuenta-copia.spec.ts` do. Never from
+  `/registro` or `/cuenta`: both read `sync` on mount.
+- A screen that starts reading `sync` on mount must grep `e2e/` for `objectStore("sync").put` and move every seed that opens it.
+
+## next-intl formats a time in the server's zone, not the reader's
+
+`useFormatter().dateTime` without a `timeZone` follows the zone the provider was given, and the provider takes the
+server's. On a UTC server a reader in Bogotá sees every time five hours off.
+
+- Measured 2026-10-09 (module 563, PR #517): `palabra-historial.spec.ts:943` expected «Hoy, 00:01» and CI rendered «05:01». It
+  passed locally because the server ran on Bogotá time; `TZ=UTC` on the `next start` process reproduced it, `TZ=UTC` on
+  Playwright alone did not.
+- Production runs on UTC too, so this is a defect the reader sees, not a test artefact.
+- Pass `timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone` from a client component, or set the provider's zone
+  from the browser. Prove a date assertion with `TZ=UTC` on the server process.
+
+## The voyager build on CI sometimes cannot reach Google Fonts
+
+`voyager-e2e` and `build-*` fail in the build step with `Can't resolve '@vercel/turbopack-next/internal/font/google/font'`
+and `next/font/google queries have exactly one entry`, 48 errors, on a PR that touches nothing of voyager.
+
+- Seen twice: #505 (2026-10-08) and #516 (2026-10-09, a pulsar-only PR). Both passed on `gh run rerun <id> --failed`.
+- Read the build step's first error before chasing a red `voyager-e2e`. This one is the runner's network, not the branch.
+
+## `harness:mint-session` needs the lane's server up
+
+`HARNESS_LANE=n npm run harness:mint-session` with no server on the lane's port dies with a bare `FAILED  fetch failed`, and
+leaves a seed run open for `harness:reap`.
+
+- Measured 2026-10-09 (module 590): `check:day` said `session user … does not exist: re-mint`; the mint failed until
+  `PORT=3205 … npm run dev` was up, then minted and `check:day` passed.
+- Start the server first, then mint with `PULSAR_BASE_URL` pointing at it.
+## A `pulsar-e2e` shard dies before its first test: port 54322 already in use
+
+The shard's `supabase start` fails with `failed to bind host port for 0.0.0.0:54322:172.18.0.2:5432/tcp: address already
+in use`, the job goes red with no spec run, and `pulsar-e2e-report` follows it red.
+
+- Seen 2026-10-09, run 37980310112, shard 1 of 4, on a branch whose other three shards were green. The log is in
+  `private/reportes/ci-37980310112-shard1-puerto-54322.log`.
+- It is the runner, not the branch. Read the shard's setup step before any spec: no `✘` line means nothing ran.
+- `gh run rerun <id> --failed` and read the rerun before merging.
+
+## The service worker's cache name lives in two files
+
+- `apps/voyager/e2e/despliegue.spec.ts` writes `CACHE_NAME` by hand. Bumping it in `apps/voyager/public/sw.js` without the
+  spec leaves `despliegue.spec.ts:38` red in CI («one cache, named by the worker in hand»), and nowhere else.
+- Measured 2026-10-09, module 651: v8 → v9 in `sw.js`, the spec still read v8, and the PR went red on its only e2e run.
+- Bump both in the same commit.
+
+## `context.route` also routes the service worker
+
+- In Playwright, `context.route` intercepts the worker's own fetches; `page.route` does not. A spec that aborts chunks with
+  `context.route` to model «the page never fetched them» also aborts the worker's precache, and no precache can pass it.
+- Measured 2026-10-09, module 651: two `offline.spec.ts` tests red on every run with a correct `sw.js`, green 10/10 once
+  switched to `page.route`, still red 6/6 on the old `sw.js`.
+
+### A cached Response hands a Turbopack Worker no bootstrap config
+
+`apps/voyager/public/sw.js` `cacheFirst` returned the stored `Response` as is. A stored response has no URL
+fragment, and Turbopack carries the Worker's bootstrap config in the Worker URL's `#params=…`; the Worker
+takes its location from the response, so it logs "Missing worker bootstrap config" and dies, online too.
+Return `new Response(cached.body, {status, headers})` instead. The worker chunk is named inside another chunk,
+never in the HTML, so `precacheChunks` must scan fetched JS for `turbopack-worker-*` and its deps; a first
+visit to `/registro` alone otherwise never installed the dictionary offline (RNL-08).
+- Surface it: `worker.onerror` in `use-dictionary.ts` sets the failed state, so offline `/` says «No se pudo
+  instalar el diccionario» and not «Instalando…» forever.
+- Measured 2026-10-09, module 691: `sin-red-una-visita.spec.ts` 10/10 green with the three changes, red with any one removed.
+
+## A pulsar spec named `*caida.spec.ts` never runs in the mobile project
+
+- `apps/pulsar/playwright.config.ts` makes `mobile` ignore `(caida|fuente-caida|importar-modelo)\.spec\.ts`, unanchored, so
+  any new file ending in `caida.spec.ts` is ignored there too. It runs only if the `caida` or `fuente-caida` project
+  matches it; otherwise Playwright says «No tests found» and the module looks covered.
+- Measured 2026-10-09, cierre parte 2. Name a new spec something else, or add it to a project by name.
+
+## A lane's `npm run build` outside `supabase-local.sh exec` bakes the remote Supabase URL
+
+- `NEXT_PUBLIC_SUPABASE_URL` is inlined at build time. A production build of a lane run without
+  `scripts/supabase-local.sh exec` carries the remote project's URL while the harness mints sessions on the local stack,
+  so every sign-in fails with `otp_expired`.
+- Measured 2026-10-09, the voyager offline modules. Build and start inside `scripts/supabase-local.sh exec`.
+
+## `indexedDB.open("reading-dictionary")` in a voyager spec breaks the dictionary
+
+- Opening the database unconditionally creates it empty at version 1. The dictionary Worker then sees the version it
+  expects already present, never runs its upgrade, and never builds its stores: the box answers nothing.
+- Measured 2026-10-09, the voyager offline modules. Check `indexedDB.databases()` first and open only a database that
+  exists.
+
+## A column added to a table granted column by column is refused until it is granted
+
+- `reading.lookups` grants INSERT to `authenticated` column by column (`apps/voyager/db/migrations/0000_*.sql:75-78`). A
+  migration that adds a column must name it in a new `GRANT INSERT (…)`, or every insert that carries it fails with 42501.
+- A probe run as the migration's superuser passes; only an insert `set local role authenticated` sees it.
+- Measured 2026-10-09, module 697: 0005 added three columns, its validator passed, and 698's `check:sync` hit 42501 on the
+  first upload. Fixed by 0006. Prove a new column as the role that writes it.
+
+## `page.content()` always holds every interface string
+- `NextIntlClientProvider` in `apps/pulsar/app/layout.tsx` ships the whole message catalogue in each page's payload.
+- `expect(await page.content()).not.toContain("<copy>")` cannot pass, whatever the screen paints.
+- Assert absence on what is drawn: `getByText(...).toHaveCount(0)` or `locator("body").innerText()`.
+- Measured 2026-10-10, module 723: `meses-km.spec.ts:165` stayed red with the feature correct; the only match was the raw
+  `month.list.empty` message.
+
+## A field made required on the sync wire breaks every spec that seeds a peer's rows
+- 698 made `definition`, `exampleEn`, `exampleEs` required in the download schema. `log.spec.ts` (`foreignPage`),
+  `registro-copia.spec.ts` (`zebraRound`) and `export.spec.ts` (`recordSchema` 2) still seeded the old shape.
+- The rows are rejected silently: RNL-01 waits for `pulledThroughCursor` until the 30 s timeout, with no error.
+- Each module's own suite stayed green; only the train's CI run caught them. Measured 2026-10-10, train t3 (#566).
+- Grep `recordSchema`, `foreign` and `/api/log/sync` routes in `apps/voyager/e2e` in the same module that changes the wire.
+

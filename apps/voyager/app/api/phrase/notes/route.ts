@@ -1,13 +1,10 @@
 import "server-only";
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
 import { normaliseHeadword } from "@/lib/dictionary/format";
-import type { DictionaryPayload } from "@/lib/dictionary/format";
-import { buildIndex, groupFor, type DictionaryIndex } from "@/lib/dictionary/index-build";
+import { groupFor, type DictionaryIndex } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
 import { claimClientCall, clientKey } from "@/lib/word/client-budget";
+import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { claimDailyCall } from "@/lib/word/spend";
 import { generateNotes, NOTES_MODEL_NAME } from "@/lib/phrase/notes-model";
 import { phraseHash, readCachedNotes, writeCachedNotes } from "@/lib/phrase/notes-cache";
@@ -20,6 +17,9 @@ import { admitPhrase, notesRequestSchema, notesResponseSchema, tokenisePhrase } 
 // had to earn either.
 export const dynamic = "force-dynamic";
 
+// Above the provider's own 20 s timeout.
+export const maxDuration = 30;
+
 const NO_STORE = { "Cache-Control": "no-store" };
 
 function json(body: unknown, status: number): Response {
@@ -28,27 +28,6 @@ function json(body: unknown, status: number): Response {
 
 function empty(status: 204 | 400): Response {
   return new Response(null, { status, headers: NO_STORE });
-}
-
-const DICTIONARY_ASSET = path.join(
-  process.cwd(),
-  "public",
-  "dictionary",
-  "eng-spa-2025.11.23.json",
-);
-
-// Read once per server process, the same asset `word/text/route.ts` loads —
-// this route's own "does the index have it" hint reads from it, it never
-// gates admission (a phrase of real-shaped words is admitted whether or not
-// the dictionary carries every one of them).
-let dictionaryIndex: DictionaryIndex | null = null;
-
-function loadDictionaryIndex(): DictionaryIndex {
-  if (!dictionaryIndex) {
-    const payload = JSON.parse(readFileSync(DICTIONARY_ASSET, "utf8")) as DictionaryPayload;
-    dictionaryIndex = buildIndex(payload);
-  }
-  return dictionaryIndex;
 }
 
 // A source token survives translation when the exact same spelling still
@@ -95,7 +74,12 @@ export async function POST(request: Request): Promise<Response> {
   // no chargeable client, over either cap, a provider failure, or a
   // generation that fails to validate all answer `204` — the same
   // "no connection" screen already drawn (RL-35).
-  if (!env.OPENAI_API_KEY || !env.PHRASE_NOTES_DAILY_CALL_CAP || !env.PHRASE_NOTES_DAILY_CLIENT_CAP) {
+  if (
+    !env.OPENAI_API_KEY ||
+    !env.PHRASE_NOTES_DAILY_CALL_CAP ||
+    !env.PHRASE_NOTES_DAILY_CLIENT_CAP ||
+    !env.WORD_TEXT_DAILY_CALL_CAP
+  ) {
     return empty(204);
   }
 
@@ -110,16 +94,17 @@ export async function POST(request: Request): Promise<Response> {
   // The same `reading.client_spend` row `/api/word/unlisted` bumps for this
   // caller, read against this route's own ceiling — never against
   // WORD_UNLISTED_DAILY_CLIENT_CAP, and never left unread the way it was.
-  const clientCalls = await claimClientCall(client);
-  if (clientCalls > env.PHRASE_NOTES_DAILY_CLIENT_CAP) {
+  if (!(await claimClientCall(client, env.PHRASE_NOTES_DAILY_CLIENT_CAP))) {
     return empty(204);
   }
 
-  // Sequential, not `Promise.all` with the claim above: both are writes
-  // that bump a counter, and run in parallel the second one climbs even
-  // when the first should already have refused the request.
-  const calls = await claimDailyCall();
-  if (calls > env.PHRASE_NOTES_DAILY_CALL_CAP) {
+  // Sequential, not `Promise.all` with the claim above: run in parallel, a
+  // caller already refused would still take one of the day's calls. The
+  // day's counter is the one every paid route shares, so its ceiling is the
+  // lower of this route's own and the global one: notes never spend past
+  // the day `/api/word/text` is held to.
+  const dailyCap = Math.min(env.PHRASE_NOTES_DAILY_CALL_CAP, env.WORD_TEXT_DAILY_CALL_CAP);
+  if (!(await claimDailyCall(dailyCap))) {
     return empty(204);
   }
 

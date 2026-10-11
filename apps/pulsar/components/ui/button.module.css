@@ -49,8 +49,15 @@
   min-block-size: 52px;
 }
 
-.block.block {
-  inline-size: 100%;
+/* Full width on the phone comes from the column's own stretch. From 1024 a
+   block button is sized to its text, 160 at least, wherever it sits (a sheet's
+   actions row included); a flex column (Split from 301) would stretch it, so
+   the width is set, not left to the parent. */
+@media (min-width: 1024px) {
+  .block.block {
+    inline-size: fit-content;
+    min-inline-size: 160px;
+  }
 }
 
 /* A label with its hint under it: the height follows the two lines, the hint

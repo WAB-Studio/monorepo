@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   // Inlined by DefinePlugin into every bundle, server included, so
   // `app/layout.tsx`'s own check on it folds to a literal `false` and the
   // branch it guards drops out of a build where the variable is unset.
@@ -10,6 +11,20 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        // No `script-src`: a script policy needs a nonce per request, which
+        // forces dynamic rendering and breaks the static offline shell.
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+          },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
       {
         // `public/` is served with `max-age=0` by default, so every open would
         // re-validate 8.2 MB — the opposite of an app that answers offline. The

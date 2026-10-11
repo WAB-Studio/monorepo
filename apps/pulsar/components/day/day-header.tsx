@@ -1,14 +1,14 @@
-import Link from "next/link";
+import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { Button, Face, Flex, IconButton, ScreenHeader, Text, ThemeToggle } from "@/components/ui";
+import { Face, Flex, ScreenHeader, Text, TextLink, ThemeToggle } from "@/components/ui";
 
 type HeaderLink = { href: string; label: string };
 
 // The day's own header (`ArmazonEncabezado.dc.html` case 4,
-// `DiaPasadoEscritorio.dc.html`): the shared `ScreenHeader`, its eyebrow line
+// `DiaPasadoEscritorio.dc.html`): the shared `ScreenHeader`, its controls row
 // holding the step back to the day before. Today's title is its `h1`, with the
-// date on that line and the light/dark control at its end (RNP-08):
+// date as its eyebrow and the light/dark control at its end (RNP-08):
 // docs/pulsar/DESIGN.md "Decisions taken here" puts it here and nowhere else —
 // there is no `/cuenta` screen in this app. A past day's date is its `h1`, and
 // «volver a hoy» takes the control's place.
@@ -33,80 +33,53 @@ export function DayHeader({
   limitNote?: string;
   toToday?: HeaderLink;
   theme?: { toLightLabel: string; toDarkLabel: string };
-  // «hechos 3 de 5»: mono, under the title (a past day's, under its date),
-  // absent when the day counts nothing.
-  tally?: string;
+  // «hechos 3 de 5»: a sentence with its figures in mono, under the title (a
+  // past day's, under its date), absent when the day counts nothing.
+  tally?: ReactNode;
   // One quiet line per goal that ended this week, under the title.
   ended?: { id: string; text: string; href: string; see: string; seeLabel: string }[];
 }) {
   // A past day (`DiaPasadoPasos.dc.html`): both steps are words with their
   // chevron, «volver a hoy» pushed to the end.
-  const eyebrow = title === undefined ? (
-    <Flex align="center" gap="1">
+  const controls = title === undefined ? (
+    <Flex align="center" gap="5">
       {back ? (
-        <Button asChild tap={44} variant="ghost">
-          <Link href={back.href}>
+        <TextLink href={back.href}>
+          <Flex as="span" align="center" gap="1">
             <ChevronLeft size={16} aria-hidden />
-            <Text variant="meta" tone="accent">
-              {back.label}
-            </Text>
-          </Link>
-        </Button>
+            {back.label}
+          </Flex>
+        </TextLink>
       ) : limitNote ? (
         <Flex width="14px" flexShrink="0" aria-hidden />
       ) : null}
       {forward ? (
-        // A ghost button's own negative margin would lay it over the step back.
-        <Flex ml="3">
-          <Button asChild tap={44} variant="ghost">
-            <Link href={forward.href}>
-              <Text variant="meta" tone="accent">
-                {forward.label}
-              </Text>
-              <ChevronRight size={16} aria-hidden />
-            </Link>
-          </Button>
-        </Flex>
+        <TextLink href={forward.href}>
+          <Flex as="span" align="center" gap="1">
+            {forward.label}
+            <ChevronRight size={16} aria-hidden />
+          </Flex>
+        </TextLink>
       ) : null}
       {toToday ? (
-        <Flex ml="auto" pl="3">
-          <Button asChild tap={44} variant="ghost">
-            <Link href={toToday.href}>
-              <Text variant="meta" tone="accent">
-                {toToday.label}
-              </Text>
-            </Link>
-          </Button>
+        <Flex ml="auto">
+          <TextLink href={toToday.href}>{toToday.label}</TextLink>
         </Flex>
       ) : null}
     </Flex>
   ) : (
-    <Flex justify="between" align="center" gap="2">
-      <Flex align="center" gap="5">
-        {back ? (
-          <IconButton asChild tap={44} variant="ghost">
-            <Link href={back.href} aria-label={back.label}>
-              <ChevronLeft size={20} aria-hidden />
-            </Link>
-          </IconButton>
-        ) : limitNote ? (
-          <Flex width="14px" flexShrink="0" aria-hidden />
-        ) : null}
-        {title ? (
-          <Text as="p" variant="meta" tone="muted">
-            {date}
-          </Text>
-        ) : null}
-        {toToday ? (
-          <Button asChild tap={44} variant="ghost">
-            <Link href={toToday.href}>
-              <Text variant="meta" tone="accent">
-                {toToday.label}
-              </Text>
-            </Link>
-          </Button>
-        ) : null}
-      </Flex>
+    <Flex justify="end" align="center" gap="5">
+      {back ? (
+        <TextLink href={back.href}>
+          <Flex as="span" align="center" gap="1">
+            <ChevronLeft size={16} aria-hidden />
+            {back.label}
+          </Flex>
+        </TextLink>
+      ) : limitNote ? (
+        <Flex width="14px" flexShrink="0" aria-hidden />
+      ) : null}
+      {toToday ? <TextLink href={toToday.href}>{toToday.label}</TextLink> : null}
       {theme ? (
         <Face on="phone">
           <ThemeToggle toLightLabel={theme.toLightLabel} toDarkLabel={theme.toDarkLabel} />
@@ -117,26 +90,32 @@ export function DayHeader({
 
   return (
     <>
-      <ScreenHeader title={title ?? date} eyebrow={eyebrow} meta={tally} />
+      <ScreenHeader
+        title={title ?? date}
+        eyebrow={title ? date : undefined}
+        controls={controls}
+        meta={tally}
+        metaVariant="sentence"
+      />
       {limitNote ? (
-        <Text as="p" variant="meta" tone="muted">
+        <Text as="p" variant="sentence">
           {limitNote}
         </Text>
       ) : null}
-      {ended?.map((line) => (
-        <Flex key={line.id} align="center" gap="1" wrap="wrap">
-          <Text as="p" variant="meta" tone="muted">
-            {line.text}
-          </Text>
-          <Button asChild tap={44} variant="ghost">
-            <Link href={line.href} aria-label={line.seeLabel}>
-              <Text variant="meta" tone="accent">
-                {line.see}
+      {ended && ended.length > 0 ? (
+        <Flex direction="column" gap="1">
+          {ended.map((line) => (
+            <Flex key={line.id} align="center" gap="3" wrap="wrap">
+              <Text as="p" variant="sentence">
+                {line.text}
               </Text>
-            </Link>
-          </Button>
+              <TextLink href={line.href} aria-label={line.seeLabel}>
+                {line.see}
+              </TextLink>
+            </Flex>
+          ))}
         </Flex>
-      ))}
+      ) : null}
     </>
   );
 }

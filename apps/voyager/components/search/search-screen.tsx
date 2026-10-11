@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { classify, PHRASE_MAX_TOKENS, PHRASE_MIN_TOKENS, type QueryKind } from "@/lib/query/classify";
+import { classify, PHRASE_MAX_TOKENS, type QueryKind } from "@/lib/query/classify";
 import { PHRASE_DEBOUNCE_MS } from "@/lib/query/settle";
 import { normaliseHeadword } from "@/lib/dictionary/format";
-import type { Sense, SenseGroup } from "@/lib/dictionary/index-build";
+import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { useDecoration } from "@/lib/word/use-decoration";
@@ -16,13 +16,15 @@ import { enableDeviceTranslator, translateOnDevice } from "@/lib/translate/on-de
 import { translateOverNetwork } from "@/lib/translate/network";
 import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
+import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
 import { Flex, Text } from "@/components/ui";
 import { InstallStatus } from "./install-status";
-import { NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
+import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
 import { SearchBox } from "./search-box";
 import { SenseList } from "./sense-list";
+import { functionWordTranslation } from "@/lib/phrase/function-words";
 import { Suggestions } from "./suggestions";
 
 // The query string's own name: `/?q=book`.
@@ -39,31 +41,6 @@ type LogPayload = Omit<LookupRecord, "id" | "schema">;
 // answers it again. Answering again is right; recording it again is not.
 // A reader who walks to the log and back five times looked the word up once.
 let lastLoggedText: string | null = null;
-
-// Cut, never truncated silently past the point RL-34's list can hold — the
-// module 27 wire schema and the row this fills both agree on the same 120.
-const TRANSLATION_MAX_CHARS = 120;
-const TRANSLATION_MAX_SENSES = 3;
-
-function cutTranslation(text: string): string {
-  if (text.length <= TRANSLATION_MAX_CHARS) return text;
-  // The cut can land mid-separator, leaving ", " or "," dangling at the
-  // end. Trim it — the 120 cap stays a ceiling, not a quota, so a shorter
-  // result here is fine. A cut that lands mid-word is left alone.
-  return text.slice(0, TRANSLATION_MAX_CHARS).replace(/[,\s]+$/u, "");
-}
-
-// Up to the group's first three senses, every translation each one carries,
-// joined the way `SenseCard` lists them within one sense. The 120-char cut
-// is the storage limit; this cap is only a maximum on top of it, so a word
-// with fewer, longer senses can still lose its third one to the cut.
-function formatSenseTranslations(senses: readonly Sense[]): string {
-  const joined = senses
-    .slice(0, TRANSLATION_MAX_SENSES)
-    .flatMap((sense) => sense.translations)
-    .join(", ");
-  return cutTranslation(joined);
-}
 
 // RL-41: "a word that already has a definition never asks for one" — true
 // only when none of the exact match's own senses carry one.
@@ -145,9 +122,9 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // — a paused prefix keeps its list. Decided by the user 2026-09-09.
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [phraseState, setPhraseState] = useState<PhraseState>({ kind: "idle" });
-  // RL-31: a two-token miss or a >60-token string never reaches
-  // `translatePhrase` — this is the state that draws in its place. RL-37
-  // reuses it for a 3-to-60-token phrase whose translation failed instead.
+  // A >60-token string never reaches `translatePhrase` — this is the state
+  // that draws in its place. RL-37 reuses it for a phrase whose translation
+  // failed instead.
   const [noEntryState, setNoEntryState] = useState<NoEntryState | null>(null);
   const [deviceOffer, setDeviceOffer] = useState<DeviceOffer>({ kind: "hidden" });
   const [logPayload, setLogPayload] = useState<LogPayload | null>(null);
@@ -177,20 +154,6 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // True when this mount is restoring a query this tab already recorded.
   const restoringRef = useRef(false);
 
-  // The call site the log's fields are true to: an effect fires after React
-  // has already committed the answer, never inside the path that produced it.
-  useEffect(() => {
-    if (!logPayload) return;
-    // Conditioned on both the flag and the text, so a restore can never
-    // swallow the next genuine lookup, whatever order the two arrive in.
-    if (restoringRef.current && logPayload.text === lastLoggedText) {
-      restoringRef.current = false;
-      return;
-    }
-    recordLookup(logPayload);
-    lastLoggedText = logPayload.text;
-  }, [logPayload]);
-
   useEffect(() => {
     return () => {
       if (urlSettleRef.current) clearTimeout(urlSettleRef.current);
@@ -207,13 +170,15 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // effect fires runs once, client-side, against whatever `status` reads at
   // that first tick — the worker still queues it if the dictionary is not
   // built yet (mirrors a keystroke landing mid-install).
-  useEffect(() => {
+  const runInitialQuery = useEffectEvent(() => {
     if (initialQueryRanRef.current || !resolvedQuery) return;
     initialQueryRanRef.current = true;
     restoringRef.current = resolvedQuery === lastLoggedText;
     latestTextRef.current = resolvedQuery;
     void runQuery(resolvedQuery, status.state === "ready");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    runInitialQuery();
   }, []);
 
   // A block of the breakdown links to `/?q=<word>` while this very screen
@@ -223,28 +188,30 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // effect above run again. `committedTextRef` is what tells the two apart
   // from a keystroke's own write to the same ref: a prop the mount effect
   // already consumed is skipped here.
-  useEffect(() => {
+  const followInitialQuery = useEffectEvent(() => {
     if (!initialQuery || initialQuery === committedTextRef.current) return;
     committedTextRef.current = initialQuery;
     boundaryRef.current = false;
     applyText(initialQuery, { schedule: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    followInitialQuery();
   }, [initialQuery]);
 
   // The browser's own back and forward across this screen's own history
   // entries: nothing else updates the box or re-asks the dictionary when
   // the URL changes out from under a mounted `SearchScreen` (RNL-05's rule
   // 4 extended to a navigation, not only to a keystroke).
+  const handlePopState = useEffectEvent(() => {
+    const nextText = new URLSearchParams(window.location.search).get(QUERY_PARAM) ?? "";
+    committedTextRef.current = nextText;
+    boundaryRef.current = nextText === "";
+    applyText(nextText, { schedule: false });
+  });
   useEffect(() => {
-    function handlePopState(): void {
-      const nextText = new URLSearchParams(window.location.search).get(QUERY_PARAM) ?? "";
-      committedTextRef.current = nextText;
-      boundaryRef.current = nextText === "";
-      applyText(nextText, { schedule: false });
-    }
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const listener = () => handlePopState();
+    window.addEventListener("popstate", listener);
+    return () => window.removeEventListener("popstate", listener);
   }, [status.state]);
 
   // Writes `/?q=<text>` once a lookup settles — never on the keystroke that
@@ -313,14 +280,14 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       if (controller.signal.aborted) return;
       phraseCacheRef.current.set(normaliseHeadword(phraseText), result);
       trimPhraseCache(phraseCacheRef.current);
-      setPhraseState({ kind: "done", result });
+      setPhraseState({ kind: "done", result, source: phraseText });
       setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "translated", result.origin, result.text));
     } catch {
       if (controller.signal.aborted) return;
       // RL-37: a phrase in range that cannot be translated falls to the same
       // per-word breakdown RL-31 draws for one that was never tried — the
       // trigger is this `failed` state, never a `done` with empty text.
-      // RL-39 still logs the call: `commit` in record.ts is what drops an
+      // RL-55 still logs the call: `commit` in record.ts is what drops an
       // "untranslated" outcome, so the chain keeps advancing past it instead
       // of leaving an earlier, answered prefix stranded in `pending`.
       setPhraseState({ kind: "failed" });
@@ -355,7 +322,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // reaches it. Above the ceiling, nothing is asked at all. Both branches
   // still log the call, as a "miss": `commit` in record.ts is what drops it,
   // so an abandoned phrase can't leave an earlier, answered prefix behind
-  // (the same reasoning as RL-39's word path).
+  // (the same reasoning as RL-55's word path).
   function scheduleNoEntry(phraseText: string, tokens: number, dictionaryReady: boolean): void {
     if (tokens > PHRASE_MAX_TOKENS) {
       setNoEntryState({ kind: "tooLong", query: phraseText, tokens });
@@ -369,7 +336,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   }
 
   function schedulePhrase(phraseText: string, tokens: number, dictionaryReady: boolean): void {
-    if (tokens < PHRASE_MIN_TOKENS || tokens > PHRASE_MAX_TOKENS) {
+    if (tokens > PHRASE_MAX_TOKENS) {
       scheduleNoEntry(phraseText, tokens, dictionaryReady);
       return;
     }
@@ -378,7 +345,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     // nothing, however far back the box was cleared to reach it.
     const cached = phraseCacheRef.current.get(normaliseHeadword(phraseText));
     if (cached) {
-      setPhraseState({ kind: "done", result: cached });
+      setPhraseState({ kind: "done", result: cached, source: phraseText });
       setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "translated", cached.origin, cached.text));
       return;
     }
@@ -428,7 +395,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       if (latestTextRef.current !== queryText || !answer) return;
       setWordAnswer(answer);
       setSuggestions(items);
-      // RL-39: a miss leaves no row, but the call still happens — `commit`
+      // RL-55: a miss leaves no row here, but the call still happens — `commit`
       // in record.ts is what drops a "miss" outcome, not this call site. A
       // guard here would leave the last *answered* prefix stuck in
       // `pending` forever, to be written once the reader had moved on to
@@ -460,6 +427,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     }
     phraseAbortRef.current?.abort();
     phraseAbortRef.current = null;
+
+    // A translation of another text must stop drawing, and stop asking for
+    // notes, the moment the box differs from what it answered.
+    setPhraseState((current) => (current.kind === "done" && current.source !== nextText ? { kind: "idle" } : current));
 
     if (urlSettleRef.current) {
       clearTimeout(urlSettleRef.current);
@@ -507,6 +478,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // read. Decided by the user 2026-09-09.
   const wordFound = wordAnswer !== null && (wordAnswer.exact !== null || wordAnswer.viaInflection.length > 0);
   const suppressNotFound = !wordFound && suggestions.length > 0;
+  // RL-59: the hand-written table leads a function word typed alone.
+  const tableLine = kind.kind === "word" ? functionWordTranslation(text) : null;
 
   // RL-35's decoration clause: the network is asked about a headword only
   // once its own answer is already painted, and only for the exact match —
@@ -527,7 +500,57 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     kind.kind === "word" && wordAnswer !== null && wordAnswer.exact === null && !suppressNotFound
       ? normaliseHeadword(wordAnswer.query)
       : null;
-  const networkAnswer = useNetworkAnswer(networkWord);
+  const networkAnswer = useNetworkAnswer(
+    networkWord,
+    wordAnswer !== null && wordAnswer.viaInflection.length === 0,
+  );
+
+  // RL-55: a word with no entry is recorded only once the network's answer
+  // for that same text is in hand. It replaces the miss payload that call
+  // produced, so `networkWord` going null (the box left the text) or a
+  // failed, absent or pending answer leaves the miss, which `commit` drops.
+  // A form with a lemma never reaches here: its payload is `inflected`.
+  const unlistedTranslation =
+    networkWord !== null && networkAnswer.kind === "resolved"
+      ? cutTranslation(networkAnswer.answer.translations.join(", "))
+      : null;
+  const unlistedAnswer = networkAnswer.kind === "resolved" ? networkAnswer.answer : null;
+  const unlistedPayload = useMemo<LogPayload | null>(() => {
+    if (networkWord === null || unlistedTranslation === null || unlistedAnswer === null) return null;
+    if (!logPayload || logPayload.kind !== "word" || logPayload.outcome !== "miss") return null;
+    // A network answer for an earlier word never labels the word now on screen.
+    if (logPayload.normalised !== networkWord) return null;
+    return {
+      ...logPayload,
+      outcome: "unlisted",
+      headword: networkWord,
+      rule: null,
+      senses: 0,
+      translation: unlistedTranslation,
+      origin: null,
+      definition: unlistedAnswer.definition,
+      exampleEn: unlistedAnswer.example.en,
+      exampleEs: unlistedAnswer.example.es,
+    };
+  }, [logPayload, networkWord, unlistedTranslation, unlistedAnswer]);
+  const recordable = unlistedPayload ?? logPayload;
+  // The same payload object re-running the effect must not record the lookup twice.
+  const recordedRef = useRef<LogPayload | null>(null);
+
+  // The call site the log's fields are true to: an effect fires after React
+  // has already committed the answer, never inside the path that produced it.
+  useEffect(() => {
+    if (!recordable || recordable === recordedRef.current) return;
+    recordedRef.current = recordable;
+    // Conditioned on both the flag and the text, so a restore can never
+    // swallow the next genuine lookup, whatever order the two arrive in.
+    if (restoringRef.current && recordable.text === lastLoggedText) {
+      restoringRef.current = false;
+      return;
+    }
+    recordLookup(recordable);
+    lastLoggedText = recordable.text;
+  }, [recordable]);
 
   return (
     <Flex direction="column" gap="5">
@@ -544,8 +567,20 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
 
       {kind.kind === "word" && (
         <Flex direction="column" gap="4">
-          {!wordFound && <Suggestions items={suggestions} onPick={handleTextChange} />}
-          {wordAnswer && !suppressNotFound && (
+          {!wordFound && tableLine === null && <Suggestions items={suggestions} onPick={handleTextChange} />}
+          {wordAnswer && tableLine !== null && (
+            <FunctionWordBlock
+              part={{ token: text, answer: wordAnswer }}
+              answer={wordAnswer}
+              heading={wordAnswer.exact?.headword ?? normaliseHeadword(text)}
+              table={tableLine}
+              t={tSearch}
+              alone
+              generated={decoration}
+              networkAnswer={networkAnswer}
+            />
+          )}
+          {wordAnswer && !suppressNotFound && tableLine === null && (
             <SenseList
               answer={wordAnswer}
               generated={decoration}
@@ -556,11 +591,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       )}
 
       {kind.kind === "phrase" &&
-        (kind.tokens < PHRASE_MIN_TOKENS || kind.tokens > PHRASE_MAX_TOKENS || phraseState.kind === "failed" ? (
+        (kind.tokens > PHRASE_MAX_TOKENS || phraseState.kind === "failed" ? (
           noEntryState && <NoEntryAnswer state={noEntryState} />
         ) : (
           <PhraseAnswer
-            source={text}
             state={phraseState}
             offer={deviceOffer}
             onEnableDevice={handleEnableDevice}

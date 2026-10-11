@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { readSource, saveDraft } from "@/lib/import/draft-store";
 import type { ImportDraft } from "@/lib/import/draft";
-import { Button, CodeBlock, FilePick, Flex, Notice, Page, ScreenHeader, SectionLabel, Text, TextArea } from "@/components/ui";
+import { Button, CodeBlock, FilePick, Flex, Notice, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -19,16 +19,70 @@ const KNOWN_ERRORS = new Set([
   "import.errors.unreadableType",
   "import.errors.noKey",
   "import.errors.cap",
+  "import.errors.blank",
   "import.errors.empty",
   "import.errors.modelFailed",
   "import.errors.modelInvalid",
 ]);
 
 type Failure =
-  | { kind: "templateLine"; line: number; expected: string; text: string }
+  | { kind: "templateLine"; cut: boolean; lines: { line: number; expected: string; unit?: string; text: string }[] }
   | { kind: "key"; key: MessageKey; values?: Record<string, string> };
 
 const subscribeNothing = () => () => {};
+
+// The box's own layout, replayed in a hidden twin: where `[start, end)` really sits, wrapped lines included.
+function spanOffset(area: HTMLTextAreaElement, start: number, end: number) {
+  const style = getComputedStyle(area);
+  const twin = document.createElement("div");
+  for (const name of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight", "tabSize"] as const) {
+    twin.style[name] = style[name];
+  }
+  twin.style.position = "absolute";
+  twin.style.visibility = "hidden";
+  twin.style.boxSizing = "border-box";
+  twin.style.width = `${area.clientWidth}px`;
+  twin.style.whiteSpace = "pre-wrap";
+  twin.style.overflowWrap = "break-word";
+  twin.textContent = area.value.slice(0, start);
+  const span = document.createElement("span");
+  span.textContent = area.value.slice(start, end) || ".";
+  twin.appendChild(span);
+  document.body.appendChild(twin);
+  const offset = { top: span.offsetTop, height: span.offsetHeight };
+  twin.remove();
+  return offset;
+}
+
+// Room kept clear above the box and for the fixed bottom nav below the line.
+const SCREEN_TOP = 16;
+const SCREEN_BOTTOM = 96;
+
+// Scrolls the page so the box starts on screen and the selected line ends above the nav.
+function revealSelection(area: HTMLTextAreaElement) {
+  const { top, height } = spanOffset(area, area.selectionStart, area.selectionEnd);
+  const rect = area.getBoundingClientRect();
+  const lineBottom = rect.top + area.clientTop + top + height - area.scrollTop;
+  const screen = window.visualViewport?.height ?? window.innerHeight;
+  let by = rect.top - SCREEN_TOP;
+  if (lineBottom - by > screen - SCREEN_BOTTOM) by = lineBottom - (screen - SCREEN_BOTTOM);
+  if (Math.abs(by) < 1) return;
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollBy({ top: by, behavior: calm ? "auto" : "smooth" });
+}
+
+// Selects line `n` (1-based) of the box without its newline and scrolls it into view.
+function selectLine(area: HTMLTextAreaElement, n: number) {
+  const lines = area.value.split("\n");
+  const start = lines.slice(0, n - 1).reduce((sum, l) => sum + l.length + 1, 0);
+  const end = start + (lines[n - 1]?.length ?? 0);
+  const { top, height } = spanOffset(area, start, end);
+  if (top < area.scrollTop) area.scrollTop = top;
+  else if (top + height > area.scrollTop + area.clientHeight) area.scrollTop = top + height - area.clientHeight;
+  area.focus({ preventScroll: true });
+  area.setSelectionRange(start, end);
+  revealSelection(area);
+}
 
 // What each failure draws: where its box sits and what it offers next.
 function placement(failure: Failure) {
@@ -37,6 +91,7 @@ function placement(failure: Failure) {
     case "import.errors.noKey":
     case "import.errors.cap":
       return { place: "top", template: true } as const;
+    case "import.errors.blank":
     case "import.errors.empty":
     case "import.errors.modelFailed":
     case "import.errors.modelInvalid":
@@ -59,11 +114,39 @@ export function ImportScreen() {
   // stored text shows once hydrated. What the person types wins from then on.
   const stored = useSyncExternalStore(subscribeNothing, () => readSource() ?? "", () => "");
   const [typed, setTyped] = useState<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const alertBox = useRef<HTMLDivElement>(null);
+  // The error row last pressed, so the list shows which line the box is pointing at.
+  const [pressed, setPressed] = useState<number | null>(null);
+  // The server's box is live before the scripts land: what it holds at hydration was typed.
+  useLayoutEffect(() => {
+    const early = box.current?.value ?? "";
+    if (early !== "") setTyped(early);
+  }, []);
+  // A keyboard rising shrinks the screen; the selected line follows it.
+  useEffect(() => {
+    const follow = () => {
+      if (box.current && document.activeElement === box.current) revealSelection(box.current);
+    };
+    const screen = window.visualViewport;
+    window.addEventListener("resize", follow);
+    screen?.addEventListener("resize", follow);
+    return () => {
+      window.removeEventListener("resize", follow);
+      screen?.removeEventListener("resize", follow);
+    };
+  }, []);
   const text = typed ?? stored;
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [showTemplate, setShowTemplate] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  const listed = failure?.kind === "templateLine";
+  // A reading with errors hands focus to the list; the key is the failure, which is new on every reading.
+  useEffect(() => {
+    if (failure?.kind === "templateLine") alertBox.current?.focus();
+  }, [failure]);
 
   const placed = failure ? placement(failure) : null;
   // The key and the cap shut the model; the template still reads.
@@ -73,6 +156,7 @@ export function ImportScreen() {
 
   function fail(next: Failure) {
     setFailure(next);
+    setPressed(null);
     setShowTemplate(false);
   }
 
@@ -84,8 +168,8 @@ export function ImportScreen() {
       const response = await fetch("/importar/leer", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
-        line?: number;
-        expected?: string;
+        cut?: boolean;
+        errors?: { line: number; expected: string; unit?: string }[];
         via?: "template" | "model";
         draft?: ImportDraft;
       } | null;
@@ -95,12 +179,12 @@ export function ImportScreen() {
         router.push("/metas/importar/revisar");
         return;
       }
-      if (body?.error === "import.errors.templateLine" && body.line && body.expected) {
+      if (body?.error === "import.errors.templateLine" && body.errors?.length) {
+        const written = source.split("\n");
         fail({
           kind: "templateLine",
-          line: body.line,
-          expected: body.expected,
-          text: source.split("\n")[body.line - 1] ?? "",
+          cut: body.cut === true,
+          lines: body.errors.map((e) => ({ ...e, text: written[e.line - 1] ?? "" })),
         });
       } else if (body?.error && KNOWN_ERRORS.has(body.error)) {
         fail({ kind: "key", key: messageKey(body.error) });
@@ -116,6 +200,10 @@ export function ImportScreen() {
 
   function readText() {
     if (busy) return;
+    if (text.trim() === "") {
+      fail({ kind: "key", key: "import.errors.blank" });
+      return;
+    }
     const form = new FormData();
     form.set("text", text);
     void send(form, text, text);
@@ -149,15 +237,28 @@ export function ImportScreen() {
   }
 
   const notice = failure ? (
-    <Notice>
-      {failure.kind === "templateLine"
-        ? t("import.errors.templateLine", {
-            line: failure.line,
-            text: failure.text,
-            expected: failure.expected,
-          })
-        : t(failure.key, failure.values)}
-    </Notice>
+    failure.kind === "templateLine" ? (
+      <Notice
+        ref={alertBox}
+        focusable
+        title={t("import.errors.templateCount", { count: failure.lines.length })}
+        aside={failure.cut ? t("import.errors.templateCut") : undefined}
+        current={pressed}
+        onRow={(index) => {
+          setPressed(index);
+          if (box.current) selectLine(box.current, failure.lines[index].line);
+        }}
+        rows={failure.lines.map((e) =>
+          t("import.errors.templateLine", {
+            line: e.line,
+            text: e.text,
+            expected: t(messageKey(e.expected), { unit: e.unit ?? "" }),
+          }),
+        )}
+      />
+    ) : (
+      <Notice>{t(failure.key, failure.values)}</Notice>
+    )
   ) : null;
 
   return (
@@ -165,68 +266,67 @@ export function ImportScreen() {
       <ScreenHeader
         title={t("import.title")}
         back={{ href: "/metas", place: t("common.nav.goals") }}
-        eyebrow={
-          <Text as="p" variant="meta" tone="muted">
-            {t("import.eyebrow")}
-          </Text>
-        }
       />
-      <Flex direction="column" gap="5" maxWidth="640px">
-        {placed?.place === "top" ? notice : null}
+      <Flex direction="column" gap="6" maxWidth="640px">
+        <Flex direction="column" gap="5">
+          {placed?.place === "top" ? notice : null}
 
-        <TextArea
-          label={t("import.textLabel")}
-          placeholder={t("import.placeholder")}
-          rows={failure ? 8 : 10}
-          value={text}
-          disabled={busy}
-          invalid={failure?.kind === "templateLine"}
-          onChange={(event) => setTyped(event.target.value)}
-        />
+          <TextArea
+            ref={box}
+            label={t("import.textLabel")}
+            placeholder={t("import.placeholder")}
+            rows={failure ? 8 : 10}
+            value={text}
+            disabled={busy}
+            invalid={listed}
+            onChange={(event) => setTyped(event.target.value)}
+          />
 
-        <FilePick
-          label={t("import.upload")}
-          hint={t("import.uploadHint")}
-          disabled={busy || modelShut}
-          onPick={(file) => void readFile(file)}
-        />
+          <FilePick
+            label={t("import.upload")}
+            hint={t("import.uploadHint")}
+            disabled={busy || modelShut}
+            onPick={(file) => void readFile(file)}
+          />
 
-        {placed?.place === "upload" ? notice : null}
+          {placed?.place === "upload" ? notice : null}
 
-        <Text as="p" variant="meta" tone="muted">
-          {t("import.privacy")}
-        </Text>
-
-        {placed?.place === "below" ? notice : null}
-
-        <Button block onClick={readText} disabled={busy} aria-busy={busy || undefined}>
-          {busy ? t("import.reading") : retry ? t("import.retry") : t("import.read")}
-        </Button>
-        {busy ? (
-          <Text as="p" variant="meta" tone="muted">
-            {t("import.slow")}
+          <Text as="p" variant="sentence" tone="muted">
+            {t("import.privacy")}
           </Text>
-        ) : null}
+
+          {placed?.place === "below" ? notice : null}
+
+          <Button block onClick={readText} disabled={busy} aria-busy={busy || undefined}>
+            {busy ? t("import.reading") : retry ? t("import.retry") : t("import.read")}
+          </Button>
+          {busy ? (
+            <Text as="p" variant="sentence" tone="muted">
+              {t("import.slow")}
+            </Text>
+          ) : null}
+        </Flex>
 
         {placed?.template && !showTemplate ? (
-          <Button variant="ghost" tone="accent" onClick={() => setShowTemplate(true)}>
-            {t("import.template.show")}
-          </Button>
+          <Flex>
+            <Button variant="ghost" tone="accent" onClick={() => setShowTemplate(true)}>
+              {t("import.template.show")}
+            </Button>
+          </Flex>
         ) : null}
 
         {showTemplate ? (
-          <Flex asChild direction="column" gap="2" align="start">
-            <section aria-label={t("import.template.label")}>
-              <SectionLabel>{t("import.template.label")}</SectionLabel>
-              <Text as="p" variant="meta" tone="muted">
-                {t("import.template.note")}
-              </Text>
-              <CodeBlock>{t("import.template.example")}</CodeBlock>
+          <Section label={t("import.template.label")}>
+            <Text as="p" variant="sentence" tone="muted">
+              {t("import.template.note")}
+            </Text>
+            <CodeBlock>{t("import.template.example")}</CodeBlock>
+            <Flex>
               <Button variant="ghost" tone="accent" onClick={copyTemplate}>
                 {copied ? t("import.template.copied") : t("import.template.copy")}
               </Button>
-            </section>
-          </Flex>
+            </Flex>
+          </Section>
         ) : null}
       </Flex>
     </Page>

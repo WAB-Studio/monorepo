@@ -3,8 +3,9 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { deriveWeek } from "@/lib/day/derive";
-import type { Cadence, CommitmentPlan, EvidenceDay, WeekView } from "@/lib/day/types";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import type { Cadence, CommitmentPlan, WeekView } from "@/lib/day/types";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
   toDeclaredFact,
@@ -24,7 +25,7 @@ import { civilDateInZone, TIME_ZONE, weekOf } from "@/lib/zone";
 // chain RNP-03 forbids. A second source costs a reader, a catalogue row and
 // one more key in the registry's own map — never a migration (RNP-10).
 
-// The goal's own name, horizon and creation moment: module 17's screen groups
+// The goal's own name, horizon and creation moment: `WeekScreen` groups
 // its rows by goal and needs all three to say which week of the plan's own
 // horizon this one is (RP-16's overline) — `to_jsonb(g)` already carries every
 // column below, so this rides the same statement `commitments`, `phases` and
@@ -39,8 +40,8 @@ type GoalRow = {
 
 // `source_key` / `source_unit` ride in from the join to `evidence_sources`;
 // neither column exists on `commitments` itself. `goal_id` widens `rows.ts`'s
-// own `CommitmentRow` — module 17's screen is what groups a commitment's own
-// dot under the goal it belongs to; `deriveWeek` (module 4) never learns it.
+// own `CommitmentRow` — `WeekScreen` is what groups a commitment's own
+// dot under the goal it belongs to; `deriveWeek` never learns it.
 type CommitmentRow = BaseCommitmentRow & { goal_id: string };
 
 // `commitment_unit` rides in from the join to `commitments`: a fact carries a
@@ -59,6 +60,7 @@ type FactRow = {
   note: string | null;
   commitment_unit: string | null;
   one_off_name: string | null;
+  one_off_parent_name: string | null;
 };
 
 type WeekQueryRow = {
@@ -70,20 +72,16 @@ type WeekQueryRow = {
   period_facts: { commitment_id: string; day: string }[];
 };
 
-type EvidenceOutcome = {
-  status: "read" | "unreadable";
-  bySourceKey: Record<string, EvidenceDay[]>;
-};
-
 /**
- * One statement, four subqueries: every open goal, every commitment not
+ * One statement, six subqueries: every open goal, every commitment not
  * retired before the week's own first day (a commitment retired mid-week
  * must still explain the days it lived through), every phase touching the
- * week, and every fact of the week's seven civil days — a one-off's own fact
+ * week, and every fact from the first of the Monday's month to the week's
+ * Sunday (`loadWeek` narrows what is drawn back to the seven days; the rest
+ * only tells a «N al mes» its month is met) — a one-off's own fact
  * included, unfiltered here the same way `lib/queries/day.ts` leaves it
- * (RP-20): no new round trip, the same `to_jsonb(f)` this file already
- * selected already carries `one_off_id` and `goal_id`, only the mapping step
- * below is what changes. No `user_id` filter: RLS alone decides, the same
+ * (RP-20): the `to_jsonb(f)` already carries `one_off_id` and `goal_id`, so
+ * it costs no round trip. No `user_id` filter: RLS alone decides, the same
  * choice `lib/queries/day.ts` and `lib/evidence/reading-lookups.ts` took.
  *
  * `retired_at` is `timestamptz`; `at time zone ${TIME_ZONE}` reads it as the
@@ -91,7 +89,7 @@ type EvidenceOutcome = {
  * day.ts` applies — a bare cast renders in the session's zone (UTC), which
  * would keep a commitment retired after 19:00 Bogotá live one day too long.
  *
- * `period_facts` is the fifth subquery of the same statement: every
+ * `period_facts` is the sixth subquery of the same statement: every
  * commitment fact from the first of `anyDay`'s month to the last of it or of
  * the week, whichever reaches further. A flexible cadence's «N de M» counts
  * inside its period, and «al mes» reaches days the week's own `facts` never
@@ -103,9 +101,8 @@ type EvidenceOutcome = {
  * a goal opened later never enters it. A goal that ended mid-week stays, it
  * lived through the days before. `first_monday` is the Monday of the oldest
  * goal's creation, archived included: the bound of the screen's ‹.
- * `WeekScreen` (module 17) only ever
- * groups a dot under a goal it finds here, and `goals.length === 0` is what
- * decides the week's own empty state (`empty-week.tsx`).
+ * `WeekScreen` only ever groups a dot under a goal it finds here, and
+ * `goals.length === 0` is what decides the week's own empty state (`empty-week.tsx`).
  */
 async function queryGoalsRow(
   tx: Transaction,
@@ -132,15 +129,17 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
          from "goals"."phases" p
          where p.starts_on <= ${weekEnd}::date
-           and (p.ends_on is null or p.ends_on >= ${weekStart}::date)) as phases,
+           and p.ends_on >= ${weekStart}::date) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit,
-                 'one_off_name', o.name
+                 'one_off_name', o.name,
+                 'one_off_parent_name', p.name
                )), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          left join "goals"."one_offs" o on o.id = f.one_off_id
-         where f.day between ${weekStart}::date and ${weekEnd}::date) as facts,
+         left join "goals"."one_offs" p on p.id = o.parent_id
+         where f.day between least(${weekStart}::date, date_trunc('month', ${weekStart}::date)::date) and ${weekEnd}::date) as facts,
       (select coalesce(json_agg(json_build_object('commitment_id', f.commitment_id, 'day', f.day)), '[]'::json)
          from "goals"."facts" f
          where f.commitment_id is not null
@@ -149,32 +148,6 @@ async function queryGoalsRow(
   `);
 
   return row;
-}
-
-// One query per known source (today, exactly one), independent of which
-// commitments actually reference it — the mapping step below narrows the
-// result back down to the commitments that asked for it.
-async function queryEvidenceBySource(
-  tx: Transaction,
-  personId: string,
-  weekStart: string,
-  weekEnd: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({
-      personId,
-      from: weekStart,
-      to: weekEnd,
-      zone: TIME_ZONE,
-      tx,
-    });
-  }
-
-  return bySourceKey;
 }
 
 function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
@@ -209,7 +182,7 @@ function toGoalSummary(row: GoalRow): GoalSummary {
 }
 
 // Which goal a commitment's own dots belong to, and its name for the dot's
-// own label: `deriveWeek` (module 4) derives a slot keyed by `commitmentId`
+// own label: `deriveWeek` derives a slot keyed by `commitmentId`
 // alone, never a group — this is the one place that maps a slot back to the
 // goal section it draws under.
 export type CommitmentGoal = {
@@ -251,6 +224,8 @@ export type OneOffFact = {
   name: string;
   day: string;
   goalId: string | null;
+  // The parent task's name for a sub-task; null for a top-level or goalless one.
+  parentName: string | null;
 };
 
 /**
@@ -264,9 +239,9 @@ export type OneOffFact = {
  * `goals`, `commitments` and `oneOffFacts` ride out of the same
  * `withGoalsDb` statement `view` is derived from — no third query, still
  * four statements total, exactly as `lib/queries/day.ts`'s own comment
- * counts them. Module 17's screen is what groups a day's dots under the
+ * counts them. `WeekScreen` is what groups a day's dots under the
  * goal they belong to and draws a goalless one under its own "Sueltas"
- * group; `WeekView` and `deriveWeek` (module 4) are unchanged.
+ * group; `WeekView` and `deriveWeek` are unchanged.
  */
 export async function loadWeek(anyDayInIt: string): Promise<{
   view: WeekView;
@@ -296,14 +271,28 @@ export async function loadWeek(anyDayInIt: string): Promise<{
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
   // that always does, so a one-off's own fact plays no part in deriving a
   // commitment's slot (RP-20's own dot is `oneOffFacts` below, read by
-  // module 17's screen, never by `deriveWeek`, which stays exactly as module
-  // 4 left it) — the same filter `lib/queries/day.ts` applies.
-  const facts = row.facts
+  // `WeekScreen`, never by `deriveWeek`) — the same filter `lib/queries/day.ts` applies.
+  const monthFacts = row.facts
     .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);
+  const weekFacts = monthFacts.filter((fact) => fact.day >= weekStart);
   const evidence = toEvidenceByCommitment(row.commitments, evidenceOutcome.bySourceKey);
 
-  const view = deriveWeek({ commitments, phases, facts, evidence, day: anyDayInIt });
+  // What asks comes from the month's facts; what is drawn comes from the
+  // week's own, so a tap made after a month was met stays «hecho» though its
+  // day no longer asks. The week-only derivation asks a superset of the other.
+  const asking = deriveWeek({ commitments, phases, facts: monthFacts, evidence, day: anyDayInIt });
+  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt });
+  const view: WeekView = {
+    ...drawn,
+    days: drawn.days.map((dayView, i) => {
+      const asked = new Set(asking.days[i].slots.map((slot) => slot.commitmentId));
+      return {
+        ...dayView,
+        slots: dayView.slots.filter((slot) => asked.has(slot.commitmentId) || slot.satisfied || slot.partial),
+      };
+    }),
+  };
 
   return {
     view,
@@ -315,12 +304,13 @@ export async function loadWeek(anyDayInIt: string): Promise<{
     // is exactly the row `facts` throws away (RP-19's own shape — "one
     // subject" means never both), read back out here instead.
     oneOffFacts: row.facts
-      .filter((fact) => fact.one_off_id !== null)
+      .filter((fact) => fact.one_off_id !== null && fact.day >= weekStart)
       .map((fact) => ({
         oneOffId: fact.one_off_id as string,
         name: fact.one_off_name ?? "",
         day: fact.day,
         goalId: fact.goal_id,
+        parentName: fact.one_off_parent_name,
       })),
   };
 }

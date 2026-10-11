@@ -7,7 +7,7 @@ import { Text } from "./text";
 import styles from "./row.module.css";
 
 // docs/pulsar/DESIGN.md: a row is a real `<button>`, never a div, at least 56px
-// tall, ruled from the next by a hairline. Never a card, never a border box.
+// tall, ruled from the next by a hairline. A border box only as `card`, a link row the boards draw so.
 // Writing a fact costs one tap, so the whole row is the target (RNP-02).
 type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & {
   // What sits at the head of the row — usually the mark, sometimes a plain
@@ -16,11 +16,15 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   leading?: ReactNode;
   // The row's own display name — never the native `<button name>` form
   // attribute, which this type deliberately excludes above: nothing in this
-  // app submits a row as a form control, and a `ReactNode` here (module 17's
-  // own dot grid, not just a string) would otherwise collide with it.
+  // app submits a row as a form control, and a `ReactNode` here (the week's
+  // dot grid, not just a string) would otherwise collide with it.
   name: ReactNode;
   // The line under the name: mono, muted, a date or a count.
   meta?: ReactNode;
+  // `sentence` sets the line in Archivo for a mixed line (a sentence whose
+  // figures and dates are `<Figure variant="meta">` spans, each on one line).
+  // Default `meta`: the whole line in mono, as every call site reads today.
+  metaVariant?: "meta" | "sentence";
   // What sits at the end — a measure, a chevron.
   trailing?: ReactNode;
   // Drops the hairline for the last row of a group, where the group's own
@@ -53,6 +57,8 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // A control of its own at the row's end, a sibling of the row's button
   // because a button cannot hold one (`TareaNotaGuardada`'s note button).
   end?: ReactNode;
+  // A link row drawn as a white bordered card, not a ruled line.
+  card?: boolean;
 };
 
 export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
@@ -60,6 +66,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     leading,
     name,
     meta,
+    metaVariant = "meta",
     trailing,
     rule = true,
     onLeadingClick,
@@ -71,6 +78,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     wideTrailing,
     preview,
     end,
+    card,
     className,
     type = "button",
     disabled,
@@ -82,6 +90,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
   const merged = [
     styles.row,
     rule ? undefined : styles.flush,
+    card ? styles.card : undefined,
     onLeadingClick || end ? styles.split : undefined,
     className,
   ]
@@ -89,18 +98,18 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     .join(" ");
 
   const body = (
-    <>
+    <span className={styles.content}>
       <span className={styles.body}>
         <Text as="span" variant="name" tone={quiet ? "muted" : undefined}>
           {name}
         </Text>
         {meta ? (
-          <Text as="span" variant="meta" className={wideMeta ? styles.narrowOnly : undefined}>
+          <Text as="span" variant={metaVariant} className={wideMeta ? styles.narrowOnly : undefined}>
             {meta}
           </Text>
         ) : null}
         {wideMeta ? (
-          <Text as="span" variant="meta" className={styles.wideOnly}>
+          <Text as="span" variant={metaVariant} className={styles.wideOnly}>
             {wideMeta}
           </Text>
         ) : null}
@@ -112,7 +121,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
       </span>
       {wideTrailing ? <span className={`${styles.trailing} ${styles.wideOnly}`}>{wideTrailing}</span> : null}
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}
-    </>
+    </span>
   );
 
   if (href) {

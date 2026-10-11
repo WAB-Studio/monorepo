@@ -22,8 +22,7 @@ const lookups = reading.table("lookups", {
 });
 
 /**
- * One search, one row: `Meta.dc.html` draws «1 búsqueda · diccionario»
- * (the threshold taken 2026-09-22), so a day's quantity is a plain count.
+ * One search, one row: `Meta.dc.html` draws «1 búsqueda · diccionario», so a day's quantity is a plain count.
  */
 const UNIT = "searches";
 const LABEL_KEY = "sources.readingLookups";

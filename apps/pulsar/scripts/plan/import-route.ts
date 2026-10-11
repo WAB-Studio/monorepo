@@ -192,8 +192,18 @@ test("a template with a broken line: 422 templateLine with its line and form, no
   assert.equal(response.status, 422);
   const body = await answer(response);
   assert.equal(body.error, "import.errors.templateLine");
-  assert.equal(typeof body.line, "number");
-  assert.equal(typeof body.expected, "string");
+  const errors = body.errors as { line: number; expected: string }[];
+  assert.equal(errors.length, 1);
+  const first = errors[0];
+  assert.equal(first.line, broken.split("\n").indexOf("- octubre · 12 h") + 1);
+  // `expected` is a key into the catalogue; the sentence it names is what the person reads, and never the line they wrote.
+  const catalogue = JSON.parse(readFileSync(resolve(process.cwd(), "messages/es/import.json"), "utf8"));
+  let sentence: unknown = catalogue;
+  for (const part of String(first.expected).replace(/^import\./, "").split(".")) {
+    sentence = (sentence as Record<string, unknown> | undefined)?.[part];
+  }
+  assert.equal(typeof sentence, "string", `«${first.expected}» is not in messages/es/import.json`);
+  assert.equal((sentence as string).includes("- octubre · 12 h"), false);
   assert.equal((await rows()).length, 0);
   assert.equal(modelCalls.length, 0);
 });
@@ -213,10 +223,10 @@ test("no key: 503 import.errors.noKey, no row, no model", async () => {
   assert.equal(modelCalls.length, 0);
 });
 
-test("a blank text: 422 import.errors.empty, no row", async () => {
+test("a blank text: 422 import.errors.blank, no row", async () => {
   const response = await route.POST(request({ text: "   " }));
   assert.equal(response.status, 422);
-  assert.equal((await answer(response)).error, "import.errors.empty");
+  assert.equal((await answer(response)).error, "import.errors.blank");
   assert.equal((await rows()).length, 0);
 });
 
@@ -303,4 +313,54 @@ test("a refused file type answers 415 even with no key: the type is judged befor
   assert.equal(response.status, 415);
   assert.equal((await answer(response)).error, "import.errors.unreadableType");
   assert.equal((await rows()).length, 0);
+});
+
+test("a body that is no form: 422 import.errors.blank, no row, no model", async () => {
+  const response = await route.POST(
+    new Request("http://localhost/importar/leer", {
+      method: "POST",
+      body: "not a form",
+      headers: { "content-type": "text/plain" },
+    }) as unknown as Parameters<typeof route.POST>[0],
+  );
+  assert.equal(response.status, 422);
+  assert.equal((await answer(response)).error, "import.errors.blank");
+  assert.equal((await rows()).length, 0);
+  assert.equal(modelCalls.length, 0);
+});
+
+// Module 801.
+test("801: a first line «pulsar · plantilla 2» is 422 on line 1, never sent to the model, with no key too", async () => {
+  for (const keyed of [true, false]) {
+    if (!keyed) delete envHandle.OPENAI_API_KEY;
+    const response = await route.POST(request({ text: TEMPLATE.replace("plantilla 1", "plantilla 2") }));
+    assert.equal(response.status, 422, `key ${keyed}`);
+    const body = await answer(response);
+    assert.equal(body.error, "import.errors.templateLine");
+    assert.deepEqual((body.errors as { line: number }[]).map((e) => e.line), [1]);
+  }
+  assert.equal(modelCalls.length, 0);
+  assert.equal((await rows()).length, 0);
+});
+
+test("801: the same refusal reaches a file, the way a pasted text does", async () => {
+  const file = new File([TEMPLATE.replace("plantilla 1", "plantilla 2")], "plan.md", { type: "text/markdown" });
+  const response = await route.POST(request({ file }));
+  assert.equal(response.status, 422);
+  assert.equal(modelCalls.length, 0);
+});
+
+test("801: a text that does not start with «pulsar ·» still goes to the model", async () => {
+  const response = await route.POST(request({ text: "plantilla 2\nquiero aprender inglés" }));
+  assert.equal(response.status, 200);
+  assert.equal(modelCalls.length, 1);
+});
+
+test("801: a broken header answers one error and judges nothing below it", async () => {
+  const text = TEMPLATE.replace("medida: horas de estudio · minutos", "medida: horas de estudio").replace("- 2026-10 · 12 h", "- octubre · 12 h");
+  const response = await route.POST(request({ text }));
+  assert.equal(response.status, 422);
+  const errors = (await answer(response)).errors as { line: number; expected: string }[];
+  assert.deepEqual(errors, [{ line: 5, expected: "import.errors.form.measure" }]);
+  assert.equal(modelCalls.length, 0);
 });

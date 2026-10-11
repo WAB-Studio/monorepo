@@ -16,6 +16,10 @@ export type ReportTask = {
   done: boolean;
   doneOn: string | null;
   estimate: number | null;
+  // The share of the estimate that falls in this month; null when the task
+  // does not split across months or carries no amount.
+  part: number | null;
+  continuesIn: string | null;
   owes: number;
   hasAmount: boolean;
   note: string | null;
@@ -30,13 +34,20 @@ export type GoalReport = {
   horizon: string;
   endedOn: string | null;
   unit: string | null;
+  // The word the person gave the measure; «mide {measureName}» reads it, never the unit.
+  measureName: string | null;
+  // A source feeds the measure (RP-14): an evidence commitment in the goal's unit.
+  measureFed: boolean;
   thisMonth: { planned: number | null; reached: number; underPace: boolean };
   toDate: { planned: number; reached: number };
   phases: { aim: string; startsOn: string; endsOn: string; current: boolean }[];
   tasks: ReportTask[];
   carried: CarriedReport[];
-  months: (MonthRow & { carried: number | null })[];
+  // `tasks` is read for a goal that measures nothing: the months it prints on paper are its tasks' (RP-71).
+  months: (MonthRow & { carried: number | null; tasks?: { done: number; total: number } })[];
   weeks: ReviewWeek[];
+  // The current week's planned minutes (RP-58); null when it has no amount.
+  weekPlanned?: number | null;
   // A week crossing two months, cut at the month's edge: each part holds the
   // week's days that fall in `month` (the first of it), so a month's parts add up to it.
   weekSplits: WeekSplit[];

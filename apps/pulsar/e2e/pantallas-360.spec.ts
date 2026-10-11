@@ -4,6 +4,7 @@ import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import plan from "../messages/es/plan.json";
 
 // RNP-07 over every built screen and every sheet: at 360 × 740 (the
 // project's own viewport) nothing scrolls sideways, no two controls sit on
@@ -174,7 +175,7 @@ test("/metas/<id>/compromisos/nuevo holds at 360 (RNP-07)", async ({ page, db, p
 test("/metas/<id>/fases/nueva holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}/fases/nueva`);
-    await expect(page.getByText("Fase nueva")).toBeVisible();
+    await expect(page.getByText(plan.phaseForm.title)).toBeVisible();
     await expectHolds(page, 3);
   });
 });
@@ -249,7 +250,7 @@ test("the archive sheet holds at 360 (RNP-07)", async ({ page, db, personId }) =
   });
 });
 
-// RNP-17 · RP-21 · RP-27: this slice's new states at 360. A person of their
+// RNP-17 · RP-59 · RP-27: this slice's new states at 360. A person of their
 // own, since an ended goal and a scheduled one-off are states the shared
 // identity's siblings would count.
 async function withNewStates(

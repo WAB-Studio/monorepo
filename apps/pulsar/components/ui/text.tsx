@@ -3,8 +3,9 @@ import { Text as ThemesText, type TextProps } from "@radix-ui/themes";
 import styles from "./text.module.css";
 
 // The type scale of docs/pulsar/DESIGN.md "Type", one class per role, so no
-// screen names a size. `body` inherits the base step and only takes a tone.
-type Variant = "title" | "heading" | "name" | "meta" | "body";
+// screen names a size. `sentence` is the quiet sentence (a hint, a refusal, a
+// note, an empty state) in Archivo; `meta` stays for figures and dates only. `body` inherits the base step and only takes a tone.
+type Variant = "title" | "heading" | "name" | "meta" | "sentence" | "line" | "body";
 
 // docs/pulsar/DESIGN.md "Tokens": `quiet` never carries a word a person must
 // read, so a screen reaching for it is asking for decoration, not a sentence.
@@ -26,6 +27,8 @@ type PulsarTextProps = {
   // A heading's own link: ink, never the browser's blue, no underline, the
   // accent focus ring. Meant for `asChild` over a `Link`.
   link?: boolean;
+  // A word inside a sentence that carries the sentence's point (a host): ink-weight 500, broken anywhere rather than overflow.
+  strong?: boolean;
 };
 
 const variants: Record<Variant, string | undefined> = {
@@ -33,6 +36,8 @@ const variants: Record<Variant, string | undefined> = {
   heading: styles.heading,
   name: styles.name,
   meta: styles.meta,
+  sentence: styles.sentence,
+  line: styles.line,
   body: undefined,
 };
 
@@ -50,8 +55,8 @@ const tones: Record<Tone, string> = {
 // union over the element it renders and a plain `Omit` would collapse it to one.
 type Narrowed<T> = T extends unknown ? Omit<T, "color" | "highContrast" | "size"> : never;
 
-export function Text({ variant = "body", tone, end, plainWide, rule, note, link, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
-  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, rule ? styles.rule : undefined, note ? styles.note : undefined, link ? styles.link : undefined, className]
+export function Text({ variant = "body", tone, end, plainWide, rule, note, link, strong, className, ...props }: Narrowed<TextProps> & PulsarTextProps) {
+  const merged = [variants[variant], tone ? tones[tone] : undefined, end ? styles.end : undefined, plainWide ? styles.plainWide : undefined, rule ? styles.rule : undefined, note ? styles.note : undefined, link ? styles.link : undefined, strong ? styles.strong : undefined, className]
     .filter(Boolean)
     .join(" ");
   return <ThemesText {...props} className={merged || undefined} />;

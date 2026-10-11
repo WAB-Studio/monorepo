@@ -4,7 +4,7 @@ import styles from "./panel.module.css";
 
 // The desktop card that groups one part of a screen (RNP-17): white ground,
 // 1px line, radius 14. Below 1024px it draws nothing, so the phone face is the
-// page's own column. Stack panels as siblings: consecutive ones sit 18px apart.
+// page's own column. Stack panels as siblings: the column's gap sets the space between them.
 export function Panel({
   children,
   as: Tag = "section",
@@ -12,6 +12,7 @@ export function Panel({
   bordered = false,
   stacked = false,
   label,
+  print,
 }: {
   children?: ReactNode;
   as?: "section" | "div";
@@ -23,12 +24,15 @@ export function Panel({
   // own stacking; from 1024px the card, without the gap between rows.
   stacked?: boolean;
   label?: string;
+  // `plain`: on paper no card, only what it holds.
+  print?: "plain";
 }) {
   const className = [
     styles.panel,
     row ? styles.row : undefined,
     bordered ? styles.bordered : undefined,
     stacked ? styles.stacked : undefined,
+    print === "plain" ? styles.printPlain : undefined,
   ]
     .filter(Boolean)
     .join(" ");
@@ -41,6 +45,7 @@ export function Panel({
 
 // Cards side by side from 1024px, tops aligned, two columns at every width;
 // below, the children stay the parent's own items.
-export function PanelGrid({ children }: { children: ReactNode }) {
-  return <div className={styles.grid}>{children}</div>;
+// `print="stack"`: on paper one full-width column.
+export function PanelGrid({ children, print }: { children: ReactNode; print?: "stack" }) {
+  return <div className={print === "stack" ? `${styles.grid} ${styles.printStack}` : styles.grid}>{children}</div>;
 }

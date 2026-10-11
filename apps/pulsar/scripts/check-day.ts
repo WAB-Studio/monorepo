@@ -1,4 +1,4 @@
-// Proves RNP-03 and RNP-04 against the seeded person of module 20, the way
+// Proves RNP-03 and RNP-04 against the seeded person, the way
 // `scripts/harness/seed-goal.ts` reaches a server action: by stubbing the
 // three modules that only exist inside Next (`server-only`, `next/headers`,
 // `next/cache`) before the first `@/`-rooted import, and by redeeming the
@@ -9,7 +9,7 @@
 // The statement count comes from the driver, not from reading `day.ts`:
 // `postgres`'s own `debug` option fires once for every statement it puts on
 // the wire, `begin` and `commit` included (`apps/orbit/scripts/harness/
-// instrument.ts`'s own technique). Module 8's done criterion names "four
+// instrument.ts`'s own technique). The done criterion names "four
 // statements... two settles and two queries", so `begin`/`commit` are
 // counted off the wire and then excluded before the assertion — they are a
 // round trip each, but never a statement `day.ts` chose to send. Excluding
@@ -607,7 +607,7 @@ const CADENCE_ZONE_WEDNESDAY = "2019-11-06";
  * Proves `lib/day/cadence.ts`'s own `asksOn`, never `lib/queries/week.ts`'s
  * SQL filter: retired mid-week, this commitment is `>= weekStart` regardless
  * of which zone `retired_at::date` renders in, so it always rides into
- * `deriveWeek`'s raw commitments set — round 1's fix does not touch this
+ * `deriveWeek`'s raw commitments set — the SQL filter does not touch this
  * case at all. What used to decide Thursday–Sunday was `asksOn`'s own bare
  * `day > plan.retiredAt` — a civil-date string compared lexically against a
  * full ISO instant, which a Thursday date string reads as "not yet retired"
@@ -672,7 +672,7 @@ async function runCadenceZoneCheck(): Promise<void> {
 
 /**
  * Proves `lib/queries/week.ts`'s own `loadWeek(...).commitments` — the raw
- * `CommitmentGoal[]` module 17's screen groups a week's dots under, built
+ * `CommitmentGoal[]` the screen groups a week's dots under, built
  * straight off `row.commitments` and never passed through `asksOn` — carries
  * the same zone fix `runZoneCheck` proved on `view.days` alone. A commitment
  * retired at 23:30 Bogotá on `ZONE_TEST_DAY` (a Sunday) must be gone from
@@ -910,7 +910,7 @@ async function runEvidenceRefusalCheck(): Promise<void> {
 }
 
 /**
- * Proves module 38's own contract: a `tap` commitment holds at most one fact
+ * Proves that: a `tap` commitment holds at most one fact
  * a day, whatever the device. Two concurrent `declareFact` calls race on the
  * pool (`max: 8`, `db/client.ts`), so `Promise.all` genuinely opens two
  * connections rather than one queued behind the other — the shape the
@@ -980,7 +980,7 @@ async function runFactUniqueCheck(): Promise<void> {
       `),
     );
   } catch (error) {
-    // `pgCode` (`@/lib/db-error`, round 2): `PgPreparedQuery#queryWithCache`
+    // `pgCode` (`@/lib/db-error`): `PgPreparedQuery#queryWithCache`
     // (`pg-core/session.ts`) wraps the raw `postgres` error in a
     // `DrizzleQueryError`, whose own `.code` is undefined — the code that
     // matters is on `.cause`, the real driver error.
@@ -994,7 +994,7 @@ async function runFactUniqueCheck(): Promise<void> {
 }
 
 /**
- * Proves module 38's round 2 fix: `declareFact`'s own advisory lock
+ * Proves that `declareFact`'s own advisory lock
  * (`app/actions/facts.ts`) serialises "Cambiar" (`replace: true`) racing a
  * plain tap on the same commitment and day. Before the lock, an independent
  * validator drove this live and found 11 of 20 trials where the loser's own
@@ -1149,7 +1149,7 @@ async function runReplaceRaceCheck(): Promise<void> {
 }
 
 /**
- * Proves RP-19 widened 2026-09-28: `loadDay(today).oneOffs` carries a
+ * Proves RP-19 widened: `loadDay(today).oneOffs` carries a
  * one-off dated three days back, still undone, with its own `day`; drops one
  * dated three days back whose fact was written on a day other than today —
  * "done leaves the list for good", true on any day the fact was written, not
@@ -1346,7 +1346,7 @@ async function runPhaseDayBoundCheck(): Promise<void> {
 }
 
 /**
- * Proves `daylessCount` counts only the dayless (RP-21), against a baseline
+ * Proves `daylessCount` counts only the dayless (RP-59), against a baseline
  * read first, with two dayless and one dated-undone one-off so the two sets
  * differ in size, and that `listDaylessOneOffs` reads them oldest first.
  */
@@ -1405,12 +1405,13 @@ async function runDaylessCountAndOrderCheck(): Promise<void> {
 }
 
 /**
- * Proves module 64's reads: a commitment asks nothing before the civil day it
+ * Proves that a commitment asks nothing before the civil day it
  * was written (`loadDay` and `loadWeek` alike), `loadDay(today).goals` carries
  * `openedOn`, a one-off done on the day drawn is in `doneOneOffs` with its
  * fact and out of `oneOffs`, one done yesterday is in neither, and a dayless
  * one is in neither list but counts in `daylessCount` and is listed by
- * `listDaylessOneOffs`, unless it is done or its goal is archived. The dayless
+ * `listDaylessOneOffs`, unless it is done or belongs to a goal (RP-59: a
+ * goal's task waits in its plan). The dayless
  * count is measured against a baseline read first: this identity may hold
  * dayless rows of its own. Every row is deleted by id in `finally`.
  */
@@ -1607,7 +1608,7 @@ function applicationStatements(calls: DebugCall[]): number {
   );
 }
 
-// Module 74: an ended goal leaves the day, the week keeps the days it lived,
+// An ended goal leaves the day, the week keeps the days it lived,
 // a done one-off carries its time, scheduled one-offs are counted and
 // listed, the week's measure equals the goal's own current week. Every row
 // is seeded under this run's identity and deleted by id. Run alone with
@@ -2003,7 +2004,7 @@ async function runDesktopSurvivorsCheck(): Promise<void> {
   }
 }
 
-// Semana counts a flexible cadence by its own period (module 91). The week
+// Semana counts a flexible cadence by its own period. The week
 // 2010-05-31..06-06 crosses a month, so «al mes» reaches facts the week's own
 // rows never read, and «por semana» must not read the week before.
 async function runFlexiblePeriodCheck(): Promise<void> {
@@ -2085,7 +2086,7 @@ async function runFlexiblePeriodCheck(): Promise<void> {
   }
 }
 
-// Module 92: `loadDay` returns every phase of a goal so Hoy can say «fase 2 de
+// `loadDay` returns every phase of a goal so Hoy can say «fase 2 de
 // 3»; the phases the day derives from stay the ones in effect, and the
 // statement count stays four.
 async function runPhasePositionCheck(): Promise<void> {
@@ -2136,7 +2137,7 @@ async function runPhasePositionCheck(): Promise<void> {
 }
 
 /**
- * Module 94: Hoy asks a flexible commitment by its own period. `loadDay`
+ * Hoy asks a flexible commitment by its own period. `loadDay`
  * once selected the week's facts only, so a monthly commitment met in an
  * earlier week was asked again, and a weekly one met on Monday and Tuesday
  * was asked on Thursday. Fixed days: 2010-09-03 (Friday), the week of
@@ -2393,6 +2394,10 @@ async function runMainChecks(seed: Baseline): Promise<void> {
   await runMonthLineCheck();
   await runMonthTaskCheck();
   await runPastWeekCheck();
+  await runPlanReadCheck();
+  await runGoallessDaylessCheck();
+  await runEvidenceInfoAndFirstGoalDayCheck();
+  await runWeekAcrossMonthEvidenceCheck();
 }
 
 // Hoy's «terminó ayer» line: goals whose last day fell in the week of the
@@ -2460,8 +2465,7 @@ async function runEndedThisWeekCheck(): Promise<void> {
   }
 }
 
-// Module 99: what the mutator found nobody pinning on `loadDay`. Fixed 2012
-// days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
+// `loadDay` on fixed 2012 days: Mon 2012-03-12 opens the week, Sun 2012-02-26 lies in the month
 // before it.
 async function runSurvivorsOf92To94Check(): Promise<void> {
   const { loadDay } = await import("@/lib/queries/day");
@@ -2538,7 +2542,7 @@ async function runSurvivorsOf92To94Check(): Promise<void> {
   }
 }
 
-// Module 128: Hoy's month line (RP-28, RP-29), the month task leaving the
+// Hoy's month line (RP-28, RP-29), the month task leaving the
 // dayless list (RP-31) and a done estimate joining the measure (RP-36).
 // Fixed October 2010: Wed 2010-10-20 is the pace day, Tue 10-19 is not.
 async function runMonthLineCheck(): Promise<void> {
@@ -2551,6 +2555,7 @@ async function runMonthLineCheck(): Promise<void> {
   const userId = person.id;
   const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   const goalIds: string[] = [];
+  const plainIds: string[] = [];
   const deviceId = "00000000-0000-4000-8000-0000000000e8";
 
   async function seedGoal(name: string): Promise<string> {
@@ -2622,6 +2627,8 @@ async function runMonthLineCheck(): Promise<void> {
 
     // Estimates: a done leaf adds its 60, its undone sibling nothing.
     const estimated = await seedGoal("month-line estimate probe");
+    // Only a goal measured in time counts a task's figure (RP-65).
+    await db`update goals.goals set measure_name = 'minutos', measure_unit = 'minutos' where id = ${estimated}`;
     const [slotCommitment] = await db<{ id: string }[]>`
       insert into goals.commitments
         (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
@@ -2667,9 +2674,11 @@ async function runMonthLineCheck(): Promise<void> {
       insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id)
       values (${userId}, ${estimated}, 'month-line child', null, ${parent.id})
     `;
-    await db`
-      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, ${estimated}, 'month-line plain dayless')
+    const [plain] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name) values (${userId}, null, 'month-line plain dayless')
+      returning id
     `;
+    plainIds.push(plain.id);
     const baseline = (await loadDay("2010-10-20")).daylessCount;
     const listed = (await listDaylessOneOffs()).filter((o) => o.name.startsWith("month-line"));
     assert(
@@ -2681,8 +2690,7 @@ async function runMonthLineCheck(): Promise<void> {
       select count(*)::int as n from goals.one_offs o
         where o.user_id = ${userId} and o.day is null and o.planned_month is null and o.parent_id is null
           and not exists (select 1 from goals.facts f where f.one_off_id = o.id)
-          and (o.goal_id is null or exists (
-            select 1 from goals.goals g where g.id = o.goal_id and g.archived_at is null and g.horizon > '2010-10-20'::date))
+          and o.goal_id is null
     `;
     assert(
       "daylessCount excludes the month task and its sub-task and counts the plain one",
@@ -2697,6 +2705,9 @@ async function runMonthLineCheck(): Promise<void> {
     reportRun("month-line", wireCalls.slice(start), true, overlap);
   } finally {
     await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
+    if (plainIds.length > 0) {
+      await db`delete from goals.one_offs where id in ${db(plainIds)} and user_id = ${userId}`;
+    }
     if (goalIds.length > 0) {
       await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
     }
@@ -2704,7 +2715,7 @@ async function runMonthLineCheck(): Promise<void> {
   }
 }
 
-// Module 174: each open goal's next undone leaf of the month, read inside the
+// Each open goal's next undone leaf of the month, read inside the
 // goals statement (RP-31, RNP-03). Seeded on today's own month, since only
 // today reads it; creation stamps are fixed so only the order decides.
 async function runMonthTaskCheck(): Promise<void> {
@@ -2730,10 +2741,11 @@ async function runMonthTaskCheck(): Promise<void> {
     day: string | null,
     createdAt: string,
     estimate: number | null = null,
+    note: string | null = null,
   ): Promise<string> {
     const [row] = await db<{ id: string }[]>`
-      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, created_at)
-      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate},
+      insert into goals.one_offs (user_id, goal_id, name, planned_month, parent_id, day, estimate, note, created_at)
+      values (${userId}, ${goalId}, ${name}, ${plannedMonth}::date, ${parentId}, ${day}::date, ${estimate}, ${note},
               ${createdAt}::timestamptz)
       returning id
     `;
@@ -2758,22 +2770,35 @@ async function runMonthTaskCheck(): Promise<void> {
     const own = await seed("month-task own", month, null, null, "2020-01-03T00:00:00Z", 90);
     const parent = await seed("month-task carried parent", previous, null, null, "2020-01-04T00:00:00Z");
     const first = await seed("month-task child 1", null, parent, null, "2020-01-05T00:00:00Z", 30);
-    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45);
+    const second = await seed("month-task child 2", null, parent, null, "2020-01-06T00:00:00Z", 45, "month-task note");
+    const third = await seed("month-task child 3", null, parent, null, "2020-01-07T00:00:00Z", 15);
     await finish(first);
 
     const nextOf = async () => (await loadDay(today)).monthTask[goal.id];
     const carried = await nextOf();
     assert(
       "the carried parent's undone child is the goal's next task, before the month's own and any dated one-off",
-      carried?.id === second && carried.name === "month-task child 2" && carried.estimate === 45,
+      carried?.id === second &&
+        carried.name === "month-task child 2" &&
+        carried.estimate === 45 &&
+        carried.note === "month-task note" &&
+        carried.parentName === "month-task carried parent",
       `monthTask = ${JSON.stringify(carried)}`,
     );
 
     await finish(second);
+    const afterSecond = await nextOf();
+    assert(
+      "the next undone child follows in plan order, a parent's name riding with it and no note of its own",
+      afterSecond?.id === third && afterSecond.note === null && afterSecond.parentName === "month-task carried parent",
+      `monthTask = ${JSON.stringify(afterSecond)}`,
+    );
+
+    await finish(third);
     const ownNext = await nextOf();
     assert(
       "with the carried child done the month's own task is next, and a task of the month after never is",
-      ownNext?.id === own && ownNext.estimate === 90,
+      ownNext?.id === own && ownNext.estimate === 90 && ownNext.parentName === null,
       `monthTask = ${JSON.stringify(ownNext)}`,
     );
 
@@ -2798,7 +2823,7 @@ async function runMonthTaskCheck(): Promise<void> {
   }
 }
 
-// Module 206 (RP-44, RP-24): a past week keeps the goals that governed it, an
+// RP-44, RP-24: a past week keeps the goals that governed it, an
 // archive since included, and drops one opened after it; `firstMonday` is the
 // oldest goal's Monday, archived included, read in the same statement. Rows
 // are relative to today and deleted by id.
@@ -2869,6 +2894,354 @@ async function runPastWeekCheck(): Promise<void> {
   } finally {
     if (ids.length > 0) {
       await db`delete from goals.goals where id in ${db(ids)} and user_id = ${person.id}`;
+    }
+    await db.end();
+  }
+}
+
+// RP-50, RP-52, RP-53, RNP-03: Hoy reads the plan. A 30-hour task
+// at a rhythm of 10 is split across three months and gives its first part;
+// last month closed with 5 done of its 10, so the end moved and the notice
+// says so, once, today alone, until `plan_seen` reaches the closed month.
+async function runPlanReadCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+  const { monthOf } = await import("@/lib/plan/months");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runPlanReadCheck: no verified session");
+  const userId = person.id;
+  const today = todayInZone();
+  const closed = monthOf(addDays(monthOf(today), -1));
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+
+  async function seedGoal(name: string, rhythm: number | null): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${userId}, ${name}, '2099-12-31'::date, 'hours', 'hours', ${rhythm},
+              '2020-01-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalIds.push(row.id);
+    return row.id;
+  }
+  async function seedTask(goal: string, name: string, estimate: number, createdAt: string): Promise<string> {
+    const [row] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, created_at)
+      values (${userId}, ${goal}, ${name}, ${estimate}, true, ${createdAt}::timestamptz)
+      returning id
+    `;
+    return row.id;
+  }
+
+  try {
+    const goal = await seedGoal("plan-read probe", 10);
+    const small = await seedTask(goal, "plan-read done in the closed month", 5, "2020-01-01T00:00:00Z");
+    const big = await seedTask(goal, "plan-read split", 30, "2020-01-02T00:00:00Z");
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day) values (${userId}, ${goal}, ${small}, ${closed}::date)
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount) values (${userId}, ${goal}, ${closed}::date, 12)
+    `;
+    const loose = await seedGoal("plan-read no rhythm", null);
+
+    const loaded = await loadDay(today);
+    const next = loaded.monthTask[goal];
+    assert(
+      "a split task is the next task and gives this month's part, not its whole estimate",
+      next?.id === big && next.part === 10 && next.estimate === 30,
+      `monthTask = ${JSON.stringify(next)}`,
+    );
+    const counts = loaded.monthTaskCounts[goal];
+    assert(
+      "the month's counts come from the plan: the split task, none done",
+      counts?.done === 0 && counts.total === 1,
+      `monthTaskCounts = ${JSON.stringify(counts)}`,
+    );
+    assert("the month line plans the rhythm", loaded.monthLine[goal]?.planned === 10, JSON.stringify(loaded.monthLine[goal]));
+
+    const notice = loaded.planNotice[goal];
+    assert(
+      "a month that closed short reads a notice with the closed month, what was done and the amount its own budget set",
+      notice !== null &&
+        notice.closedMonth === closed &&
+        notice.closedDone === 5 &&
+        notice.closedAmount === 12 &&
+        notice.movedDays > 0,
+      `planNotice = ${JSON.stringify(notice)}`,
+    );
+    assert(
+      "a goal with no rhythm reads no notice",
+      loaded.planNotice[loose] === null,
+      `planNotice = ${JSON.stringify(loaded.planNotice[loose])}`,
+    );
+    const past = await loadDay(addDays(today, -1));
+    assert("a past day reads no notice", Object.keys(past.planNotice).length === 0, JSON.stringify(past.planNotice));
+
+    await db`update goals.goals set plan_seen = ${closed}::date where id = ${goal}`;
+    const seen = await loadDay(today);
+    assert("once plan_seen reaches the closed month the notice is gone", seen.planNotice[goal] === null, JSON.stringify(seen.planNotice[goal]));
+
+    await loadDay(today);
+    const start = wireCalls.length;
+    const { overlap } = await withOverlap(() => loadDay(today));
+    reportRun("plan-read", wireCalls.slice(start), true, overlap);
+  } finally {
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
+    await db.end();
+  }
+}
+
+// RP-59: `/sueltas` and «N sin día» hold one-offs with no goal.
+// A goal's task with no day is a task of its plan (0014), so it is in neither
+// the list nor the count; a goal's task with a later day stays in
+// `listScheduledOneOffs`. Counts are deltas on a baseline read first.
+async function runGoallessDaylessCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { listDaylessOneOffs, listScheduledOneOffs } = await import("@/lib/queries/one-offs");
+  const { createGoal } = await import("@/app/actions/plan");
+  const { createOneOff } = await import("@/app/actions/one-offs");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runGoallessDaylessCheck: no verified session");
+  const today = todayInZone();
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  const oneOffIds: string[] = [];
+  const baseline = await loadDay(today);
+  const baselineScheduled = baseline.scheduledCount;
+
+  try {
+    const goal = await createGoal({ name: "check-day 407 probe", horizon: "2099-12-31" });
+    if (!goal.ok) throw new Error(`runGoallessDaylessCheck: createGoal failed: ${goal.error}`);
+    goalIds.push(goal.goalId);
+
+    const task = await createOneOff({ name: "check-day 407 goal task", day: null, goalId: goal.goalId });
+    if (!task.ok) throw new Error(`runGoallessDaylessCheck: createOneOff (goal task) failed: ${task.error}`);
+    oneOffIds.push(task.oneOffId);
+
+    const afterTask = await loadDay(today);
+    assert(
+      "a goal's dayless task does not move daylessCount",
+      afterTask.daylessCount === baseline.daylessCount,
+      `baseline ${baseline.daylessCount}, now ${afterTask.daylessCount}`,
+    );
+
+    const loose = await createOneOff({ name: "check-day 407 loose", day: null });
+    if (!loose.ok) throw new Error(`runGoallessDaylessCheck: createOneOff (loose) failed: ${loose.error}`);
+    oneOffIds.push(loose.oneOffId);
+
+    const afterLoose = await loadDay(today);
+    assert(
+      "a goalless dayless one-off moves daylessCount by one",
+      afterLoose.daylessCount === baseline.daylessCount + 1,
+      `baseline ${baseline.daylessCount}, now ${afterLoose.daylessCount}`,
+    );
+
+    const listed = await listDaylessOneOffs();
+    const ids = listed.map((row) => row.id);
+    assert(
+      "listDaylessOneOffs lists the goalless one-off and not the goal's task",
+      ids.includes(loose.oneOffId) && !ids.includes(task.oneOffId),
+      `ids = ${JSON.stringify(ids)}`,
+    );
+    assert(
+      "every listed dayless one-off reads no goal",
+      listed.every((row) => row.goalId === null && row.goalName === null),
+      JSON.stringify(listed.filter((row) => row.goalId !== null)),
+    );
+    assert(
+      "listDaylessOneOffs and daylessCount agree with a goal's task and a goalless one seeded",
+      listed.length === afterLoose.daylessCount,
+      `${listed.length} listed, ${afterLoose.daylessCount} counted`,
+    );
+    const [planRow] = await db<{ in_plan: boolean; day: string | null }[]>`
+      select in_plan, day::text as day from goals.one_offs where id = ${task.oneOffId}
+    `;
+    assert(
+      "the goal's task is in its plan with no day",
+      planRow.in_plan === true && planRow.day === null,
+      JSON.stringify(planRow),
+    );
+
+    const later = addDays(today, 2);
+    const dated = await createOneOff({ name: "check-day 407 goal task later", day: later, goalId: goal.goalId });
+    if (!dated.ok) throw new Error(`runGoallessDaylessCheck: createOneOff (dated) failed: ${dated.error}`);
+    oneOffIds.push(dated.oneOffId);
+    const scheduled = await listScheduledOneOffs(today);
+    const row = scheduled.find((item) => item.id === dated.oneOffId);
+    assert(
+      "a goal's task with a later day stays in listScheduledOneOffs with its goal",
+      row !== undefined && row.day === later && row.goalId === goal.goalId,
+      `row = ${JSON.stringify(row)}`,
+    );
+    assert(
+      "and counts in scheduledCount",
+      (await loadDay(today)).scheduledCount === baselineScheduled + 1,
+      `baseline ${baselineScheduled}`,
+    );
+  } finally {
+    if (oneOffIds.length > 0) {
+      await db`delete from goals.one_offs where id in ${db(oneOffIds)} and user_id = ${person.id}`;
+    }
+    if (goalIds.length > 0) {
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${person.id}`;
+    }
+    await db.end();
+  }
+}
+
+/**
+ * `loadDay` hands each evidence commitment its threshold and the catalogue
+ * keys of its source, null for every other kind, and the civil day of the
+ * person's oldest goal, archived included.
+ */
+async function runEvidenceInfoAndFirstGoalDayCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+  const { todayInZone } = await import("@/lib/zone");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runEvidenceInfoAndFirstGoalDayCheck: no verified session");
+  const userId = person.id;
+  const today = todayInZone();
+  console.log(`\nmodule 571 check — ${new Date().toISOString()} (today ${today})`);
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const goalIds: string[] = [];
+  try {
+    const [foreign] = await db<{ n: number; oldest: string | null }[]>`
+      select count(*)::int as n, min(created_at at time zone 'America/Bogota')::date::text as oldest
+      from goals.goals where user_id = ${userId}
+    `;
+    if (foreign.n === 0) {
+      assert("a person with no goals has firstGoalDay null", (await loadDay(today)).firstGoalDay === null, "goals exist");
+    } else {
+      console.log(`NOTE    ${foreign.n} goal(s) not seeded here (oldest ${foreign.oldest}); the null case is not driven`);
+    }
+
+    const seedGoal = async (name: string, createdAt: string, archived: boolean): Promise<string> => {
+      const [row] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, created_at, archived_at)
+        values (${userId}, ${name}, '2099-12-31'::date, ${createdAt}::timestamptz,
+                ${archived ? "2001-04-01T12:00:00Z" : null}::timestamptz)
+        returning id
+      `;
+      goalIds.push(row.id);
+      return row.id;
+    };
+    const archivedFirst = await seedGoal("check-571 archived third", "2001-03-03T15:00:00Z", true);
+    await seedGoal("check-571 tenth", "2001-03-10T15:00:00Z", false);
+
+    const [source] = await db<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (${userId}, ${archivedFirst}, 'check-571 evidence', 'daily', 'evidence', ${source.id}, 3, '2001-03-03T15:00:00Z'::timestamptz)
+    `;
+    const openGoal = goalIds[1];
+    await db`
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${userId}, ${openGoal}, 'check-571 tap', 'daily', 'tap', '2001-03-10T15:00:00Z'::timestamptz)
+    `;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${userId}, ${openGoal}, 'check-571 quantity', 'daily', 'quantity', 10, 'min', '2001-03-10T15:00:00Z'::timestamptz)
+    `;
+
+    const loaded = await loadDay(today);
+    const mine = (name: string) => loaded.commitments.find((c) => c.name === name);
+    assert(
+      "an evidence commitment carries its threshold and its source's label and unit keys",
+      JSON.stringify(mine("check-571 evidence")?.evidence) ===
+        JSON.stringify({ threshold: 3, labelKey: "sources.readingLookups", unitKey: "sources.readingLookupsUnit" }),
+      `evidence = ${JSON.stringify(mine("check-571 evidence")?.evidence)}`,
+    );
+    assert(
+      "a tap and a quantity commitment carry evidence null",
+      mine("check-571 tap")?.evidence === null && mine("check-571 quantity")?.evidence === null,
+      `tap ${JSON.stringify(mine("check-571 tap")?.evidence)}, quantity ${JSON.stringify(mine("check-571 quantity")?.evidence)}`,
+    );
+    const expectedFirst = foreign.n === 0 || (foreign.oldest !== null && foreign.oldest > "2001-03-03") ? "2001-03-03" : foreign.oldest;
+    assert(
+      "firstGoalDay is the oldest goal's civil day, archived included",
+      loaded.firstGoalDay === expectedFirst,
+      `firstGoalDay = ${loaded.firstGoalDay}, expected ${expectedFirst}`,
+    );
+  } finally {
+    if (goalIds.length > 0) {
+      await db`delete from goals.commitments where goal_id in ${db(goalIds)} and user_id = ${userId}`;
+      await db`delete from goals.goals where id in ${db(goalIds)} and user_id = ${userId}`;
+    }
+    await db.end();
+  }
+}
+
+/**
+ * A week that crosses a month still counts the evidence of its days in the
+ * month before: 2010-05-31 is the Monday of the week of Thursday 2010-06-03.
+ */
+async function runWeekAcrossMonthEvidenceCheck(): Promise<void> {
+  const { loadDay } = await import("@/lib/queries/day");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runWeekAcrossMonthEvidenceCheck: no verified session");
+  const userId = person.id;
+  console.log(`\nmodule 593 check — ${new Date().toISOString()}`);
+
+  const db = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  const deviceId = "00000000-0000-4000-8000-0000000000d6";
+  let goalId: string | null = null;
+  try {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${userId}, 'check-593 measured', '2099-12-31'::date, 'searches', 'searches',
+              '2009-12-01T00:00:00Z'::timestamptz)
+      returning id
+    `;
+    goalId = goal.id;
+    const [source] = await db<{ id: string }[]>`select id from goals.evidence_sources where key = 'reading_lookups'`;
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (${userId}, ${goalId}, 'check-593 evidence', 'daily', 'evidence', ${source.id}, 1,
+              '2009-12-01T00:00:00Z'::timestamptz)
+    `;
+    // Monday 05-31 (the previous month), Tuesday 06-01, and the Sunday before the week.
+    const lookupAt = ["2010-05-31T17:00:00Z", "2010-06-01T17:00:00Z", "2010-05-30T17:00:00Z"];
+    for (const [i, at] of lookupAt.entries()) {
+      await db`
+        insert into reading.lookups
+          (user_id, device_id, local_id, at, received_at, text, normalised, kind, outcome,
+           dictionary_ready, record_schema)
+        values (${userId}, ${deviceId}::uuid, ${i + 1}, ${at}::timestamptz, ${at}::timestamptz, 'x', 'x',
+                'word', 'exact', true, 1)
+      `;
+    }
+    const measure = (await loadDay("2010-06-03")).weekMeasure[goalId];
+    assert(
+      "weekMeasure on a Thursday of a week crossing a month counts the Monday of the month before",
+      measure === 2,
+      `weekMeasure = ${measure}, seeded 05-31 and 06-01 in the week and 05-30 the Sunday before`,
+    );
+  } finally {
+    await db`delete from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid`;
+    const [left] = await db<{ n: number }[]>`
+      select count(*)::int as n from reading.lookups where user_id = ${userId} and device_id = ${deviceId}::uuid
+    `;
+    assert("the week-across-month case leaves no reading.lookups behind", left.n === 0, `${left.n} rows left`);
+    if (goalId) {
+      await db`delete from goals.commitments where goal_id = ${goalId} and user_id = ${userId}`;
+      await db`delete from goals.goals where id = ${goalId} and user_id = ${userId}`;
     }
     await db.end();
   }

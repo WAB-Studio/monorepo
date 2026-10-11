@@ -54,7 +54,7 @@ test("a commitment retired today with today's fact stays a done row, one without
     }
 
     await page.goto("/");
-    await expect(page.getByRole("button", { name: "Diaria sin hecho", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Diaria sin hecho/ })).toBeVisible();
     for (const [name] of cases) {
       await expect(page.getByText(name, { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: new RegExp(`^${name} .*lo dijiste tú$`) })).toBeVisible();
@@ -64,7 +64,7 @@ test("a commitment retired today with today's fact stays a done row, one without
 
     // Undo as before: the row asks again, its fact gone.
     await page.getByRole("button", { name: /^Diaria hecha .*lo dijiste tú$/ }).click();
-    await expect(page.getByRole("button", { name: "Diaria hecha", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Diaria hecha(?! .*lo dijiste tú)/ })).toBeVisible();
     await expect(page.getByText("lo dijiste tú")).toHaveCount(2);
   } finally {
     await context.close();
@@ -116,7 +116,7 @@ test("a commitment retired today reads on a day before as it did then (RP-13)", 
     await page.goto(`/dia/${yesterday}`);
     await expect(page.getByText("Hecha ayer", { exact: true })).toBeVisible();
     await expect(page.getByText("Pendiente ayer", { exact: true })).toBeVisible();
-    await expect(page.getByText("08:10 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("todos los días · 08:10 · lo dijiste tú", { exact: true })).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;

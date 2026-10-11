@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { SectionLabel } from "./section-label";
 import { Skeleton } from "./skeleton";
 import { Text } from "./text";
 import styles from "./screen-header.module.css";
@@ -14,19 +15,43 @@ export function ScreenHeader({
   title,
   back,
   eyebrow,
+  eyebrowHref,
+  eyebrowFill,
+  controls,
   actions,
   meta,
+  metaVariant = "meta",
+  lead,
 }: {
   title: string;
   back?: { href: string; place: string };
-  // A section label, or an accent link, between the way back and the title.
+  // A string is drawn in the one eyebrow style. A node is drawn as given.
   eyebrow?: ReactNode;
+  // Makes a string eyebrow an accent link.
+  eyebrowHref?: string;
+  // Stretches a node eyebrow across the header, for one that carries a row of its own.
+  eyebrowFill?: boolean;
+  // A row on the eyebrow's line: the steps, the way back, the theme toggle.
+  controls?: ReactNode;
   // Beside the title from 1024, under it below.
   actions?: ReactNode;
-  // One mono line under the title.
-  meta?: string;
+  // One line under the title: mono figures by default, the quiet sentence when it reads as one.
+  meta?: ReactNode;
+  metaVariant?: "meta" | "sentence";
+  // A mono line in ink straight under the title, before `meta`; its `<strong>` is the part to read first.
+  lead?: ReactNode;
 }) {
   const t = useTranslations("common");
+  const eyebrowNode =
+    typeof eyebrow !== "string" ? (
+      eyebrow
+    ) : !eyebrow ? null : eyebrowHref ? (
+      <Link href={eyebrowHref} className={styles.eyebrowLink}>
+        {eyebrow}
+      </Link>
+    ) : (
+      <SectionLabel>{eyebrow}</SectionLabel>
+    );
 
   return (
     <header className={styles.header}>
@@ -40,15 +65,27 @@ export function ScreenHeader({
           <span>{back.place}</span>
         </Link>
       ) : null}
-      {eyebrow ? <div className={styles.eyebrow}>{eyebrow}</div> : null}
+      {controls ? (
+        <div className={styles.top}>
+          {eyebrowNode ? <div className={styles.eyebrow}>{eyebrowNode}</div> : null}
+          <div className={styles.controls}>{controls}</div>
+        </div>
+      ) : eyebrowNode ? (
+        <div className={eyebrowFill ? `${styles.eyebrow} ${styles.eyebrowFill}` : styles.eyebrow}>{eyebrowNode}</div>
+      ) : null}
       <div className={styles.line}>
         <Text asChild variant="title">
           <h1 className={styles.title}>{title}</h1>
         </Text>
         {actions ? <div className={styles.actions}>{actions}</div> : null}
       </div>
+      {lead ? (
+        <Text as="p" variant="meta" tone="ink" className={styles.lead}>
+          {lead}
+        </Text>
+      ) : null}
       {meta ? (
-        <Text as="p" variant="meta" tone="muted" className={styles.meta}>
+        <Text as="p" variant={metaVariant} tone="muted" className={styles.meta}>
           {meta}
         </Text>
       ) : null}

@@ -351,6 +351,13 @@
       "when": 1791229576363,
       "tag": "0049_audit_sequence_without_api_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1791584095524,
+      "tag": "0050_harness_oauth_clients",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-// Drives the readers' plan order (RP-47, module 254): rows planted in ONE
+// Drives the readers' plan order (RP-47): rows planted in ONE
 // statement share `created_at`, so only `position` can put them in order. The
 // names run against the positions and the ids against both, so a name or uuid sort fails too. Runs on the session
 // `harness:mint-session` left standing, with `server-only`, `next/headers` and

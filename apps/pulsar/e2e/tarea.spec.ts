@@ -3,7 +3,7 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (module 140, RP-30, RP-31,
+// `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-30, RP-31,
 // RP-35): the form that writes a task of a month and a sub-task under a
 // parent. Calendar-bound as 139: «last month» is always closed, this month
 // always open.

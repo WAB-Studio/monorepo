@@ -1,8 +1,9 @@
 import { test, expect } from "./fixtures";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import plan from "../messages/es/plan.json";
 
-// `ScreenHeader` (module 204, RNP-16, RNP-07): the four plan forms that had no
+// `ScreenHeader` (RNP-16, RNP-07): the four plan forms that had no
 // way out carry the page's one `h1` and a 48px way back that names its place.
 
 const thisMonth = monthOf(todayInZone());
@@ -34,7 +35,7 @@ for (const size of SIZES) {
     const forms = [
       { path: "/metas/nueva", title: "¿Qué quieres sostener?", place: "Metas", lands: "/metas" },
       { path: `/metas/${goal.id}/compromisos/nuevo`, title: "Compromiso nuevo", place: name, lands: `/metas/${goal.id}` },
-      { path: `/metas/${goal.id}/fases/nueva`, title: "Fase nueva", place: name, lands: `/metas/${goal.id}` },
+      { path: `/metas/${goal.id}/fases/nueva`, title: plan.phaseForm.title, place: name, lands: `/metas/${goal.id}` },
       {
         path: `/metas/${goal.id}/meses/${month}/tarea/nueva`,
         title: null,

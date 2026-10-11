@@ -1,6 +1,8 @@
 // The words for a minute. A unit named any other way is not time and prints
 // as it always has.
-const TIME_UNITS = new Set(["minutos", "minuto", "min", "mins"]);
+// An array too: the rhythm action hands the same list to the SQL.
+export const TIME_UNITS = ["minutos", "minuto", "min", "mins"] as const;
+const TIME_UNIT_SET: ReadonlySet<string> = new Set(TIME_UNITS);
 
 // `useGrouping: "always"`: "es" leaves four digits bare by default, and a
 // total of 1.234 h has to read as grouped as the figures beside it.
@@ -15,8 +17,22 @@ export type TimeWords = {
   unit?: (unit: string, n: number) => string;
 };
 
+// Words for an hour. Never in TIME_UNITS: what is stored in them keeps reading as it does.
+export const HOUR_UNITS = ["horas", "hora", "h"] as const;
+const HOUR_UNIT_SET: ReadonlySet<string> = new Set(HOUR_UNITS);
+
+export function isHourUnit(unit: string): boolean {
+  return HOUR_UNIT_SET.has(unit.trim().toLowerCase());
+}
+
+// What a commitment keeps: hours become whole minutes, any other unit stays.
+export function storedMeasure(unit: string, amount: number | null): { unit: string; amount: number | null } {
+  if (!isHourUnit(unit)) return { unit, amount };
+  return { unit: "minutos", amount: amount === null ? null : amount * 60 };
+}
+
 export function isTimeUnit(unit: string | null): boolean {
-  return unit !== null && TIME_UNITS.has(unit.trim().toLowerCase());
+  return unit !== null && TIME_UNIT_SET.has(unit.trim().toLowerCase());
 }
 
 export function splitMinutes(n: number): { h: number; min: number } {
@@ -27,7 +43,7 @@ export function formatTime(n: number, words: TimeWords): string {
   const { h, min } = splitMinutes(n);
   if (h === 0) return words.min(grouped.format(min));
   if (min === 0) return words.h(grouped.format(h));
-  return words.join(words.h(grouped.format(h)), words.min(grouped.format(min)));
+  return words.join(words.h(grouped.format(h)), words.min(String(min).padStart(2, "0")));
 }
 
 export function formatQuantity(n: number, unit: string, words: TimeWords): string {

@@ -4,9 +4,9 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// `MetasCentro` and `MetasCentroEscritorio` (module 267, RP-46, RP-37, RNP-07):
+// `MetasCentro` and `MetasCentroEscritorio` (RP-49, RP-37, RNP-07):
 // «el plan» is outline cards, each with its title on one line and its hint
-// under it, 10px apart.
+// under it, 12px apart.
 
 async function expectPlanCards(page: Page, names: string[], width: number) {
   const boxes: { top: number; bottom: number }[] = [];
@@ -48,12 +48,12 @@ async function expectPlanCards(page: Page, names: string[], width: number) {
     boxes.push({ top: card!.top, bottom: card!.bottom });
   }
   for (let i = 1; i < boxes.length; i += 1) {
-    expect(Math.abs(boxes[i].top - boxes[i - 1].bottom - 10), `gap before ${names[i]} at ${width}`).toBeLessThanOrEqual(1);
+    expect(Math.abs(boxes[i].top - boxes[i - 1].bottom - 12), `gap before ${names[i]} at ${width}`).toBeLessThanOrEqual(1);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 }
 
-test("with a goal, the plan cards keep one-line titles, hints under them and 10px between, at 360, 1024 and 1440; «Abrir otra meta» stays centred", async ({
+test("with a goal, the plan cards keep one-line titles, hints under them and 12px between, at 360, 1024 and 1440; «Abrir otra meta» stays centred", async ({
   person,
   browser,
   db,

@@ -1,11 +1,13 @@
 import type { ReviewWeek } from "@/lib/day/types";
 
+import { shortMonth } from "@/lib/dates/short-month";
+
 import type { GoalReport } from "./report";
 
 export type Section = "month" | "toDate" | "phases" | "tasks" | "months";
 
 // A goal with no unit measures nothing, so it prints no figure section
-// rather than a zero (RP-46). `month` stays with a unit even when this month
+// rather than a zero (RP-49). `month` stays with a unit even when this month
 // has no amount: the page then prints the reached figure alone. `tasks` is
 // every task of the month, carried first, so a goal with none prints no head.
 export function goalSections(goal: GoalReport): Section[] {
@@ -14,8 +16,40 @@ export function goalSections(goal: GoalReport): Section[] {
   if (measured) sections.push("month", "toDate");
   if (goal.phases.length > 0) sections.push("phases");
   if (goal.tasks.length > 0) sections.push("tasks");
-  if (measured) sections.push("months");
+  if (measured || goal.months.some((month) => month.tasks !== undefined && printsOnPaper(month))) {
+    sections.push("months");
+  }
   return sections;
+}
+
+// A goal's head stays with its table when the table is tall and still short enough for the goal to fit a page.
+// A goal taller than a page still breaks, where the printer finds room.
+export function keepsHeadWithTable(months: GoalReport["months"]): boolean {
+  const rows = months.filter(printsOnPaper).length;
+  return rows >= HEAD_WITH_TABLE_ROWS && rows < HEAD_WITH_TABLE_MAX_ROWS;
+}
+
+// A month that has not started and has no planned amount prints nothing; a
+// past or current month always prints, and a planned 0 is still an amount (RP-70).
+// A goal that measures nothing prints a month that has started or holds a task (RP-71).
+export function printsOnPaper(month: GoalReport["months"][number]): boolean {
+  if (month.tasks !== undefined) return month.past || month.current || month.tasks.total > 0;
+  return month.past || month.current || month.planned !== null;
+}
+
+// A whole table this tall is what a head left at a page foot leaves alone on
+// the next page; a shorter one is left to flow with its goal.
+export const HEAD_WITH_TABLE_ROWS = 8;
+
+// Past this many rows a table is too long for its goal to keep to one page.
+export const HEAD_WITH_TABLE_MAX_ROWS = 20;
+
+// A «por mes» table of this many printed rows or more flows across pages
+// instead of keeping to one (`ReporteImpresoTablaLarga.dc.html`).
+export const LONG_TABLE_ROWS = 15;
+
+export function isLongTable(months: GoalReport["months"]): boolean {
+  return months.filter(printsOnPaper).length >= LONG_TABLE_ROWS;
 }
 
 // A week as one month holds it: the whole week, or its days in that month.
@@ -45,17 +79,14 @@ export function monthsWithWeeks(goal: GoalReport): MonthWithWeeks[] {
   });
 }
 
-const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
 // «31 ago–6 sep 2026»: the year closes the span, and opens both ends when the
-// span crosses a year. The month is cut to three letters because ICU's own
-// short form is «sept».
+// span crosses a year.
 export function civilSpan(startsOn: string, endsOn: string): string {
   const [startYear, startMonth, startDay] = startsOn.split("-").map(Number);
   const [endYear, endMonth, endDay] = endsOn.split("-").map(Number);
-  if (startsOn === endsOn) return `${endDay} ${SHORT_MONTHS[endMonth - 1]} ${endYear}`;
-  const start = SHORT_MONTHS[startMonth - 1];
-  const end = SHORT_MONTHS[endMonth - 1];
+  if (startsOn === endsOn) return `${endDay} ${shortMonth(endsOn)} ${endYear}`;
+  const start = shortMonth(startsOn);
+  const end = shortMonth(endsOn);
   if (startYear !== endYear) return `${startDay} ${start} ${startYear}–${endDay} ${end} ${endYear}`;
   if (startMonth !== endMonth) return `${startDay} ${start}–${endDay} ${end} ${endYear}`;
   return `${startDay}–${endDay} ${end} ${endYear}`;

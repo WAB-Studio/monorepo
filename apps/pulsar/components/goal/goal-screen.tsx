@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { type Translator } from "@/i18n/translator";
@@ -10,18 +12,18 @@ import {
 import { EvidenceNote } from "@/components/day/evidence-note";
 import { dayWords } from "@/lib/day/day-words";
 import { phaseOn } from "@/lib/day/derive";
-import { ShiftProposal } from "@/components/month/task-row";
-import { monthList } from "@/lib/plan/carry";
-import { shiftOfferNow } from "@/lib/plan/shift-offer";
-import { listGoals, loadGoal } from "@/lib/queries/goal";
+import { planHrefFrom } from "@/lib/plan/return-to";
+import { amountOf } from "@/lib/plan/roadmap";
+import { planMonthList } from "@/lib/plan/roadmap-read";
+import { loadGoal } from "@/lib/queries/goal";
 import { dayBefore } from "@/lib/day/weeks";
-import { isTimeUnit } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 import {
   civilDateInZone,
-  civilDateLabel,
   civilDayMonthShort,
   todayInZone,
   TIME_ZONE,
+  civilDateLabel,
 } from "@/lib/zone";
 import {
   Button,
@@ -34,10 +36,11 @@ import {
   Progress,
   Row,
   ScreenHeader,
+  Section,
   SectionLabel,
-  Separator,
   Split,
   Text,
+  TextLink,
 } from "@/components/ui";
 
 import { CommitmentList, countWord } from "./commitment-list";
@@ -74,10 +77,15 @@ function phaseSpanLabel(
   startsOn: string,
   endsOn: string | null,
   t: Translator,
-) {
+): ReactNode {
   const start = weekIndex(openedOn, startsOn);
   const end = endsOn ? weekIndex(openedOn, endsOn) : start;
-  return t("goal.detail.phaseSpan", { start, end });
+  // A phase stored before its goal opened reads from week 1, never week 0.
+  return t.rich("goal.detail.phaseSpan", {
+    start: Math.max(1, start),
+    end: Math.max(1, end),
+    fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} />,
+  });
 }
 
 /**
@@ -89,7 +97,7 @@ function phaseSpanLabel(
  * show and nothing to sum.
  */
 export async function GoalScreen({ goalId }: { goalId: string }) {
-  const [goal, goals] = await Promise.all([loadGoal(goalId), listGoals()]);
+  const goal = await loadGoal(goalId);
   if (!goal) notFound();
 
   const t = await getTranslations();
@@ -114,6 +122,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       goalId={goal.id}
       name={goal.name}
       openedOn={openedOn}
+      horizon={goal.horizon}
       weeks={sheetWeeks}
       phases={goal.phases}
       solid={ended}
@@ -122,22 +131,18 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const phoneActs = ended ? (
     <Face on="phone">
-      <Flex gap="3">
-        <Flex flexGrow="1" flexBasis="0" minWidth="0">
-          {moveAction}
-        </Flex>
-        <Flex flexGrow="1" flexBasis="0" minWidth="0">
-          <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
-        </Flex>
-      </Flex>
+      <Section as="div">
+        {moveAction}
+        <ArchiveGoalAction goalId={goal.id} name={goal.name} short />
+      </Section>
     </Face>
   ) : null;
 
   // `MetaMes*.dc.html` (RP-28, RP-29): the current month's amount, drawn only
   // with a measure and a month inside the span. A time unit prints itself in
-  // hours and minutes; any other unit is already named by «mide en».
+  // hours and minutes; any other unit is named beside each figure, as the total is.
   const month = goal.month;
-  const figureUnit = isTimeUnit(goal.measureUnit) ? (goal.measureUnit ?? undefined) : undefined;
+  const figureUnit = goal.measureUnit ?? undefined;
   const monthName = (t.raw("day.monthLong") as string[])[Number(today.slice(5, 7)) - 1];
   const daysLeft = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate() - Number(today.slice(8, 10));
   const planned = month?.planned ?? null;
@@ -145,130 +150,149 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   // A goal with no measure has no amount to read, but its months and their
   // tasks stay reachable (`MetaSinMedida.dc.html`).
   const bareMonth = !goal.measureUnit && goal.months.some((row) => row.current);
-  const own = bareMonth
-    ? monthList(goal.tasks, `${today.slice(0, 7)}-01`, today).filter((item) => item.carriedFrom === null)
-    : [];
-  const offer =
-    (month || bareMonth) && !archived && !ended
-      ? shiftOfferNow({
-          today,
-          horizon: goal.horizon,
-          budgets: goal.budgets,
-          months: goal.months,
-          phases: goal.phases,
-          tasks: goal.tasks,
-          shifts: goal.shifts,
-        })
-      : null;
+  const monthKey = `${today.slice(0, 7)}-01`;
+  const own = planMonthList(goal.plan, monthKey).filter((item) => item.carriedFrom === null);
+  // An archived goal that holds no task this month has nothing to say of it;
+  // «Ver por mes» is still the way to the months that do.
+  const noMonthBlock = archived && bareMonth && own.length === 0;
+  const units = await getTranslations("units");
+  const words: TimeWords = {
+    h: (h) => units("h", { h }),
+    min: (min) => units("min", { min }),
+    join: (h, min) => units("join", { h, min }),
+  };
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const monthNames = t.raw("day.monthLong") as string[];
-  const closedName = offer ? monthNames[Number(offer.closedMonth.slice(5, 7)) - 1] : "";
-  const shiftOffer = offer ? (
-    <ShiftProposal
-      goalId={goal.id}
-      goalName={goal.name}
-      month={offer.closedMonth.slice(0, 7)}
-      plan={offer.plan}
-      currentPhase={currentPhase?.name ?? null}
-      hasDoneTasks={goal.tasks.some((task) => task.doneOn !== null)}
-      otherGoals={goals.filter((other) => other.id !== goal.id).map((other) => other.name)}
-      proposal={t("month.shift.carriedOver", {
-        month: closedName.charAt(0).toUpperCase() + closedName.slice(1),
-        share: Math.floor((offer.share.carried * 100) / offer.share.planned),
-      })}
-      see={t("month.shift.see")}
-      until={t("month.shift.until", {
-        date: `${Number(offer.until.slice(8, 10))} de ${monthNames[Number(offer.until.slice(5, 7)) - 1]}`,
-      })}
-    />
-  ) : null;
+  const planEnd = goal.roadmap.end;
+  const planAmount = amountOf(monthKey, goal.plan);
+  const monthOwn = goal.plan.rhythm !== null && goal.plan.budgets.some((budget) => budget.month === monthKey);
+  const planItems = planMonthList(goal.plan, monthKey);
+  const planDone = planItems.filter((item) => item.done).length;
+  // The end carries its year only when it is not this one, as `endLabel` does.
+  const planEndLabel = planEnd
+    ? `${Number(planEnd.slice(8, 10))} de ${monthNames[Number(planEnd.slice(5, 7)) - 1]}${
+        planEnd.slice(0, 4) === today.slice(0, 4) ? "" : ` de ${planEnd.slice(0, 4)}`
+      }`
+    : null;
+  // A goal with no measure keeps its plan; one measured in something else has none.
+  const measuresOther = goal.measureUnit !== null && !isTimeUnit(goal.measureUnit);
+  const planSection =
+    goal.roadmap.state === "empty" || measuresOther ? null : (
+      <Section label={t("roadmap.meta.planLabel")}>
+        <Row
+          href={`/metas/${goal.id}/plan`}
+          card
+          name={
+            goal.roadmap.state === "noRhythm"
+              ? t("roadmap.meta.build")
+              : planEndLabel
+                ? t("roadmap.meta.finish", { date: planEndLabel })
+                : t("roadmap.plan.title")
+          }
+          meta={
+            goal.roadmap.state === "planned" && planAmount !== null
+              ? t.rich(planItems.length === 0 ? "roadmap.meta.rhythmLine" : "roadmap.meta.rhythmLineDone", {
+                  amount: formatQuantity(planAmount, goal.measureUnit ?? "", words),
+                  done: planDone,
+                  total: planItems.length,
+                  month: monthName,
+                  ...fig,
+                })
+              : undefined
+          }
+          metaVariant="sentence"
+          trailing={<ChevronRight size={16} strokeWidth={1.5} aria-hidden />}
+        />
+      </Section>
+    );
   const monthsLink = (
-    <Button asChild variant="ghost">
-      <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
-    </Button>
+    <TextLink href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</TextLink>
   );
-  const bareBlock = bareMonth ? (
-    <section>
-      <Separator />
-      <Flex justify="between" align="center">
-        <SectionLabel>{monthName}</SectionLabel>
-        <Button asChild variant="ghost" tone="accent" tap={44}>
-          <Link href={`/metas/${goal.id}/meses`}>{t("goal.detail.monthsLink")}</Link>
-        </Button>
-      </Flex>
-      <Text as="p">
-        {t("month.months.withoutMeasure.goalTasks", {
-          count: own.length,
-          done: own.filter((item) => item.done).length,
-        })}
-      </Text>
-      {shiftOffer}
-    </section>
+  const bareBlock = bareMonth && !noMonthBlock ? (
+    <Panel>
+      <Section label={monthName}>
+        <Text as="p" variant="sentence" tone="secondary">
+          {t("month.months.withoutMeasure.goalTasks", {
+            count: own.length,
+            done: own.filter((item) => item.done).length,
+          })}
+        </Text>
+        {monthsLink}
+      </Section>
+    </Panel>
   ) : null;
   // Under 60 % from the 20th the pace line holds reached «de» planned itself.
   const paceLine = planned !== null && planned > 0 && Boolean(month?.underPace) && goal.evidence !== "unreadable";
   const monthBlock =
     goal.measureUnit && month ? (
-      <section>
-        <SectionLabel>{monthName}</SectionLabel>
+      <Section label={monthName}>
         {paceLine ? (
-          <Text as="p" variant="meta">
+          <Text as="p" variant="sentence">
             {t("goal.detail.monthPace", { day: Number(today.slice(8, 10)) })}{" "}
             <Figure value={month.reached} unit={figureUnit} variant="meta" />{" "}
             {t("day.monthLine.of")} <Figure value={planned as number} unit={figureUnit} variant="meta" />
             {t("goal.detail.monthPaceUnder", { threshold: 60 })}
           </Text>
         ) : (
-          <Flex align="baseline" gap="2" wrap="wrap">
-            <Figure value={month.reached} unit={figureUnit} variant="measure" />
+          <Text as="p" variant="sentence" tone="muted">
+            <Figure value={month.reached} unit={figureUnit} variant="measure" />{" "}
             {planned !== null ? (
-              <Text variant="meta" tone="muted">
+              <>
                 {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
-              </Text>
+              </>
             ) : (
-              <Text variant="meta" tone="muted">
-                {t("goal.detail.monthNoPlan")}
-              </Text>
+              t("goal.detail.monthNoPlan")
             )}
-          </Flex>
+          </Text>
         )}
+        {monthOwn ? (
+          <Text as="p" variant="sentence" tone="muted">
+            {t("goal.detail.monthInLieu")}
+          </Text>
+        ) : null}
         {planned !== null && planned > 0 ? (
           <>
             <Progress percent={percent} />
             {goal.evidence === "unreadable" ? (
-              <Text as="p" variant="meta" tone="muted">
+              <Text as="p" variant="sentence" tone="muted">
                 {t("goal.detail.monthDeclaredOnly")}
               </Text>
             ) : paceLine ? null : (
-              <Text as="p" variant="meta" tone="muted">
+              <Text as="p" variant="sentence" tone="muted">
                 {t("goal.detail.monthProgress", { percent, days: daysLeft })}
               </Text>
             )}
           </>
         ) : null}
-        {shiftOffer}
+        {measuresOther && planItems.length > 0 ? (
+          <Text as="p" variant="line">
+            {t("goal.detail.monthTasks", { done: planDone, total: planItems.length })}
+          </Text>
+        ) : null}
         {planned === null && !archived && !ended ? (
           <Button asChild variant="outline">
-            <Link href={`/metas/${goal.id}/meses?planear=${today.slice(0, 7)}`}>
+            <Link href={planHrefFrom(goal.id, today.slice(0, 7), `/metas/${goal.id}`)}>
               {t("goal.detail.monthPlanLink", { month: monthName })}
             </Link>
           </Button>
         ) : null}
-      </section>
+      </Section>
     ) : null;
 
   const before = (
     <>
+      {planSection}
       <Panel>
         <Face on="desktop">
           <SectionLabel>{t("goal.detail.endHeading")}</SectionLabel>
         </Face>
-        {ended && goal.endedOn ? (
-          <Text as="p" variant="meta">
+        {goal.endedOn ? (
+          <Text as="p" variant="sentence">
             {endedOnWords(goal.endedOn, t)}
           </Text>
         ) : (
           <Flex justify="between" align="center">
-            <Text as="p" variant="meta" tone="muted">
+            <Text as="p" variant="sentence" tone="muted">
               {t("goal.detail.horizonUntil", {
                 weeks: totalWeeks,
                 date: endLabel,
@@ -278,7 +302,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Flex>
         )}
         {goal.measureUnit ? null : (
-          <Text as="p" variant="meta" tone="muted">
+          <Text as="p" variant="sentence" tone="muted">
             {t("month.list.noMeasure")}
           </Text>
         )}
@@ -287,8 +311,10 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
       {goal.measureUnit ? (
         <Panel>
-          <Text as="p" variant="meta" tone="muted">
-            {t("goal.detail.measures", { unit: goal.measureUnit })}
+          <Text as="p" variant="sentence" tone="muted">
+            {isTimeUnit(goal.measureUnit)
+              ? t("goal.detail.measuresTime")
+              : t("goal.detail.measures", { unit: goal.measureUnit })}
           </Text>
           {phoneActs}
 
@@ -299,26 +325,38 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               variant="measure"
             />
           ) : null}
+          <Text as="p" variant="sentence" tone="muted">
+            {t.rich("goal.detail.measureSince", {
+              date:
+                openedOn.slice(0, 4) === today.slice(0, 4)
+                  ? civilDateLabel(openedOn)
+                  : t("goal.detail.measureSinceYear", { date: civilDateLabel(openedOn), year: openedOn.slice(0, 4) }),
+              fig: (chunks) => <Figure variant="meta" value={chunks} />,
+            })}
+          </Text>
 
           {monthBlock}
 
-          <Flex gap="5" wrap="wrap">
-            {month ? monthsLink : null}
-            <Button asChild variant="ghost">
-              <Link href={`/metas/${goal.id}/revision`}>
+          <Section as="div">
+            <Flex wrap="wrap" gap="4">
+              {month || noMonthBlock ? monthsLink : null}
+              <TextLink href={`/metas/${goal.id}/revision`}>
                 {t("goal.detail.reviewLink")}
-              </Link>
-            </Button>
-          </Flex>
+              </TextLink>
+            </Flex>
+          </Section>
 
           {goal.measureUnit && goal.evidence === "unreadable" ? (
-            <EvidenceNote text={t("goal.detail.unreadableEvidence")} />
+            <EvidenceNote title={t("goal.detail.unreadableTitle")} body={t("goal.detail.unreadableBody")} />
           ) : null}
         </Panel>
       ) : (
         <>
           {phoneActs}
           {bareBlock}
+          {noMonthBlock ? (
+            <Section as="div">{monthsLink}</Section>
+          ) : null}
         </>
       )}
     </>
@@ -336,21 +374,21 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const after = (
     <Panel>
-      <section>
-        <Flex justify="between" align="center" mb={{ initial: "0", lg: "1" }}>
-          <SectionLabel>
-            {t("goal.detail.phasesCount", {
-              word: countWord(goal.phases.length, t, true),
-              count: goal.phases.length,
-            })}
-          </SectionLabel>
+      <Section>
+        <Flex justify="between" align="center">
+          {goal.phases.length > 0 ? (
+            <SectionLabel>
+              {t("goal.detail.phasesCount", {
+                word: countWord(goal.phases.length, t, true),
+                count: goal.phases.length,
+              })}
+            </SectionLabel>
+          ) : null}
           {archived || ended ? null : (
             <Face on="desktop">
-              <Button asChild variant="ghost" tone="accent" tap={44}>
-                <Link href={`/metas/${goal.id}/fases/nueva`}>
-                  {t("goal.phases.add")}
-                </Link>
-              </Button>
+              <TextLink href={`/metas/${goal.id}/fases/nueva`}>
+                {t("goal.phases.add")}
+              </TextLink>
             </Face>
           )}
         </Flex>
@@ -366,7 +404,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             name={phase.name}
             trailing={
               <Flex direction="column" align="end">
-                <Text as="span" variant="meta" tone="muted">
+                <Text as="span" variant="sentence" tone="muted">
                   {phaseSpanLabel(openedOn, phase.startsOn, phase.endsOn, t)}
                 </Text>
               </Flex>
@@ -376,18 +414,14 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         ))}
         {archived || ended ? null : (
           <Face on="phone">
-            <Button
-              asChild
-              variant={goal.phases.length > 0 ? "outline" : "solid"}
-              block
-            >
+            <Button asChild variant="outline" block>
               <Link href={`/metas/${goal.id}/fases/nueva`}>
                 {t("goal.phases.add")}
               </Link>
             </Button>
           </Face>
         )}
-      </section>
+      </Section>
     </Panel>
   );
 
@@ -396,16 +430,16 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <ScreenHeader
         title={goal.name}
         back={{ href: "/metas", place: t("common.nav.goals") }}
-        meta={
-          goal.archivedAt
-            ? t("goal.detail.archivedOverline", { date: longDateLabel(goal.archivedAt) })
-            : t("goal.detail.overline", { date: longDateLabel(goal.createdAt) })
-        }
+        metaVariant="sentence"
+        meta={t.rich(archived ? "goal.detail.archivedOverline" : "goal.detail.overline", {
+          date: longDateLabel(goal.archivedAt ?? goal.createdAt),
+          ...fig,
+        })}
         actions={
           archived ? null : (
             <Face on="desktop">
-              <Flex gap="2">
-                <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
+              <Flex gap="3">
+                <RenameGoalAction goalId={goal.id} name={goal.name} />
                 <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short />
               </Flex>
             </Face>
@@ -414,11 +448,11 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       />
       {archived ? null : (
         <Face on="phone">
-          <RenameGoalAction goalId={goal.id} name={goal.name} />
+          <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
         </Face>
       )}
 
-      <Split before={before} main={main} after={after} aside={380} />
+      <Split before={before} main={main} after={after} aside={380} afterBelow />
 
       {archived ? (
         <ReopenGoalButton goalId={goal.id} />

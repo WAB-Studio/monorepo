@@ -83,11 +83,11 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await addQuantityCommitment(page, goalId, measureName, unit, 5);
 
     // The way in (`Meta.dc.html` draws none, the coordinator's own decision):
-    // a ghost link under the measure figure, only once the goal has one.
+    // a text link (the one accent link style) under the measure figure, only once the goal has one.
     await page.goto(`/metas/${goalId}`);
     const wayIn = page.getByRole("link", { name: "Ver por semana" });
     await expect(wayIn).toBeVisible();
-    await expect(wayIn).toHaveClass(/\bghost\b/);
+    await expect(wayIn).toHaveClass(/text-link/);
     await expect(wayIn).toHaveAttribute("href", `/metas/${goalId}/revision`);
 
     const id = await commitmentId(db, personId, measureName);
@@ -102,6 +102,11 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await db`update goals.goals set created_at = ${backdatedAt} where id = ${goalId} and user_id = ${personId}`;
     expect(civilDateInZone(backdatedAt)).toBe(openedOn);
 
+    await db`
+      insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
+      values (${personId}, ${goalId}, 'Fase única', ${openedOn}, ${dayAfter(openedOn, 20)})
+    `;
+
     // Facts in two of the three weeks (week 1's own opening day, week 2's
     // own opening day); week 3, today's own, gets none.
     await db`
@@ -112,9 +117,10 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     `;
 
     // The goal's own figure: 750 minutes in hours and minutes, and no
-    // «minutos» after them; «mide en minutos» above it stays as it was.
+    // «minutos» after them; its measure line reads «mide en horas y minutos».
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toHaveCount(0);
     // The total comes first; the month block under it may repeat it (RP-28).
     await expect(page.getByText("12 h 30 min", { exact: true }).first()).toBeVisible();
 
@@ -124,7 +130,11 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     // the goal, the measure's unit on its mono line.
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Por semana");
-    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    const measureLine = page.getByText("mide en horas y minutos", { exact: true });
+    await expect(measureLine).toBeVisible();
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toHaveCount(0);
+    // A sentence is Archivo, never mono (`SistemaTipo`).
+    expect.soft(await measureLine.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
     await expect(page.getByLabel(`Volver a ${goalName}`)).toHaveAttribute("href", `/metas/${goalId}`);
     await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
     await expect(page.getByText("la única cifra que predice el progreso")).toHaveCount(0);
@@ -155,6 +165,8 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     // `RevisionEscritorio.dc.html`: the same rows, a real `<table>`, widened
     // past the kit's usual 640px cap.
     await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toHaveCount(0);
     const table = page.getByRole("table");
     await expect(table).toBeVisible();
     const rows = table.getByRole("row");
@@ -170,6 +182,11 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0 min");
     await expect(week3Row.getByRole("cell").nth(3)).toHaveText("en curso");
     await expect(week3Row).toHaveAttribute("data-current", "");
+
+    // A phase is named on the week it starts, not again on each week it spans.
+    await expect.soft(week1Row.getByRole("cell").nth(2)).toHaveText("Fase única");
+    await expect.soft(rows.nth(2).getByRole("cell").nth(2)).toHaveText("");
+    await expect.soft(week3Row.getByRole("cell").nth(2)).toHaveText("");
 
     // From 1024 the table spans the main column, past the old 1020 cap.
     const tableWidth = (await table.boundingBox())!.width;
@@ -211,6 +228,8 @@ test("a goal with no measure yet says so on its review, with no way in and no ta
     await expect(page.getByRole("table")).toHaveCount(0);
     await expect(page.getByRole("listitem")).toHaveCount(0);
 
+    await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveCount(0);
+
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
     await page.getByLabel(`Volver a ${goalName}`).click();
@@ -251,9 +270,26 @@ test("a goal measured in «páginas» reads its plain number on the goal and in 
     `;
 
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText(`750${unit}`, { exact: true })).toBeVisible();
+    // The goal's total sits right above «en total, desde…»; the month block below carries its own 750.
+    const total = page
+      .locator("p", { hasText: /^en total, desde el / })
+      .locator("visible=true")
+      .locator("xpath=preceding-sibling::*[1]");
+    await expect(total).toHaveCount(1);
+    await expect(total).toHaveText(`750 ${unit}`);
+    // The month block beside «sin monto planeado» names the unit too, as the total does.
+    const monthFigure = page
+      .getByText("sin monto planeado")
+      .locator("visible=true")
+      .locator("xpath=./*[1]");
+    await expect(monthFigure).toHaveCount(1);
+    await expect(monthFigure).toHaveJSProperty("textContent", `750\u00a0${unit}`);
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
 
     await page.goto(`/metas/${goalId}/revision`);
+    await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
+    await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
     await expect(page.locator("li[data-current]")).toContainText(`750${unit}`);
 
     await page.setViewportSize({ width: 1280, height: 900 });

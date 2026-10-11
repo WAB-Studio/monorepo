@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     form = await request.formData();
   } catch {
-    return fail(422, "import.errors.empty");
+    return fail(422, "import.errors.blank");
   }
 
   const pasted = form.get("text");
@@ -56,18 +56,14 @@ export async function POST(request: NextRequest) {
     input = { kind: "text", text: pasted };
     text = pasted;
   } else {
-    return fail(422, "import.errors.empty");
+    return fail(422, "import.errors.blank");
   }
 
   if (text !== null) {
     const template = parseTemplate(text);
     if (template.matched) {
       if ("error" in template) {
-        return reply(422, {
-          error: "import.errors.templateLine",
-          line: template.error.line,
-          expected: template.error.expected,
-        });
+        return reply(422, { error: "import.errors.templateLine", errors: template.errors, cut: template.cut });
       }
       return reply(200, { via: "template", draft: template.draft });
     }

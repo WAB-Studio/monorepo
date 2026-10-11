@@ -117,6 +117,7 @@ test("deleted from Hoy, a carried one-off leaves, a reload keeps it gone, and no
     await page.goto("/");
     await nameButton(page, name).click();
     const sheet = page.getByRole("dialog");
+    await sheet.getByRole("button", { name: "Borrar la tarea" }).click();
     await sheet.getByRole("button", { name: "Borrarla" }).click();
     await expect(sheet).toBeHidden();
     await expect(nameButton(page, name)).toHaveCount(0);

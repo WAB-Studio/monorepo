@@ -29,7 +29,10 @@ Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignm
 
 1. Group the plan's modules into assignments. One assignment per worker.
 2. Take every assignment that depends on nothing pending. Open a lane for each: `scripts/worktree.sh <lane> <branch> <base>`.
-3. Dispatch one `worker` per lane, all in one message. Wait for the reports.
+3. For a module that draws or changes a screen, dispatch the `tester` first, on the module's branch: it writes the
+   Done table's tests from the contract, red. Then the `worker` makes them green. Words-only and pure-function modules
+   go straight to the worker. Decided by the user 2026-10-06.
+   Dispatch one agent per lane, all in one message. Wait for the reports.
 4. Read each report. Resolve its `Unresolved`. Collect its `Deferred`.
 5. Put any `Questions` to the user. Re-dispatch that assignment with the answers.
 6. Dispatch a `validator` per finished branch. On `FAIL`, re-dispatch that worker with its `Fixes`. On `PASS`, mark the plan's modules done and merge the branch.
@@ -41,10 +44,10 @@ Subagents: `planner` takes a slice and returns a plan. `worker` takes an assignm
 
 ## Parallel tracks
 
-- Four lanes take workers. Lane 1 is yours: you merge, you tick, you run the suites the branches share.
+- Lanes 2 to 6 take e2e work, 7 and up work with no e2e (`AGENTS.md` § Parallel tracks). Lane 1 is yours: you merge, you tick, you run the suites the branches share.
 - Give each dispatch its lane number, its worktree path, its port and its branch.
 - Never put two workers on one lane, and never two on one file.
-- Cap the suites running at once at three.
+- Cap the suites running at once at five.
 - Serialize only what a dependency forces. Nothing else.
 
 ## What a dispatch costs

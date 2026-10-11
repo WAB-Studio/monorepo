@@ -7,7 +7,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Hoy at 1024 and beyond (`HoyEscritorio.dc.html`, RNP-17): the goals left, the
 // week's figure, the sueltas, «N esperan» and «hechas hoy» right; at 360 the
-// order is the phone's own. «N esperan» counts dayless plus scheduled (RP-21).
+// order is the phone's own. «N esperan» counts dayless plus scheduled (RP-59).
 
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
@@ -177,7 +177,7 @@ test("at 360 the sections come in the phone's own order and the figure is not dr
   }
 });
 
-test("«N esperan» is dayless plus scheduled at the same moment, and opens /sueltas (RP-21)", async ({
+test("«N esperan» is dayless plus scheduled at the same moment, and opens /sueltas (RP-59)", async ({
   person,
   browser,
   db,
@@ -227,7 +227,9 @@ test("a one-off done at a known instant reads its HH:mm in «hechas hoy» (RP-19
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const row = page.getByRole("button", { name: `Deshacer: ${name}` });
+    // The mark undoes; the name button beside it carries the name and its hour.
+    await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
+    const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row).toBeVisible();
     await expect(row).toContainText("19:40");
   } finally {

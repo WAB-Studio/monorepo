@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import postgres from "postgres";
 
 // The signed-in person every spec drives: the suite's global setup mints a
@@ -155,5 +155,25 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     await provide(workerPerson);
   },
 });
+
+// Next's route announcer is an open shadow root holding `role="alert"`, which
+// `getByRole` pierces; the app's alerts are every body child but that one.
+export function appAlerts(page: Page): Locator {
+  return page.locator("body > :not(next-route-announcer)").locator('xpath=descendant-or-self::*[@role="alert"]');
+}
+
+// `load` fires with the loading fallback still standing, and the real page sits
+// in a hidden streamed div with no box: anchor on one visible `main` and the
+// fonts before any box or style is read (docs/TRAPS.md).
+export async function settled(page: Page): Promise<void> {
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator("main")).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+}
+
+export async function visit(page: Page, url: string): Promise<void> {
+  await page.goto(url);
+  await settled(page);
+}
 
 export { expect };

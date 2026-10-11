@@ -107,6 +107,8 @@ let cId: string;
 let archivedId: string;
 let endedId: string;
 let dId: string;
+let fId: string;
+let gId: string;
 let loadMonthAcross: typeof import("@/lib/queries/month").loadMonthAcross;
 let archiveGoal: typeof import("@/app/actions/plan").archiveGoal;
 
@@ -197,6 +199,26 @@ before(async () => {
     insert into goals.one_offs (user_id, goal_id, name, planned_month)
     values (${owner.user_id}, ${cId}, 'RP-43 fixture: arrastrada', ${`${lastMonth}-01`})`;
 
+  // F plans at 10 a month: its 15-unit task splits, its 4-unit task waits for next month.
+  const f = await goal("RP-50 fixture: F", "minutos");
+  fId = f.goalId;
+  const rhythm = await (await import("@/app/actions/roadmap")).setRhythm({ goalId: fId, amount: 10 });
+  if (!rhythm.ok) throw new Error(`setRhythm: ${rhythm.error}`);
+  await sql`
+    insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+    values (${owner.user_id}, ${fId}, 'RP-50 fixture: partida', 15, true),
+           (${owner.user_id}, ${fId}, 'RP-50 fixture: pequeña', 4, true)`;
+
+  // G holds a parent fixed to this month whose children are only partly estimated.
+  gId = (await goal("RP-50 fixture: G", "minutos")).goalId;
+  const [mixed] = await sql<{ id: string }[]>`
+    insert into goals.one_offs (user_id, goal_id, name, planned_month)
+    values (${owner.user_id}, ${gId}, 'RP-50 fixture: mixta', ${monthStart}) returning id`;
+  await sql`
+    insert into goals.one_offs (user_id, goal_id, name, parent_id, estimate)
+    values (${owner.user_id}, ${gId}, 'RP-50 fixture: mixta con monto', ${mixed.id}, 3),
+           (${owner.user_id}, ${gId}, 'RP-50 fixture: mixta sin monto', ${mixed.id}, null)`;
+
   const archived = await archiveGoal({ goalId: archivedId });
   if (!archived.ok) throw new Error(`archiveGoal: ${archived.error}`);
   await sql`
@@ -211,6 +233,8 @@ after(async () => {
 });
 
 const own = () => [aId, bId, cId, dId, archivedId, endedId];
+
+const nextMonthOf = (monthFirst: string) => `${monthFrom(monthFirst, 1)}-01`;
 
 test("loadMonthAcross: A, B, C and D read; the archived and the ended goal do not", async () => {
   const month = await loadMonthAcross(today);
@@ -317,4 +341,39 @@ test("loadMonthAcross: the same four statements with one goal", async () => {
   assert.equal(wire.connections, 2);
   assert.equal(wire.applicationStatements, 4);
   assert.equal(overlapped, true);
+});
+
+test("loadMonthAcross: a split task lists with its part, and the line carries the rhythm", async () => {
+  const month = await loadMonthAcross(today);
+  const f = month.goals.find((goal) => goal.id === fId)!;
+  assert.equal(f.line?.planned, 10);
+  assert.deepEqual(
+    f.items.map((item) => [item.task.name, item.part, item.hours, item.from, item.to, item.fixed]),
+    [["RP-50 fixture: partida", 10, 15, null, nextMonthOf(monthStart), false]],
+  );
+  assert.equal(f.items[0].owes, 10);
+  assert.equal(f.items[0].hasAmount, true);
+});
+
+test("loadMonthAcross: a fixed parent reads fixed, and an amount on any child is an amount", async () => {
+  const g = (await loadMonthAcross(today)).goals.find((goal) => goal.id === gId)!;
+  const item = g.items.find((entry) => entry.task.name === "RP-50 fixture: mixta")!;
+  assert.equal(item.fixed, true);
+  assert.equal(item.hasAmount, true);
+});
+
+test("loadMonthAcross: the plan's reading still takes two transactions and four statements", async () => {
+  const { calls } = await wireOfOneRead();
+  const wire = readWire(calls);
+  assert.equal(wire.connections, 2);
+  assert.equal(wire.applicationStatements, 4);
+});
+
+test("loadMonthAcross: a budget of a later month moves where the split task goes on", async () => {
+  const { setMonthBudget } = await import("@/app/actions/budgets");
+  const closed = await setMonthBudget({ goalId: fId, month: monthFrom(today, 1), amount: 0 });
+  if (!closed.ok) throw new Error(`setMonthBudget: ${closed.error}`);
+  const f = (await loadMonthAcross(today)).goals.find((goal) => goal.id === fId)!;
+  assert.equal(f.items[0].part, 10);
+  assert.equal(f.items[0].to, `${monthFrom(today, 2)}-01`);
 });

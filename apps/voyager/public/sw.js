@@ -10,7 +10,7 @@
 // — the field `sense-list.tsx` has read since RL-28 (#157). Bumping the name
 // is what drops that pool; `SHELL_BUILD` below is what keeps a later deploy
 // from rebuilding it.
-const CACHE_NAME = "reading-shell-v8";
+const CACHE_NAME = "reading-shell-v11";
 
 // The shell the cache is allowed to hold, read off the current `/` every time
 // the network answers one. A deploy changes the hashed script names in that
@@ -27,7 +27,10 @@ const NAVIGATION_TIMEOUT_MS = 3000;
 // own, never only as a side effect of having been visited online first — a
 // bookmark, or a link into "/cuenta" that lands before "/" ever loaded, must
 // still draw the app's own screen, not the browser's error page.
-const SHELL_ROUTES = ["/", "/registro", "/cuenta"];
+// "/registro/_" is the generic word page: the server renders no row, and the
+// client reads the word from the address, so one cached copy answers every
+// "/registro/<word>" the reader never opened online.
+const SHELL_ROUTES = ["/", "/registro", "/cuenta", "/registro/_"];
 
 // Both routes call `getReader()` on the server and let a signed-in render
 // draw more than a signed-out one does: "/cuenta" bakes the email itself
@@ -41,27 +44,69 @@ const SHELL_ROUTES = ["/", "/registro", "/cuenta"];
 // both cache entries are written exactly once, with credentials withheld
 // (see `install`), and `navigate` below never overwrites either — not with
 // a signed-in render, not with any other.
-const NO_OVERWRITE_ROUTES = new Set(["/cuenta", "/registro"]);
+const NO_OVERWRITE_ROUTES = new Set(["/cuenta", "/registro", "/registro/_"]);
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   // `cache.add` rejects on anything but a 2xx; a `fetch` + `put` takes whatever
   // status each route answers with, so an install never fails on one of them.
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(
-        SHELL_ROUTES.map((route) => {
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const pages = await Promise.all(
+        SHELL_ROUTES.map(async (route) => {
           // Omitting credentials for "/cuenta" forces the signed-out render
           // even when the tab installing the worker happens to hold a
           // session — the one copy this cache ever takes of it must be safe
           // to hand to a stranger.
           const init = NO_OVERWRITE_ROUTES.has(route) ? { credentials: "omit" } : undefined;
-          return fetch(route, init).then((response) => cache.put(route, response));
+          const response = await fetch(route, init);
+          return { route, response, html: await response.clone().text() };
         }),
-      ),
-    ),
+      );
+      // The sweep runs before any chunk lands, or it would delete the ones
+      // another page's precache had just stored.
+      const home = pages.find((page) => page.route === "/");
+      if (home) await retireOtherBuilds(cache, home.response.clone());
+      await Promise.all(pages.map((page) => cache.put(page.route, page.response)));
+      // A page names chunks the others do not; a reader whose first online
+      // visits were "/registro" and "/cuenta" would otherwise open "/" offline
+      // with its HTML and none of its scripts.
+      await precacheChunks(cache, pages.map((page) => page.html).join("\n"));
+    })(),
   );
 });
+
+// Every hashed asset a page's HTML names. Content-hashed, so storing one is
+// never stale; `retireOtherBuilds` sweeps them when "/" names another build.
+async function precacheChunks(cache, html) {
+  const seen = new Set();
+  const fetchOne = async (url) => {
+    if (seen.has(url)) return "";
+    seen.add(url);
+    let response = await cache.match(url);
+    if (!response) {
+      try {
+        response = await fetch(url);
+        if (response.ok) await cache.put(url, response.clone());
+      } catch {
+        return "";
+      }
+    }
+    return url.endsWith(".js") ? await response.clone().text() : "";
+  };
+  const urls = new Set(html.match(/\/_next\/static\/[^"'\\\s)<>]+?\.(?:js|css|woff2?)/g) ?? []);
+  const bodies = await Promise.all(Array.from(urls).map(fetchOne));
+  // Workers are named inside a chunk, with the chunks they import.
+  const extra = new Set();
+  for (const body of bodies) {
+    for (const m of body.matchAll(/"(static\/chunks\/turbopack-worker-[^"]+\.js)",\[([^\]]*)\]/g)) {
+      extra.add("/_next/" + m[1]);
+      for (const d of m[2].matchAll(/"(static\/[^"]+)"/g)) extra.add("/_next/" + d[1]);
+    }
+  }
+  await Promise.all(Array.from(extra).map(fetchOne));
+}
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
@@ -132,8 +177,14 @@ async function navigate(request, event) {
     if (path === "/") event.waitUntil(retireOtherBuilds(cache, response.clone()));
     return response;
   } catch {
-    const shell = await cache.match(request);
+    // "/cuenta" ignores the query: the tab is chosen on the client from the
+    // address, so one cached copy serves both.
+    const shell = await cache.match(request, { ignoreSearch: path === "/cuenta" });
     if (shell) return shell;
+    if (path.startsWith("/registro/")) {
+      const generic = await cache.match("/registro/_");
+      if (generic) return generic;
+    }
     throw new Error("offline, no cached shell");
   }
 }
@@ -143,7 +194,9 @@ async function navigate(request, event) {
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
-  if (cached) return cached;
+  // A stored response keeps its own URL, which has no fragment; a Worker
+  // takes its location from it and loses the `#params=` its bootstrap reads.
+  if (cached) return new Response(cached.body, { status: cached.status, headers: cached.headers });
   const response = await fetch(request);
   if (response.ok) cache.put(request, response.clone());
   return response;

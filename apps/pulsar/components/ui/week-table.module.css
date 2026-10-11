@@ -32,7 +32,7 @@
 
 /* Today's column, header to footer. */
 .today {
-  background: var(--pulsar-accent-soft);
+  background: var(--pulsar-today);
 }
 
 .head.today {
@@ -51,7 +51,8 @@
 }
 
 .head.today {
-  background-image: linear-gradient(var(--pulsar-accent-soft), var(--pulsar-accent-soft));
+  background-image: linear-gradient(var(--pulsar-today), var(--pulsar-today));
+  font-weight: 600;
 }
 
 /* The width the header's own text has to draw in: «hoy» rides beside the day
@@ -235,7 +236,7 @@
 }
 
 .foldToday {
-  background: var(--pulsar-accent-soft);
+  background: var(--pulsar-raised);
 }
 
 .foldDayBox {
@@ -254,7 +255,7 @@
 
 .foldToday .foldDayBox {
   color: var(--pulsar-ink);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .foldGroup {
@@ -289,6 +290,19 @@
   font-weight: 500;
   line-height: 1.35;
   color: var(--pulsar-ink);
+}
+
+.sentence {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--pulsar-muted);
+}
+
+.foldSentence {
+  margin: 3px 0 0;
+  padding-inline: 4px;
+  font-size: 12px;
+  color: var(--pulsar-muted);
 }
 
 .foldDetail {
@@ -329,6 +343,16 @@
 .foldFoot .foldMarks {
   margin-block-start: 2px;
   padding-block-end: 0;
+}
+
+/* A mixed line: the words in Archivo, only its figures in mono. */
+.foldFoot .foldSum {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .foldTally {

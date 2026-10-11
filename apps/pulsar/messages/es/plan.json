@@ -1,15 +1,14 @@
 {
   "commitmentForm": {
-    "overline": "{goal}",
     "title": "Compromiso nuevo",
     "whatLabel": "qué es",
     "whenLabel": "cada cuándo",
     "cadence": {
       "daily": "todos los días",
       "weekdays": "días sueltos",
-      "times_per_week": "N por semana",
-      "every_n_days": "cada N días",
-      "times_per_month": "N al mes"
+      "times_per_week": "veces por semana",
+      "every_n_days": "cada tantos días",
+      "times_per_month": "veces al mes"
     },
     "timesPerWeekLabel": "veces por semana",
     "everyNDaysLabel": "cada cuántos días",
@@ -17,24 +16,26 @@
     "timesPerMonthHint": "Cualquier día del mes cuenta. Hoy lo muestra «1 de 2 este mes».",
     "doneByLabel": "qué lo da por hecho",
     "satisfaction": {
-      "tap": "un toque",
+      "tap": "una vez",
       "quantity": "un número",
-      "evidence": "lo que ya sabe otra app"
+      "evidence": "lo que anota otra app"
     },
     "quantityLabel": "cantidad",
     "unitLabel": "unidad",
     "noMeasureYet": "Esta meta todavía no tiene cifra: «{unit}» se la pone.",
-    "sourceLabel": "fuente",
-    "thresholdLabel": "umbral",
+    "thresholdLabel": "cuenta desde",
     "submit": "Añadirlo"
   },
   "phaseForm": {
-    "title": "Fase nueva",
-    "aimLabel": "qué busca",
-    "weeksLabel": "qué semanas",
+    "title": "Añadir una fase",
+    "aimLabel": "qué toca en esta fase",
     "fromLabel": "desde la semana",
     "toLabel": "hasta la semana",
-    "submit": "Añadirla"
+    "submit": "Añadir la fase",
+    "span": "Del lunes <fig>{from}</fig> al domingo <fig>{to}</fig>. La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>.",
+    "beyond": "La meta llega hasta la semana <fig>{lastWeek}</fig>, el <fig>{lastDay}</fig>. Elige hasta esa semana o mueve el final.",
+    "moveEnd": "Mover el final",
+    "overlap": "Las semanas <fig>{from}</fig> a <fig>{to}</fig> ya son de «{aim}». Empieza en la <fig>{next}</fig>."
   },
   "retireSheet": {
     "title": "¿Retirarlo?",

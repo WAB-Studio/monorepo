@@ -48,8 +48,8 @@ test("a goal named «Inglés Crítico» keeps its capitals on its field, and on 
   try {
     const page = await context.newPage();
     await page.goto("/");
-    await expect(page.getByLabel("Algo suelto de Inglés Crítico")).toBeVisible();
-    await expect(page.getByPlaceholder("Escribe algo suelto de Inglés Crítico...")).toBeVisible();
+    await expect(page.getByLabel("Una tarea de Inglés Crítico", { exact: true })).toBeVisible();
+    await expect(page.getByPlaceholder("Una tarea de Inglés Crítico…", { exact: true })).toBeVisible();
 
     await page.goto(`/dia/${plusDays(-1)}`);
     await expect(page.getByText("Ese día no pedía nada")).toBeVisible();

@@ -13,6 +13,8 @@ export function CheckRow({
   disabled,
   name,
   meta,
+  metaMore,
+  boxLabel,
   note,
   reason,
   trailing,
@@ -27,6 +29,10 @@ export function CheckRow({
   name: ReactNode;
   // The quiet line under the name.
   meta?: ReactNode;
+  // A second quiet line, under the first.
+  metaMore?: ReactNode;
+  // Names the checkbox when the row's visible words do not carry what it stands for.
+  boxLabel?: string;
   // A task's note, whole, under the meta: read-only, its line breaks kept.
   note?: string | null;
   // A refusal's words, in ink under the meta.
@@ -48,6 +54,7 @@ export function CheckRow({
           className={styles.box}
           checked={checked}
           disabled={disabled}
+          aria-label={boxLabel}
           onChange={(event: ChangeEvent<HTMLInputElement>) =>
             onCheckedChange?.(event.target.checked)
           }
@@ -63,6 +70,11 @@ export function CheckRow({
           {meta ? (
             <Text as="span" variant="meta" tone="quiet">
               {meta}
+            </Text>
+          ) : null}
+          {metaMore ? (
+            <Text as="span" variant="meta" tone="quiet">
+              {metaMore}
             </Text>
           ) : null}
           {note ? <span className={styles.note}>{note}</span> : null}
@@ -86,6 +98,17 @@ export function CheckRow({
 }
 
 // The review's confirm, held at the foot above the nav.
-export function ActionBar({ children }: { children?: ReactNode }) {
-  return <div className={styles.bar}>{children}</div>;
+// `column` stands one card wide from 1024px, for a review of one goal.
+export function ActionBar({
+  children,
+  span = "full",
+}: {
+  children?: ReactNode;
+  span?: "full" | "column";
+}) {
+  return (
+    <div className={span === "column" ? `${styles.bar} ${styles.barColumn}` : styles.bar}>
+      {children}
+    </div>
+  );
 }

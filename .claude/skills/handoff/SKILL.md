@@ -17,11 +17,13 @@ The one document that survives a session. `private/handoffs/HANDOFF-<YYYY-MM-DD>
 
 ## Closing — "cerremos handoff", or on the window's own warning
 
-The `context-watch.sh` hook says when the window passes 400k tokens. Take it as the phrase and close
-at once, forced. Decided by the user 2026-10-01: «en el momento que lleguemos a 400k cerrar todo forzado».
+The `context-watch.sh` hook says when the window passes 300k tokens. From then on dispatch nothing
+new, let every running agent finish, and close when none runs. Decided by the user 2026-10-10, replacing
+the forced close at 400k of 2026-10-01: that close cut 2 to 5 agents per handoff.
 
-1. **Stop every subagent still running** (`TaskStop`). Never wait for one. Its branch holds what it
-   committed; say in the file what it was doing and what it had proved.
+1. **Wait for every subagent still running.** Never `TaskStop` one, except one with no progress in
+   30 minutes: say in the file what it was doing and what it had proved.
+   «cerremos handoff» from the user closes at once: stop what runs, the same way.
 2. Commit and push every branch that carries work. Leave no tree dirty.
 3. Run `git log <base>..HEAD --format='%h %an <%ae>%n%(trailers)'` on each. No Claude attribution.
 4. Write the file.

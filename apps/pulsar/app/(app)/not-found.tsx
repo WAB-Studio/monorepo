@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
-import { Button, NoTabMarked, Page, ScreenExit, ScreenHeader, Text } from "@/components/ui";
+import { Button, NoTabMarked, Page, ScreenExit, ScreenHeader } from "@/components/ui";
 
 /**
  * `ArmazonNoEncontrada.dc.html` (RNP-01, RNP-16). Reached from inside the app — `/dia/zzz`,
@@ -16,14 +16,7 @@ export default async function NotFound() {
   return (
     <Page width="full">
       <NoTabMarked />
-      <ScreenHeader
-        title={t("title")}
-        eyebrow={
-          <Text as="p" variant="meta" tone="muted">
-            {t("kicker")}
-          </Text>
-        }
-      />
+      <ScreenHeader title={t("title")} />
       <ScreenExit message={t("body")}>
         <Button asChild>
           <Link href="/">{t("primaryAction")}</Link>

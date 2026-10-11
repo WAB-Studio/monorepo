@@ -148,3 +148,96 @@ test("registerSharedIdentity refuses a remote host before issuing any statement"
       else process.env.MIGRATION_DATABASE_URL = before;
     }
   }));
+
+// A tagged-template stand-in that records each statement's text and bound values.
+function recordingSql(rows: unknown[] = []) {
+  const statements: { text: string; values: unknown[] }[] = [];
+  const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
+    statements.push({ text: strings.join("?"), values });
+    return Promise.resolve(rows);
+  }) as never;
+  return { sql, statements };
+}
+
+function withLocalUrl(fn: () => Promise<void>) {
+  const before = process.env.MIGRATION_DATABASE_URL;
+  process.env.MIGRATION_DATABASE_URL = LOCAL;
+  return fn().finally(() => {
+    if (before === undefined) delete process.env.MIGRATION_DATABASE_URL;
+    else process.env.MIGRATION_DATABASE_URL = before;
+  });
+}
+
+test("registerOAuthClient writes one row stamped with the run openRun opened", () =>
+  withEnv(undefined, () =>
+    withLocalUrl(async () => {
+      const { openRun, registerOAuthClient } = await freshRegistry();
+      const { sql, statements } = recordingSql();
+      const run = await openRun("e2e", sql);
+      statements.length = 0;
+
+      await registerOAuthClient(sql, "client-1");
+
+      assert.equal(statements.length, 1);
+      assert.match(statements[0].text, /insert into harness\.oauth_clients \(client_id, run_id\)/);
+      assert.deepEqual(statements[0].values, ["client-1", run]);
+    })));
+
+test("registerOAuthClient stamps the run a parent exported when this process opened none", () =>
+  withEnv(undefined, () =>
+    withLocalUrl(async () => {
+      const before = process.env.HARNESS_RUN_ID;
+      process.env.HARNESS_RUN_ID = "run-from-parent";
+      try {
+        const { registerOAuthClient } = await freshRegistry();
+        const { sql, statements } = recordingSql();
+
+        await registerOAuthClient(sql, "client-2");
+
+        assert.deepEqual(statements[0].values, ["client-2", "run-from-parent"]);
+      } finally {
+        if (before === undefined) delete process.env.HARNESS_RUN_ID;
+        else process.env.HARNESS_RUN_ID = before;
+      }
+    })));
+
+test("runId throws when no run was opened and none was exported", () =>
+  withEnv(undefined, async () => {
+    const before = process.env.HARNESS_RUN_ID;
+    delete process.env.HARNESS_RUN_ID;
+    try {
+      const { runId } = await freshRegistry();
+      assert.throws(() => runId(), /openRun has not run/);
+    } finally {
+      if (before !== undefined) process.env.HARNESS_RUN_ID = before;
+    }
+  }));
+
+test("registerOAuthClient refuses a remote host before issuing any statement", () =>
+  withEnv(undefined, async () => {
+    const before = process.env.MIGRATION_DATABASE_URL;
+    process.env.MIGRATION_DATABASE_URL = REMOTE;
+    const { sql, statements } = recordingSql();
+    try {
+      const { registerOAuthClient } = await freshRegistry();
+      await assert.rejects(registerOAuthClient(sql, "client-1"), /not the local stack/);
+      assert.equal(statements.length, 0);
+    } finally {
+      if (before === undefined) delete process.env.MIGRATION_DATABASE_URL;
+      else process.env.MIGRATION_DATABASE_URL = before;
+    }
+  }));
+
+test("registeredOAuthClients reads this run's clients alone", () =>
+  withEnv(undefined, () =>
+    withLocalUrl(async () => {
+      const { openRun, registeredOAuthClients } = await freshRegistry();
+      const { sql, statements } = recordingSql([{ client_id: "client-1" }, { client_id: "client-2" }]);
+      const run = await openRun("e2e", sql);
+      statements.length = 0;
+
+      assert.deepEqual(await registeredOAuthClients(sql), ["client-1", "client-2"]);
+      assert.equal(statements.length, 1);
+      assert.match(statements[0].text, /from harness\.oauth_clients where run_id = \?/);
+      assert.deepEqual(statements[0].values, [run]);
+    })));

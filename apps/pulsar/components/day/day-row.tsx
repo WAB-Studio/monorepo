@@ -4,11 +4,11 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { declareFact, undoFact } from "@/app/actions/facts";
-import { cadencePhrase, flexibleWords, metPhrase, rowMeta } from "@/lib/day/row-phrases";
+import { cadencePhrase, flexibleWords, metPhrase, partialPair, rowMeta } from "@/lib/day/row-phrases";
 import type { Cadence } from "@/lib/day/types";
 import { formatQuantity } from "@/lib/units/time";
 import { useTimeWords } from "@/components/ui/figure";
-import { Mark, Row, Text, type MarkState } from "@/components/ui";
+import { Figure, Mark, Row, Text, type MarkState } from "@/components/ui";
 
 import { QuantitySheet } from "./quantity-sheet";
 import { type MessageKey } from "@/i18n/translator";
@@ -21,13 +21,12 @@ export type DayRowProps = {
   // What satisfies the commitment (RP-02, RP-03, RP-07): a `tap` row calls
   // `declareFact` outright, an `evidence` row never calls it at all — RP-07
   // says evidence takes no act from the person — and a `quantity` row opens
-  // module 14's sheet.
+  // the quantity sheet.
   kind: DayRowKind;
   markState: MarkState;
-  // The evidence catalogue's own name for the source, shown only once this
-  // row is actually satisfied by it (RP-09): before that there is nothing
-  // yet to attribute to a source.
-  sourceName?: string;
+  // An evidence row's ask, and once met what it got and its source (RP-08,
+  // RP-09): `got` and `source` stay null until the row is satisfied.
+  evidence?: { asks: string; got: string | null; source: string | null };
   // The plan's own number, unit and cadence for a `quantity` row (RP-03):
   // null for every other kind, which needs none of them.
   target?: number | null;
@@ -64,7 +63,7 @@ export type DayRowProps = {
  * One commitment's row (RP-01, RP-02, RP-05, RP-08). A `tap` commitment is
  * satisfied outright, and a second tap on a done one undoes it through
  * `undoFact` — the same gesture that made it unmakes it, no confirm sheet
- * (RP-05, decided 2026-09-27). A `quantity` row's tap always opens
+ * (RP-05). A `quantity` row's tap always opens
  * `QuantitySheet`, done or not: calling `declareFact` bare would only ever
  * come back `day.errors.quantityRequired`, and a done row needs the sheet
  * anyway to show what it logged and offer `Deshacer`. An `evidence` row is
@@ -72,20 +71,12 @@ export type DayRowProps = {
  * or `undoFact` for it (RP-05: a derived fact belongs to the app that
  * recorded it).
  */
-// «1 de 3 min»: when both read as one number and one word, the word is said once.
-function partialPair(logged: string, target: string): { logged: string; target: string } {
-  const [loggedNumber, loggedWord, ...loggedRest] = logged.split(" ");
-  const [, targetWord, ...targetRest] = target.split(" ");
-  const single = loggedRest.length === 0 && targetRest.length === 0 && loggedWord !== undefined;
-  return { logged: single && loggedWord === targetWord ? loggedNumber : logged, target };
-}
-
 export function DayRow({
   commitmentId,
   name,
   kind,
   markState,
-  sourceName,
+  evidence,
   target,
   unit,
   cadence,
@@ -108,7 +99,7 @@ export function DayRow({
   // A quiet row has no slot, so what it holds today is the fact itself.
   const done = quiet ? factId !== undefined : markState === "declared";
   // A done row's second line is what the person actually logged, never the
-  // plan's target (decided 2026-09-27, `docs/pulsar/DESIGN.md`). A time unit prints as «1 h 30 min» (RP-35); any other keeps the
+  // plan's target. A time unit prints as «1 h 30 min» (RP-35); any other keeps the
   // commitment's own word.
   const amount =
     kind === "quantity"
@@ -116,11 +107,11 @@ export function DayRow({
         ? formatQuantity(loggedQuantity, unit, words)
         : target != null && unit != null
           ? formatQuantity(target, unit, words)
-          : sourceName
-      : sourceName;
+          : undefined
+      : undefined;
   const cadenceText = cadence
     ? cadencePhrase((key, values) => t(key, values), cadence, {
-        weekdayShort: t.raw("day.cadence.weekdayShort") as string[],
+        weekdayShort: t.raw("day.cadence.weekdayName") as string[],
         weekdayPlural: t.raw("day.cadence.weekdayPlural") as string[],
       })
     : null;
@@ -137,12 +128,13 @@ export function DayRow({
     quiet: Boolean(quiet),
     cadenceText: progress ? null : cadenceText,
     amount,
+    evidence,
     status: metWords ?? progress,
     writtenTime,
     writtenLabel,
     partial:
       kind === "quantity" && loggedQuantity != null && factId !== undefined && target != null && unit != null
-        ? partialPair(formatQuantity(loggedQuantity, unit, words), formatQuantity(target, unit, words))
+        ? partialPair(formatQuantity(loggedQuantity, unit, words), formatQuantity(target, unit, words), unit)
         : null,
   });
 
@@ -157,7 +149,7 @@ export function DayRow({
 
     startTransition(() => {
       // Done already: this tap undoes it, never declares a second fact
-      // beside it (the bug the critic measured 2026-09-27).
+      // beside it.
       const action = done && factId ? undoFact({ factId }) : declareFact({ commitmentId, day });
       void action.then((result) => {
         if (!result.ok) setError(result.error);
@@ -171,17 +163,20 @@ export function DayRow({
         leading={<Mark state={markState} quiet={quiet} />}
         quiet={quiet}
         name={name}
-        meta={meta}
+        meta={meta?.map((part, index) =>
+          "figure" in part ? <Figure key={index} value={part.figure} variant="meta" /> : part.text,
+        )}
+        metaVariant="sentence"
         onClick={handleTap}
         disabled={!tappable || pending}
       />
       {note ? (
-        <Text as="p" tone="quiet" variant="meta">
+        <Text as="p" variant="sentence">
           {note}
         </Text>
       ) : null}
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

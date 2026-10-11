@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 
 import { PhaseForm } from "@/components/goal/phase-form";
-import { horizonWeeks, weekIndex } from "@/components/goal/phase-weeks";
+import { defaultPhaseWeeks } from "@/components/goal/phase-weeks";
 import { loadGoal } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
 import { civilDateInZone } from "@/lib/zone";
@@ -14,8 +14,8 @@ import { civilDateInZone } from "@/lib/zone";
  * every phase it already has, all in `loadGoal`'s single statement
  * (`lib/queries/goal.ts`), the same shape `app/metas/[goalId]/compromisos/
  * nuevo/page.tsx` takes for a commitment. Prefills the next open span: from
- * the week after the last phase ends (1 with none), four weeks long, never
- * past the goal's own horizon.
+ * the week after the last phase ends (1 with none), four weeks long at most,
+ * every week of it within the goal's horizon; empty when no week fits.
  */
 // Static per route: no title reads a goal or costs a statement (RNP-01).
 export async function generateMetadata(): Promise<Metadata> {
@@ -40,15 +40,12 @@ export default async function NewPhasePage({
   if (goal.archivedAt || goal.endedOn) notFound();
 
   const openedOn = civilDateInZone(new Date(goal.createdAt));
-  const totalWeeks = horizonWeeks(openedOn, goal.horizon);
-
-  const lastEndsOn = goal.phases.reduce<string | null>(
-    (latest, phase) =>
-      phase.endsOn !== null && (latest === null || phase.endsOn > latest) ? phase.endsOn : latest,
-    null,
-  );
-  const defaultFromWeek = lastEndsOn ? weekIndex(openedOn, lastEndsOn) + 1 : 1;
-  const defaultToWeek = Math.max(defaultFromWeek, Math.min(defaultFromWeek + 3, totalWeeks));
+  const existingPhases = goal.phases.map((phase) => ({
+    name: phase.name,
+    startsOn: phase.startsOn,
+    endsOn: phase.endsOn,
+  }));
+  const span = defaultPhaseWeeks({ openedOn, horizon: goal.horizon, phases: existingPhases });
 
   return (
     <PhaseForm
@@ -56,18 +53,9 @@ export default async function NewPhasePage({
       goalName={goal.name}
       openedOn={openedOn}
       horizon={goal.horizon}
-      defaultFromWeek={defaultFromWeek}
-      defaultToWeek={defaultToWeek}
-      existingPhases={goal.phases.map((phase) => ({
-        startsOn: phase.startsOn,
-        // `phases.ends_on` is `NOT NULL` (db/schema/phases.ts): every phase
-        // this app has ever written already closes. `Phase`'s own type
-        // allows an open-ended span for a future cadence this engine does
-        // not yet write; a far sentinel keeps that case refusing correctly
-        // — an open phase overlapping anything after its own start — rather
-        // than collapsing it to a single day.
-        endsOn: phase.endsOn ?? "9999-12-31",
-      }))}
+      defaultFromWeek={span?.from ?? null}
+      defaultToWeek={span?.to ?? null}
+      existingPhases={existingPhases}
     />
   );
 }

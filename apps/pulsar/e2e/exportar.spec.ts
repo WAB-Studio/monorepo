@@ -2,8 +2,9 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, settled, type Person } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
+import { nextMonth } from "@/lib/plan/months";
 import {
   civilDateToDate,
   civilDateShort,
@@ -11,15 +12,19 @@ import {
   todayInZone,
 } from "@/lib/zone";
 import type postgres from "postgres";
+import exportMessages from "../messages/es/export.json";
 
 // `Reporte.dc.html`, `ReporteImpreso.dc.html`, `ReporteSinEvidencia.dc.html`,
 // `ReporteVacio.dc.html`, `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
-// `ReporteImpresoTareas.dc.html` (module 131, 265, RP-46, RP-35): `/exportar` is a page the
+// `ReporteImpresoTareas.dc.html` (RP-49, RP-35): `/exportar` is a page the
 // browser prints. The unreadable case needs the second `next start` the
 // `fuente` project already names (`PULSAR_FAULT_BASE_URL`).
 // Pages the two-goal seeded report takes on A4 with the carried notes
-// printed and the month's tasks, measured by `pdfinfo` on 2026-10-06 (module 265).
-const A4_PAGES = 11;
+// printed and the month's tasks, measured by `pdfinfo`
+// (spaced sections and the months printed alone keep a section from running across pages).
+// Measured with `page.pdf({ preferCSSPageSize: true })`: the sheet is the app's own `@page`, never the test's.
+// Remeasured after RP-70 (empty future months off paper): `pdfinfo` still reads 5 pages for the seeded report.
+const A4_PAGES = 5;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 function plusDays(days: number): string {
@@ -126,8 +131,8 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seed> {
   };
 }
 
-test.describe("the report page (RP-46, RP-35)", () => {
-  test("RP-46: draws the goal, its month in hours and minutes, the month's tasks and a carried one; signed out lands on /entrar", async ({
+test.describe("the report page (RP-49, RP-35)", () => {
+  test("RP-49: draws the goal, its month in hours and minutes, the month's tasks and a carried one; signed out lands on /entrar", async ({
     person,
     browser,
     baseURL,
@@ -171,7 +176,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
       await expect(seen("Tu plan")).toHaveCount(1);
       await expect(seen("1 meta")).toHaveCount(1);
       await expect(seen("hasta hoy")).toHaveCount(1);
-      // RP-46: the first figure is named, the month's tasks listed done and not.
+      // RP-49: the first figure is named, the month's tasks listed done and not.
       const monthName = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" }).format(
         civilDateToDate(todayInZone()),
       );
@@ -179,7 +184,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
       await expect(seen(`tareas de ${monthName}`)).toHaveCount(1);
       await expect(seen(seeded.monthTask)).toHaveCount(1);
       await expect(seen(seeded.doneTask)).toHaveCount(1);
-      // RP-46: a note sits under its own task, whether the task is carried, this month's or done.
+      // RP-49: a note sits under its own task, whether the task is carried, this month's or done.
       for (const [task, note] of [
         [seeded.monthTask, seeded.monthNote],
         [seeded.doneTask, seeded.doneNote],
@@ -189,7 +194,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
         ).toHaveText(note);
       }
       await expect(page.getByText(/^exportar · .* de \d{4}$/)).toBeVisible();
-      await expect(page).toHaveTitle(/^pulsar · /);
+      await expect(page).toHaveTitle(new RegExp(`^${exportMessages.printBrand} · `));
       // The evidence read, so no notice.
       await expect(
         page.getByText(/No pudimos leer el diccionario/),
@@ -267,7 +272,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
       expect(await ink()).toBe("rgb(0, 0, 0)");
 
       // Chromium's own PDF: the page's text is in the file.
-      const pdf = await page.pdf({ format: "A4" });
+      const pdf = await page.pdf({ preferCSSPageSize: true });
       const dir = resolve(process.cwd(), "private/export-pdf");
       mkdirSync(dir, { recursive: true });
       const file = resolve(dir, `${seeded.goalId}.pdf`);
@@ -322,9 +327,10 @@ test.describe("the report page (RP-46, RP-35)", () => {
       await expect(page.getByRole("main").getByText(name, { exact: true })).toBeVisible();
       await expect(page.getByText(phaseName)).toBeVisible();
       await expect(page.getByText(/^no mide nada · hasta el /)).toBeVisible();
-      for (const absent of ["hasta hoy", "por mes", "por semana"]) {
+      for (const absent of ["hasta hoy", "por semana"]) {
         await expect(page.getByText(absent, { exact: true })).toHaveCount(0);
       }
+      await expect(page.getByText(/· por mes$/).locator("visible=true")).toHaveCount(0);
       await expect(page.getByText(/\b0\b/)).toHaveCount(0);
     } finally {
       await context.close();
@@ -400,7 +406,7 @@ test.describe("the report page (RP-46, RP-35)", () => {
         await expect(back).toBeHidden();
         await expect(nav).toBeHidden();
         await expect(page).toHaveTitle(
-          `pulsar · ${civilDateShort(todayInZone())}`,
+          `${exportMessages.printBrand} · ${civilDateShort(todayInZone())}`,
         );
         await page.emulateMedia({ media: "screen" });
 
@@ -413,47 +419,135 @@ test.describe("the report page (RP-46, RP-35)", () => {
     });
   }
 
-  test("an unreadable dictionary says so once and every figure is only what was declared", async ({
-    person,
-    browser,
-    db,
-  }) => {
-    test.skip(
-      !FAULT,
-      "needs PULSAR_FAULT_BASE_URL, a next start with PULSAR_FAULT_SEAM set",
-    );
-    const seeded = await seed(db, person);
+  // `ReporteFuenteCaida` (RNP-04): the notice is the report's own
+  // sentence, every goal still says what it measures and until when, and only
+  // the goal a down source feeds adds that its figure is what was declared.
+  async function seedDown(db: postgres.Sql, person: Person) {
+      const stamp = Date.now();
+      const today = todayInZone();
+      const monthStart = `${today.slice(0, 7)}-01`;
+      const fedName = `Leer en inglés ${stamp}`;
+      const plainName = `Correr 10K ${stamp}`;
+      const [fed] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+        values (${person.id}, ${fedName}, ${plusDays(50)}, 'búsquedas', 'searches', now() - interval '20 days')
+        returning id
+      `;
+      const [evidence] = await db<{ id: string }[]>`
+        insert into goals.commitments
+          (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+        values (
+          ${person.id}, ${fed.id}, ${`Buscar ${stamp}`}, 'daily', 'evidence',
+          (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
+          now() - interval '20 days'
+        ) returning id
+      `;
+      void evidence;
+      const [declared] = await db<{ id: string }[]>`
+        insert into goals.commitments
+          (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+        values (${person.id}, ${fed.id}, ${`Dicho ${stamp}`}, 'daily', 'quantity', 1, 'searches', now() - interval '20 days')
+        returning id
+      `;
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${person.id}, ${fed.id}, ${declared.id}, ${today}::date, 4)
+      `;
+      const [plain] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+        values (${person.id}, ${plainName}, ${plusDays(70)}, 'km', 'km', now() - interval '20 days')
+        returning id
+      `;
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${plain.id}, ${monthStart}::date, 40)
+      `;
+      return { fed, plain, fedName, plainName };
+  }
+
+  async function openDown(
+    browser: import("@playwright/test").Browser,
+    person: Person,
+    width: number,
+  ) {
     const context = await browser.newContext({
       storageState: person.sessionFile,
       baseURL: FAULT!,
+      viewport: { width, height: 900 },
     });
-    try {
-      const page = await context.newPage();
-      await page.goto("/exportar");
-      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
-      await expect(
-        page.getByText(
-          "No pudimos leer el diccionario de lectura. Las cifras que salen de él son solo lo que dijiste tú.",
-        ),
-      ).toHaveCount(1);
-      await expect(
-        page.getByText("solo lo que dijiste tú", { exact: true }).first(),
-      ).toBeVisible();
-      await expect(page.getByText("solo lo dicho").first()).toBeVisible();
-      await expect(
-        page.getByText("alimentada por el diccionario"),
-      ).toBeVisible();
-      await expect(page.getByText("1 h 30 min").first()).toBeVisible();
-    } finally {
-      await context.close();
-      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
-    }
-  });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    return { context, page };
+  }
+
+  const DATE = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
+  const panelOf = (page: import("@playwright/test").Page, name: string) =>
+    page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
+  const needFault = () =>
+    test.skip(!FAULT, "needs PULSAR_FAULT_BASE_URL, a next start with PULSAR_FAULT_SEAM set");
+
+  for (const width of [390, 1440]) {
+    test(`at ${width} the page says «No pudimos leer una fuente» once, the board's sentence, and never «diccionario»; no overflow`, async ({ person, browser, db }) => {
+      needFault();
+      const seeded = await seedDown(db, person);
+      const { context, page } = await openDown(browser, person, width);
+      try {
+        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
+        await expect(
+          page.getByText(
+            "No pudimos leer una fuente. Las cifras que salen de ella son solo lo que dijiste tú.",
+            { exact: true },
+          ),
+        ).toHaveCount(1);
+        expect(await page.locator("main").textContent()).not.toMatch(/diccionario/i);
+        const sizes = await page.evaluate(() => [
+          document.documentElement.scrollWidth,
+          document.documentElement.clientWidth,
+        ]);
+        expect(sizes[0]).toBeLessThanOrEqual(sizes[1]);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id in (${seeded.fed.id}, ${seeded.plain.id}) and user_id = ${person.id}`;
+      }
+    });
+
+    test(`at ${width} a goal no source feeds still reads «mide en km · hasta el …» and adds nothing`, async ({ person, browser, db }) => {
+      needFault();
+      const seeded = await seedDown(db, person);
+      const { context, page } = await openDown(browser, person, width);
+      try {
+        await expect(page.getByRole("main").getByText(seeded.plainName, { exact: true })).toBeVisible();
+        const panel = panelOf(page, seeded.plainName);
+        await expect(panel.getByText(new RegExp(`^mide en km · hasta el ${DATE}$`))).toBeVisible();
+        await expect(panel.getByText("solo lo que dijiste tú")).toHaveCount(0);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id in (${seeded.fed.id}, ${seeded.plain.id}) and user_id = ${person.id}`;
+      }
+    });
+
+    test(`at ${width} the goal a down source feeds reads «mide búsquedas, en searches · hasta el … · solo lo que dijiste tú» and says it under its figure`, async ({ person, browser, db }) => {
+      needFault();
+      const seeded = await seedDown(db, person);
+      const { context, page } = await openDown(browser, person, width);
+      try {
+        await expect(page.getByRole("main").getByText(seeded.fedName, { exact: true })).toBeVisible();
+        const panel = panelOf(page, seeded.fedName);
+        await expect(
+          panel.getByText(new RegExp(`^mide búsquedas, en searches · hasta el ${DATE} · solo lo que dijiste tú$`)),
+        ).toBeVisible();
+        await expect(panel.getByText("solo lo que dijiste tú", { exact: true })).toHaveCount(1);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id in (${seeded.fed.id}, ${seeded.plain.id}) and user_id = ${person.id}`;
+      }
+    });
+  }
 });
 
-// `Exportar.dc.html` (module 137, RP-46, RP-37): `/metas` offers the export
+// `Exportar.dc.html` (RP-49, RP-37): `/metas` offers the export
 // beside the import under «el plan».
-test.describe("the way in from /metas (RP-46, RP-37)", () => {
+test.describe("the way in from /metas (RP-49, RP-37)", () => {
   test("«Exportar» opens the report; «Importar un plan» points at its page", async ({
     person,
     browser,
@@ -531,9 +625,9 @@ test.describe("the way in from /metas (RP-46, RP-37)", () => {
   });
 });
 
-// Module 171 (RP-31, RP-32, RP-46, RP-35): what is owed, the goal's last day,
+// RP-31, RP-32, RP-49, RP-35: what is owed, the goal's last day,
 // the months whole, a head that says pulsar, and page 1 used.
-test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)", () => {
+test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)", () => {
   async function seedExtras(db: postgres.Sql, person: Person, seeded: Seed) {
     const stamp = Date.now();
     const today = todayInZone();
@@ -597,7 +691,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       const horizon = plusDays(90);
       await expect(
         page.getByText(
-          `mide minutos · hasta el ${longDate(dayBefore(horizon))}`,
+          `mide en horas y minutos · hasta el ${longDate(dayBefore(horizon))}`,
         ),
       ).toBeVisible();
       await expect(
@@ -616,16 +710,22 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       await expect(
         page.getByText(extras.doneChild, { exact: true }),
       ).toBeVisible();
-      // The carried task with an amount says what it owes, at the row's end.
-      await expect(page.getByText(/^debe 45 min$/)).toHaveCount(1);
-      await expect(page.getByText(/debe 0/)).toHaveCount(0);
+      // RP-49: the carried task has two parts, one done: it says «1 de 2», and no task owes «0».
+      await expect(
+        page
+          .locator("main")
+          .getByText(extras.noAmount, { exact: true })
+          .and(page.locator(":visible"))
+          .locator("xpath=ancestor::*[count(.//*[@role='img'])=3][last()]"),
+      ).toContainText("1 de 2", { useInnerText: true });
+      await expect(page.getByText(/\bfalta\b/)).toHaveCount(0);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
     }
   });
 
-  test("RP-46 months: no unit word in the header, planned and share on both faces, each week under the month it starts in", async ({
+  test("RP-49 months: hecho against planned and estado on both faces, the closed month names where its share went", async ({
     person,
     browser,
     baseURL,
@@ -645,79 +745,53 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
         .locator("table", { hasText: "planeado" })
         .first()
         .locator("thead th");
-      await expect(headers).toHaveText(["mes", "alcanzado", "planeado", ""]);
+      await expect(headers).toHaveText(["por mes", "hecho", "planeado"]);
       const closed = wide
-        .locator("table tbody tr", { hasText: /se arrastró \d+ %/ })
+        .locator("table tbody tr", { hasText: /\d+ % pasó a \p{L}+/u })
         .first();
       await expect(closed).toBeVisible();
-      await expect(closed.locator("td").nth(2)).toHaveText("10 h");
+      // RP-49: the plan has its own column, so «hecho» no longer carries «de 10 h»;
+      // the closed state sits on a second line under the month's name.
+      await expect(closed.locator("td").nth(1)).not.toContainText("de 10 h");
+      await expect(closed.locator("td").nth(2)).toContainText("10 h");
+      await expect(closed.locator("td").nth(0)).toContainText("cerrado");
+      // The month the share went to is the one after the closed month.
+      const next = monthLong(todayInZone());
+      await expect(closed.locator("td").nth(0)).toContainText(`pasó a ${next}`);
       await expect(
         wide
           .locator("table tbody tr[data-current]", { hasText: "en curso" })
-          .first(),
-      ).toBeVisible();
-      // Weeks are no table of their own: each sits under its month's row.
-      await expect(wide.getByText("por semana", { exact: true })).toHaveCount(0);
+          .first()
+          .locator("td")
+          .nth(0),
+      ).toContainText("en curso");
       await expect(
-        wide.getByText("por mes", { exact: true }).locator("visible=true"),
+        wide.getByText(/· por mes$/).locator("visible=true"),
       ).toHaveCount(1);
-      const rows = await wide
-        .locator("table")
-        .first()
-        .locator("tbody tr")
-        .evaluateAll((nodes) => nodes.map((node) => (node.querySelector("td")?.textContent ?? "").trim()));
-      expect(rows[0]).not.toMatch(/^sem /);
-      const months = [
-        "enero", "febrero", "marzo", "abril", "mayo", "junio",
-        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-      ];
-      const abbreviations = months.map((month) => month.slice(0, 3));
-      let owner = "";
-      let weeks = 0;
-      for (const row of rows) {
-        if (!row.startsWith("sem ")) {
-          owner = months.find((month) => row.startsWith(month)) ?? "";
-          continue;
-        }
-        weeks += 1;
-        // «31 ago–6 sep 2026» starts in its first month; «5–11 oct 2026» in its only one.
-        const span = /^sem \d+ · (\d+)(?: ([a-z]{3}))?(?: \d{4})?(?:–\d+ ([a-z]{3}))? \d{4}/.exec(row);
-        expect(span, row).not.toBeNull();
-        const startAbbreviation = span![2] ?? span![3];
-        expect(abbreviations[months.indexOf(owner)], row).toBe(startAbbreviation);
-        expect(row).toMatch(/\d{4}/);
-      }
-      expect(weeks).toBeGreaterThan(0);
 
       const phone = await context.newPage();
       await phone.setViewportSize({ width: 360, height: 740 });
       await phone.goto("/exportar");
       const note = phone
-        .locator("ol li", { hasText: /se arrastró \d+ %/ })
+        .locator("ol li", { hasText: /\d+ % pasó a \p{L}+/u })
         .first();
       await expect(note).toBeVisible();
-      await expect(note).toContainText(/de 10 h · se arrastró \d+ %/);
+      await expect(note).toContainText("cerrado");
       await expect(
         phone
-          .locator("ol li[data-current]", { hasText: /de 12 h · en curso/ })
+          .locator("ol li[data-current]", { hasText: /de 12 h/ })
           .first(),
-      ).toBeVisible();
-      await expect(
-        phone.getByText("por mes", { exact: true }).locator("visible=true"),
-      ).toHaveCount(1);
+      ).toContainText("en curso");
       await expect(
         phone.getByText(/^\d+ meses$/).locator("visible=true"),
       ).toHaveCount(1);
-      await expect(
-        phone.getByText(/^sem \d+ · /).locator("visible=true").first(),
-      ).toBeVisible();
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
     }
   });
 
-  test("RP-46 on paper: the head says pulsar with the year, the tasks and weeks sit under their goal and month, every date has its year, page 1 is used", async ({
+  test("RP-49 on paper: the head says pulsar with the year, the tasks sit under their goal, no week prints, every date has its year, page 1 is used", async ({
     person,
     browser,
     baseURL,
@@ -738,13 +812,13 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       await page.emulateMedia({ media: "print" });
       const year = todayInZone().slice(0, 4);
       await expect(
-        page.getByText(new RegExp(`^pulsar · .*${year}$`)),
+        page.getByText(new RegExp(`^${exportMessages.printBrand} · .*${year}$`)),
       ).toBeVisible();
       await expect(
         page.getByText(/^exportar · /).locator("visible=true"),
       ).toHaveCount(0);
 
-      const pdf = await page.pdf({ format: "A4" });
+      const pdf = await page.pdf({ preferCSSPageSize: true });
       const dir = resolve(process.cwd(), "private/export-pdf");
       mkdirSync(dir, { recursive: true });
       const file = resolve(dir, `171-${first.goalId}.pdf`);
@@ -786,37 +860,93 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
       expect(at(first.monthNote)).toBeGreaterThan(at(first.monthTask));
       expect(at(first.monthNote)).toBeLessThan(at(first.doneTask));
       expect(at(first.doneNote)).toBeGreaterThan(at(first.doneTask));
-      // A week's span sits inside its month's block: the closest month above names its start.
       const months = [
         "enero", "febrero", "marzo", "abril", "mayo", "junio",
         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
       ];
-      const marks = new RegExp(
-        `(?<month>(?:${months.join("|")}) \\d{4})|sem \\d+ · (?<day>\\d+)(?: (?<first>[a-z]{3}))?(?: \\d{4})?(?:–\\d+ (?<last>[a-z]{3}))? \\d{4}`,
-        "g",
-      );
-      let owner = "";
-      let placed = 0;
-      for (const found of block.matchAll(marks)) {
-        if (found.groups!.month) {
-          owner = found.groups!.month.split(" ")[0];
-          continue;
-        }
-        placed += 1;
-        expect(owner, found[0]).not.toBe("");
-        expect(owner.slice(0, 3), found[0]).toBe(found.groups!.first ?? found.groups!.last);
-      }
-      expect(placed).toBeGreaterThan(0);
+      // RP-49: only the months print; no week row reaches the sheet.
+      expect(flat).not.toMatch(/sem \d+ ·/);
       // Every printed date carries its year: a day and its month are followed by one within a span.
-      const dayMonth = new RegExp(`\\d{1,2} (?:de )?(?:${months.map((name) => name.slice(0, 3)).join("|")})[a-z]*`, "g");
+      // A count («0 de 1») ends in digits that are not a day: the lookbehind skips them.
+      const dayMonth = new RegExp(`(?<!\\d de )\\d{1,2} (?:de )?(?:${months.map((name) => name.slice(0, 3)).join("|")})[a-z]*`, "g");
       const bare = [...flat.matchAll(dayMonth)]
         .filter((found) => !/\d{4}/.test(flat.slice(found.index, found.index + found[0].length + 22)))
         .map((found) => flat.slice(found.index, found.index + 40));
       expect(bare).toEqual([]);
-      // A week's span never breaks: every «sem N ·» opening carries its closing year on its own line.
-      const opened = all.split("\n").filter((line) => /sem \d+ ·/.test(line));
-      expect(opened.length).toBeGreaterThan(0);
-      for (const line of opened) expect(line).toMatch(/sem \d+ · .*\d{4}/);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("RP-49 on paper loses nothing: every goal and every month row the screen shows, but the empty future ones (RP-70), is in the PDF, in its goal", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const first = await seed(db, person);
+    await seedExtras(db, person, first);
+    const second = await seed(db, person);
+    await seedExtras(db, person, second);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      const main = page.getByRole("main");
+      const names = [first.name, second.name];
+      for (const name of names) {
+        await expect(main.getByRole("heading", { name, exact: true })).toHaveCount(1);
+      }
+      // On screen: per goal, the first column of its «mes» table.
+      const onScreen: string[][] = [];
+      for (const name of names) {
+        const table = main
+          .locator("section", { has: page.getByText(`${name} · por mes`, { exact: true }) })
+          .locator("table", { has: page.locator("thead th", { hasText: /^por mes$/ }) })
+          .first();
+        // The state sits on a second line of the same cell: the label is its first words.
+        const labels = (await table.locator("tbody tr:not([data-row='months-out']) td:first-child").allTextContents()).map(
+          (label) => /^[a-zñ]+ \d{4}/.exec(label.trim())![0],
+        );
+        expect(labels.length, `${name}: months on screen`).toBeGreaterThanOrEqual(4);
+        // RP-70: a month with no state and no planned amount is on screen only.
+        const rows = table.locator("tbody tr:not([data-row='months-out'])");
+        const kept: string[] = [];
+        for (const [row, month] of labels.entries()) {
+          const cells = rows.nth(row).locator("td");
+          const state = (await cells.nth(0).innerText()).trim().replace(/^[a-zñ]+ \d{4}/, "").trim();
+          const planned = (await cells.nth(2).innerText()).trim();
+          if (state !== "" || planned !== "") kept.push(month);
+        }
+        onScreen.push(kept);
+      }
+
+      await page.emulateMedia({ media: "print" });
+      const dir = resolve(process.cwd(), "private/export-pdf");
+      mkdirSync(dir, { recursive: true });
+      const file = resolve(dir, `379-completo-${first.goalId}.pdf`);
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+      const lines = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" })
+        .split("\n")
+        .map((line) => line.trim());
+
+      // Each goal's heading is one line of its own; its months are the label lines up to the next goal.
+      const at = names.map((name) => lines.indexOf(name));
+      for (const [index, found] of at.entries()) expect(found, `${names[index]} heading in the PDF`).toBeGreaterThanOrEqual(0);
+      expect(lines.filter((line) => names.includes(line))).toHaveLength(names.length);
+      // A month's line may carry its state or its figures: its label is the first words.
+      const label = /^[a-zñ]+ \d{4}(?= |$)/;
+      const printed = at.map((from, index) =>
+        lines
+          .slice(from, at[index + 1] ?? lines.length)
+          .flatMap((line) => label.exec(line) ?? []),
+      );
+      expect(printed).toEqual(onScreen);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = any(${[first.goalId, second.goalId]}) and user_id = ${person.id}`;
@@ -824,9 +954,9 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-46, RP-35)",
   });
 });
 
-// Module 265 (RP-46): the head counts the goals that ended, an ended goal is
+// RP-49: the head counts the goals that ended, an ended goal is
 // named with its last day and goes last, and the page never overflows.
-test.describe("the report's head, its ended goals and its width (RP-46)", () => {
+test.describe("the report's head, its ended goals and its width (RP-49)", () => {
   async function seedEnded(db: postgres.Sql, person: Person) {
     const name = `Meta terminada ${Date.now()}`;
     const [goal] = await db<{ id: string }[]>`
@@ -984,6 +1114,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       try {
         const page = await context.newPage();
         await page.goto("/exportar");
+        await settled(page);
         const main = page.getByRole("main");
         const parent = await main.getByText(seeded.taskName, { exact: true }).boundingBox();
         const child = await main.getByText(seeded.childName, { exact: true }).boundingBox();
@@ -1024,7 +1155,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
     return { goalId: goal.id, name };
   }
 
-  test("RP-46: a week crossing two months sits under both with its own span and share", async ({
+  test("RP-49: a week crossing two months is one week in the fold, with the whole week's total", async ({
     person,
     browser,
     baseURL,
@@ -1040,6 +1171,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       const page = await context.newPage();
       await page.goto("/exportar");
       await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await page.locator("summary", { hasText: /^Ver las \d+ semanas$/ }).click();
       const rows = await page
         .getByRole("main")
         .locator("table tbody tr")
@@ -1047,24 +1179,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
           nodes.map((node) => [...node.querySelectorAll("td")].map((cell) => (cell.textContent ?? "").trim())),
         );
       const split = rows.filter((cells) => /^sem 5 · /.test(cells[0]));
-      expect(split.map((cells) => [cells[0], cells[1]])).toEqual([
-        ["sem 5 · 28–30 sep 2026", "30 min"],
-        ["sem 5 · 1–4 oct 2026", "20 min"],
-      ]);
-      // Each month's weeks add up to its row.
-      const total = (cells: string[]) => Number(/(\d+) min/.exec(cells[1])?.[1] ?? 0);
-      const monthRow = (label: string) => rows.find((cells) => cells[0].startsWith(label))!;
-      const under = (label: string) => {
-        const at = rows.indexOf(monthRow(label));
-        let sum = 0;
-        for (const cells of rows.slice(at + 1)) {
-          if (!cells[0].startsWith("sem ")) break;
-          sum += total(cells);
-        }
-        return sum;
-      };
-      expect(under("septiembre")).toBe(total(monthRow("septiembre")));
-      expect(under("octubre")).toBe(total(monthRow("octubre")));
+      expect(split.map((cells) => [cells[0], cells[1]])).toEqual([["sem 5 · 28 sep–4 oct 2026", "50 min"]]);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
@@ -1096,7 +1211,7 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       await page.emulateMedia({ media: "print" });
       const file = resolve(process.cwd(), "private/export-pdf", `281-${seeded.goalId}.pdf`);
       mkdirSync(resolve(process.cwd(), "private/export-pdf"), { recursive: true });
-      writeFileSync(file, await page.pdf({ format: "A4" }));
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
       const text = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" });
       expect(text.toLowerCase()).toContain("hasta hoy");
       expect(text.replace(/\s+/g, " ")).not.toMatch(/\bde\s*0/);
@@ -1105,4 +1220,1404 @@ test.describe("the report's head, its ended goals and its width (RP-46)", () => 
       await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
     }
   });
+});
+
+test.describe("the report's type and space", () => {
+  for (const width of [360, 1280] as const) {
+    test(`at ${width} sentences are Archivo, figures stay mono and sections keep the space system`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const seeded = await seed(db, person);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 800 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+        const family = (text: string | RegExp) =>
+          page
+            .getByRole("main")
+            .getByText(text)
+            .first()
+            .evaluate((node) => getComputedStyle(node).fontFamily);
+        // The goal's measure line and the count under the title are sentences.
+        expect(await family(/^mide en horas y minutos · hasta el /)).not.toMatch(/mono/i);
+        expect(await family(/^\d+ metas?$/)).not.toMatch(/mono/i);
+        expect(await family(seeded.monthTask)).not.toMatch(/mono/i);
+        // «de 12 h»: the sentence is Archivo around a mono figure.
+        const planned = page.getByRole("main").getByText(/^de\s*12 h/).first();
+        expect(await planned.evaluate((node) => getComputedStyle(node).fontFamily)).not.toMatch(
+          /mono/i,
+        );
+        // A section's label sits 12 above its content; sections 32 apart.
+        const gaps = await page.evaluate((goalName) => {
+          const labels = [...document.querySelectorAll("main section > *:first-child")]
+            .filter((node) => /^(este mes|hasta hoy|fases|tareas de)|· por mes$/.test(node.textContent ?? ""))
+            .map((node) => ({
+              text: node.textContent ?? "",
+              label: node.getBoundingClientRect(),
+              next: node.nextElementSibling?.getBoundingClientRect() ?? null,
+              section: node.parentElement!.getBoundingClientRect(),
+              after: node.parentElement!.nextElementSibling?.getBoundingClientRect() ?? null,
+            }));
+          return labels.map((entry) => ({
+            own: entry.text.includes(goalName),
+            inner: entry.next ? Math.round(entry.next.top - entry.label.bottom) : null,
+            outer: entry.after ? Math.round(entry.after.top - entry.section.bottom) : null,
+          }));
+        }, seeded.name);
+        // The seeded goal's own «<meta> · por mes» section is among those measured.
+        expect(gaps.filter((gap) => gap.own).length).toBeGreaterThan(0);
+        // The months table's cell padding is the screen's own (18): the compact paper rule must not reach it.
+        const cellPadding = await page.evaluate(() => {
+          const cell = document.querySelector("main table td");
+          if (!cell) return null;
+          const style = getComputedStyle(cell);
+          return [style.paddingTop, style.paddingBottom];
+        });
+        expect(cellPadding).toEqual(["18px", "18px"]);
+        for (const gap of gaps) {
+          if (gap.inner !== null) expect(gap.inner).toBe(12);
+          if (gap.outer !== null) expect(gap.outer).toBe(32);
+        }
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
+});
+
+const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+// `ReporteFuenteCaida` with the source readable: the line is the
+// same for every goal and carries nothing about a source.
+test.describe("a readable source", () => {
+  test("every goal reads «mide X, en Y · hasta el …» or «mide en Y · hasta el …», fed or not, with no word about a source", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goals: string[] = [];
+    for (const [name, measure, unit] of [
+      [`Leída ${stamp}`, "búsquedas", "searches"],
+      [`Corrida ${stamp}`, "km", "km"],
+    ]) {
+      const [goal] = await db<{ id: string }[]>`
+        insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+        values (${person.id}, ${name}, ${plusDays(60)}, ${measure}, ${unit}, now() - interval '10 days')
+        returning id
+      `;
+      goals.push(goal.id);
+    }
+    await db`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+      values (
+        ${person.id}, ${goals[0]}, ${`Buscar ${stamp}`}, 'daily', 'evidence',
+        (select id from goals.evidence_sources where key = 'reading_lookups'), 1,
+        now() - interval '10 days'
+      )
+    `;
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(`Leída ${stamp}`, { exact: true })).toBeVisible();
+      const date = String.raw`\d{1,2} de [a-záéíóú]+( de \d{4})?`;
+      const panelOf = (name: string) =>
+        page.getByRole("heading", { name, exact: true }).locator("xpath=ancestor::*[count(.//h2)=1][last()]");
+      await expect(panelOf(`Leída ${stamp}`).getByText(new RegExp(`^mide búsquedas, en searches · hasta el ${date}$`))).toBeVisible();
+      await expect(panelOf(`Corrida ${stamp}`).getByText(new RegExp(`^mide en km · hasta el ${date}$`))).toBeVisible();
+      const body = (await page.locator("main").textContent()) ?? "";
+      expect(body).not.toMatch(/diccionario|alimentada|solo lo que dijiste tú|No pudimos leer/i);
+    } finally {
+      await context.close();
+      for (const id of goals) await db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;
+    }
+  });
+});
+
+// `ReporteTareaParte` (RP-54): a task the
+// plan splits shows the part that falls in this month and «sigue en <mes> ·
+// <total> en total» under its name. There is no «viene de».
+test.describe("a task split across months", () => {
+  const today = todayInZone();
+  const next = (() => {
+    const d = civilDateToDate(`${today.slice(0, 7)}-01`);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    return dateToCivilDate(d);
+  })();
+  const nextLabel = MONTH_NAMES[Number(next.slice(5, 7)) - 1];
+  const SIGUE = new RegExp(`sigue en ${nextLabel}( de \\d{4})? · 10 h en total`);
+
+  // 12 h a month, in plan order: 4 h, a 7 h parent of 1 h + 6 h, then a 10 h
+  // task of which only the 1 h left in the month fits.
+  async function seedSplit(db: postgres.Sql, person: Person) {
+    const stamp = Date.now();
+    const names = {
+      whole: `Leer AI Engineering cap. 1–4 ${stamp}`,
+      tutor: `Tutor ${stamp}`,
+      long: `Construir un harness de evals ${stamp}`,
+    };
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${person.id}, ${`IA aplicada ${stamp}`}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${names.whole}, 240, true)
+    `;
+    const [tutor] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, in_plan, note)
+      values (${person.id}, ${goal.id}, ${names.tutor}, true, 'Preguntar por la tarifa por hora.')
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${tutor.id}, ${`Elegir tutor ${stamp}`}, 60)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${tutor.id}, ${`Sesiones 1–4 ${stamp}`}, 360)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${names.long}, 600, true)
+    `;
+    return { goalId: goal.id, goalName: `IA aplicada ${stamp}`, ...names };
+  }
+
+  const rowOf = (page: import("@playwright/test").Page, name: string) =>
+    page
+      .locator("main")
+      .getByText(name, { exact: true })
+      .and(page.locator(":visible"))
+      .locator("xpath=ancestor::*[count(.//*[@role='img'])=1][last()]");
+
+  for (const width of [390, 1440]) {
+    test(`at ${width} the split task's row says 1 h and «sigue en», a whole one says its estimate and no «sigue en»`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const seeded = await seedSplit(db, person);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 900 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true })).toBeVisible();
+
+        const split = rowOf(page, seeded.long);
+        await expect(split).toContainText(SIGUE, { useInnerText: true });
+        const splitText = (await split.innerText()).replace(/\s+/g, " ");
+        expect(splitText.replace(/10 h en total/, "")).toMatch(/(^|\D)1 h\b/);
+        expect(splitText.replace(/10 h en total/, "")).not.toMatch(/(^|\D)10 h\b/);
+
+        const whole = rowOf(page, seeded.whole);
+        await expect(whole).toContainText(/(^|\D)4 h\b/, { useInnerText: true });
+        await expect(whole).not.toContainText(/sigue en/);
+
+        const panel = page
+          .getByRole("heading", { name: seeded.goalName, exact: true })
+          .locator("xpath=ancestor::*[count(.//h2)=1][last()]");
+        await expect(panel.getByText(/sigue en/)).toHaveCount(1);
+        expect((await panel.innerText()) ?? "").not.toMatch(/viene de/i);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
+
+  test("at 360 the split goal's page does not overflow", async ({ person, browser, baseURL, db }) => {
+    const seeded = await seedSplit(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 360, height: 740 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(rowOf(page, seeded.long)).toContainText(SIGUE, { useInnerText: true });
+      const sizes = await page.evaluate(() => [
+        document.documentElement.scrollWidth,
+        document.documentElement.clientWidth,
+        document.querySelector("main")!.scrollWidth,
+        document.querySelector("main")!.clientWidth,
+      ]);
+      expect(sizes[0]).toBeLessThanOrEqual(sizes[1]);
+      expect(sizes[2]).toBeLessThanOrEqual(sizes[3]);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("on paper the split task prints its part and «sigue en», never «viene de»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seedSplit(db, person);
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(seeded.goalName, { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const dir = resolve(process.cwd(), "private/export-pdf");
+      mkdirSync(dir, { recursive: true });
+      const file = resolve(dir, `578-${seeded.goalId}.pdf`);
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+      const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
+      const from = flat.indexOf(seeded.long);
+      expect(from).toBeGreaterThanOrEqual(0);
+      const row = flat.slice(from, from + 220);
+      expect(row).toMatch(SIGUE);
+      const rest = row.replace(/10 h en total/, "");
+      expect(rest).toMatch(/(^|\D)1 h\b/);
+      expect(rest).not.toMatch(/(^|\D)10 h\b/);
+      expect(flat.slice(flat.indexOf(seeded.goalName))).not.toMatch(/viene de/i);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+});
+
+// (RP-49, RP-17), `ReporteImpresoCompacto.dc.html`: on A4 the report spends the whole printable width,
+// keeps a heading with what follows it, and three goals with no activity fit two pages.
+test.describe("the report on A4, compact", () => {
+  const MONTH_NAMES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ];
+
+  type Planned = { goalId: string; name: string; months: string[] };
+
+  // A goal that opens this month and runs `months` months, a planned amount in each, one open task and no activity.
+  async function seedCompact(
+    db: postgres.Sql,
+    person: Person,
+    spec: { name: string; measure: string; unit: string; months: number; amount: number },
+  ): Promise<Planned> {
+    const monthStart = `${todayInZone().slice(0, 7)}-01`;
+    const starts: string[] = [];
+    let cursor = monthStart;
+    for (let i = 0; i < spec.months; i += 1) {
+      starts.push(cursor);
+      cursor = nextMonth(cursor);
+    }
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${spec.name}, ${cursor}::date, ${spec.measure}, ${spec.unit}, now())
+      returning id
+    `;
+    for (const month of starts) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${month}::date, ${spec.amount})
+      `;
+    }
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, planned_month)
+      values (${person.id}, ${goal.id}, ${`Tarea abierta de ${spec.name}`}, ${monthStart}::date)
+    `;
+    const labels = starts.map(
+      (month) => `${MONTH_NAMES[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`,
+    );
+    return { goalId: goal.id, name: spec.name, months: labels };
+  }
+
+  // The board's three goals: 6 months of 12 h, 3 months of km, 2 months of searches.
+  async function seedBoard(db: postgres.Sql, person: Person, stamp: number): Promise<Planned[]> {
+    return [
+      await seedCompact(db, person, { name: `IA aplicada ${stamp}`, measure: "minutos", unit: "minutos", months: 6, amount: 720 }),
+      await seedCompact(db, person, { name: `Correr 10K ${stamp}`, measure: "km", unit: "km", months: 3, amount: 40 }),
+      await seedCompact(db, person, { name: `Leer en inglés ${stamp}`, measure: "búsquedas", unit: "searches", months: 2, amount: 30 }),
+    ];
+  }
+
+  async function savePdf(page: import("@playwright/test").Page, label: string): Promise<string> {
+    const dir = resolve(process.cwd(), "private/export-pdf");
+    mkdirSync(dir, { recursive: true });
+    const file = resolve(dir, `579-${label}-${Date.now()}.pdf`);
+    writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+    return file;
+  }
+
+  function pageCount(file: string): number {
+    return Number(/Pages:\s+(\d+)/.exec(execFileSync("pdfinfo", [file], { encoding: "utf8" }))![1]);
+  }
+
+  // One entry per page: its lines, trimmed, blanks dropped.
+  function pageLines(file: string): string[][] {
+    return Array.from({ length: pageCount(file) }, (_, index) =>
+      execFileSync("pdftotext", ["-layout", "-f", String(index + 1), "-l", String(index + 1), file, "-"], {
+        encoding: "utf8",
+      })
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== ""),
+    );
+  }
+
+  async function open(
+    browser: import("@playwright/test").Browser,
+    baseURL: string,
+    person: Person,
+  ) {
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL,
+      viewport: { width: 794, height: 1123 },
+    });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+    await page.emulateMedia({ media: "print" });
+    return { context, page };
+  }
+
+  test("three goals with no activity, as on the board, print on two A4 pages", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }, testInfo) => {
+    const goals = await seedBoard(db, person, Date.now());
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      for (const goal of goals) {
+        await expect(page.getByRole("heading", { name: goal.name, exact: true })).toHaveCount(1);
+      }
+      const file = await savePdf(page, "paginas");
+      const pages = pageCount(file);
+      testInfo.annotations.push({ type: "a4-pages", description: String(pages) });
+      expect(pages, `pages of the board's three goals (${file})`).toBeLessThanOrEqual(2);
+      // Fewer pages by dropping a goal would pass the count: every goal and every month must still print.
+      const text = pageLines(file).flat();
+      for (const goal of goals) {
+        expect(text, goal.name).toContain(goal.name);
+        for (const label of goal.months) expect(text.filter((line) => line.startsWith(label)).length, `${goal.name} ${label}`).toBeGreaterThanOrEqual(1);
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("in print each goal block and each table take 95 % of the printable width, with no rail column", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const goals = await seedBoard(db, person, Date.now());
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      const available = await page.evaluate(() => document.documentElement.clientWidth);
+      const widths = await page.evaluate((names) => {
+        const out: { what: string; width: number }[] = [];
+        for (const name of names) {
+          const heading = [...document.querySelectorAll("h2")].find((node) => node.textContent === name)!;
+          out.push({ what: `block of ${name}`, width: heading.closest("section")!.getBoundingClientRect().width });
+          const label = [...document.querySelectorAll("section")].find((node) =>
+            (node.textContent ?? "").startsWith(`${name} · por mes`),
+          );
+          const table = (label ?? heading.closest("section")!).querySelector("table");
+          out.push({ what: `table of ${name}`, width: table?.getBoundingClientRect().width ?? 0 });
+        }
+        return out;
+      }, goals.map((goal) => goal.name));
+      for (const { what, width } of widths) {
+        expect(width / available, `${what}: ${Math.round(width)} of ${available} px`).toBeGreaterThanOrEqual(0.95);
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
+    }
+  });
+
+  // Goals of different heights put the page foot in different places; each «por mes» label must land with its first row.
+  test("a «por mes» label is on the page of its first row, and no page ends on a heading, a label or a table head", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goals: Planned[] = [];
+    for (const [index, months] of [6, 3, 2, 14, 9, 12, 5, 8].entries()) {
+      goals.push(
+        await seedCompact(db, person, {
+          name: `Altura ${stamp} n${index}`,
+          measure: "minutos",
+          unit: "minutos",
+          months,
+          amount: 720,
+        }),
+      );
+    }
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      const file = await savePdf(page, "encabezado");
+      const pages = pageLines(file);
+      const monthRow = new RegExp(`^(${MONTH_NAMES.join("|")}) \\d{4}\\b`);
+      for (const goal of goals) {
+        const at = pages.findIndex((lines) => lines.some((line) => line.toLowerCase() === `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase()));
+        expect(at, `${goal.name}: «por mes» label in the PDF`).toBeGreaterThanOrEqual(0);
+        const lines = pages[at];
+        const after = lines.slice(lines.findIndex((line) => line.toLowerCase() === `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase()) + 1);
+        expect(
+          after.some((line) => line.startsWith(goal.months[0]) || monthRow.test(line)),
+          `${goal.name}: label on page ${at + 1} of ${pages.length}, its first row is not there`,
+        ).toBe(true);
+      }
+      const orphan = new RegExp(
+        `^(${goals.map((goal) => goal.name).join("|")})( · por mes( · \\d+ meses?)?)?$|^(este mes|hasta hoy|al terminar|fases|tareas de)|^mes\\b.*\\bhecho|^\\d+ meses?$`,
+        "i",
+      );
+      for (const [index, lines] of pages.entries()) {
+        if (index === pages.length - 1) continue;
+        expect(lines.at(-1), `page ${index + 1} of ${pages.length} ends on «${lines.at(-1)}»`).not.toMatch(orphan);
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("a long table breaks between rows: every month row is whole on one page, none lost, and some table runs onto the next page", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const goals: Planned[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      goals.push(
+        await seedCompact(db, person, {
+          name: `Larga ${stamp} n${index}`,
+          measure: "minutos",
+          unit: "minutos",
+          // The first goal alone is taller than an A4 page, so its split is real whatever `whole` keeps together.
+          months: index === 0 ? 60 : 14,
+          amount: 720,
+        }),
+      );
+    }
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      const file = await savePdf(page, "tabla-larga");
+      const pages = pageLines(file);
+      // Every line of the PDF with the page it is on, so a goal's rows are read between its label and the next goal.
+      const run = pages.flatMap((lines, index) => lines.map((line) => ({ line, page: index })));
+      const lowered = (goal: Planned) => `${goal.name} · por mes · ${goal.months.length} meses`.toLowerCase();
+      let split = 0;
+      for (const [position, goal] of goals.entries()) {
+        const from = run.findIndex((entry) => entry.line.toLowerCase() === lowered(goal));
+        expect(from, `${goal.name}: label in the PDF`).toBeGreaterThanOrEqual(0);
+        const next = goals[position + 1];
+        const until = next ? run.findIndex((entry) => entry.line === next.name) : run.length;
+        const span = run.slice(from, until < 0 ? run.length : until);
+        const where: number[] = [];
+        for (const label of goal.months) {
+          const found = span.filter((entry) => entry.line.startsWith(label));
+          expect(found.length, `${goal.name} ${label}: lines starting with it`).toBe(1);
+          // The label prints on a line of its own and its cells on the next line: a row cut in two leaves them on another page.
+          const at = span.indexOf(found[0]);
+          const cells = span.slice(at + 1, at + 2);
+          expect(cells.length, `${goal.name} ${label}: cells after its label`).toBe(1);
+          expect(
+            cells.map((cell) => cell.page),
+            `${goal.name} ${label}: label on page ${found[0].page + 1}, cells on ${cells.map((cell) => cell.page + 1)}`,
+          ).toEqual([found[0].page]);
+          where.push(found[0].page);
+        }
+        // The rows keep their order across pages.
+        expect([...where].sort((a, b) => a - b)).toEqual(where);
+        if (new Set(where).size > 1) split += 1;
+      }
+      expect(split, `tables that ran onto a second page (${pages.length} pages, ${file})`).toBeGreaterThanOrEqual(1);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${goals.map((goal) => goal.goalId)}) and user_id = ${person.id}`;
+    }
+  });
+});
+
+// RP-49 (test-critic #4, #5, #6): the last day counts as ended, paper is black
+// everywhere, and «N % pasó a» is the share the seeded numbers give.
+test.describe("the report's last day, its ink and its share (RP-49)", () => {
+  const longDay = (day: string) =>
+    new Intl.DateTimeFormat("es-CO", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(civilDateToDate(day));
+
+  test("a goal whose horizon is today is ended: counted in the head and named with yesterday", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const name = `Meta de hoy ${Date.now()}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${name}, ${todayInZone()}, 'páginas', 'páginas', now() - interval '100 days')
+      returning id
+    `;
+    const seeded = await seed(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText("2 metas · 1 terminada", { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(`terminada el ${longDay(plusDays(-1))}`, { exact: true }),
+      ).toBeVisible();
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[goal.id, seeded.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("on paper every visible text node in main computes pure black", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seed(db, person);
+    const ended = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${`Meta cerrada ${Date.now()}`}, ${plusDays(-2)}, 'páginas', 'páginas', now() - interval '100 days')
+      returning id
+    `;
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.addInitScript(() => localStorage.setItem("theme", "dark"));
+      await page.goto("/exportar");
+      await expect(page.getByRole("main").getByText(seeded.name, { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const offenders = await page.evaluate(() => {
+        const found: string[] = [];
+        const walker = document.createTreeWalker(
+          document.querySelector("main")!,
+          NodeFilter.SHOW_TEXT,
+        );
+        let seen = 0;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = (node.textContent ?? "").trim();
+          const el = node.parentElement;
+          if (!text || !el || el.getClientRects().length === 0) continue;
+          const style = getComputedStyle(el);
+          if (style.visibility === "hidden" || style.display === "none") continue;
+          seen += 1;
+          if (style.color !== "rgb(0, 0, 0)") found.push(`${text.slice(0, 40)} → ${style.color}`);
+        }
+        if (seen < 20) found.push(`only ${seen} text nodes reached`);
+        return found;
+      });
+      expect(offenders).toEqual([]);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[seeded.goalId, ...ended.map((g) => g.id)]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("the closed month says the share that passed on, rounded down from the seeded estimates", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const seeded = await seed(db, person);
+    // Last month, from the estimates seeded here and in `seed` (a parent whose
+    // only sub-task owes 45): 45 + 110 owed, 200 done, so 155 of 355 passed on.
+    const before = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
+    before.setUTCMonth(before.getUTCMonth() - 1);
+    const lastMonth = dateToCivilDate(before).slice(0, 7);
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${seeded.goalId}, ${`${lastMonth}-01`}::date, 600)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${seeded.goalId}, ${`Debida ${Date.now()}`}, 110, ${`${lastMonth}-01`}::date)
+    `;
+    const [finished] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${seeded.goalId}, ${`Hecha antes ${Date.now()}`}, 200, ${`${lastMonth}-01`}::date)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${seeded.goalId}, ${finished.id}, ${`${lastMonth}-10`}::date)
+    `;
+    const expected = Math.floor(((45 + 110) * 100) / (45 + 110 + 200));
+    expect(expected).toBe(43);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1280, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      const closed = page
+        .locator("table tbody tr", { hasText: /\d+ % pasó a \p{L}+/u })
+        .first();
+      await expect(closed).toBeVisible();
+      await expect(closed).toContainText(`${expected} % pasó a`);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${seeded.goalId} and user_id = ${person.id}`;
+    }
+  });
+});
+
+// `ReporteTareaPendiente` and `ReporteImpresoCompacto` (RP-49, RP-32): every open task says it is pending,
+// with its amount; the month table reads «por mes | hecho | planeado»; the state of a closed or current
+// month sits under the month's name. Paper is the app's own A4 (`@page`), never the test's.
+test.describe("the report's pending tasks and its month table (RP-49, RP-32)", () => {
+  const monthName = (day: string) =>
+    new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" }).format(civilDateToDate(day));
+  const firstOfMonth = (offset: number) => {
+    const date = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
+    date.setUTCMonth(date.getUTCMonth() + offset);
+    return dateToCivilDate(date);
+  };
+
+  // Last month 9 h of 12 h (360 min of facts and a 180 min task done) with 60 min owed against that (25 % passes on),
+  // this month 4 h 15 min of 12 h (165 min and a 90 min task done),
+  // then two months with only a plan. Tasks of this month: open with 4 h, open with nothing, done with 1 h 30 min.
+  async function seedMonths(db: postgres.Sql, person: Person) {
+    const stamp = Date.now();
+    const names = {
+      goal: `IA aplicada ${stamp}`,
+      open: `Leer AI Engineering cap. 1–4 ${stamp}`,
+      bare: `Pedir la tarifa por hora ${stamp}`,
+      done: `Dataset listo ${stamp}`,
+    };
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${names.goal}, ${firstOfMonth(3)}, 'horas de estudio', 'minutos', now() - interval '70 days')
+      returning id
+    `;
+    for (const [offset, amount] of [[-1, 720], [0, 720], [1, 1200], [2, 720]] as const) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${firstOfMonth(offset)}::date, ${amount})
+      `;
+    }
+    const [commitment] = await db<{ id: string }[]>`
+      insert into goals.commitments
+        (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+      values (${person.id}, ${goal.id}, ${`Estudio ${stamp}`}, 'daily', 'quantity', 30, 'minutos', now() - interval '70 days')
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+      values (${person.id}, ${goal.id}, ${commitment.id}, ${`${firstOfMonth(-1).slice(0, 7)}-10`}::date, 360),
+             (${person.id}, ${goal.id}, ${commitment.id}, ${todayInZone()}::date, 165)
+    `;
+    const last = firstOfMonth(-1);
+    const this_ = firstOfMonth(0);
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${goal.id}, ${`Debida ${stamp}`}, 60, ${last}::date)
+    `;
+    const [before] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${goal.id}, ${`Hecha antes ${stamp}`}, 180, ${last}::date)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${goal.id}, ${before.id}, ${`${last.slice(0, 7)}-10`}::date)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${goal.id}, ${names.open}, 240, ${this_}::date),
+             (${person.id}, ${goal.id}, ${names.bare}, null, ${this_}::date)
+    `;
+    const [finished] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${goal.id}, ${names.done}, 90, ${this_}::date)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${goal.id}, ${finished.id}, ${todayInZone()}::date)
+    `;
+    return { goalId: goal.id, ...names };
+  }
+
+  // 12 h a month in plan order: 4 h, a parent of 1 h (done) + 6 h, then a 10 h task of which 1 h fits.
+  async function seedParts(db: postgres.Sql, person: Person) {
+    const stamp = Date.now();
+    const names = {
+      goal: `Plan con partes ${stamp}`,
+      tutor: `Tutor ${stamp}`,
+      doneChild: `Elegir tutor ${stamp}`,
+      openChild: `Sesiones 1–4 ${stamp}`,
+      split: `Dataset dorado ${stamp}`,
+    };
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${person.id}, ${names.goal}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${`Lectura previa ${stamp}`}, 240, true)
+    `;
+    const [tutor] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, in_plan)
+      values (${person.id}, ${goal.id}, ${names.tutor}, true)
+      returning id
+    `;
+    const [elegir] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${tutor.id}, ${names.doneChild}, 60)
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${tutor.id}, ${names.openChild}, 360)
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${goal.id}, ${elegir.id}, ${todayInZone()}::date)
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${names.split}, 600, true)
+    `;
+    return { goalId: goal.id, ...names };
+  }
+
+  const rowOf = (page: import("@playwright/test").Page, name: string) =>
+    page
+      .locator("main")
+      .getByText(name, { exact: true })
+      .and(page.locator(":visible"))
+      .locator("xpath=ancestor::*[count(.//*[@role='img'])=1][last()]");
+
+  const monthsTable = (page: import("@playwright/test").Page, goal: string) =>
+    page
+      .locator("section", { has: page.getByText(`${goal} · por mes`, { exact: true }) })
+      .last()
+      .locator("table")
+      .first();
+
+  async function expectTaskStates(
+    page: import("@playwright/test").Page,
+    months: Awaited<ReturnType<typeof seedMonths>>,
+    parts: Awaited<ReturnType<typeof seedParts>>,
+  ) {
+    const text = async (name: string) => (await rowOf(page, name).innerText()).replace(/\s+/g, " ");
+    await expect(rowOf(page, months.open)).toBeVisible();
+    const open = await text(months.open);
+    expect(open, "open 4 h task").toMatch(/pendiente · 4 h\b/);
+    expect(open).not.toMatch(/hecha/);
+
+    const bare = await text(months.bare);
+    expect(bare, "open task with no estimate").toMatch(/pendiente/);
+    expect(bare).not.toMatch(/pendiente ·/);
+    expect(bare).not.toMatch(/\d+ (h|min)\b/);
+
+    const done = await text(months.done);
+    expect(done, "done 1 h 30 min task").toMatch(/hecha · 1 h 30 min/);
+    expect(done).not.toMatch(/pendiente/);
+
+    expect(await text(parts.tutor), "task with parts").toMatch(/1 de 2/);
+    const doneChild = await text(parts.doneChild);
+    expect(doneChild, "done sub-task").toMatch(/hecha · 1 h\b/);
+    expect(doneChild).not.toMatch(/pendiente/);
+    const openChild = await text(parts.openChild);
+    expect(openChild, "open sub-task").toMatch(/pendiente · 6 h\b/);
+    expect(openChild).not.toMatch(/hecha/);
+
+    const split = await text(parts.split);
+    expect(split, "task split across months, this month's part").toMatch(/pendiente · 1 h\b/);
+    expect(split).toMatch(/sigue en/);
+  }
+
+  for (const width of [390, 1440]) {
+    test(`at ${width} every open task says pendiente with its amount, a done one hecha, a task with parts «1 de 2»`, async ({
+      person,
+      browser,
+      baseURL,
+      db,
+    }) => {
+      const months = await seedMonths(db, person);
+      const parts = await seedParts(db, person);
+      const context = await browser.newContext({
+        storageState: person.sessionFile,
+        baseURL: baseURL!,
+        viewport: { width, height: 900 },
+      });
+      try {
+        const page = await context.newPage();
+        await page.goto("/exportar");
+        await expectTaskStates(page, months, parts);
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = any(${[months.goalId, parts.goalId]}) and user_id = ${person.id}`;
+      }
+    });
+  }
+
+  test("on paper every open task says pendiente with its amount, a done one hecha, in the PDF too", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const months = await seedMonths(db, person);
+    const parts = await seedParts(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 794, height: 1123 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(rowOf(page, months.open)).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      await expectTaskStates(page, months, parts);
+      const file = resolve(process.cwd(), "private/export-pdf", `675-tasks-${months.goalId}.pdf`);
+      mkdirSync(resolve(process.cwd(), "private/export-pdf"), { recursive: true });
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+      const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
+      const after = (name: string) => {
+        const at = flat.indexOf(name);
+        expect(at, `${name} in the PDF`).toBeGreaterThanOrEqual(0);
+        return flat.slice(at + name.length, at + name.length + 70);
+      };
+      expect(after(months.open)).toMatch(/pendiente · 4 h\b/);
+      expect(after(months.done)).toMatch(/hecha · 1 h 30 min/);
+      expect(after(parts.doneChild)).toMatch(/hecha · 1 h\b/);
+      expect(after(parts.openChild)).toMatch(/pendiente · 6 h\b/);
+      expect(after(parts.tutor)).toMatch(/1 de 2/);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[months.goalId, parts.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+
+  // Rows by role, not by position: the closed one names where its share went, the current one is `data-current`.
+  async function expectMonthRows(page: import("@playwright/test").Page, goal: string) {
+    const table = monthsTable(page, goal);
+    await expect(table.locator("thead th")).toHaveText(["por mes", "hecho", "planeado"]);
+    const closed = table.locator("tbody tr", { hasText: /\d+ % pasó a/ });
+    await expect(closed).toHaveCount(1);
+    const cells = (row: import("@playwright/test").Locator) => row.locator("td");
+    await expect(cells(closed).nth(0)).toContainText(`25 % pasó a ${monthName(firstOfMonth(0))}`);
+    await expect(cells(closed).nth(0)).toContainText("cerrado");
+    await expect(cells(closed).nth(1)).toHaveText("9 h");
+    await expect(cells(closed).nth(2)).toHaveText("12 h");
+
+    const current = table.locator("tbody tr[data-current]");
+    await expect(current).toHaveCount(1);
+    await expect(cells(current).nth(0)).toContainText("en curso");
+    await expect(cells(current).nth(1)).toHaveText("4 h 15 min");
+    await expect(cells(current).nth(2)).toHaveText("12 h");
+
+    // The month after the current one brings only its plan: nothing done, no word in the plan cell but the figure.
+    const future = table.locator("tbody tr").nth(
+      (await table.locator("tbody tr").evaluateAll((rows) => rows.findIndex((row) => row.hasAttribute("data-current")))) + 1,
+    );
+    await expect(cells(future).nth(0)).toContainText(monthName(firstOfMonth(1)));
+    await expect(cells(future).nth(1)).not.toContainText(/\d/);
+    await expect(cells(future).nth(2)).toHaveText("20 h");
+  }
+
+  test("at 1440 the month table reads «por mes | hecho | planeado», the state under the month's name, the plan in its own column", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const months = await seedMonths(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1440, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText(`${months.goal} · por mes`, { exact: true })).toBeVisible();
+      await expectMonthRows(page, months.goal);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${months.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("at 390 the closed month says «cerrado» and where its share went, the current one «en curso»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const months = await seedMonths(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 390, height: 844 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText(`${months.goal} · por mes`, { exact: true })).toBeVisible();
+      const list = page
+        .locator("section", { has: page.getByText(`${months.goal} · por mes`, { exact: true }) })
+        .last();
+      const closed = list.locator("li", { hasText: /\d+ % pasó a/ });
+      await expect(closed).toHaveCount(1);
+      await expect(closed).toContainText(`25 % pasó a ${monthName(firstOfMonth(0))}`);
+      await expect(closed).toContainText("cerrado");
+      await expect(list.locator("li[data-current]")).toContainText("en curso");
+      await expect(list.locator("li[data-current]")).toContainText("12 h");
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${months.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("on paper the month table reads «por mes | hecho | planeado» with the same rows, and the PDF says so", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const months = await seedMonths(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 794, height: 1123 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText(`${months.goal} · por mes`, { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      await expectMonthRows(page, months.goal);
+      const file = resolve(process.cwd(), "private/export-pdf", `675-months-${months.goalId}.pdf`);
+      mkdirSync(resolve(process.cwd(), "private/export-pdf"), { recursive: true });
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+      const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).replace(/\s+/g, " ");
+      expect(flat).toMatch(/por mes hecho planeado/i);
+      expect(flat).not.toMatch(/hecho estado/i);
+      expect(flat).toContain(`25 % pasó a ${monthName(firstOfMonth(0))}`);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${months.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("a goal in km keeps its unit in the header: «por mes | hecho km | planeado»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const name = `Correr 10K ${stamp}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${name}, ${firstOfMonth(3)}, 'km', 'km', now() - interval '20 days')
+      returning id
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${goal.id}, ${firstOfMonth(0)}::date, 40)
+    `;
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 1440, height: 900 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText(`${name} · por mes`, { exact: true })).toBeVisible();
+      await expect(monthsTable(page, name).locator("thead th")).toHaveText(["por mes", /^hecho\s?km$/, "planeado"]);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
+    }
+  });
+
+  // The sheet is the app's own: `@page` says A4, and the pages are as wide as it says.
+  test("the PDF takes the app's own paper: every page is A4 and the report does not run wider than 794 px", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const months = await seedMonths(db, person);
+    const parts = await seedParts(db, person);
+    const context = await browser.newContext({
+      storageState: person.sessionFile,
+      baseURL: baseURL!,
+      viewport: { width: 794, height: 1123 },
+    });
+    try {
+      const page = await context.newPage();
+      await page.goto("/exportar");
+      await expect(page.getByText(`${months.goal} · por mes`, { exact: true })).toBeVisible();
+      await page.emulateMedia({ media: "print" });
+      const widths = await page.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        scroll: document.documentElement.scrollWidth,
+        page: document.querySelector("main")!.getBoundingClientRect().right,
+      }));
+      expect(widths.viewport).toBe(794);
+      expect(widths.scroll, "the report does not overflow an A4 width").toBeLessThanOrEqual(widths.viewport);
+      expect(widths.page).toBeLessThanOrEqual(widths.viewport);
+
+      const file = resolve(process.cwd(), "private/export-pdf", `675-a4-${months.goalId}.pdf`);
+      mkdirSync(resolve(process.cwd(), "private/export-pdf"), { recursive: true });
+      writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+      const info = execFileSync("pdfinfo", ["-f", "1", "-l", "99", file], { encoding: "utf8" });
+      const sizes = [...info.matchAll(/Page\s+\d+ size:\s+([\d.]+) x ([\d.]+) pts/g)].map((found) => [
+        Number(found[1]),
+        Number(found[2]),
+      ]);
+      expect(sizes.length).toBeGreaterThan(0);
+      for (const [width, height] of sizes) {
+        expect(width, "A4 is 595.28 pt wide").toBeCloseTo(595.28, 0);
+        expect(height, "A4 is 841.89 pt tall").toBeCloseTo(841.89, 0);
+      }
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[months.goalId, parts.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+});
+
+// The right-hand words of a task's row (RP-49): «hecha · <its amount>» for a done task,
+// «n de m» only for a parent with no part of its own.
+test.describe("what closes a task's row on the report (RP-49)", () => {
+  const today = todayInZone();
+  const monthStart = `${today.slice(0, 7)}-01`;
+
+  const rowOf = (page: import("@playwright/test").Page, name: string) =>
+    page
+      .locator("main")
+      .getByText(name, { exact: true })
+      .and(page.locator(":visible"))
+      .locator("xpath=ancestor::*[count(.//*[@role='img'])=1][last()]");
+
+  async function open(browser: import("@playwright/test").Browser, baseURL: string, person: Person) {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    return { context, page };
+  }
+
+  test("a carried task done this month prints its own amount, not what it still owes", async ({ person, browser, baseURL, db }) => {
+    const stamp = Date.now();
+    const goalName = `Meta hecha arrastrada ${stamp}`;
+    const taskName = `Arrastrada y hecha ${stamp}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${goalName}, ${plusDays(90)}, 'minutos', 'minutos', now() - interval '70 days')
+      returning id
+    `;
+    await db`
+      insert into goals.month_budgets (user_id, goal_id, month, amount)
+      values (${person.id}, ${goal.id}, ${monthStart}::date, 720)
+    `;
+    const [task] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month)
+      values (${person.id}, ${goal.id}, ${taskName}, 60, (${monthStart}::date - interval '1 month')::date)
+      returning id
+    `;
+    await db`
+      insert into goals.facts (user_id, goal_id, one_off_id, day)
+      values (${person.id}, ${goal.id}, ${task.id}, ${today}::date)
+    `;
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
+      const row = rowOf(page, taskName);
+      await expect(row).toContainText("hecha · 1 h", { useInnerText: true });
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
+    }
+  });
+
+  // 12 h a month: a 10 h task, then a parent of 5 h + 5 h of which only 2 h fit.
+  test("a parent whose own part falls in this month prints «pendiente · amount», never «n de m»", async ({ person, browser, baseURL, db }) => {
+    const stamp = Date.now();
+    const goalName = `Meta padre partido ${stamp}`;
+    const filler = `Relleno ${stamp}`;
+    const parentName = `Padre partido ${stamp}`;
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+      values (${person.id}, ${goalName}, ${plusDays(150)}, 'minutos', 'minutos', 720, now() - interval '3 days')
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan)
+      values (${person.id}, ${goal.id}, ${filler}, 600, true)
+    `;
+    const [parent] = await db<{ id: string }[]>`
+      insert into goals.one_offs (user_id, goal_id, name, in_plan)
+      values (${person.id}, ${goal.id}, ${parentName}, true)
+      returning id
+    `;
+    await db`
+      insert into goals.one_offs (user_id, goal_id, parent_id, name, estimate)
+      values (${person.id}, ${goal.id}, ${parent.id}, ${`Mitad ${stamp}`}, 300), (${person.id}, ${goal.id}, ${parent.id}, ${`Otra mitad ${stamp}`}, 300)
+    `;
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
+      const row = page
+        .locator("main")
+        .getByText(parentName, { exact: true })
+        .and(page.locator(":visible"))
+        .locator("xpath=ancestor::*[count(.//*[@role='img'])=3][last()]");
+      await expect(row).toContainText("pendiente · 2 h", { useInnerText: true });
+      await expect(row).not.toContainText("0 de 2", { useInnerText: true });
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
+    }
+  });
+});
+
+// `ReporteImpresoSinMesesVacios.dc.html` (RP-70): on paper a month that has not started and has no
+// amount is not printed; on screen, and for the AI, the goal keeps every month.
+test.describe("the paper leaves out the months that have not started and carry no amount (RP-70)", () => {
+  const NAMES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ];
+
+  const startOf = (offset: number) => {
+    const date = civilDateToDate(`${todayInZone().slice(0, 7)}-01`);
+    date.setUTCMonth(date.getUTCMonth() + offset);
+    return dateToCivilDate(date);
+  };
+  const labelOf = (offset: number) => {
+    const day = startOf(offset);
+    return `${NAMES[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
+  };
+
+  type Sparse = { goalId: string; name: string };
+
+  // Months `from`..`to` (offsets from this month, `to` inclusive); only the offsets in `budgets` carry an amount.
+  async function seedSparse(
+    db: postgres.Sql,
+    person: Person,
+    spec: { name: string; measure: string; unit: string; from: number; to: number; budgets: number[]; amount: number; fact?: number },
+  ): Promise<Sparse> {
+    const [goal] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+      values (${person.id}, ${spec.name}, ${startOf(spec.to + 1)}::date, ${spec.measure}, ${spec.unit},
+              (${startOf(spec.from)}::date + interval '14 days' + interval '12 hours')::timestamptz)
+      returning id
+    `;
+    for (const offset of spec.budgets) {
+      await db`
+        insert into goals.month_budgets (user_id, goal_id, month, amount)
+        values (${person.id}, ${goal.id}, ${startOf(offset)}::date, ${spec.amount})
+      `;
+    }
+    if (spec.fact !== undefined) {
+      const [commitment] = await db<{ id: string }[]>`
+        insert into goals.commitments
+          (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
+        values (${person.id}, ${goal.id}, ${`Sesión ${spec.name}`}, 'daily', 'quantity', 1, ${spec.unit}, now() - interval '70 days')
+        returning id
+      `;
+      await db`
+        insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+        values (${person.id}, ${goal.id}, ${commitment.id}, ${todayInZone()}::date, ${spec.fact})
+      `;
+    }
+    return { goalId: goal.id, name: spec.name };
+  }
+
+  // The board: IA in minutes (this month and two planned), Correr in km (two closed, this month, two with no amount).
+  async function seedBoard(db: postgres.Sql, person: Person, stamp: number) {
+    const ia = await seedSparse(db, person, {
+      name: `IA aplicada ${stamp}`, measure: "minutos", unit: "minutos", from: 0, to: 2, budgets: [0, 1, 2], amount: 720,
+    });
+    const run = await seedSparse(db, person, {
+      name: `Correr 10K ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [-2, -1, 0], amount: 40, fact: 11,
+    });
+    return { ia, run };
+  }
+
+  async function open(
+    browser: import("@playwright/test").Browser,
+    baseURL: string,
+    person: Person,
+    viewport = { width: 794, height: 1123 },
+  ) {
+    const context = await browser.newContext({ storageState: person.sessionFile, baseURL, viewport });
+    const page = await context.newPage();
+    await page.goto("/exportar");
+    return { context, page };
+  }
+
+  async function printed(page: import("@playwright/test").Page, label: string): Promise<string> {
+    await page.emulateMedia({ media: "print" });
+    const dir = resolve(process.cwd(), "private/export-pdf");
+    mkdirSync(dir, { recursive: true });
+    const file = resolve(dir, `725-${label}-${Date.now()}.pdf`);
+    writeFileSync(file, await page.pdf({ preferCSSPageSize: true }));
+    return file;
+  }
+
+  // The text of one goal's «por mes» table: from its label to the next goal's name (or the end), lowercase, one run.
+  function tableOf(file: string, name: string, next?: string): string {
+    const flat = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" })
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+    const from = flat.indexOf(`${name} · por mes`.toLowerCase());
+    expect(from, `«${name} · por mes» in the PDF`).toBeGreaterThanOrEqual(0);
+    const to = next ? flat.indexOf(next.toLowerCase(), from) : -1;
+    return flat.slice(from, to === -1 ? undefined : to);
+  }
+
+  test("RP-70 on paper: a goal in km prints its closed, current and planned months and none of the two with no amount", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }, testInfo) => {
+    const stamp = Date.now();
+    const { ia, run } = await seedBoard(db, person, stamp);
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      const file = await printed(page, "km");
+      testInfo.annotations.push({ type: "pdf", description: file });
+      const table = tableOf(file, run.name);
+      for (const offset of [-2, -1, 0]) expect(table, `month ${offset} printed`).toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table, `month +${offset} has no amount`).not.toContain(labelOf(offset));
+      expect(table).toContain("en curso");
+      expect(table.match(/cerrado/g) ?? []).toHaveLength(2);
+      expect(table).toContain("11 km");
+      // The other goal has an amount in every month, so every one of them prints.
+      const other = tableOf(file, ia.name, run.name);
+      for (const offset of [0, 1, 2]) expect(other, `IA month ${offset}`).toContain(labelOf(offset));
+      expect(other).toContain("12 h");
+      expect(other).toContain("planeado");
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = any(${[ia.goalId, run.goalId]}) and user_id = ${person.id}`;
+    }
+  });
+
+  test("RP-70 on paper, printed from a phone-wide window: the same months, the stacked face adds none", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }, testInfo) => {
+    const stamp = Date.now();
+    const run = await seedSparse(db, person, {
+      name: `Correr 10K ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [-2, -1, 0], amount: 40, fact: 11,
+    });
+    const { context, page } = await open(browser, baseURL!, person, { width: 390, height: 844 });
+    try {
+      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      const file = await printed(page, "telefono");
+      testInfo.annotations.push({ type: "pdf", description: file });
+      const table = tableOf(file, run.name);
+      for (const offset of [-2, -1, 0]) expect(table).toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table).not.toContain(labelOf(offset));
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${run.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  test("RP-70 on paper: a closed month with no amount and no activity still prints, as «cerrado»", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const stamp = Date.now();
+    const run = await seedSparse(db, person, {
+      name: `Correr vacío ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [0], amount: 40,
+    });
+    const { context, page } = await open(browser, baseURL!, person);
+    try {
+      await expect(page.getByRole("main").getByText(run.name, { exact: true })).toBeVisible();
+      const table = tableOf(await printed(page, "pasado-vacio"), run.name);
+      for (const offset of [-2, -1, 0]) expect(table, `month ${offset}`).toContain(labelOf(offset));
+      for (const offset of [1, 2]) expect(table, `month +${offset}`).not.toContain(labelOf(offset));
+      expect(table.match(/cerrado/g) ?? []).toHaveLength(2);
+    } finally {
+      await context.close();
+      await db`delete from goals.goals where id = ${run.goalId} and user_id = ${person.id}`;
+    }
+  });
+
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    test(`RP-70 on screen at ${width} px: the goal shows all five of its months`, async ({ person, browser, baseURL, db }) => {
+      const stamp = Date.now();
+      const run = await seedSparse(db, person, {
+        name: `Correr 10K ${stamp}`, measure: "km", unit: "km", from: -2, to: 2, budgets: [-2, -1, 0], amount: 40, fact: 11,
+      });
+      const { context, page } = await open(browser, baseURL!, person, { width, height });
+      try {
+        await expect(page.getByRole("main").getByText(run.name, { exact: true }).first()).toBeVisible();
+        const section = page.locator("section").filter({ hasText: `${run.name} · por mes` }).last();
+        for (const offset of [-2, -1, 0, 1, 2]) {
+          await expect(
+            section.getByText(labelOf(offset)).locator("visible=true"),
+            `month ${offset} on screen`,
+          ).toHaveCount(1);
+        }
+      } finally {
+        await context.close();
+        await db`delete from goals.goals where id = ${run.goalId} and user_id = ${person.id}`;
+      }
+    });
+  }
 });

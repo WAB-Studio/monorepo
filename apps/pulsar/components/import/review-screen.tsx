@@ -6,13 +6,16 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { confirmImport } from "@/app/actions/import";
-import { draftRefusals, strayEstimates, withoutStrayEstimates, type ImportDraft } from "@/lib/import/draft";
+import { draftRefusals, phaseCuts, phaseDrops, strayEstimates, withoutStrayEstimates, type ImportDraft } from "@/lib/import/draft";
 import { clearDraft, readDraft, saveReview } from "@/lib/import/draft-store";
 import { repeatedGoals } from "@/lib/import/repeated";
 import { dayBefore } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, splitMinutes } from "@/lib/units/time";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
+import { setRhythmSchema } from "@/lib/validation/rhythm";
+import { weekdaysSentence } from "@/lib/day/row-phrases";
+import { shortMonth } from "@/lib/dates/short-month";
 import { civilDateToDate } from "@/lib/zone";
 import { useTimeWords } from "@/components/ui/figure";
 import {
@@ -28,11 +31,12 @@ import {
   Panel,
   PanelGrid,
   ScreenHeader,
-  SectionLabel,
+  Section,
   Sheet,
   SheetActions,
   Text,
   TextArea,
+  TextLink,
 } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
@@ -41,6 +45,7 @@ type Commitment = Goal["commitments"][number];
 
 const WHOLE = /^\d+$/;
 const monthAmount = setMonthBudgetSchema.shape.amount;
+const rhythmAmount = setRhythmSchema.shape.amount;
 const taskEstimate = createOneOffSchema.shape.estimate.nonoptional();
 
 // What the person has unmarked, by item path ("goals.0.months.1"). A parent's
@@ -77,6 +82,7 @@ export function markedDraft(draft: ImportDraft, unmarked: Unmarked, refused: Rea
     return [
       {
         ...goal,
+        rhythm: kept(`${at}.rhythm`) ? goal.rhythm : null,
         phases: goal.phases.filter((_, p) => kept(`${at}.phases.${p}`)),
         months: goal.months.filter((_, m) => kept(`${at}.months.${m}`)),
         commitments: goal.commitments.filter((_, c) => kept(`${at}.commitments.${c}`)),
@@ -96,13 +102,14 @@ function withAmount(draft: ImportDraft, path: string, amount: number): ImportDra
   const next = structuredClone(draft);
   const parts = path.split(".");
   const goal = next.goals[Number(parts[1])];
-  if (parts[2] === "months") goal.months[Number(parts[3])].amount = amount;
+  if (parts[2] === "rhythm") goal.rhythm = amount;
+  else if (parts[2] === "months") goal.months[Number(parts[3])].amount = amount;
   else if (parts[4] === "children") goal.tasks[Number(parts[3])].children[Number(parts[5])].estimate = amount;
   else goal.tasks[Number(parts[3])].estimate = amount;
   return next;
 }
 
-type Editing = { path: string; title: string; unit: string; amount: number; schema: "month" | "task" };
+type Editing = { path: string; title: string; unit: string; amount: number; schema: "month" | "task" | "rhythm" };
 
 /**
  * `/metas/importar/revisar` (RP-37): the draft grouped by goal, every item
@@ -154,10 +161,19 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   // The goals with no measure keep their tasks, without the time they cannot hold.
   const work = useMemo(() => (draft ? withoutStrayEstimates(draft) : null), [draft]);
-  const strays = useMemo(() => new Set(draft ? strayEstimates(draft).map((stray) => stray.path) : []), [draft]);
+  const strays = useMemo(() => new Map(draft ? strayEstimates(draft).map((stray) => [stray.path, stray.key] as const) : []), [draft]);
   const repeated = useMemo(() => new Set(work ? repeatedGoals(work, openGoalNames) : []), [work, openGoalNames]);
   const refusals = useMemo(() => (work ? draftRefusals(work, today) : []), [work, today]);
   const refused = useMemo(() => new Set(refusals.map((refusal) => refusal.path)), [refusals]);
+  // A goal refused whole says so once; what lies under it is not listed.
+  const listed = useMemo(
+    () =>
+      refusals.filter((refusal) => {
+        const g = refusal.path.split(".")[1];
+        return refusal.path.endsWith(".horizon") || !refused.has(`goals.${g}.horizon`);
+      }),
+    [refusals, refused],
+  );
   const sent = useMemo(() => (work ? markedDraft(work, unmarked, refused) : null), [work, unmarked, refused]);
 
   if (!loaded || !stored || !draft || !work || !sent) return <Page width="full" />;
@@ -165,15 +181,15 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   const monthWord = (month: string, long = false) =>
     format.dateTime(civilDateToDate(`${month}-01`), long ? { month: "long", year: "numeric", timeZone: "UTC" } : { month: "long", timeZone: "UTC" });
   const dayLabel = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-  const shortMonth = (date: string, withYear = false) =>
-    format
-      .dateTime(civilDateToDate(date), withYear ? { month: "short", year: "numeric", timeZone: "UTC" } : { month: "short", timeZone: "UTC" })
-      .replace(".", "");
   const phaseSpan = (startsOn: string, endsOn: string) => {
     if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return shortMonth(startsOn);
     const crossesYear = startsOn.slice(0, 4) !== endsOn.slice(0, 4);
-    return `${shortMonth(startsOn, crossesYear)}–${shortMonth(endsOn, crossesYear)}`;
+    const year = (date: string) => (crossesYear ? ` ${date.slice(0, 4)}` : "");
+    return `${shortMonth(startsOn)}${year(startsOn)}–${shortMonth(endsOn)}${year(endsOn)}`;
   };
+  // The board's form for a day inside the year: no year.
+  const dayAndMonth = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "long", timeZone: "UTC" });
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const figure = (value: number | null, unit: string | null): ReactNode =>
     unit === null || value === null ? null : <Figure value={value} unit={unit} variant="meta" />;
 
@@ -182,8 +198,7 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
       case "daily":
         return t("goal.cadence.daily");
       case "weekdays": {
-        const names = t.raw("goal.cadence.weekdayFull") as string[];
-        return format.list((commitment.cadenceWeekdays ?? []).map((day) => names[day - 1]), { type: "conjunction" });
+        return weekdaysSentence((key, values) => t(key, values), commitment.cadenceWeekdays ?? [], t.raw("goal.cadence.weekdayFull") as string[]);
       }
       case "times_per_week":
         return t("goal.cadence.timesPerWeek", { count: commitment.cadenceN ?? 0 });
@@ -205,6 +220,34 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
   }
 
   const goalsKept = sent.goals.length;
+  const cuts = phaseCuts(work, today);
+  const drops = new Set(phaseDrops(work, today).map((drop) => drop.path));
+  const droppedAims = phaseDrops(work, today);
+
+  // What the bar says stays out: the one item by name, several by count.
+  function outLine(): ReactNode {
+    if (listed.length === 0) return null;
+    if (listed.length > 1) {
+      return t.rich("import.review.out.many", {
+        count: listed.length,
+        link: (chunks) => <TextLink href="#blocked">{chunks}</TextLink>,
+      });
+    }
+    const [, g, group, index] = listed[0].path.split(".");
+    const goal = work!.goals[Number(g)];
+    let name = goal.name;
+    let subTasks = 0;
+    if (group === "phases") name = goal.phases[Number(index)].aim;
+    else if (group === "months") name = monthWord(goal.months[Number(index)].month, true);
+    else if (group === "commitments") name = goal.commitments[Number(index)].name;
+    else if (group === "tasks") {
+      const task = goal.tasks[Number(index)];
+      name = task.name;
+      subTasks = task.children.length;
+    }
+    return t("import.review.out.one", { name, subTasks });
+  }
+  const out = outLine();
 
   async function confirm() {
     if (pending || goalsKept === 0) return;
@@ -299,18 +342,17 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
   // What the review was read from sits beside it from 1024; a file leaves no text to show.
   const source = (
-    <Flex direction="column" gap="3">
+    <Flex direction="column" gap="5">
       {stored.source !== null ? (
         <TextArea label={t("import.review.sourceLabel")} readOnly rows={16} value={stored.source} />
       ) : (
-        <>
-          <SectionLabel>{t("import.review.sourceLabel")}</SectionLabel>
-          <Text as="p" variant="meta" tone="muted">
+        <Section label={t("import.review.sourceLabel")}>
+          <Text as="p" variant="sentence" tone="muted">
             {stored.sourceName
               ? t("import.review.sourceFile", { name: stored.sourceName })
               : t("import.review.sourceFileAnon")}
           </Text>
-        </>
+        </Section>
       )}
       <Button asChild block variant="outline">
         <Link href="/metas/importar">{t("import.review.change")}</Link>
@@ -318,33 +360,31 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
     </Flex>
   );
 
+  const createButton = (
+    <Button block onClick={confirm} disabled={pending || goalsKept === 0} aria-busy={pending || undefined}>
+      {pending ? t("import.review.creating") : t("import.review.create", { count: goalsKept })}
+    </Button>
+  );
+
   const review = (
-    <Flex direction="column" gap="5">
-      <div>
-        <Text as="p" variant="meta" tone="muted">
-          {eyebrow}
-        </Text>
-        <Text as="p" variant="meta" tone="muted">
-          {t("import.review.hint")}
-        </Text>
-      </div>
+    <Flex direction="column" gap="6">
+      <Text as="p" variant="sentence" tone="muted">
+        {t("import.review.hint")}
+      </Text>
 
       {refusals.length > 0 ? (
-        <section>
+        <Section>
           <Text asChild variant="heading">
-            <h2>{t("import.review.blocked.title")}</h2>
+            <h2 id="blocked">{t("import.review.blocked.title")}</h2>
           </Text>
-          <Text as="p" variant="meta" tone="muted">
+          <Text as="p" variant="sentence" tone="muted">
             {t("import.review.blocked.hint")}
           </Text>
-          {refusals
-            // A goal refused whole says so once; what lies under it is not listed.
-            .filter((refusal) => {
-              const g = refusal.path.split(".")[1];
-              return refusal.path.endsWith(".horizon") || !refused.has(`goals.${g}.horizon`);
-            })
+          <div>
+          {listed
             .map((refusal) => blockedRow(refusal.path, refusal.key, refusal.values))}
-        </section>
+          </div>
+        </Section>
       ) : null}
 
       <PanelGrid>
@@ -355,120 +395,203 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         const ok = (path: string) => !refused.has(path);
         const on = (path: string) => !unmarked.has(path);
         const goalOn = on(at);
-        const phases = goal.phases.map((phase, p) => ({ phase, path: `${at}.phases.${p}` })).filter((entry) => ok(entry.path));
+        const phases = goal.phases
+          .map((phase, p) => ({ phase, path: `${at}.phases.${p}` }))
+          .filter((entry) => ok(entry.path) && !drops.has(entry.path));
+        const lastDay = dayBefore(goal.horizon);
+        const cutNotes = cuts
+          .filter((cut) => cut.path.startsWith(`${at}.phases.`) && ok(cut.path))
+          .map((cut) => t.rich("import.review.cutPhase", { aim: cut.aim, date: dayAndMonth(cut.from), ...fig }));
+        const dropNotes = droppedAims
+          .filter((drop) => drop.path.startsWith(`${at}.phases.`) && ok(drop.path))
+          .map((drop) => t("import.review.droppedPhase", { aim: drop.aim }));
+        const notes = [...cutNotes, ...dropNotes];
         const months = goal.months.map((entry, m) => ({ entry, path: `${at}.months.${m}` })).filter((item) => ok(item.path));
         const commitments = goal.commitments.map((commitment, c) => ({ commitment, path: `${at}.commitments.${c}` })).filter((item) => ok(item.path));
+        const planned = goalOn && on(`${at}.rhythm`) && goal.rhythm !== null && unit !== null && isTimeUnit(unit);
         const tasks = goal.tasks.map((task, i) => ({ task, path: `${at}.tasks.${i}` })).filter((item) => ok(item.path));
         return (
           <Panel key={at} stacked label={goal.name}>
-            <Text asChild variant="heading">
-              <h2>{goal.name}</h2>
-            </Text>
-            {repeated.has(g) ? (
-              <div role="note">
+            <Flex direction="column" gap="6">
+              <Section as="div">
+                <Text asChild variant="heading">
+                  <h2>{goal.name}</h2>
+                </Text>
+                {repeated.has(g) ? (
+                  <div role="note">
+                    <Panel as="div" bordered>
+                      <Text as="p" variant="body">
+                        {t("import.review.repeated")}
+                      </Text>
+                    </Panel>
+                  </div>
+                ) : null}
+                <Text as="p" variant="sentence" tone="muted">
+                  {t.rich("import.review.goalSpan", {
+                    from: dayAndMonth(today),
+                    to: dayLabel(lastDay),
+                    ...fig,
+                  })}
+                </Text>
+                <CheckRow
+                  checked={goalOn}
+                  onCheckedChange={(value) => toggle(at, value)}
+                  name={t("import.review.horizonUntil", { date: dayLabel(dayBefore(goal.horizon)) })}
+                  meta={t("import.review.horizon")}
+                />
+                {goal.measure ? (
+                  <CheckRow
+                    checked={goalOn}
+                    onCheckedChange={(value) => toggle(at, value)}
+                    name={goal.measure.name}
+                    meta={t("import.review.measure")}
+                    trailing={isTimeUnit(goal.measure.unit) ? t("import.review.measureTime") : goal.measure.unit}
+                  />
+                ) : null}
+                {goal.measure && goal.rhythm !== null && isTimeUnit(goal.measure.unit) ? (
+                  <CheckRow
+                    checked={goalOn && on(`${at}.rhythm`)}
+                    disabled={!goalOn}
+                    onCheckedChange={(value) => toggle(`${at}.rhythm`, value)}
+                    name={t("import.review.rhythmName")}
+                    boxLabel={t("import.review.rhythmOf", { amount: formatQuantity(goal.rhythm, goal.measure.unit, words) })}
+                    meta={t("import.review.rhythmMeta")}
+                    amount={figure(goal.rhythm, goal.measure.unit)}
+                    amountLabel={t("import.review.rhythmAmountOf", { amount: formatQuantity(goal.rhythm, goal.measure.unit, words) })}
+                    onAmount={() =>
+                      setEditing({
+                        path: `${at}.rhythm`,
+                        title: t("import.review.edit.rhythmEyebrow", { goal: goal.name }),
+                        unit: goal.measure!.unit,
+                        amount: goal.rhythm!,
+                        schema: "rhythm",
+                      })
+                    }
+                  />
+                ) : null}
+              </Section>
+              {phases.length > 0 ? (
+                <Section label={t("import.review.groups.phases")} as="div">
+                  <div>
+                    {phases.map(({ phase, path }) => (
+                      <CheckRow
+                        key={path}
+                        checked={goalOn && on(path)}
+                        disabled={!goalOn}
+                        onCheckedChange={(value) => toggle(path, value)}
+                        name={phase.aim}
+                        trailing={phaseSpan(phase.startsOn, phase.endsOn)}
+                      />
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
+
+              {notes.length > 0 ? (
                 <Panel as="div" bordered>
                   <Text as="p" variant="body">
-                    {t("import.review.repeated")}
+                    {notes.map((note, n) => (
+                      <Fragment key={n}>
+                        {n > 0 ? " " : null}
+                        {note}
+                      </Fragment>
+                    ))}
                   </Text>
                 </Panel>
-              </div>
-            ) : null}
-            <CheckRow
-              checked={goalOn}
-              onCheckedChange={(value) => toggle(at, value)}
-              name={t("import.review.horizonUntil", { date: dayLabel(dayBefore(goal.horizon)) })}
-              meta={t("import.review.horizon")}
-            />
-            {goal.measure ? (
-              <CheckRow
-                checked={goalOn}
-                onCheckedChange={(value) => toggle(at, value)}
-                name={goal.measure.name}
-                meta={t("import.review.measure")}
-                trailing={goal.measure.unit}
-              />
-            ) : null}
+              ) : null}
 
-            {phases.length > 0 ? <GroupLabel>{t("import.review.groups.phases")}</GroupLabel> : null}
-            {phases.map(({ phase, path }) => (
-              <CheckRow
-                key={path}
-                checked={goalOn && on(path)}
-                disabled={!goalOn}
-                onCheckedChange={(value) => toggle(path, value)}
-                name={phase.aim}
-                trailing={phaseSpan(phase.startsOn, phase.endsOn)}
-              />
-            ))}
+              {months.length > 0 ? (
+                <Section label={t("import.review.groups.months")} as="div">
+                  <div>
+                    {months.map(({ entry, path }) => (
+                      <CheckRow
+                        key={path}
+                        checked={goalOn && on(path)}
+                        disabled={!goalOn}
+                        onCheckedChange={(value) => toggle(path, value)}
+                        name={monthWord(entry.month)}
+                        meta={planned ? t("import.review.inLieuOfRhythm") : undefined}
+                        {...amountProps(path, monthWord(entry.month), unit ?? "", entry.amount, "month")}
+                      />
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
 
-            {months.length > 0 ? <GroupLabel>{t("import.review.groups.months")}</GroupLabel> : null}
-            {months.map(({ entry, path }) => (
-              <CheckRow
-                key={path}
-                checked={goalOn && on(path)}
-                disabled={!goalOn}
-                onCheckedChange={(value) => toggle(path, value)}
-                name={monthWord(entry.month)}
-                {...amountProps(path, monthWord(entry.month), unit ?? "", entry.amount, "month")}
-              />
-            ))}
+              {commitments.length > 0 ? (
+                <Section label={t("import.review.groups.commitments")} as="div">
+                  <div>
+                    {commitments.map(({ commitment, path }) => (
+                      <CheckRow
+                        key={path}
+                        checked={goalOn && on(path)}
+                        disabled={!goalOn}
+                        onCheckedChange={(value) => toggle(path, value)}
+                        name={commitment.name}
+                        meta={commitment.satisfaction === "tap" ? `${cadenceText(commitment)} · ${t("goal.satisfaction.tap")}` : cadenceText(commitment)}
+                        trailing={commitment.targetQuantity !== null ? figure(commitment.targetQuantity, commitment.unit) : undefined}
+                      />
+                    ))}
+                  </div>
+                </Section>
+              ) : null}
 
-            {commitments.length > 0 ? <GroupLabel>{t("import.review.groups.commitments")}</GroupLabel> : null}
-            {commitments.map(({ commitment, path }) => (
-              <CheckRow
-                key={path}
-                checked={goalOn && on(path)}
-                disabled={!goalOn}
-                onCheckedChange={(value) => toggle(path, value)}
-                name={commitment.name}
-                meta={commitment.satisfaction === "tap" ? `${cadenceText(commitment)} · ${t("goal.satisfaction.tap")}` : cadenceText(commitment)}
-                trailing={commitment.targetQuantity !== null ? figure(commitment.targetQuantity, commitment.unit) : undefined}
-              />
-            ))}
-
-            {tasks.length > 0 ? <GroupLabel>{t("import.review.groups.tasks")}</GroupLabel> : null}
-            {tasks.map(({ task, path }) => {
-              const taskOn = goalOn && on(path);
-              const children = task.children
-                .map((child, c) => ({ child, path: `${path}.children.${c}` }))
-                .filter((item) => ok(item.path));
-              const sum = children.reduce((total, item) => total + (on(item.path) && taskOn ? (item.child.estimate ?? 0) : 0), 0);
-              return (
-                <Fragment key={path}>
-                  <CheckRow
-                    checked={taskOn}
-                    disabled={!goalOn}
-                    onCheckedChange={(value) => toggle(path, value)}
-                    name={task.name}
-                    note={task.note}
-                    meta={
-                      task.children.length > 0
-                        ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
-                        : strays.has(path)
-                          ? `${monthWord(task.month)} · ${t("import.notices.estimateDropped")}`
-                          : monthWord(task.month)
-                    }
-                    {...(task.children.length === 0 && task.estimate !== null
-                      ? amountProps(path, task.name, unit ?? "", task.estimate, "task")
-                      : {})}
-                    trailing={task.children.length > 0 ? figure(sum, unit) : undefined}
-                  />
-                  {children.map(({ child, path: childPath }) => (
-                    <CheckRow
-                      key={childPath}
-                      indent
-                      checked={taskOn && on(childPath)}
-                      disabled={!taskOn}
-                      onCheckedChange={(value) => toggle(childPath, value)}
-                      name={child.name}
-                      note={child.note}
-                      meta={strays.has(childPath) ? t("import.notices.estimateDropped") : undefined}
-                      {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
-                    />
-                  ))}
-                </Fragment>
-              );
-            })}
+              {tasks.length > 0 ? (
+                <Section label={t("import.review.groups.tasks")} as="div">
+                  <div>
+                    {tasks.map(({ task, path }) => {
+                      const taskOn = goalOn && on(path);
+                      const children = task.children
+                        .map((child, c) => ({ child, path: `${path}.children.${c}` }))
+                        .filter((item) => ok(item.path));
+                      const sum = children.reduce((total, item) => total + (on(item.path) && taskOn ? (item.child.estimate ?? 0) : 0), 0);
+                      return (
+                        <Fragment key={path}>
+                          <CheckRow
+                            checked={taskOn}
+                            disabled={!goalOn}
+                            onCheckedChange={(value) => toggle(path, value)}
+                            name={task.name}
+                            note={task.note}
+                            meta={
+                              planned
+                                ? t("import.review.toPlan")
+                                : task.children.length > 0
+                                ? t("import.review.sumOfMarked", { month: monthWord(task.month) })
+                                : strays.has(path)
+                                  ? `${monthWord(task.month)} · ${t(messageKey(strays.get(path)!))}`
+                                  : monthWord(task.month)
+                            }
+                            metaMore={
+                              planned && task.children.length > 0
+                                ? t("import.review.sumAlone")
+                                : undefined
+                            }
+                            {...(task.children.length === 0 && task.estimate !== null
+                              ? amountProps(path, task.name, unit ?? "", task.estimate, "task")
+                              : {})}
+                            trailing={task.children.length > 0 ? figure(sum, unit) : undefined}
+                          />
+                          {children.map(({ child, path: childPath }) => (
+                            <CheckRow
+                              key={childPath}
+                              indent
+                              checked={taskOn && on(childPath)}
+                              disabled={!taskOn}
+                              onCheckedChange={(value) => toggle(childPath, value)}
+                              name={child.name}
+                              note={child.note}
+                              meta={strays.has(childPath) ? t(messageKey(strays.get(childPath)!)) : undefined}
+                              {...(child.estimate !== null ? amountProps(childPath, child.name, unit ?? "", child.estimate, "task") : {})}
+                            />
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                </Section>
+              ) : null}
+            </Flex>
           </Panel>
         );
       })}
@@ -476,17 +599,28 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
 
       {failure ? <Notice>{failure}</Notice> : null}
 
-      <ActionBar>
-        <Button block onClick={confirm} disabled={pending || goalsKept === 0} aria-busy={pending || undefined}>
-          {pending ? t("import.review.creating") : t("import.review.create", { count: goalsKept })}
-        </Button>
+      <ActionBar span={work.goals.length === 1 ? "column" : "full"}>
+        {out ? (
+          <Flex direction="column" gap="2">
+            <Text as="p" variant="sentence" tone="muted">
+              {out}
+            </Text>
+            {createButton}
+          </Flex>
+        ) : (
+          createButton
+        )}
       </ActionBar>
     </Flex>
   );
 
   return (
     <Page width="full">
-      <ScreenHeader title={t("import.review.title")} back={{ href: "/metas/importar", place: t("import.review.place") }} />
+      <ScreenHeader
+        title={t("import.review.title")}
+        back={{ href: "/metas/importar", place: t("import.review.place") }}
+        eyebrow={eyebrow}
+      />
       <ListDetail show="detail" list={source} detail={review} />
 
       {editing ? (
@@ -503,14 +637,6 @@ export function ReviewScreen({ today, openGoalNames }: { today: string; openGoal
         />
       ) : null}
     </Page>
-  );
-}
-
-function GroupLabel({ children }: { children: ReactNode }) {
-  return (
-    <Flex pt="4">
-      <SectionLabel>{children}</SectionLabel>
-    </Flex>
   );
 }
 
@@ -547,7 +673,7 @@ function AmountSheet({
     } else {
       typed = WHOLE.test(single.trim()) ? Number(single.trim()) : Number.NaN;
     }
-    const parsed = (editing.schema === "month" ? monthAmount : taskEstimate).safeParse(typed);
+    const parsed = ({ month: monthAmount, task: taskEstimate, rhythm: rhythmAmount })[editing.schema].safeParse(typed);
     if (!parsed.success) {
       setError(t(messageKey(parsed.error.issues[0].message)));
       return;
@@ -562,7 +688,7 @@ function AmountSheet({
         if (!open) onClose();
       }}
       label={editing.title}
-      title={t("import.review.edit.title")}
+      title={t(editing.schema === "rhythm" ? "import.review.edit.rhythmTitle" : "import.review.edit.title")}
     >
       {timed ? (
         <Flex gap="3">

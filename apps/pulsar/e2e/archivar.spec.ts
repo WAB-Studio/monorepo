@@ -3,6 +3,7 @@ import type postgres from "postgres";
 
 import { todayInZone } from "../lib/zone";
 import { test, expect, laneNumber } from "./fixtures";
+import plan from "../messages/es/plan.json";
 
 // Reused per lane, never one per run (RP-23, RP-24): `goals.goals` grants no
 // DELETE (`scripts/check-policies.ts`'s own P37), so a fresh goal every run
@@ -36,7 +37,7 @@ async function findOrCreateGoal(
 
 async function askToday(db: postgres.Sql, personId: string, goalId: string): Promise<string> {
   // Below 1024px Hoy draws a goal's section only when it asks something
-  // today (module 263): a daily tap commitment, born days ago, asks.
+  // today: a daily tap commitment, born days ago, asks.
   const [row] = await db<{ id: string }[]>`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
     values (${personId}, ${goalId}, 'Tocar la meta de archivar', 'daily', 'tap', now() - interval '3 days')
@@ -97,13 +98,13 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
   await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
 
   // Open, before archiving: `listGoalsForMetas` (`lib/queries/goal.ts`)
-  // draws the open list bare, outside the "Archivadas" `<section>`
+  // draws the open list in its own «abiertas» `<section>`, never the "Archivadas" one
   // (`app/metas/page.tsx`) — a swapped open/archived split would instead
   // land this goal inside that section while it is still open.
   await page.goto("/metas");
   const openLink = page.getByRole("link", { name: marker });
   await expect(openLink).toBeVisible();
-  await expect(openLink.locator("xpath=ancestor::section")).toHaveCount(0);
+  await expect(openLink.locator("xpath=ancestor::section[.//span[normalize-space()='Archivadas']]")).toHaveCount(0);
 
   // A fact this goal carries, so "its facts stay" has something real to
   // check — a one-off's, never a commitment's: this goal may or may not
@@ -141,7 +142,7 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
     // same split `listGoalsForMetas` draws its two arrays from.
     const archivedLink = page.getByRole("link", { name: marker });
     await expect(archivedLink).toBeVisible();
-    const archivedSection = archivedLink.locator("xpath=ancestor::section");
+    const archivedSection = archivedLink.locator("xpath=ancestor::section[1]");
     await expect(archivedSection).toHaveCount(1);
     await expect(archivedSection.getByText("Archivadas")).toBeVisible();
 
@@ -209,7 +210,7 @@ test("an archived goal offers no way to add a phase, direct visit included (RP-2
     // nowhere in it.
     await page.goto(`/metas/${goalId}/fases/nueva`);
     await expect(page.getByRole("heading", { name: "Esta página no existe" })).toBeVisible();
-    await expect(page.getByText("Fase nueva")).toHaveCount(0);
+    await expect(page.getByText(plan.phaseForm.title)).toHaveCount(0);
   } finally {
     await db`update goals.goals set archived_at = null, name = ${marker} where id = ${goalId}`;
   }
@@ -230,7 +231,7 @@ test("an archived goal offers no way to add a commitment, direct visit included 
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveCount(0);
 
     // `listGoals` (`lib/queries/goal.ts`) is this route's own lookup
-    // (`app/metas/[goalId]/compromisos/nuevo/page.tsx`): open-only, an
+    // `app/metas/[goalId]/compromisos/nuevo/page.tsx`: open-only, an
     // archived goal is absent from it and `notFound()` fires — read off the
     // body, never the status (see the phase test above).
     await page.goto(`/metas/${goalId}/compromisos/nuevo`);

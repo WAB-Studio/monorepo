@@ -84,10 +84,11 @@ let createGoal: typeof import("@/app/actions/plan").createGoal;
 let createOneOff: typeof import("@/app/actions/one-offs").createOneOff;
 let scheduleOneOff: typeof import("@/app/actions/one-offs").scheduleOneOff;
 let deleteOneOff: typeof import("@/app/actions/one-offs").deleteOneOff;
-let moveTaskToMonth: typeof import("@/app/actions/one-offs").moveTaskToMonth;
+let fixTask: typeof import("@/app/actions/one-offs").fixTask;
 let moveHorizon: typeof import("@/app/actions/plan").moveHorizon;
 let addPhase: typeof import("@/app/actions/plan").addPhase;
 let addCommitment: typeof import("@/app/actions/plan").addCommitment;
+let setRhythm: typeof import("@/app/actions/roadmap").setRhythm;
 let reopenGoal: typeof import("@/app/actions/plan").reopenGoal;
 let archiveGoal: typeof import("@/app/actions/plan").archiveGoal;
 let retireCommitment: typeof import("@/app/actions/plan").retireCommitment;
@@ -133,7 +134,8 @@ let fixtureGoalId: string;
 before(async () => {
   installStubs(loadCookies());
   ({ renameGoal, createGoal, moveHorizon, addPhase, addCommitment, reopenGoal, archiveGoal, retireCommitment } = await import("@/app/actions/plan"));
-  ({ createOneOff, scheduleOneOff, deleteOneOff, moveTaskToMonth } = await import("@/app/actions/one-offs"));
+  ({ setRhythm } = await import("@/app/actions/roadmap"));
+  ({ createOneOff, scheduleOneOff, deleteOneOff, fixTask } = await import("@/app/actions/one-offs"));
   ({ declareFact, undoFact } = await import("@/app/actions/facts"));
   ({ todayInZone } = await import("@/lib/zone"));
   ({ PAST_DAY_LIMIT } = await import("@/lib/validation/fact"));
@@ -158,6 +160,8 @@ before(async () => {
     values (${personId}, ${goal.goalId}, 'RP-06 fixture: hace 10 días', 'daily', 'tap', now() - interval '10 days')
     returning id`;
   oldCommitmentId = old.id;
+  // The goal opened with its oldest commitment, as the app can reach.
+  await sql`update goals.goals set created_at = now() - interval '10 days' where id = ${goal.goalId}`;
 
   const [young] = await sql<{ id: string }[]>`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
@@ -335,7 +339,7 @@ test("declareFact: a past-day fact revalidates /semana and its own /dia/<day>", 
   assert.ok(revalidated.includes(`/dia/${day}`), `revalidated: ${revalidated.join(", ")}`);
 });
 
-// Module 66: a one-off's day and a goal's horizon. Everything seeded here is
+// A one-off's day and a goal's horizon. Everything seeded here is
 // deleted by id in `finally`, never by a sweep.
 async function oneOffDay(id: string): Promise<string | null> {
   const [row] = await sql<{ day: string | null }[]>`
@@ -346,7 +350,7 @@ async function oneOffDay(id: string): Promise<string | null> {
 test("createOneOff: no day lands a null day; yesterday is refused and writes no row; tomorrow lands tomorrow", async () => {
   const ids: string[] = [];
   try {
-    const dayless = await createOneOff({ name: "RP-21 sin día", day: null });
+    const dayless = await createOneOff({ name: "RP-59 sin día", day: null });
     assert.equal(dayless.ok, true);
     if (!dayless.ok) return;
     ids.push(dayless.oneOffId);
@@ -374,10 +378,10 @@ test("createOneOff: no day lands a null day; yesterday is refused and writes no 
   }
 });
 
-test("scheduleOneOff: a dayless one gets today; a second call is refused and the day holds; one with a fact is refused", async () => {
+test("scheduleOneOff: a dayless one gets today; a second call moves it on (RP-61); one with a fact is refused", async () => {
   const ids: string[] = [];
   try {
-    const made = await createOneOff({ name: "RP-21 por fechar", day: null });
+    const made = await createOneOff({ name: "RP-59 por fechar", day: null });
     if (!made.ok) throw new Error(made.error);
     ids.push(made.oneOffId);
 
@@ -386,13 +390,13 @@ test("scheduleOneOff: a dayless one gets today; a second call is refused and the
     assert.equal(await oneOffDay(made.oneOffId), today);
 
     const second = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, 3) });
-    assert.equal(second.ok, false);
-    if (!second.ok) assert.equal(second.error, "day.errors.oneOffAlreadyDated");
-    assert.equal(await oneOffDay(made.oneOffId), today);
+    assert.deepEqual(second, { ok: true });
+    assert.equal(await oneOffDay(made.oneOffId), shiftDay(today, 3));
 
     const past = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, -1) });
     assert.equal(past.ok, false);
     if (!past.ok) assert.equal(past.error, "day.errors.oneOffDayPast");
+    assert.equal(await oneOffDay(made.oneOffId), shiftDay(today, 3));
 
     const missing = await scheduleOneOff({ oneOffId: randomUUID(), day: today });
     assert.equal(missing.ok, false);
@@ -401,7 +405,7 @@ test("scheduleOneOff: a dayless one gets today; a second call is refused and the
     // A dayless one that already carries a fact: seeded through the pooler,
     // since `completeOneOff` never sees a dayless one.
     const [withFact] = await sql<{ id: string }[]>`
-      insert into goals.one_offs (user_id, name) values (${personId}, 'RP-21 con hecho') returning id`;
+      insert into goals.one_offs (user_id, name) values (${personId}, 'RP-59 con hecho') returning id`;
     ids.push(withFact.id);
     await sql`insert into goals.facts (user_id, one_off_id, day) values (${personId}, ${withFact.id}, ${today})`;
     const refused = await scheduleOneOff({ oneOffId: withFact.id, day: today });
@@ -469,13 +473,13 @@ test("moveHorizon: another person's goal answers notFound and is unchanged", asy
   }
 });
 
-test("scheduleOneOff: a one-off dated after today moves; one dated today is refused; another person's is notFound", async () => {
+test("scheduleOneOff: a one-off dated after today moves; one dated today moves too (RP-61); another person's is notFound", async () => {
   const ids: string[] = [];
   const [member] = await sql<{ id: string }[]>`
     select id from auth.users where email = ${memberEmail}`;
   if (!member) throw new Error("no member identity — run harness:token for this lane");
   try {
-    const made = await createOneOff({ name: "RP-21 mover", day: shiftDay(today, 1) });
+    const made = await createOneOff({ name: "RP-59 mover", day: shiftDay(today, 1) });
     if (!made.ok) throw new Error(made.error);
     ids.push(made.oneOffId);
 
@@ -493,13 +497,12 @@ test("scheduleOneOff: a one-off dated after today moves; one dated today is refu
     assert.ok(loaded.oneOffs.some((o) => o.id === made.oneOffId));
 
     const dated = await scheduleOneOff({ oneOffId: made.oneOffId, day: shiftDay(today, 3) });
-    assert.equal(dated.ok, false);
-    if (!dated.ok) assert.equal(dated.error, "day.errors.oneOffAlreadyDated");
-    assert.equal(await oneOffDay(made.oneOffId), today);
+    assert.deepEqual(dated, { ok: true });
+    assert.equal(await oneOffDay(made.oneOffId), shiftDay(today, 3));
 
     const [withFact] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, name, day)
-      values (${personId}, 'RP-21 futura con hecho', ${shiftDay(today, 1)}) returning id`;
+      values (${personId}, 'RP-59 futura con hecho', ${shiftDay(today, 1)}) returning id`;
     ids.push(withFact.id);
     await sql`insert into goals.facts (user_id, one_off_id, day) values (${personId}, ${withFact.id}, ${today})`;
     const refused = await scheduleOneOff({ oneOffId: withFact.id, day: shiftDay(today, 2) });
@@ -509,7 +512,7 @@ test("scheduleOneOff: a one-off dated after today moves; one dated today is refu
 
     const [foreign] = await sql<{ id: string }[]>`
       insert into goals.one_offs (user_id, name, day)
-      values (${member.id}, 'RP-21 ajena', ${shiftDay(today, 1)}) returning id`;
+      values (${member.id}, 'RP-59 ajena', ${shiftDay(today, 1)}) returning id`;
     ids.push(foreign.id);
     const other = await scheduleOneOff({ oneOffId: foreign.id, day: shiftDay(today, 2) });
     assert.equal(other.ok, false);
@@ -889,16 +892,59 @@ test("deleteOneOff: a one-off carrying its own fact is refused as oneOffHasFact 
   }
 });
 
-test("moveTaskToMonth: a task nobody can see is notFound, a one-off that is no month task or an id that is no uuid is invalid", async () => {
+test("fixTask: a task nobody can see is notFound, a one-off that is no plan task or an id that is no uuid is invalid", async () => {
   const month = today.slice(0, 7);
-  assert.deepEqual(await moveTaskToMonth({ oneOffId: randomUUID(), month }), { ok: false, error: "plan.errors.notFound" });
+  assert.deepEqual(await fixTask({ oneOffId: randomUUID(), month }), { ok: false, error: "plan.errors.notFound" });
 
   const loose = await createOneOff({ name: "RP-31 suelta sin mes", day: null });
   if (!loose.ok) throw new Error(loose.error);
   try {
-    assert.deepEqual(await moveTaskToMonth({ oneOffId: loose.oneOffId, month }), { ok: false, error: "month.errors.invalid" });
-    assert.deepEqual(await moveTaskToMonth({ oneOffId: "nope", month }), { ok: false, error: "month.errors.invalid" });
+    assert.deepEqual(await fixTask({ oneOffId: loose.oneOffId, month }), { ok: false, error: "month.errors.invalid" });
+    assert.deepEqual(await fixTask({ oneOffId: "nope", month }), { ok: false, error: "month.errors.invalid" });
   } finally {
     await sql`delete from goals.one_offs where id = ${loose.oneOffId}`;
   }
+});
+
+test("addCommitment: hours written on a quantity commitment are stored as minutes, only where the goal counts time; a goal in km keeps its unit", async () => {
+  const fresh = await createGoal({ name: "RP-66 horas", horizon: shiftDay(today, 60) });
+  if (!fresh.ok) throw new Error(fresh.error);
+  const timed = await createGoal({ name: "RP-66 minutos", horizon: shiftDay(today, 60) });
+  if (!timed.ok) throw new Error(timed.error);
+  const km = await createGoal({ name: "RP-66 km", horizon: shiftDay(today, 60) });
+  if (!km.ok) throw new Error(km.error);
+  const quantity = (goalId: string, name: string, unit: string, targetQuantity: number) =>
+    addCommitment({ goalId, name, cadenceKind: "daily", satisfaction: "quantity", unit, targetQuantity });
+  const stored = async (commitmentId: string) => {
+    const [row] = await sql<{ unit: string; target: number }[]>`
+      select unit, target_quantity as target from goals.commitments where id = ${commitmentId}`;
+    return row;
+  };
+  const measureOf = async (goalId: string) => {
+    const [row] = await sql<{ measure_unit: string | null }[]>`select measure_unit from goals.goals where id = ${goalId}`;
+    return row.measure_unit;
+  };
+  try {
+    const first = await quantity(fresh.goalId, "estudio", "horas", 2);
+    if (!first.ok) throw new Error(first.error);
+    assert.deepEqual(await stored(first.commitmentId), { unit: "minutos", target: 120 });
+    assert.equal(await measureOf(fresh.goalId), "minutos");
+    assert.deepEqual(await setRhythm({ goalId: fresh.goalId, amount: 600 }), { ok: true });
+
+    const seed = await quantity(timed.goalId, "lectura", "minutos", 30);
+    if (!seed.ok) throw new Error(seed.error);
+    const hours = await quantity(timed.goalId, "repaso", "horas", 2);
+    if (!hours.ok) throw new Error(hours.error);
+    assert.deepEqual(await stored(hours.commitmentId), { unit: "minutos", target: 120 });
+
+    const run = await quantity(km.goalId, "correr", "km", 5);
+    if (!run.ok) throw new Error(run.error);
+    const ignored = await quantity(km.goalId, "otra", "horas", 2);
+    if (!ignored.ok) throw new Error(ignored.error);
+    assert.deepEqual(await stored(ignored.commitmentId), { unit: "km", target: 2 });
+  } finally {
+    await sql`delete from goals.goals where id in ${sql([fresh.goalId, timed.goalId, km.goalId])}`;
+  }
+  const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from goals.goals where user_id = ${personId} and name like 'RP-66 %'`;
+  assert.equal(n, 0);
 });

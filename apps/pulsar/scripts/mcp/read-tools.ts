@@ -14,6 +14,7 @@ import postgres from "postgres";
 
 import { adminSql, createPeople, dropPeople, openCheckRun, stubServerOnly, type Person } from "./lib/people";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
+import { todayInZone } from "@/lib/zone";
 
 type Call = { at: number; connection: number; query: string };
 type Handler = (input: Record<string, unknown>, ctx: ServerContext) => Promise<{
@@ -230,7 +231,7 @@ test("get_today answers today's day", async () => {
   const result = await call("get_today", {});
   assert.notEqual(result.isError, true);
   const body = result.structuredContent as { day: string; goals: { id: string }[]; slots: unknown[] };
-  assert.match(body.day, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(body.day, todayInZone());
   assert.deepEqual(body.goals.map((goal) => goal.id), [subjectGoal]);
   assert.equal(body.slots.length, 1);
 });
@@ -280,7 +281,7 @@ test("each tool issues exactly its loader's statements", async () => {
     list_loose_one_offs: await measured("list_loose_one_offs", {}),
   };
   console.log(`wire: ${JSON.stringify(counts)}`);
-  // `/metas` reads the evidence beside the goals since module 210: two transactions.
+  // `/metas` reads the evidence beside the goals: two transactions.
   assert.equal(counts.list_goals.statements, 4);
   assert.equal(counts.get_goal.statements, 4);
   assert.equal(counts.get_month.statements, 4);
@@ -293,4 +294,64 @@ test("the two loose lists run in overlapping transactions", async () => {
   const wireOf = await measured("list_loose_one_offs", {});
   assert.equal(wireOf.connections, 2);
   assert.equal(wireOf.overlap, true);
+});
+
+// RP-59: a goal's task with no day waits in its plan, never in the loose list.
+test("list_loose_one_offs keeps a goal's dayless task out of dayless and a goal's task with a later day in scheduled", async () => {
+  await session.actAs(asResolved(subject), async () => {
+    const waiting = await oneOffs.createOneOff({ name: "tarea de meta sin día", day: null, goalId: subjectGoal });
+    if (!waiting.ok) throw new Error(`createOneOff goal task: ${waiting.error}`);
+    const later = await oneOffs.createOneOff({ name: "tarea de meta con día", day: dayFrom(4), goalId: subjectGoal });
+    if (!later.ok) throw new Error(`createOneOff goal task later: ${later.error}`);
+  });
+  const result = await call("list_loose_one_offs", {});
+  const body = result.structuredContent as { dayless: { name: string }[]; scheduled: { name: string; day: string }[] };
+  assert.deepEqual(body.dayless.map((item) => item.name), ["sin día"]);
+  assert.ok(body.scheduled.some((item) => item.name === "tarea de meta con día" && item.day === dayFrom(4)));
+});
+
+// RP-39, RP-56: the annotations of every registered tool, taken from the registry.
+type Registered = { annotations?: Record<string, unknown>; inputSchema: { safeParse: (value: unknown) => { success: boolean } } };
+
+async function registry(): Promise<Map<string, Registered>> {
+  const seen = new Map<string, Registered>();
+  const server = {
+    registerTool: (name: string, config: Registered) => void seen.set(name, config),
+  } as unknown as McpServer;
+  const { registerReadTools } = await import("@/lib/mcp/tools/read");
+  const { registerWriteTools } = await import("@/lib/mcp/tools/write");
+  registerReadTools(server);
+  registerWriteTools(server);
+  return seen;
+}
+
+test("the registry holds twenty tools: six read and fourteen write, each with its annotations", async () => {
+  const seen = await registry();
+  assert.equal(seen.size, 20);
+  const reads = new Set(handlers.keys());
+  assert.equal(reads.size, 6);
+  for (const [name, config] of seen) {
+    const expected = reads.has(name)
+      ? { readOnlyHint: true, destructiveHint: false, idempotentHint: true }
+      : { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+    assert.deepEqual(config.annotations, expected, name);
+  }
+  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 14);
+});
+
+test("get_month refuses the month 2026-00 and never answers data", async () => {
+  const config = (await registry()).get("get_month")!;
+  assert.equal(config.inputSchema.safeParse({ goal_id: subjectGoal, month: "2026-00" }).success, false);
+  assert.equal(config.inputSchema.safeParse({ goal_id: subjectGoal, month: currentMonth }).success, true);
+});
+
+test("get_report keeps every month of the goal, down to the horizon's with no amount (RP-39, RP-70)", async () => {
+  const result = await call("get_report", {});
+  const body = result.structuredContent as {
+    goals: { months: { month: string; planned: number | null; past: boolean; current: boolean }[] }[];
+  };
+  const months = body.goals[0].months;
+  const last = months[months.length - 1];
+  assert.equal(last.month, dayFrom(120).slice(0, 7));
+  assert.deepEqual([last.planned, last.past, last.current], [null, false, false]);
 });

@@ -1,13 +1,31 @@
+import type { Locator } from "@playwright/test";
+
 import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import monthMessages from "../messages/es/month.json";
 
-// `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `MesCorrer` (module 139,
-// RP-30, RP-31, RP-32, RP-48): one month of a goal, its carried tasks first,
-// and the shift a closed month offers. Calendar-bound as 135: the seeded
-// «last month» is always the month before today, so the proposal's window is
-// always open.
+const owesLine = (month: string, owes: string) =>
+  monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
+
+// `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado` (RP-30,
+// RP-31, RP-32): one month of a goal, its carried tasks first. Calendar-bound
+// as 135: the seeded «last month» is always the month before today.
+
+// A mixed line: its sentence in Archivo, each figure (a span) in mono.
+async function expectFigures(line: Locator, figures: string[]) {
+  const set = await line.evaluate((el) => ({
+    line: getComputedStyle(el).fontFamily,
+    spans: Array.from(el.querySelectorAll("span")).map((span) => ({
+      text: span.textContent,
+      family: getComputedStyle(span).fontFamily,
+    })),
+  }));
+  expect(set.line).not.toMatch(/mono/i);
+  expect(set.spans.map((span) => span.text)).toEqual(figures);
+  for (const span of set.spans) expect(span.family).toMatch(/mono/i);
+}
 
 const NAMES = [
   "enero",
@@ -118,7 +136,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     const parentRow = page.locator("[data-done]");
     await expect(parentRow).toHaveCount(1);
     await expect(parentRow).toContainText(`Padre ${stamp}`);
-    await expect(parentRow).toContainText(`de ${label(lastMonth)} · debe 3 h`);
+    await expect(parentRow).toContainText(owesLine(label(lastMonth), "3 h"));
     await expect(parentRow).toHaveAttribute("data-done", "false");
     // The parent has no mark of its own: only the leaves do.
     await expect(parentRow.locator("[data-state]")).toHaveCount(0);
@@ -135,6 +153,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(page.locator("[data-state=declared]")).toHaveCount(2);
     await expect(parentRow).toContainText(`Padre ${stamp}`);
     await expect(page.getByText("incluye 3 h de tareas hechas")).toBeVisible();
+    await expectFigures(page.getByText("incluye 3 h de tareas hechas"), ["3 h"]);
 
     // Undone again with no reload: the done child is the one to take back.
     await page.getByRole("button", { name: `Deshacer: Hijo pendiente ${stamp}` }).click();
@@ -143,7 +162,14 @@ test("this month lists the carried parent first, then its own task; marking the 
     // Last month: closed, its share, nothing to add.
     await page.goto(`/metas/${goalId}/meses/${seg(lastMonth)}`);
     await expect(page.getByText("cerrado", { exact: true })).toBeVisible();
-    await expect(page.getByText("cerrado · se arrastró 75 % · 3 h de 4 h")).toBeVisible();
+    const closedLine = monthMessages.list.closedLineTo
+      .replace(/<\/?fig>/g, "")
+      .replace("{share}", "75")
+      .replace("{next}", label(thisMonth))
+      .replace("{owed}", "3 h")
+      .replace("{planned}", "4 h");
+    await expect(page.getByText(closedLine)).toBeVisible();
+    await expectFigures(page.getByText(closedLine), ["75 %", "3 h", "4 h"]);
     await expect(page.getByText("Un mes cerrado no toma tareas nuevas.")).toBeVisible();
     await expect(page.getByRole("link", { name: /Otra tarea|Escribir una tarea/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Escribir una tarea/ })).toHaveCount(0);
@@ -207,7 +233,7 @@ test("a carried task with no estimate reads «de <mes>» alone and one with time
     await expect(bare).toContainText(`de ${label(lastMonth)}`);
     await expect(bare).not.toContainText("debe");
     await expect(bare).not.toContainText("0 min");
-    await expect(owed).toContainText(`de ${label(lastMonth)} · debe 5 h 15 min`);
+    await expect(owed).toContainText(owesLine(label(lastMonth), "5 h 15 min"));
 
     if (following.slice(0, 7) <= horizon.slice(0, 7)) {
       await page.goto(`/metas/${goalId}/meses/${seg(following)}`);
@@ -252,75 +278,6 @@ test("a goal with no measure's empty month promises no time; the back and «Todo
       await all.click();
       await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses$`));
     }
-  } finally {
-    await context.close();
-  }
-});
-
-test("a closed month over half carried proposes the shift; the sheet lists the moves; accepting moves the plan a month and the proposal is gone; at exactly half or two months back there is none (RP-48)", async ({
-  person,
-  browser,
-  baseURL,
-  db,
-}) => {
-  const stamp = Date.now();
-  const moved = await seedGoal(db, person.id, `Meta corre ${stamp}`);
-  await seedBudget(db, person.id, moved, thisMonth, 600);
-  await seedBudget(db, person.id, moved, following, 300);
-  await seedTask(db, person.id, moved, `Sigue ${stamp}`, lastMonth, 100);
-  await seedTask(db, person.id, moved, `Se mueve ${stamp}`, thisMonth, 60);
-
-  const half = await seedGoal(db, person.id, `Meta mitad ${stamp}`);
-  await seedTask(db, person.id, half, `Hecha ${stamp}`, lastMonth, 100, null, `${lastMonth.slice(0, 8)}15`);
-  await seedTask(db, person.id, half, `Falta ${stamp}`, lastMonth, 100);
-
-  const old = await seedGoal(db, person.id, `Meta vieja ${stamp}`, twoBack);
-  await seedTask(db, person.id, old, `Antigua ${stamp}`, twoBack, 100);
-
-  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
-  try {
-    const page = await context.newPage();
-    await page.setViewportSize({ width: 360, height: 740 });
-    const proposal = /Se arrastró más de la mitad de/;
-
-    await page.goto(`/metas/${half}/meses/${seg(lastMonth)}`);
-    await expect(page.getByText("cerrado · se arrastró 50 % · 1 h 40 min de 3 h 20 min")).toBeVisible();
-    await expect(page.getByText(proposal)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);
-    await page.goto(`/metas/${old}/meses/${seg(twoBack)}`);
-    await expect(page.getByText("cerrado", { exact: true })).toBeVisible();
-    await expect(page.getByText(proposal)).toHaveCount(0);
-
-    await page.goto(`/metas/${moved}/meses/${seg(lastMonth)}`);
-    await expect(page.getByText(`Se arrastró más de la mitad de ${label(lastMonth)}.`)).toBeVisible();
-    // The box is drawn on the phone: a border, not a bare column.
-    const box = page.getByText(`Se arrastró más de la mitad de ${label(lastMonth)}.`).locator("xpath=ancestor::div[1]/..");
-    expect(await box.evaluate((el) => parseFloat(getComputedStyle(el).borderTopWidth))).toBeGreaterThan(0);
-    await expect(page.getByText(/^se puede hasta el \d+ de /)).toBeVisible();
-    await expect(page.getByText(`sigue en ${label(thisMonth)}`)).toBeVisible();
-    await page.getByRole("button", { name: "ver qué se corre" }).click();
-    const sheet = page.getByRole("dialog");
-    await expect(sheet.getByRole("heading", { name: "Correr un mes lo que sigue" })).toBeVisible();
-    await expect(sheet.getByText("1 tarea planeada")).toBeVisible();
-    await expect(sheet.getByText(/^montos de /)).toBeVisible();
-    await sheet.getByRole("button", { name: "Correr un mes" }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(page.getByText(proposal)).toHaveCount(0);
-
-    // One month later, read from a reload.
-    await page.reload();
-    await expect(page.getByText(proposal)).toHaveCount(0);
-    await page.goto(`/metas/${moved}/meses/${seg(following)}`);
-    await expect(page.getByText(`Se mueve ${stamp}`)).toBeVisible();
-    await expect(page.getByText("de 10 h", { exact: true })).toBeVisible();
-    const budgets = await db<{ month: string; amount: number }[]>`
-      select to_char(month, 'YYYY-MM') as month, amount from goals.month_budgets
-      where goal_id = ${moved} order by month
-    `;
-    expect(budgets.map((b) => `${b.month}:${b.amount}`)).toEqual([
-      `${seg(following)}:600`,
-      `${seg(nextMonth(following))}:300`,
-    ]);
   } finally {
     await context.close();
   }

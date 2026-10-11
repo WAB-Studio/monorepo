@@ -30,7 +30,7 @@ export type PhaseRow = {
   id: string;
   aim: string;
   starts_on: string;
-  ends_on: string | null;
+  ends_on: string;
 };
 
 // The columns `toDeclaredFact` reads, common to every query's own `FactRow` —

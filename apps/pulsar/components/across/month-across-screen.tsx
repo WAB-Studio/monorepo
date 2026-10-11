@@ -1,11 +1,15 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
+import { EvidenceNote } from "@/components/day/evidence-note";
 import { TaskRow } from "@/components/month/task-row";
-import { Button, Face, Flex, Figure, Grid, Page, Panel, ScreenHeader, SectionLabel, Separator, Text } from "@/components/ui";
-import { owedAt, type MonthItem } from "@/lib/plan/carry";
-import { loadMonthAcross, type MonthAcrossGoal } from "@/lib/queries/month";
+import { Button, Flex, Figure, Grid, Page, Panel, ScreenHeader, Section, Text, TextLink } from "@/components/ui";
+import { owedAt } from "@/lib/plan/carry";
+import { planHrefFrom } from "@/lib/plan/return-to";
+import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
+import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
 
 function sum(values: number[]): number {
@@ -38,6 +42,8 @@ export async function MonthAcrossScreen() {
   function block(goal: MonthAcrossGoal) {
     const unit = goal.unit;
     const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
+    // The `<fig>` tags of the month catalogue: each figure of a mixed line in mono.
+  const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
     const goalHref = `/metas/${goal.id}/meses/${seg}`;
     const carried = goal.items.filter((entry) => entry.carriedFrom !== null);
     const own = goal.items.filter((entry) => entry.carriedFrom === null);
@@ -56,7 +62,7 @@ export async function MonthAcrossScreen() {
     const collapsed = across.evidence === "unreadable" && (!goal.line || goal.line.planned === null);
     const doneTasks = leaves.filter((task) => task.doneOn !== null).length;
 
-    let meta: string | null = null;
+    let meta: ReactNode = null;
     if (!goal.line) {
       meta =
         goal.items.length === 0
@@ -71,38 +77,51 @@ export async function MonthAcrossScreen() {
     } else if (across.evidence === "unreadable") {
       meta = t("month.declaredOnly");
     } else if (doneInMonth > 0) {
-      meta = t("month.list.includesDone", { done: say(doneInMonth) });
+      meta = t.rich("month.list.includesDone", { done: say(doneInMonth), ...fig });
     }
 
     const planLink = collapsed
       ? null
       : goal.line && goal.line.planned === null
-        ? { href: `/metas/${goal.id}/meses?planear=${seg}`, label: t("month.planMonth", { month: thisName }) }
+        ? { href: planHrefFrom(goal.id, seg, "/mes"), label: t("month.planMonth", { month: thisName }) }
         : goal.items.length === 0
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
           : null;
 
     const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: thisName });
 
-    function item(entry: MonthItem) {
+    const openMonths = openMonthsOf(goal.plan);
+    const sheetOf = (task: MonthAcrossItem["task"], kids: MonthAcrossItem["children"]) => ({
+      goalId: goal.id,
+      goalName: goal.name,
+      unit,
+      estimate: task.estimate,
+      planMonth: planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null,
+      months: task.parentId === null ? openMonths : [],
+      canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),
+      fixedMonth: task.plannedMonth?.slice(0, 7) ?? null,
+    });
+
+    function item(entry: MonthAcrossItem) {
       const { task, children } = entry;
       const childTotal = sum(children.map((child) => child.estimate ?? 0));
       const childDone = sum(children.filter((child) => child.doneOn !== null).map((child) => child.estimate ?? 0));
       const isParent = children.length > 0;
       const owes = entry.carriedFrom !== null ? entry.owes : isParent ? childTotal : (task.estimate ?? 0);
 
-      let sub: string | undefined;
+      let sub: ReactNode;
       if (entry.carriedFrom !== null) {
         sub = entry.hasAmount
-          ? t("month.list.owes", { month: monthName(entry.carriedFrom), owes: say(entry.owes) })
+          ? t.rich("month.list.owes", { month: monthName(entry.carriedFrom), owes: say(entry.owes), ...fig })
           : t("month.list.fromMonth", { month: monthName(entry.carriedFrom) });
       } else if (isParent) {
         sub =
           childTotal > 0
-            ? t("month.list.doneOf", { done: say(childDone), total: say(childTotal) })
-            : t("month.list.doneOf", {
+            ? t.rich("month.list.doneOf", { done: say(childDone), total: say(childTotal), ...fig })
+            : t.rich("month.list.doneOf", {
                 done: children.filter((child) => child.doneOn !== null).length,
                 total: children.length,
+                ...fig,
               });
       }
 
@@ -119,6 +138,18 @@ export async function MonthAcrossScreen() {
             markLabel={t("month.across.mark", { name: task.name })}
             note={task.note}
             noteEyebrow={noteEyebrow}
+            part={
+              entry.from !== null || entry.to !== null
+                ? {
+                    part: entry.part,
+                    hours: entry.hours,
+                    from: entry.from?.slice(0, 7) ?? null,
+                    to: entry.to?.slice(0, 7) ?? null,
+                  }
+                : undefined
+            }
+            fixedMonth={goal.plan.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined}
+            sheet={sheetOf(task, children)}
           />
           {children.map((child) => (
             <TaskRow
@@ -132,6 +163,7 @@ export async function MonthAcrossScreen() {
               markLabel={t("month.across.mark", { name: child.name })}
               note={child.note}
               noteEyebrow={noteEyebrow}
+              sheet={sheetOf(child, [])}
             />
           ))}
         </Flex>
@@ -140,11 +172,8 @@ export async function MonthAcrossScreen() {
 
     return (
       <Panel key={goal.id}>
-        <Face on="phone">
-          <Separator weight="strong" />
-        </Face>
-        <Flex direction="column" gap="1">
-          <Text asChild variant="heading">
+        <Section as="div">
+          <Text asChild variant="heading" rule>
             <h2>
               <Flex asChild align="center" justify="between" gap="2" minHeight="48px">
                 <Text asChild link>
@@ -160,38 +189,35 @@ export async function MonthAcrossScreen() {
             <Flex align="baseline" gap="2">
               <Figure value={goal.line.reached} unit={unit ?? undefined} />
               {goal.line.planned !== null ? (
-                <Text variant="meta" tone="muted">
-                  {t("month.months.of", { planned: say(goal.line.planned) })}
+                <Text variant="sentence">
+                  {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}
                 </Text>
               ) : null}
             </Flex>
           ) : null}
           {meta ? (
-            <Text as="p" variant="meta" tone="muted">
+            <Text as="p" variant="sentence">
               {meta}
             </Text>
           ) : null}
-          {planLink ? (
-            <Button asChild variant="ghost" tone="accent">
-              <Link href={planLink.href}>{planLink.label}</Link>
-            </Button>
-          ) : null}
-        </Flex>
+          {planLink ? <TextLink href={planLink.href}>{planLink.label}</TextLink> : null}
+        </Section>
         {collapsed ? null : carriedMonths.map((from) => (
-          <Flex key={from} direction="column">
-            <SectionLabel>{t("month.list.fromMonth", { month: monthName(from) })}</SectionLabel>
+          <Section key={from} as="div" label={t("month.list.fromMonth", { month: monthName(from) })}>
             {carried.filter((entry) => entry.carriedFrom === from).map(item)}
-          </Flex>
+          </Section>
         ))}
         {!collapsed && own.length > 0 ? (
-          <Flex direction="column">
-            <SectionLabel>
-              {unit && isTimeUnit(unit) && ownPlanned > 0
+          <Section
+            as="div"
+            label={
+              unit && isTimeUnit(unit) && ownPlanned > 0
                 ? t("month.list.ownMonth", { month: thisName, planned: say(ownPlanned) })
-                : t("month.list.fromMonth", { month: thisName })}
-            </SectionLabel>
+                : t("month.list.fromMonth", { month: thisName })
+            }
+          >
             {own.map(item)}
-          </Flex>
+          </Section>
         ) : null}
       </Panel>
     );
@@ -201,27 +227,23 @@ export async function MonthAcrossScreen() {
     <Page width="full">
       <ScreenHeader title={thisName.charAt(0).toUpperCase() + thisName.slice(1)} meta={dateLine} />
       {across.goals.length === 0 ? (
-        <Flex direction="column" gap="3">
-          <Text as="p">{t("month.across.empty.title")}</Text>
+        <Section as="div">
+          <Text as="p" variant="sentence">
+            {t("month.across.empty.title")}
+          </Text>
           <Button asChild tap={52} block>
             <Link href="/metas/nueva">{t("month.across.empty.create")}</Link>
           </Button>
           <Button asChild tap={52} block variant="outline">
             <Link href="/metas/importar">{t("month.across.empty.import")}</Link>
           </Button>
-        </Flex>
+        </Section>
       ) : (
         <>
           {across.evidence === "unreadable" ? (
-            <>
-              <Separator />
-              <Text as="p" role="status">
-                {t("month.across.unreadable")}
-              </Text>
-              <Separator />
-            </>
+            <EvidenceNote title={t("month.across.unreadableTitle")} body={t("month.across.unreadableBody")} />
           ) : null}
-          <Grid columns={{ initial: "1", lg: "3" }} gap="6" align="start">
+          <Grid columns={{ initial: "1", lg: "3" }} gap={{ initial: "6", md: "4" }} align="start">
             {across.goals.map(block)}
           </Grid>
         </>

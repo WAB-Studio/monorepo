@@ -6,6 +6,7 @@ import { and, eq, isNull, max, sql } from "drizzle-orm";
 
 import { commitments, evidenceSources, goals, phases } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
+import { isHourUnit, isTimeUnit, storedMeasure } from "@/lib/units/time";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { isClosed } from "@/lib/validation/closed";
 import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
@@ -29,6 +30,7 @@ import {
   type RetireCommitmentInput,
 } from "@/lib/validation/plan";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type CreateGoalResult = { ok: true; goalId: string } | { ok: false; error: MessageKey };
 export type AddPhaseResult = { ok: true; phaseId: string } | { ok: false; error: MessageKey };
@@ -40,10 +42,6 @@ export type RenameGoalResult = { ok: true } | { ok: false; error: MessageKey };
 export type ArchiveGoalResult = { ok: true } | { ok: false; error: MessageKey };
 export type ReopenGoalResult = { ok: true } | { ok: false; error: MessageKey };
 export type MoveHorizonResult = { ok: true } | { ok: false; error: MessageKey };
-
-// Carries a message key out of the transaction without collapsing every
-// rejection into the same generic failure.
-class NamedError extends Error {}
 
 // Never a bare array parameter — drizzle expands a JS array inside a `sql`
 // template into a parenthesised comma list, not a Postgres array literal
@@ -183,7 +181,12 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
   try {
     const commitmentId = await withGoalsDb(async (tx) => {
       const [goal] = await tx
-        .select({ id: goals.id, horizon: goals.horizon, archivedAt: goals.archivedAt })
+        .select({
+          id: goals.id,
+          horizon: goals.horizon,
+          archivedAt: goals.archivedAt,
+          measureUnit: goals.measureUnit,
+        })
         .from(goals)
         .where(eq(goals.id, data.goalId));
       // Closed reads as not there: `compromisos/nuevo` answers it with a 404.
@@ -201,8 +204,19 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
 
       const cadenceN = "cadenceN" in data ? data.cadenceN : null;
       const cadenceWeekdays = "cadenceWeekdays" in data ? weekdaysArraySql(data.cadenceWeekdays) : sql`null`;
-      const targetQuantity = "targetQuantity" in data ? data.targetQuantity : null;
-      const unit = "unit" in data ? data.unit : null;
+      // A goal that already measures owns the unit: whatever was sent is ignored,
+      // except that hours written onto a goal counted in minutes still become minutes.
+      let unit: string | null = null;
+      let targetQuantity: number | null = null;
+      if ("unit" in data && "targetQuantity" in data) {
+        const base = goal.measureUnit ?? data.unit;
+        if (isTimeUnit(base) && isHourUnit(data.unit) && !isHourUnit(base)) {
+          unit = base;
+          targetQuantity = data.targetQuantity * 60;
+        } else {
+          ({ unit, amount: targetQuantity } = storedMeasure(base, data.targetQuantity));
+        }
+      }
       const threshold = "threshold" in data ? data.threshold : null;
 
       const [inserted] = await tx.execute<{ id: string }>(sql`
@@ -219,7 +233,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
       if (data.satisfaction === "quantity") {
         await tx
           .update(goals)
-          .set({ measureName: data.name, measureUnit: data.unit })
+          .set({ measureName: data.name, measureUnit: unit })
           .where(and(eq(goals.id, data.goalId), isNull(goals.measureName)));
       }
 
@@ -236,9 +250,8 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
     // missed for any reason still meets `integer`'s ceiling as a message,
     // never a 500. `pgCode`, not a bare `error.code`: drizzle-orm wraps the
     // driver's error in `DrizzleQueryError` and hangs the real one off
-    // `.cause`, so the bare check this used to be never fired (module 38's
-    // own bug in `declareFact`, measured again here by module 37's validator —
-    // `lib/db-error.test.ts` proves the difference).
+    // `.cause`, so a bare check never fires
+    // (`lib/db-error.test.ts` proves the difference).
     if (pgCode(error) === "22003") return { ok: false, error: "plan.errors.valueOutOfRange" };
     throw error;
   }

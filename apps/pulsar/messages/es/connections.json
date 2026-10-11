@@ -3,15 +3,14 @@
     "title": "Conectar una IA",
     "hint": "Claude lee y reorganiza tus metas"
   },
-  "eyebrow": "la ia",
   "title": "Conectar una IA",
-  "intro": "Deja que Claude lea tus metas, anote lo hecho y reorganice tus meses. Nunca borra ni archiva.",
+  "intro": "Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.",
   "sections": {
     "first": "una llave para claude code",
     "keys": "llaves",
     "another": "otra llave",
-    "oauth": "claude.ai",
-    "connector": "en claude.ai"
+    "oauth": "conexiones",
+    "connector": "en claude.ai o claude desktop"
   },
   "nameLabel": "nombre de la llave",
   "namePlaceholder": "mi portátil",
@@ -21,20 +20,36 @@
   "connector": {
     "note": "Agrega un conector con esta dirección y entra con tu correo.",
     "copy": "Copiar",
-    "copyName": "Copiar la dirección"
+    "copyName": "Copiar la dirección",
+    "copied": "Copiada.",
+    "copyFailed": "No se pudo copiar. Mantén presionado el texto para copiarlo."
   },
   "row": {
-    "metaUsed": "creada {created} · usada {used}",
-    "metaUnused": "creada {created} · sin usar",
-    "neverUsed": "sin usar",
-    "today": "hoy",
-    "on": "el {date}",
-    "revokedMeta": "revocada el {date} · ya no entra",
-    "revoke": "Revocar"
+    "metaUsed": "creada <created></created> · usada <used></used>",
+    "metaUnused": "creada <created></created> · sin usar",
+    "metaUsedFirst": "Creada <created></created> · usada <used></used>",
+    "metaUnusedFirst": "Creada <created></created> · sin usar",
+    "stampToday": "hoy a las <fig>{time}</fig>",
+    "stampOn": "el <fig>{date}</fig>",
+    "stampOnClock": "el <fig>{date}</fig> <fig>{time}</fig>",
+    "revokedMeta": "revocada el <fig>{date}</fig> · ya no entra",
+    "expiredMeta": "venció el <fig>{date}</fig> · sin uso desde el <fig>{used}</fig>",
+    "expiredUnused": "venció el <fig>{date}</fig> · sin usar",
+    "revoke": "Revocar",
+    "revokeKey": "Revocar la llave {name}",
+    "revokeHost": "Revocar {name}, vuelve a {host}",
+    "revokeConnection": "Revocar {name}, conectada el {date}",
+    "renew": "crea otra",
+    "renewKey": "crea otra en lugar de {name}"
+  },
+  "folds": {
+    "keys": "{count, plural, one {# llave que ya no entra} other {# llaves que ya no entran}}",
+    "connections": "{count, plural, one {# conexión que ya no entra} other {# conexiones que ya no entran}}"
   },
   "oauth": {
-    "metaUsed": "conectada {created} · usada {used}",
-    "metaUnused": "conectada {created} · sin usar"
+    "metaUsed": "conectada <created></created> · usada <used></used>",
+    "metaUnused": "conectada <created></created> · sin usar",
+    "returns": "vuelve a <strong>{host}</strong>"
   },
   "revokeSheet": {
     "keyLabel": "revocar la llave",
@@ -48,12 +63,11 @@
   "created": {
     "title": "Tu llave",
     "once": "No la volverás a ver. Si la pierdes, revócala y crea otra.",
-    "copy": "Copiar",
     "copyName": "Copiar la llave",
-    "terminal": "pégalo en tu terminal",
+    "terminal": "claude code · pégalo en tu terminal",
     "claudeCode": "claude mcp add --transport http pulsar {url}/mcp --header \"Authorization: Bearer {key}\"",
-    "copyCommandName": "Copiar el comando",
-    "connected": "Claude Code queda conectado. Prueba: «lee mi meta de inglés y dime qué sigue».",
+    "copyCommandName": "Copiar el comando de Claude Code",
+    "connected": "Prueba: «lee mis metas y dime qué sigue».",
     "done": "Listo"
   },
   "errors": {

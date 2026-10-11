@@ -95,3 +95,16 @@ test("consentReturnPath refuses every other destination", () => {
     assert.equal(consentReturnPath(next, SITE), null, String(next));
   }
 });
+
+test("a code_challenge has exactly 43 characters", () => {
+  const challenge = good.code_challenge;
+  assert.equal(challenge.length, 43);
+  assert.equal(refusal({ code_challenge: challenge.slice(1) }), "oauth.errors.codeChallenge");
+  assert.equal(refusal({ code_challenge: `${challenge}A` }), "oauth.errors.codeChallenge");
+  assert.equal(refusal({ code_challenge: challenge }), null);
+});
+
+test("an https client_id that is no URL is refused", () => {
+  assert.equal(refusal({ client_id: "https://" }), "oauth.errors.clientId");
+  assert.equal(refusal({ client_id: "https://[" }), "oauth.errors.clientId");
+});

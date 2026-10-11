@@ -9,7 +9,7 @@ export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
 });
 
-// A personal key or an OAuth connection (RP-38, RP-41). Revoked, never deleted:
+// A personal key or an OAuth connection (RP-38, RP-60). Revoked, never deleted:
 // no DELETE grant. `token_hash` is in no SELECT grant; only
 // `goals.person_for_token` reads it.
 export const accessTokens = goalsSchema.table(
@@ -30,6 +30,8 @@ export const accessTokens = goalsSchema.table(
     // Null for a personal key, which lasts until revoked.
     expiresAt: timestamp({ withTimezone: true }),
     revokedAt: timestamp({ withTimezone: true }),
+    // Where the person approved the client to return; null for a personal key. Written only by the exchange.
+    redirectUri: text(),
   },
   (t) => [
     index("access_tokens_user_id_idx").on(t.userId),

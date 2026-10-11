@@ -1,11 +1,13 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import type { Translator } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
+import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
-import { Button, Flex, SectionLabel, Text } from "@/components/ui";
+import { Button, Figure, Flex, Section, Text } from "@/components/ui";
 
 import { CommitmentRow } from "./retire-sheet";
 
@@ -30,8 +32,7 @@ function cadenceWords(cadence: Cadence, t: Translator): string {
     case "daily":
       return t("goal.cadence.daily");
     case "weekdays": {
-      const names = t.raw("goal.cadence.weekdayFull") as string[];
-      return cadence.days.map((day) => names[day - 1]).join(", ");
+      return weekdaysSentence((key, values) => t(key, values), cadence.days, t.raw("goal.cadence.weekdayFull") as string[]);
     }
     case "times_per_week":
       return t("goal.cadence.timesPerWeek", { count: cadence.count });
@@ -49,18 +50,28 @@ function cadenceWords(cadence: Cadence, t: Translator): string {
 // What satisfies the commitment, in quiet: a tap, the quantity's own unit —
 // the person's own word, never resolved against a catalogue — or the
 // evidence threshold and source ("1 búsqueda · diccionario").
-function satisfactionWords(commitment: GoalCommitment, t: Translator): string {
+function satisfactionWords(commitment: GoalCommitment, t: Translator): ReactNode {
   switch (commitment.satisfiedBy.kind) {
     case "tap":
       return t("goal.satisfaction.tap");
     case "quantity":
-      return commitment.satisfiedBy.unit;
+      return (
+        <Figure
+          value={commitment.satisfiedBy.target}
+          unit={commitment.satisfiedBy.unit}
+          variant="meta"
+        />
+      );
     case "evidence": {
       const { threshold, unit } = commitment.satisfiedBy;
       const labelKey = commitment.sourceLabelKey;
       const source = labelKey ? t(labelKey) : "";
-      const words = labelKey ? evidenceUnitWords({ labelKey, unit }, threshold, t) : unit;
-      return `${threshold} ${words} · ${source}`;
+      const unitWords = labelKey ? evidenceUnitWords({ labelKey, unit }, threshold, t) : unit;
+      return (
+        <>
+          <Figure value={threshold} unit={unitWords} variant="meta" /> · {source}
+        </>
+      );
     }
   }
 }
@@ -93,13 +104,12 @@ export async function CommitmentList({
   const activeCount = commitments.filter((commitment) => commitment.retiredAt === null).length;
 
   return (
-    <section>
-      <SectionLabel>
-        {t("goal.detail.commitmentsCount", {
-          word: countWord(activeCount, t),
-          count: activeCount,
-        })}
-      </SectionLabel>
+    <Section
+      label={t("goal.detail.commitmentsCount", {
+        word: countWord(activeCount, t),
+        count: activeCount,
+      })}
+    >
       {commitments.map((commitment) => (
         <CommitmentRow
           key={commitment.id}
@@ -109,11 +119,11 @@ export async function CommitmentList({
           retiredLabel={t("goal.commitments.retired")}
           factDayCount={commitment.factDayCount}
           trailing={
-            <Flex direction="column" align="end" gap="1">
-              <Text as="span" variant="meta" tone="muted">
+            <Flex direction="column" align="end">
+              <Text as="span" variant="sentence" tone="muted">
                 {cadenceWords(commitment.cadence, t)}
               </Text>
-              <Text as="span" variant="meta" tone="muted">
+              <Text as="span" variant="sentence" tone="muted">
                 {satisfactionWords(commitment, t)}
               </Text>
             </Flex>
@@ -125,6 +135,6 @@ export async function CommitmentList({
           <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>
         </Button>
       ) : null}
-    </section>
+    </Section>
   );
 }

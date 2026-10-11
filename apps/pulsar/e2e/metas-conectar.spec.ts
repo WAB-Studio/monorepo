@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { dateToCivilDate, civilDateToDate, todayInZone } from "@/lib/zone";
 
-// `MetasConectar.dc.html` (module 193, RP-38, RNP-07): «el plan» on /metas
+// `MetasConectar.dc.html` (RP-38, RNP-07): «el plan» on /metas
 // offers «Conectar una IA», with a goal and with none.
 
 async function expectConnect(page: import("@playwright/test").Page, width: number) {

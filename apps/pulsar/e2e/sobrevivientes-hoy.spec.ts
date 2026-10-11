@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// What the mutator found nobody pinning on Hoy (module 99): every goal that
+// Hoy: every goal that
 // ended this week gets its own line, and a row's second line reads in the
 // order `HoyEscritorio.dc.html` and `HoyCuenta.dc.html` draw it: cadence,
 // amount, count, hour, and the day it was written when that is not the day.
@@ -112,7 +112,7 @@ test("a row's second line reads cadence, amount, count, hour, in that order", as
     await settled(page);
     await expect(page.getByText(`Un día ${stamp}`, { exact: true })).toBeVisible();
     await expect(page.getByText(`solo los ${plural} · 10 min · 07:40 · lo dijiste tú`, { exact: true })).toBeVisible();
-    await expect(page.getByText(`solo los ${plural} · 20 páginas · pide el número`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`solo los ${plural} · 20 páginas`, { exact: true })).toBeVisible();
     await expect(page.getByText("10 min · 1 de 3 esta semana · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
 
     // Written another day than the one on the page: the day closes the line.
@@ -129,7 +129,7 @@ test("a row's second line reads cadence, amount, count, hour, in that order", as
     `;
     await page.goto(`/dia/${yesterday}`);
     await settled(page);
-    await expect(page.getByText(/^5 min · 07:40 · lo dijiste tú · anotado el /)).toBeVisible();
+    await expect(page.getByText(/^todos los días · 5 min · 07:40 · lo dijiste tú · anotado el /)).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;

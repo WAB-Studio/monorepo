@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { commitments, facts, oneOffs } from "@/db/schema";
+import { commitments, facts, goals, oneOffs } from "@/db/schema";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
@@ -18,13 +18,10 @@ import {
 } from "@/lib/validation/fact";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { messageKey, type MessageKey } from "@/i18n/translator";
+import { NamedError } from "@/lib/actions/named-error";
 
 export type DeclareFactResult = { ok: true; factId: string } | { ok: false; error: MessageKey };
 export type UndoFactResult = { ok: true } | { ok: false; error: MessageKey };
-
-// Carries a message key out of the transaction without collapsing every
-// rejection into the same generic failure.
-class NamedError extends Error {}
 
 /**
  * Writes a fact in one gesture (RP-02, RP-03, RP-04). The day it happened is
@@ -49,8 +46,8 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // once the subject is read) are what keep it inside RP-06's reach.
       const day = parsed.data.day ?? todayInZone();
 
-      // Serialises every write for this (commitment, day) — round 2's own
-      // fix. Without it, "Cambiar" racing a plain tap on the same commitment
+      // Serialises every write for this (commitment, day).
+      // Without it, "Cambiar" racing a plain tap on the same commitment
       // could return a `factId` from a row the other call's own delete had
       // already removed by the time this one's fallback `select` ran: two
       // separate statements, no lock between them, each transaction reading
@@ -59,10 +56,15 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // transaction — delete, insert, fallback select alike — runs only
       // after the winner's has fully landed. A one-off never conflicts on
       // `facts_commitment_day_unique` (it carries no `commitmentId`), so it
-      // takes no lock.
+      // takes no lock on that index; its own lock, below, serialises the
+      // read-then-insert so two marks leave one fact.
       if (commitmentId != null) {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${commitmentId}::text || ':' || ${day}, 0))`,
+        );
+      } else if (oneOffId != null) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${oneOffId}::text || ':once', 0))`,
         );
       }
 
@@ -73,10 +75,12 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           .select({
             satisfaction: commitments.satisfaction,
             goalId: commitments.goalId,
+            openedAt: goals.createdAt,
             createdAt: commitments.createdAt,
             retiredAt: commitments.retiredAt,
           })
           .from(commitments)
+          .innerJoin(goals, eq(goals.id, commitments.goalId))
           .where(eq(commitments.id, commitmentId));
 
         if (!commitment) throw new NamedError("day.errors.notFound");
@@ -96,6 +100,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           .superRefine(
             requireDayForSubject({
               kind: "commitment",
+              openedDay: civilDateInZone(commitment.openedAt),
               createdDay: civilDateInZone(commitment.createdAt),
               retiredDay: commitment.retiredAt ? civilDateInZone(commitment.retiredAt) : null,
             }),
@@ -131,6 +136,13 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
           throw new NamedError(dayCheck.error.issues[0].message);
         }
 
+        // A one-off done twice keeps the fact it already has: adopted, never
+        // written again, whether or not the unique index exists.
+        const [done] = await tx.execute<{ id: string; day: string }>(sql`
+          select id, day::text as day from ${facts} where one_off_id = ${oneOffId}
+        `);
+        if (done) return { id: done.id, day: done.day };
+
         goalId = oneOff.goalId;
       }
 
@@ -141,7 +153,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // with someone else's read.
       //
       // Adopts first, deletes only when there is something to actually
-      // change (round 2): the lock above serialises the two writes, but does
+      // change: the lock above serialises the two writes, but does
       // not by itself say what "replace" should do when it wins the race
       // *after* a concurrent plain tap already landed the very same
       // (commitment, day) row — deleting that row unconditionally would
@@ -178,31 +190,33 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       // deliberately withheld from `authenticated`, left to the column's own
       // `now()` (RP-06).
       //
-      // `facts_commitment_day_unique` (module 38) is the arbiter for a
+      // `facts_commitment_day_unique` is the arbiter for a
       // `commitmentId` insert: two taps racing from two devices both reach
       // this statement, one lands and one conflicts, and `on conflict …
       // do nothing` turns the second into a no-op rather than a 500 — a
       // one-off's insert never carries a `commitmentId`, so it never matches
-      // that partial index and always returns a row here.
+      // that partial index. Without a target it covers the one-off's own
+      // index too, and is correct before that index exists.
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${facts}
           (user_id, commitment_id, one_off_id, goal_id, day, quantity, note)
         values
           (${person.id}, ${commitmentId ?? null}, ${oneOffId ?? null}, ${goalId},
            ${day}, ${quantity ?? null}, ${note ?? null})
-        on conflict (commitment_id, day) where commitment_id is not null do nothing
+        on conflict do nothing
         returning id
       `);
 
       if (inserted) return { id: inserted.id, day };
 
       // The index refused this insert: another device's tap for the same
-      // commitment and day landed first. Read back its id rather than fail —
+      // subject and day landed first. Read back its id rather than fail —
       // a second tap from another device is a no-op, never an error.
-      const [existing] = await tx.execute<{ id: string }>(sql`
-        select id from ${facts}
-        where commitment_id = ${commitmentId} and day = ${day}
-      `);
+      const [existing] = await tx.execute<{ id: string }>(
+        commitmentId != null
+          ? sql`select id from ${facts} where commitment_id = ${commitmentId} and day = ${day}`
+          : sql`select id from ${facts} where one_off_id = ${oneOffId}`,
+      );
       if (!existing) {
         // Unreachable: the conflict that just fired proves a row is there.
         throw new NamedError("day.errors.notFound");
@@ -210,7 +224,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
       return { id: existing.id, day };
     });
 
-    // `/dia/[fecha]` (modules 46, 49): the day a past fact just landed on has
+    // `/dia/[fecha]`: the day a past fact just landed on has
     // its own route, revalidated by its literal path — never the pattern,
     // which would need a `'page'` `type` this call has no business asking
     // for since the route itself is still unbuilt.
@@ -226,7 +240,7 @@ export async function declareFact(input: DeclareFactInput): Promise<DeclareFactR
     // meets Postgres's own `integer` ceiling as a message, never a 500.
     // `pgCode`, not a bare `error.code`: drizzle-orm wraps the driver's error
     // in `DrizzleQueryError` and hangs the real one off `.cause`, so the
-    // bare check never fired (module 38, round 2).
+    // bare check never fires.
     if (pgCode(error) === "22003") return { ok: false, error: "day.errors.quantityInvalid" };
     throw error;
   }

@@ -139,8 +139,8 @@ export function QuantitySheet({
         note: trimmedNote.length > 0 ? trimmedNote : undefined,
         // "Cambiar", not "Anotar": a row already carrying a fact today
         // replaces it whole, server-side, in one transaction — never a
-        // second `declareFact` beside the first (the defect the validator
-        // proved live: 25 and 30 both landing in `goals.facts`).
+        // second `declareFact` beside the first (25 and 30 would both land
+        // in `goals.facts`).
         replace: factId != null,
         day,
       });
@@ -212,7 +212,7 @@ export function QuantitySheet({
       />
 
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

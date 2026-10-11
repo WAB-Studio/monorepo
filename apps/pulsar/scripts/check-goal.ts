@@ -1,4 +1,4 @@
-// Proves module 28's `loadGoal` fan-out the same way `scripts/check-day.ts`
+// Proves `loadGoal`'s fan-out the same way `scripts/check-day.ts`
 // proves `loadDay`'s: by counting statements off the driver's own wire, not
 // off `goal.ts`'s source text, and by redeeming this lane's own
 // `private/session-<lane>.json` cookie rather than typing anything into
@@ -7,15 +7,12 @@
 // `postgres`'s own type-fetch text, capped at one per connection and zero
 // warm) is copied from it verbatim, not reinvented.
 //
-// This closes the holes module 28's own validator and this module's own
-// first round each found. First (module 28's gitignored probe, a copy sits
-// at `private/reportes/check-goal.modulo28.ts`): its SQL-text assertion only
-// tested that `"goals"."goals"` appears *somewhere* in the reading
-// statement, so a `from` bound rewritten as a hardcoded
-// `sql`'0001-01-01'::date`` still passed — the `to` bound's own reference
+// A SQL-text assertion that only checks `"goals"."goals"` appears *somewhere* in the reading
+// statement is too weak: a `from` bound rewritten as a hardcoded
+// `sql`'0001-01-01'::date`` still passes — the `to` bound's own reference
 // carried the whole assertion. `assertReadingBounds` below extracts the
 // `between <from> and <to>` clause `goalSpan`'s own two subqueries land in
-// (`lib/queries/goal.ts`) and checks each side on its own. Second: that same
+// (`lib/queries/goal.ts`) and checks each side on its own. And that
 // text-only check also passes a bound that names `"goals"."goals"` but reads
 // the wrong row or the wrong column — both bounds on `horizon`, say. Text
 // alone cannot tell; `assertBoundsResolveToGoalRow` below replays the exact
@@ -343,7 +340,7 @@ function findReadingAppCall(calls: DebugCall[]): DebugCall | undefined {
 }
 
 /**
- * The assertion module 28's own probe did not make: `"goals"."goals"` named
+ * `"goals"."goals"` named
  * once in the `from` bound and once in the `to` bound, checked independently
  * rather than counted across the whole statement. A count of two across the
  * whole statement would still pass if one bound carried both references and
@@ -434,7 +431,7 @@ async function assertBoundsResolveToGoalRow(goalId: string, calls: DebugCall[]):
 
   const [expected] = await withGoalsDb((tx) =>
     tx.execute<{ expected_from: string; expected_to: string }>(sql`
-      select (g.created_at at time zone ${TIME_ZONE})::date as expected_from, g.horizon as expected_to
+      select (g.created_at at time zone ${TIME_ZONE})::date as expected_from, g.horizon - 1 as expected_to
       from "goals"."goals" g where g.id = ${goalId}
     `),
   );
@@ -809,7 +806,50 @@ async function runMeasureRenameCheck(): Promise<void> {
 }
 
 /**
- * RP-15's own race, driven live 2026-09-27: two tabs submitting overlapping
+ * A goal that measures owns its commitments' unit: a quantity
+ * commitment sent with another unit is stored with the goal's.
+ */
+async function runCommitmentUnitCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { withGoalsDb } = await import("@/lib/session");
+
+  const goal = await createGoal({ name: "check-goal.ts probe — 361 unit", horizon: "2099-12-31" });
+  if (!goal.ok) throw new Error(`runCommitmentUnitCheck: createGoal failed: ${goal.error}`);
+
+  const quantity = (name: string, unit: string) =>
+    addCommitment({
+      goalId: goal.goalId,
+      name,
+      cadenceKind: "daily",
+      satisfaction: "quantity",
+      targetQuantity: 3,
+      unit,
+    });
+  const unitOf = async (commitmentId: string) => {
+    const [row] = await withGoalsDb((tx) =>
+      tx.execute<{ unit: string | null }>(sql`select unit from "goals"."commitments" where id = ${commitmentId}`),
+    );
+    return row?.unit;
+  };
+
+  const first = await quantity("check-goal.ts probe — 361 first", "min");
+  const second = await quantity("check-goal.ts probe — 361 second", "cards");
+  if (!first.ok || !second.ok) throw new Error("runCommitmentUnitCheck: addCommitment failed");
+
+  assert(
+    "the first quantity commitment of a goal names its unit",
+    (await unitOf(first.commitmentId)) === "min",
+    "unit=min",
+  );
+  assert(
+    "a quantity commitment sent with another unit on a measured goal stores the goal's unit (361)",
+    (await unitOf(second.commitmentId)) === "min",
+    `unit=${await unitOf(second.commitmentId)}`,
+  );
+}
+
+/**
+ * RP-15's own race: two tabs submitting overlapping
  * spans (1–4 and 2–5) on the same goal both landed under `READ COMMITTED`,
  * each reading "no overlap yet" before either had committed. `addPhase`'s own
  * `pg_advisory_xact_lock`, keyed on the goal's id and taken as the first
@@ -877,8 +917,7 @@ const OPENED_WEEKDAY_OFFSET = 2;
  * `declareFact`'s own `PAST_DAY_LIMIT` (7) can reach, so seeded through the
  * granted INSERT columns directly, the same technique `declareFact` itself
  * uses (`day`, `quantity` — never `written_at`), never through the action.
- * `loadGoal` still issues four statements against this goal (module 28's own
- * "no new statement" promise), and the reading transaction forced to throw
+ * `loadGoal` still issues four statements against this goal (the "no new statement" promise), and the reading transaction forced to throw
  * still returns three weeks whose own totals still match the declared seed
  * — the declared half alone, RNP-04 carried from `measureTotal` into the
  * review, never a length that happens to be three while every total reads
@@ -1168,10 +1207,9 @@ async function runEndedCheck(): Promise<void> {
 }
 
 /**
- * Module 129: `loadGoal` reads the plan by month. A goal opened 2010-09-15
+ * `loadGoal` reads the plan by month. A goal opened 2010-09-15
  * with a horizon of 2011-08-15, budgets for 2010-10 (720) and 2010-11 (0), one
- * declared fact of 300 in October, a parent with two sub-tasks, and a shifted
- * month, all seeded through the session pooler (the one door onto the
+ * declared fact of 300 in October, a parent with two sub-tasks, all seeded through the session pooler (the one door onto the
  * backdated `created_at` and onto rows the policies would refuse), read with
  * `today` pinned inside the span.
  */
@@ -1204,8 +1242,6 @@ async function runPlanMonthsCheck(): Promise<void> {
     await migrationDb`
       insert into goals.month_budgets (user_id, goal_id, month, amount)
       values (${person.id}, ${goalId}, '2010-10-01', 720), (${person.id}, ${goalId}, '2010-11-01', 0)`;
-    await migrationDb`
-      insert into goals.month_shifts (user_id, goal_id, month) values (${person.id}, ${goalId}, '2010-09-01')`;
     await migrationDb`
       insert into goals.facts (user_id, commitment_id, goal_id, day, quantity)
       values (${person.id}, ${commitment.commitmentId}, ${goalId}, '2010-10-05', 300)`;
@@ -1257,9 +1293,9 @@ async function runPlanMonthsCheck(): Promise<void> {
       `month = ${JSON.stringify(zero?.month)}`,
     );
     assert(
-      "RP-28: loadGoal returns the budgets, and the shifted month in shifts",
-      before.budgets.length === 2 && JSON.stringify(before.shifts) === JSON.stringify(["2010-09-01"]),
-      `budgets = ${JSON.stringify(before.budgets)}, shifts = ${JSON.stringify(before.shifts)}`,
+      "RP-28: loadGoal returns the budgets",
+      before.budgets.length === 2,
+      `budgets = ${JSON.stringify(before.budgets)}`,
     );
     assert(
       "RP-30: a parent and its two children come back in tasks, none done yet",
@@ -1323,6 +1359,212 @@ async function runMetasOverlapCheck(): Promise<void> {
   );
 }
 
+/**
+ * `loadGoal` and `/metas` read the plan. Goal A (rhythm 600, two
+ * plan tasks of 300 and 600, no budget) is the filled case; goal B (no
+ * rhythm, tasks fixed in months) is a migrated one; goal C measures nothing.
+ * Task rows are backdated through the session pooler: `createdOn` must not
+ * sit after the pinned `today`.
+ */
+async function runPlanRoadmapCheck(): Promise<void> {
+  const { createGoal, addCommitment } = await import("@/app/actions/plan");
+  const { loadGoal, listGoalsForMetas } = await import("@/lib/queries/goal");
+  const { fillPlan } = await import("@/lib/plan/roadmap");
+  const { getPerson } = await import("@/lib/session");
+
+  const person = await getPerson();
+  if (!person) throw new Error("runPlanRoadmapCheck: no settled session");
+
+  const seeded: string[] = [];
+  const open = async (label: string, measured: boolean): Promise<string> => {
+    const goal = await createGoal({ name: `check-goal.ts probe — 340 ${label}`, horizon: "2030-01-01" });
+    if (!goal.ok) throw new Error(`runPlanRoadmapCheck: createGoal failed: ${goal.error}`);
+    seeded.push(goal.goalId);
+    if (measured) {
+      const commitment = await addCommitment({
+        goalId: goal.goalId,
+        name: `check-goal.ts probe — 340 ${label} medida`,
+        cadenceKind: "daily",
+        satisfaction: "quantity",
+        targetQuantity: 1,
+        unit: "min",
+      });
+      if (!commitment.ok) throw new Error(`runPlanRoadmapCheck: addCommitment failed: ${commitment.error}`);
+    }
+    return goal.goalId;
+  };
+
+  const migrationDb = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
+  try {
+    const a = await open("A", true);
+    const b = await open("B", true);
+    const c = await open("C", false);
+    for (const id of [a, b, c]) {
+      await migrationDb`
+        update goals.goals set created_at = ${new Date("2010-09-15T12:00:00-05:00")}, horizon = '2011-08-15'
+        where id = ${id}`;
+    }
+    await migrationDb`update goals.goals set rhythm = 600 where id = ${a}`;
+    const task = async (goalId: string, name: string, estimate: number | null, month: string | null, position: number) => {
+      const [row] = await migrationDb<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, estimate, planned_month, in_plan, position, created_at)
+        values (${person.id}, ${goalId}, ${`check-goal.ts probe — 340 ${name}`}, ${estimate}, ${month}, true, ${position},
+                ${new Date("2010-09-16T12:00:00-05:00")})
+        returning id`;
+      return row.id;
+    };
+    const a1 = await task(a, "a1", 300, null, 1);
+    const a2 = await task(a, "a2", 600, null, 2);
+    const b1 = await task(b, "b1", 120, "2010-10-01", 1);
+    const b2 = await task(b, "b2", 90, "2010-11-01", 2);
+    const c1 = await task(c, "c1", null, "2010-10-01", 1);
+    await task(c, "c2", null, "2010-10-01", 2);
+    await migrationDb`
+      insert into goals.facts (user_id, one_off_id, goal_id, day) values (${person.id}, ${c1}, ${c}, '2010-10-10')`;
+
+    const today = "2010-10-20";
+    const start = wireCalls.length;
+    const { result: viewA, overlap } = await withOverlap(() => loadGoal(a, today));
+    reportRun("plan-roadmap", wireCalls.slice(start), true, overlap);
+    if (!viewA) throw new Error("runPlanRoadmapCheck: loadGoal(A) returned null");
+
+    assert(
+      "RP-50: a goal with a rhythm and no budget reads the rhythm as this month's amount",
+      viewA.rhythm === 600 && viewA.month?.planned === 600 &&
+        viewA.months.find((row) => row.month === "2010-10-01")?.planned === 600,
+      `rhythm=${viewA.rhythm} month=${JSON.stringify(viewA.month)}`,
+    );
+    const expected = fillPlan({
+      rhythm: 600,
+      budgets: [],
+      tasks: [a1, a2].map((id, index) => ({
+        id,
+        parentId: null,
+        name: "",
+        plannedMonth: null,
+        day: null,
+        estimate: index === 0 ? 300 : 600,
+        doneOn: null,
+        factId: null,
+        note: null,
+        inPlan: true,
+        createdOn: "2010-09-16",
+        position: index + 1,
+      })),
+      openedOn: "2010-09-15",
+      horizon: "2011-08-15",
+      today,
+    });
+    const shape = (roadmap: typeof expected) =>
+      JSON.stringify([roadmap.state, roadmap.end, roadmap.months.map((m) => [m.month, m.filled, m.items.map((i) => [i.task.id, i.part])])]);
+    assert(
+      "RP-53: roadmap.end and months match fillPlan over the seeded rows (900 at 600 a month ends in November)",
+      expected.state === "planned" && expected.end?.startsWith("2010-11") === true && shape(viewA.roadmap) === shape(expected),
+      `got ${shape(viewA.roadmap)}, expected ${shape(expected)}`,
+    );
+    assert(
+      "RP-50: tasks carry in_plan, position and createdOn in the person's zone",
+      viewA.tasks.length === 2 && viewA.tasks.every((t) => t.inPlan && t.createdOn === "2010-09-16") &&
+        viewA.tasks.find((t) => t.id === a2)?.position === 2,
+      `tasks = ${JSON.stringify(viewA.tasks.map((t) => [t.inPlan, t.position, t.createdOn]))}`,
+    );
+
+    const metasStart = wireCalls.length;
+    const metas = await listGoalsForMetas(today);
+    const statements = [...groupByConnection(wireCalls.slice(metasStart)).entries()].reduce(
+      (sum, [connection, calls]) => sum + analyzeGroup(connection, calls).applicationCount,
+      0,
+    );
+    const month = (id: string) => metas.open.find((goal) => goal.id === id)?.month;
+    assert(
+      "/metas: a goal with a rhythm and no budget plans the rhythm this month",
+      month(a)?.kind === "amount" && (month(a) as { planned: number | null }).planned === 600,
+      `month = ${JSON.stringify(month(a))}`,
+    );
+    await migrationDb`
+      insert into goals.month_budgets (user_id, goal_id, month, amount) values (${person.id}, ${a}, '2010-10-01', 720)`;
+    const budgeted = await loadGoal(a, today);
+    assert(
+      "RP-50: a month's own budget wins over the rhythm",
+      budgeted?.month?.planned === 720 && budgeted.months.find((row) => row.month === "2010-11-01")?.planned === 600,
+      `month=${JSON.stringify(budgeted?.month)}`,
+    );
+
+    const viewB = await loadGoal(b, today);
+    const monthItems = (month: string) =>
+      viewB?.roadmap.months.find((m) => m.month === month)?.items.map((item) => item.task.id) ?? [];
+    assert(
+      "a migrated goal (fixed months, no rhythm) reads each task in the month it had",
+      viewB?.rhythm === null && JSON.stringify(monthItems("2010-10-01")) === JSON.stringify([b1]) &&
+        JSON.stringify(monthItems("2010-11-01")) === JSON.stringify([b2]),
+      `oct=${JSON.stringify(monthItems("2010-10-01"))} nov=${JSON.stringify(monthItems("2010-11-01"))}`,
+    );
+
+    assert(
+      "/metas: a goal with no measure counts the plan's tasks of the month, done and total",
+      JSON.stringify(month(c)) === JSON.stringify({ kind: "tasks", month: "2010-10-01", done: 1, total: 2 }),
+      `month = ${JSON.stringify(month(c))}`,
+    );
+    assert(
+      "/metas: the statement count is unchanged (four application statements)",
+      statements === 4,
+      `${statements} application statement(s)`,
+    );
+
+    // Goal D: a migrated goal with a task in every position relative to today (2010-10-20).
+    const d = await open("D", false);
+    await migrationDb`
+      update goals.goals set created_at = ${new Date("2010-09-15T12:00:00-05:00")}, horizon = '2011-08-15'
+      where id = ${d}`;
+    const dPast = await task(d, "dPast", 60, "2010-08-01", 1);
+    const dDonePast = await task(d, "dDonePast", 30, "2010-09-01", 2);
+    const dNow = await task(d, "dNow", 45, "2010-10-01", 3);
+    const dDoneNow = await task(d, "dDoneNow", 15, "2010-10-01", 4);
+    const dFuture = await task(d, "dFuture", 90, "2010-12-01", 5);
+    await migrationDb`
+      insert into goals.facts (user_id, one_off_id, goal_id, day) values
+        (${person.id}, ${dDonePast}, ${d}, '2010-09-20'), (${person.id}, ${dDoneNow}, ${d}, '2010-10-10')`;
+    const viewD = await loadGoal(d, today);
+    const placed = new Map<string, string>();
+    for (const m of viewD?.roadmap.months ?? []) {
+      for (const item of m.items) {
+        placed.set(item.task.id, `${m.month}|done=${item.done}|from=${item.carriedFrom}`);
+      }
+    }
+    const got = (id: string) => placed.get(id) ?? "absent";
+    assert(
+      "a migrated goal: an undone task of a past month reads in the current month, carried from its own (RP-31)",
+      viewD?.rhythm === null && got(dPast) === "2010-10-01|done=false|from=2010-08-01",
+      got(dPast),
+    );
+    assert(
+      "a migrated goal: a task of the current month stays there, done or not, never carried",
+      got(dNow) === "2010-10-01|done=false|from=null" && got(dDoneNow) === "2010-10-01|done=true|from=null",
+      `${got(dNow)} / ${got(dDoneNow)}`,
+    );
+    assert(
+      "a migrated goal: a task of a future month reads in that month",
+      got(dFuture) === "2010-12-01|done=false|from=null" && viewD?.roadmap.unplaced.length === 0,
+      `${got(dFuture)} unplaced=${viewD?.roadmap.unplaced.length}`,
+    );
+    assert(
+      "a migrated goal: a task done in a past month is not listed in the current one",
+      got(dDonePast) === "absent",
+      got(dDonePast),
+    );
+    const metasD = await listGoalsForMetas(today);
+    assert(
+      "/metas: a migrated goal's month line counts the carried and the current month's tasks, done and total",
+      JSON.stringify(metasD.open.find((goal) => goal.id === d)?.month) ===
+        JSON.stringify({ kind: "tasks", month: "2010-10-01", done: 1, total: 3 }),
+      JSON.stringify(metasD.open.find((goal) => goal.id === d)?.month),
+    );
+  } finally {
+    for (const id of seeded) await migrationDb`delete from goals.goals where id = ${id}`;
+    await migrationDb.end();
+  }
+}
+
 async function runMain(): Promise<void> {
   installStubs(loadCookies(), "none");
 
@@ -1376,9 +1618,8 @@ async function runMain(): Promise<void> {
     `measureUnit = ${cold.measureUnit}`,
   );
 
-  // The registry's reader replaced in a child process (module 28's own
-  // dispatch): proves the sum against known rows, since no harness identity
-  // on this database carries a real `reading.lookups` row to sum instead.
+  // The registry's reader replaced in a child process (dispatched there):
+  // proves the sum against known rows, since no harness identity on this database carries a real `reading.lookups` row to sum instead.
   const stubExpected = DECLARED_QUANTITY + STUB_TOTAL;
   const stub = runChildProcess("stub", goalId);
   console.log(`\nstub run — evidence = ${stub.evidence}, measureTotal = ${stub.measureTotal}`);
@@ -1409,6 +1650,7 @@ async function runMain(): Promise<void> {
   await runEndedCheck();
   await runPlanMonthsCheck();
   await runMetasOverlapCheck();
+  await runPlanRoadmapCheck();
 
   // The commitment that reads a source names it, by the catalogue's own label
   // key; one that reads nothing names none.
@@ -1427,6 +1669,8 @@ async function runMain(): Promise<void> {
     byKind("quantity").length > 0 && byKind("quantity").every((c) => c.sourceLabelKey === null),
     `quantity: ${JSON.stringify(byKind("quantity").map((c) => c.sourceLabelKey))}`,
   );
+
+  await runCommitmentUnitCheck();
 
   console.log("");
   console.log(failed ? "REPORT  failed" : "REPORT  passed");

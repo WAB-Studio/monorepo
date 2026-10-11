@@ -122,61 +122,141 @@ async function seedLocalRows(page: Page, count: number): Promise<void> {
   );
 }
 
-// Mirrors `lib/log/merge.ts`'s own batching and per-row constraint
-// swallowing — `mergeForeign` itself is unreachable from here: nothing in
-// the shipped app calls it yet (module 12), so no bundle exposes it on
-// `window`, and this evaluates inside a browser context no Node import
-// reaches regardless. Resolves once every batch has landed; a caller that
-// wants the merge running *while* it does something else holds this
-// promise without awaiting it first (RNL-01 under fusion).
-async function mergeForeignRows(page: Page, count: number, device: string): Promise<void> {
-  await page.evaluate(
-    ({ count, device }) =>
-      new Promise<void>((resolve, reject) => {
-        const BATCH_SIZE = 500;
+const PEER_DEVICE = "6f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f";
+const FOREIGN_TOTAL = 10_000;
+const PAGE = 500;
+const FINAL_CURSOR = `page-${FOREIGN_TOTAL / PAGE}`;
+
+// The account's side of `/api/log/sync`, as the wire schema
+// (`lib/sync/protocol.ts`) defines it: 500 peer rows per round, then an empty
+// round that ends the driver's loop. The cursor is opaque to the driver.
+function foreignPage(since: string | null): { accepted: number; rows: unknown[]; cursor: string } {
+  const index = since ? Number(since.replace("page-", "")) : 0;
+  const rows = [];
+  for (let i = index * PAGE; i < Math.min((index + 1) * PAGE, FOREIGN_TOTAL); i++) {
+    rows.push({
+      deviceId: PEER_DEVICE,
+      localId: i + 1,
+      at: Date.now() - i,
+      text: `foreign-${i}`,
+      normalised: `foreign-${i}`,
+      kind: "word",
+      outcome: "exact",
+      headword: `foreign-${i}`,
+      rule: null,
+      senses: 1,
+      translation: null,
+      dictionaryReady: true,
+      origin: "device",
+      recordSchema: 2,
+      definition: null,
+      exampleEn: null,
+      exampleEs: null,
+      receivedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 0, i)).toISOString(),
+    });
+  }
+  return { accepted: 0, rows, cursor: `page-${Math.min(index + 1, FOREIGN_TOTAL / PAGE)}` };
+}
+
+async function readSyncRow(page: Page): Promise<{ pulledThroughCursor: string | null; enabled: boolean } | undefined> {
+  return page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
         const request = indexedDB.open("reading-log");
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
           const db = request.result;
-          const insertBatch = (offset: number) => {
-            if (offset >= count) {
-              db.close();
-              resolve();
-              return;
-            }
-            const tx = db.transaction("lookups", "readwrite");
-            const store = tx.objectStore("lookups");
-            const end = Math.min(offset + BATCH_SIZE, count);
-            for (let i = offset; i < end; i++) {
-              const add = store.add({
-                schema: 2,
-                at: Date.now() - i,
-                text: `foreign-${i}`,
-                normalised: `foreign-${i}`,
-                kind: "word",
-                outcome: "miss",
-                headword: null,
-                rule: null,
-                senses: 0,
-                translation: null,
-                dictionaryReady: true,
-                origin: null,
-                device,
-                deviceSeq: i,
-              });
-              // Already merged: cancel the default abort, keep going.
-              add.onerror = (event) => {
-                if (add.error?.name === "ConstraintError") event.preventDefault();
-              };
-            }
-            tx.oncomplete = () => insertBatch(end);
-            tx.onabort = () => reject(tx.error);
+          const get = db.transaction("sync", "readonly").objectStore("sync").get("state");
+          get.onsuccess = () => {
+            db.close();
+            resolve(get.result);
           };
-          insertBatch(0);
+          get.onerror = () => reject(get.error);
         };
       }),
-    { count, device },
   );
+}
+
+async function enableCopy(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("reading-log");
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction("sync", "readwrite");
+          tx.objectStore("sync").put({
+            key: "state",
+            deviceId: crypto.randomUUID(),
+            pushedThroughLocalId: null,
+            pulledThroughCursor: null,
+            lastSyncedAt: null,
+            enabled: true,
+            readerId: "00000000-0000-4000-8000-000000000001",
+            retired: false,
+          });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+}
+
+// `SyncOnHide` (in the layout) is the trigger a real reader reaches by
+// switching tabs; a headless page is never hidden by itself.
+async function hideTab(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+}
+
+// Starts one worker lookup every 5 ms in the page and returns at once;
+// `stopProbe` ends the loop and hands back every latency. Each latency runs
+// from the moment its lookup was due, not from when it was sent: a main thread
+// held up by the merge delays the later ticks too, and they all show it.
+async function startProbe(page: Page, text: string): Promise<void> {
+  await page.evaluate(
+    ({ text, startId }) => {
+      const worker = (window as unknown as { __dictionaryWorker: Worker }).__dictionaryWorker;
+      const probe = { stop: false, durations: [] as number[], done: Promise.resolve() };
+      (window as unknown as { __probe: typeof probe }).__probe = probe;
+      probe.done = (async () => {
+        const origin = performance.now();
+        for (let tick = 0; !probe.stop; tick++) {
+          const due = origin + tick * 5;
+          const wait = due - performance.now();
+          if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+          const id = startId + tick;
+          await new Promise<void>((resolve) => {
+            const onMessage = (event: MessageEvent<{ id?: number; kind: string }>) => {
+              if (event.data.id !== id || event.data.kind !== "answer") return;
+              worker.removeEventListener("message", onMessage);
+              probe.durations.push(performance.now() - Math.max(due, origin));
+              resolve();
+            };
+            worker.addEventListener("message", onMessage);
+            worker.postMessage({ id, kind: "lookup", text });
+          });
+        }
+      })();
+    },
+    { text, startId: (nextProbeId += 10_000_000) },
+  );
+}
+
+async function stopProbe(page: Page): Promise<number[]> {
+  return page.evaluate(async () => {
+    const probe = (window as unknown as { __probe: { stop: boolean; durations: number[]; done: Promise<void> } }).__probe;
+    probe.stop = true;
+    await probe.done;
+    return probe.durations;
+  });
 }
 
 test("every lookup that finds an answer is recorded, a miss leaves no row, a fat log costs nothing, and a lost log costs nothing either", async ({
@@ -278,9 +358,26 @@ test("every lookup that finds an answer is recorded, a miss leaves no row, a fat
   expect(pageErrors).toEqual([]);
 });
 
-test("RNL-01 stays under 10ms with a 10,000-row merge in flight (RNL-06 under decision 3)", async ({ page }) => {
+// The merge is the app's own: `SyncOnOpen` calls `syncNow`, the driver posts to
+// `/api/log/sync` (answered here, per page, for this browser alone) and hands
+// the pages to `mergeForeign`. Nothing in this spec inserts a row itself.
+test("RNL-01: a lookup answers in under 10ms at the median and at the 95th percentile while the app merges 10,000 rows from the account", async ({
+  page,
+}) => {
   await deleteTranslator(page);
   await exposeDictionaryWorker(page);
+
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let rounds = 0;
+  await page.route("**/api/log/sync", async (route) => {
+    const body = route.request().postDataJSON() as { since: string | null };
+    // The first round waits, so the probe is already running when the merge starts.
+    if (rounds++ === 0) await gate;
+    await route.fulfill({ json: foreignPage(body.since) });
+  });
 
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
@@ -289,33 +386,40 @@ test("RNL-01 stays under 10ms with a 10,000-row merge in flight (RNL-06 under de
   await assetResponse;
   await page.waitForTimeout(1000);
 
-  // `reading-log` opens lazily, on the first settled query (`record.ts`):
-  // one throwaway lookup is what stands up the real v2 schema — store, sync,
-  // `foreign` index — before the raw seeders below reach for it with no
-  // `onupgradeneeded` of their own to fall back on.
+  // `reading-log` opens lazily, on the first settled query: one throwaway
+  // lookup stands up the v3 schema and the app mints its device row.
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.pressSequentially("primer", { delay: 30 });
   await searchBox.fill("");
   await page.waitForTimeout(300);
 
-  await seedLocalRows(page, 10_000);
+  // The copy is switched on in storage; the tab then hides, which is what runs
+  // the driver for a signed-in reader. The first round waits at the gate.
+  await enableCopy(page);
+  await hideTab(page);
+  await expect.poll(() => rounds).toBe(1);
 
-  // Launched, not awaited: the merge's own batches of `add` calls are still
-  // landing while the round trips below run, which is the only way to prove
-  // the worker's answer never waits on this database (RNL-06).
-  const mergeDone = mergeForeignRows(page, 10_000, "peer-device");
+  const worker = await measureWorkerRoundTrips(page, 3, "throughout");
+  expect(worker).toHaveLength(3);
+  await startProbe(page, "throughout");
+  release();
 
-  const durations = await measureWorkerRoundTrips(page, 200, "throughout");
-  const p95 = percentile(durations, 95);
-  console.log(`RNL-01 worker round trip under a 10,000-row merge in flight, 200 lookups — p95 ${p95.toFixed(3)} ms`);
-  expect(p95).toBeLessThan(10);
+  await expect
+    .poll(async () => (await readSyncRow(page))?.pulledThroughCursor, { timeout: 60_000 })
+    .toBe(FINAL_CURSOR);
+  const durations = await stopProbe(page);
 
-  await mergeDone;
-  const rowCount = (await readLogRows(page)).length;
-  expect(rowCount).toBe(20_001);
+  expect(durations.length).toBeGreaterThan(50);
+  const median = percentile(durations, 50);
+  console.log(`RNL-01 worker round trip during the app's own 10,000-row merge — ${durations.length} lookups, median ${median.toFixed(3)} ms, p95 ${percentile(durations, 95).toFixed(1)} ms, max ${Math.max(...durations).toFixed(1)} ms`);
+  expect(median).toBeLessThan(10);
+  expect(percentile(durations, 95)).toBeLessThan(10);
+
+  const foreign = (await readLogRows(page)).filter((row) => row.normalised.startsWith("foreign-"));
+  expect(foreign).toHaveLength(FOREIGN_TOTAL);
 });
 
-test("RL-34: a word's stored translation spans senses, and the 120-char cut still wins over the 3-sense cap", async ({
+test("RL-34: a word's stored translation spans senses, and the 120-char cut between glosses still wins over the 3-sense cap", async ({
   page,
 }) => {
   await deleteTranslator(page);
@@ -344,7 +448,7 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut stil
   expect(backRow?.translation?.length).toBeLessThanOrEqual(120);
 
   // A one-sense headword whose glosses alone run to 154 raw characters: the
-  // cut still lands at exactly 120, unmoved by the sense cap above it.
+  // cut lands after the last whole gloss that fits, unmoved by the sense cap.
   await searchBox.fill("the road to hell is paved with good intentions");
   await expect(page.getByRole("heading", { name: "the road to hell is paved with good intentions" })).toBeVisible({
     timeout: 5000,
@@ -356,7 +460,9 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut stil
     (row) => row.normalised === "the road to hell is paved with good intentions",
   );
   expect(idiomRow?.senses).toBe(1);
-  expect(idiomRow?.translation).toHaveLength(120);
+  expect(idiomRow?.translation).toBe(
+    "el camino al infierno está empedrado de buenas intenciones, el infierno está empedrado de buenas intenciones",
+  );
 
   // "anyway" carries one sense whose raw glosses run to 195 characters, and
   // the 120-char cut lands right after "comoquiera, " — a separator, not a
@@ -647,43 +753,38 @@ test("the same word typed at ordinary speed, 120ms per keystroke, still lands as
 // `pending` by a non-prefix word, and "cat", the word that displaced it. A
 // relay holding one key overwrote "book" with "cat" before "book"'s own
 // IndexedDB transaction had a chance to survive the teardown that follows,
-// and the next document recovered only "cat". Six variants: three delays
-// short of the 800ms settle, crossed by the two teardowns that lose a row a
-// killed tab does not (docs/TRAPS.md) — a URL navigation and a reload.
-for (const waitMs of [0, 200, 400] as const) {
-  for (const teardown of ["goto", "reload"] as const) {
-    test(`book, then cat with no empty box between them, torn down by a ${teardown} at ${waitMs}ms, leaves both rows`, async ({
-      page,
-    }) => {
-      await deleteTranslator(page);
-      const assetResponse = page.waitForResponse(
-        (response) => response.url().includes(manifest.asset.path) && response.ok(),
-      );
-      await page.goto("/");
-      await assetResponse;
-      await page.waitForTimeout(1000);
+// and the next document recovered only "cat". The 0/200/400 ms matrix over
+// these two teardowns is `lib/log/record.test.ts`; each real teardown is
+// driven once here, at 0 ms, the tightest gap.
+for (const teardown of ["goto", "reload"] as const) {
+  test(`book, then cat with no empty box between them, torn down by a ${teardown} at once, leaves both rows`, async ({
+    page,
+  }) => {
+    await deleteTranslator(page);
+    const assetResponse = page.waitForResponse(
+      (response) => response.url().includes(manifest.asset.path) && response.ok(),
+    );
+    await page.goto("/");
+    await assetResponse;
+    await page.waitForTimeout(1000);
 
-      const searchBox = page.getByRole("textbox", { name: messages.search.label });
-      await searchBox.fill("book");
-      // Past the 800ms settle: "book" is `pending`, not `latestCandidate`,
-      // before "cat" ever displaces it.
-      await page.waitForTimeout(1200);
-      // The reported reproduction: replace the box's whole content, the way
-      // selecting all and typing over it does, never emptying it first.
-      await searchBox.fill("cat");
-      await page.waitForTimeout(waitMs);
+    const searchBox = page.getByRole("textbox", { name: messages.search.label });
+    await searchBox.fill("book");
+    // Past the 800ms settle: "book" is `pending` before "cat" displaces it.
+    await page.waitForTimeout(1200);
+    // Replace the box's whole content, never emptying it first.
+    await searchBox.fill("cat");
 
-      if (teardown === "goto") {
-        await page.goto("/registro");
-      } else {
-        await page.reload();
-      }
+    if (teardown === "goto") {
+      await page.goto("/registro");
+    } else {
+      await page.reload();
+    }
 
-      const rows = await readLogRows(page);
-      expect(rows.find((row) => row.normalised === "book")).toBeTruthy();
-      expect(rows.find((row) => row.normalised === "cat")).toBeTruthy();
-    });
-  }
+    const rows = await readLogRows(page);
+    expect(rows.find((row) => row.normalised === "book")).toBeTruthy();
+    expect(rows.find((row) => row.normalised === "cat")).toBeTruthy();
+  });
 }
 
 test("three words answered in a row with no empty box between them, abandoned cold, leave three rows", async ({

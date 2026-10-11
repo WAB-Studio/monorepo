@@ -10,3 +10,7 @@
   block-size: 100%;
   background: var(--pulsar-ink);
 }
+
+.thick {
+  block-size: 6px;
+}

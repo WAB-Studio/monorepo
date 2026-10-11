@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
+import { FUNCTION_WORDS, functionWordTranslation } from "../lib/phrase/function-words";
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 
@@ -308,6 +309,8 @@ test("every block and the trailing line lead back to /?q=<word>, and that screen
   await page.locator('main a[href="/?q=she"]').click();
   await expect(page).toHaveURL(/\/\?q=she$/);
   await expect(page.getByRole("heading", { name: "she", exact: true })).toBeVisible();
+  // RL-59: `she` is a function word, so the dictionary's lines sit folded.
+  await page.locator("main").getByRole("button", { name: messages.search.noEntry.showDictionary }).click();
   await expect(page.getByText(messages.word.translations)).toBeVisible();
 
   await page.goBack();
@@ -321,4 +324,337 @@ test("every block and the trailing line lead back to /?q=<word>, and that screen
   await more.click();
   await expect(page).toHaveURL(/\/\?q=bitter$/);
   await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible();
+});
+
+// RL-57 / module 559 (docs/voyager/DESIGN.md `SinEntradaFraseFuncion`): in the
+// per-word breakdown a function word leads with the table's translation and
+// the dictionary's own line follows, muted. The expected strings come from the
+// table's own function, never from the component.
+async function failTranslation(page: Page): Promise<void> {
+  await page.route("**/api/translate", async (route) => {
+    await route.fulfill({ status: 502, contentType: "application/json", body: JSON.stringify({ error: "provider" }) });
+  });
+}
+
+type Line = { text: string; color: string };
+
+// Every leaf text between a word's heading and the next block's heading (or the
+// end of the answer), in reading order: the block's lines without naming the
+// component or a class.
+async function blockLines(page: Page, word: string, next: string | null): Promise<Line[]> {
+  const from = await top(page, mainHeadings(page).filter({ hasText: new RegExp(`^${word}$`) }));
+  const to = next === null ? Infinity : await top(page, mainHeadings(page).filter({ hasText: new RegExp(`^${next}$`) }));
+  return page.locator("main *").evaluateAll(
+    (nodes, [lo, hi]) =>
+      nodes
+        .filter((node) => node.children.length === 0 && !node.closest("h1, h2, h3"))
+        .map((node) => ({
+          y: node.getBoundingClientRect().top + window.scrollY,
+          text: (node.textContent ?? "").trim(),
+          color: getComputedStyle(node).color,
+        }))
+        .filter((n) => n.text !== "" && n.y > lo && n.y < hi)
+        .sort((x, y) => x.y - y.y)
+        .map(({ text, color }) => ({ text, color })),
+    [from, to] as [number, number],
+  );
+}
+
+async function top(page: Page, locator: ReturnType<Page["getByText"]>): Promise<number> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error("not on screen");
+  return box.y + (await page.evaluate(() => window.scrollY));
+}
+
+async function breakdown(page: Page, query: string): Promise<void> {
+  await page.getByRole("textbox", { name: messages.search.label }).fill(query);
+  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 400);
+  await expect(page.getByText(messages.search.noEntry.titleTranslationFailed.replace("{query}", query))).toBeVisible();
+}
+
+
+// Module 681. The board's words (SinEntradaFuncionPlegadaOscuroMovil): no
+// message key exists yet for the control, so the spec states the text the
+// board draws.
+const FOLDED_LABEL = "ver el diccionario";
+const OPEN_LABEL = "ocultar el diccionario";
+
+// The control that follows a word's heading in reading order: the word's own,
+// for a function word, without naming a component or a class.
+function controlOf(page: Page, word: string) {
+  return mainHeadings(page)
+    .filter({ hasText: new RegExp(`^${word}$`) })
+    .locator("xpath=following::button[@aria-expanded][1]");
+}
+
+async function unfold(page: Page, word: string): Promise<void> {
+  const control = controlOf(page, word);
+  await expect(control).toHaveAttribute("aria-expanded", "false");
+  await control.click();
+  await expect(control).toHaveAttribute("aria-expanded", "true");
+}
+
+function visible(page: Page, text: string) {
+  return page.locator("main").getByText(text, { exact: true }).locator("visible=true");
+}
+
+function formLine(key: "viaInflectionWithEntry" | "formOf", surface: string, lemma: string): string {
+  return messages.word[key].replace("{surface}", surface).replace("{lemma}", lemma);
+}
+
+async function sentence(page: Page, query: string): Promise<void> {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+  await breakdown(page, query);
+}
+
+const GLOSSES = new Set(Array.from(FUNCTION_WORDS.values()));
+
+test("a function word's block starts with the table translation and the dictionary's line follows it", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+  const tableText = functionWordTranslation("something") as string;
+  expect(tableText, "558's table owns `something`").not.toBeNull();
+
+  await breakdown(page, "something weird happened");
+  await unfold(page, "something");
+  const lines = (await blockLines(page, "something", "weird")).map((l) => l.text);
+  expect(lines[0], "the table's translation leads the block").toBe(tableText);
+  expect(lines.indexOf("basurita"), "the dictionary's own line follows it").toBeGreaterThan(0);
+});
+
+test("the dictionary line under a function word is muted, the table line is not", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "she whispered something nobody heard");
+  await unfold(page, "she");
+  const she = await blockLines(page, "she", "whispered");
+  const whispered = await blockLines(page, "whispered", "something");
+  const plain = whispered.find((l) => l.text === "susurrar, chamuyar, gaguear, shushushar");
+  expect(plain, "a content word's translation, today's tone").toBeDefined();
+
+  expect(she[0].text).toBe(functionWordTranslation("she"));
+  expect(she[0].color, "the table line wears the unmuted tone").toBe(plain?.color);
+  const dictionaryLine = she.slice(1).find((l) => l.text === "ella");
+  expect(dictionaryLine, "the dictionary's line stays under the table's").toBeDefined();
+  expect(dictionaryLine?.color, "and sits muted").not.toBe(plain?.color);
+});
+
+test("the board's sentence: she and nobody lead with the table, whispered and heard stay as the dictionary has them", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "she whispered something nobody heard");
+  expect((await blockLines(page, "she", "whispered"))[0].text).toBe(functionWordTranslation("she"));
+  expect((await blockLines(page, "nobody", "heard"))[0].text).toBe(functionWordTranslation("nobody"));
+  expect((await blockLines(page, "something", "nobody"))[0].text).toBe(functionWordTranslation("something"));
+
+  for (const [word, next] of [["whispered", "something"], ["heard", null]] as const) {
+    const lines = (await blockLines(page, word, next)).map((l) => l.text);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.filter((line) => GLOSSES.has(line)), `${word} takes nothing from the table`).toEqual([]);
+  }
+});
+
+test("a function word written with a capital is headed by the dictionary's entry, not by what was typed", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "She whispered something nobody heard");
+  const headings = mainHeadings(page);
+  await expect(headings.filter({ hasText: /^she$/ }), "the entry's own headword").toHaveCount(1);
+  await expect(headings.filter({ hasText: /^She$/ }), "not the written token").toHaveCount(0);
+  // The block still leads with the table's line under that heading.
+  expect((await blockLines(page, "she", "whispered"))[0].text).toBe(functionWordTranslation("she"));
+});
+
+test("a content word's block draws the dictionary alone", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await breakdown(page, "something weird happened");
+  const lines = (await blockLines(page, "weird", "happened")).map((l) => l.text);
+  expect(lines.length, "weird draws its senses").toBeGreaterThan(0);
+  expect(lines.filter((line) => GLOSSES.has(line))).toEqual([]);
+  expect(lines).toContain("raro, anormal, bizarro, cuático, extraño");
+});
+
+test("offline, the breakdown still leads with the table translation and asks for nothing", async ({ page, context }) => {
+  await deleteTranslator(page);
+  await openReady(page);
+  await context.setOffline(true);
+
+  const requestUrls: string[] = [];
+  page.on("request", (request) => requestUrls.push(request.url()));
+  await page.getByRole("textbox", { name: messages.search.label }).fill("something weird happened");
+  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 600);
+
+  const lines = (await blockLines(page, "something", "weird")).map((l) => l.text);
+  expect(lines[0]).toBe(functionWordTranslation("something"));
+  const stray = strayRequests(requestUrls).filter((url) => !url.includes("/api/translate"));
+  expect(stray).toEqual([]);
+});
+
+test("past sixty words of function words, the line stands alone with no block and no table line", async ({ page }) => {
+  await deleteTranslator(page);
+  await failTranslation(page);
+  await openReady(page);
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill(Array.from({ length: 61 }, () => "something").join(" "));
+  await expect(page.getByText(messages.search.noEntry.tooLong.replace("{count}", "61"))).toBeVisible();
+  await expect(mainHeadings(page)).toHaveCount(0);
+  await expect(page.getByText(functionWordTranslation("something") as string, { exact: true })).toHaveCount(0);
+});
+
+// Module 681 / RL-58 inside the breakdown (SinEntradaLemaCompactoOscuroMovil):
+// the lemma block of a form with an exact entry sits under the form's first
+// group, as on the word page. Expectations are the board's words and the
+// dictionary's rows, never the component's markup.
+test("in a sentence, left carries the leave block between its first and second groups", async ({ page }) => {
+  await sentence(page, "I left it there");
+  const lines = (await blockLines(page, "left", "it")).map((l) => l.text);
+  const first = lines.indexOf("sobrado, sobras");
+  const via = lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave"));
+  const leaveVerb = lines.indexOf("dejar, abandonar, abjurar, apostatar, defeccionar, desertar, legar, partir, salir, irse, depositar, largarse");
+  const leaveNoun = lines.indexOf("permiso, excedencia, licencia, despedida");
+  const second = lines.indexOf("izquierda, de izquierda, izquierdo");
+  const rest = lines.indexOf("a la izquierda, izquierdo");
+  for (const [name, at] of Object.entries({ first, via, leaveVerb, leaveNoun, second, rest })) {
+    expect(at, `${name} is in left's block`).toBeGreaterThanOrEqual(0);
+  }
+  expect(first, "left's first group leads").toBeLessThan(via);
+  expect(via).toBeLessThan(leaveVerb);
+  expect(leaveVerb).toBeLessThan(leaveNoun);
+  expect(leaveNoun, "left's second group follows the whole leave block").toBeLessThan(second);
+  expect(second).toBeLessThan(rest);
+  expect(lines.filter((line) => line === formLine("viaInflectionWithEntry", "left", "leave")), "named once").toHaveLength(1);
+  await expect(mainHeadings(page).filter({ hasText: /^leave$/ })).toHaveCount(1);
+});
+
+// The Done table says «see» before «serrar»; RL-58 says right under the form's
+// first group, and the word page for `saw` answers serrar, then see, then
+// sierra. This asserts RL-58 and the word page.
+test("in a sentence, saw carries the see block under its first group, ahead of its second", async ({ page }) => {
+  await sentence(page, "I saw it there");
+  const lines = (await blockLines(page, "saw", "it")).map((l) => l.text);
+  const serrar = lines.indexOf("serrar, aserrar");
+  const via = lines.indexOf(formLine("viaInflectionWithEntry", "saw", "see"));
+  const sierra = lines.indexOf("sierra, proverbio, refrán, dicho");
+  expect(serrar).toBeGreaterThanOrEqual(0);
+  expect(serrar, "the form's first group leads").toBeLessThan(via);
+  expect(via, "the lemma block rises above the form's second group").toBeLessThan(sierra);
+});
+
+test("in a sentence, bed (an exact entry with no lemma) carries no lemma block", async ({ page }) => {
+  await sentence(page, "I left it on the bed");
+  const lines = (await blockLines(page, "bed", null)).map((l) => l.text);
+  expect(lines.some((line) => line.includes("cama, lecho"))).toBe(true);
+  expect(lines.filter((line) => line.includes("es una forma de"))).toEqual([]);
+  await expect(mainHeadings(page).filter({ hasText: /^bed$/ })).toHaveCount(1);
+});
+
+test("in a sentence, a form with no entry of its own still leads, then names its lemma once", async ({ page }) => {
+  await sentence(page, "stopping bed");
+  const lines = (await blockLines(page, "stopping", "bed")).map((l) => l.text);
+  const form = lines.indexOf(formLine("formOf", "stopping", "stop"));
+  expect(form, "the form is named").toBeGreaterThanOrEqual(0);
+  expect(lines.filter((line) => line.includes("también es una forma de"))).toEqual([]);
+  expect(lines.indexOf("dejar de, parar de, parar, detener, pararse, entullecer, discontinuar")).toBeGreaterThan(form);
+  await expect(mainHeadings(page).filter({ hasText: /^stop$/ })).toHaveCount(1);
+});
+
+// SinEntradaFuncionPlegadaOscuroMovil.
+test("a function word's dictionary block is folded on arrival behind a control that says so", async ({ page }) => {
+  await sentence(page, "it would be there");
+  for (const word of ["it", "would", "be", "there"]) {
+    const control = controlOf(page, word);
+    await expect(control, `${word} has its control`).toHaveAttribute("aria-expanded", "false");
+    await expect(control).toHaveText(FOLDED_LABEL);
+  }
+  await expect(visible(page, functionWordTranslation("would") as string), "the table line stays").toHaveCount(1);
+  await expect(visible(page, "por favor"), "would's dictionary line is not on screen").toHaveCount(0);
+  await expect(visible(page, messages.word.translations), "no group label of any word is on screen").toHaveCount(0);
+});
+
+test("the control is a 44px target", async ({ page }) => {
+  await sentence(page, "it would be there");
+  const box = await controlOf(page, "would").boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+});
+
+test("tapping the control opens the muted block and the control reads «ocultar»; tapping again folds it", async ({ page }) => {
+  await sentence(page, "it would be there");
+  const control = controlOf(page, "would");
+  await control.click();
+  await expect(control).toHaveAttribute("aria-expanded", "true");
+  await expect(control).toHaveText(OPEN_LABEL);
+  await expect(visible(page, "por favor")).toHaveCount(1);
+  await expect(controlOf(page, "be"), "another word stays folded").toHaveAttribute("aria-expanded", "false");
+  await expect(visible(page, "ser, estar")).toHaveCount(1);
+
+  const lines = await blockLines(page, "would", "be");
+  const table = lines.find((l) => l.text === functionWordTranslation("would"));
+  const opened = lines.find((l) => l.text === "por favor");
+  expect(table).toBeDefined();
+  expect(opened?.color, "the opened block is muted").not.toBe(table?.color);
+  expect(lines.find((l) => l.text === messages.word.translations)?.color, "and so are its labels").not.toBe(table?.color);
+
+  await control.click();
+  await expect(control).toHaveAttribute("aria-expanded", "false");
+  await expect(control).toHaveText(FOLDED_LABEL);
+  await expect(visible(page, "por favor")).toHaveCount(0);
+});
+
+test("six function words at 360 take less than half of the 2540px the open breakdown measured", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 0) > 400, "the 2540px was measured at 360");
+  const query = "that was what they could do";
+  for (const word of query.split(" ")) {
+    expect(functionWordTranslation(word), `${word} is in the table`).not.toBeNull();
+  }
+  await sentence(page, query);
+  const [from, to] = await page.locator("main *").evaluateAll((nodes) => {
+    const boxes = nodes
+      .filter((node) => node.children.length === 0 && (node.textContent ?? "").trim() !== "")
+      .map((node) => node.getBoundingClientRect());
+    return [Math.min(...boxes.map((b) => b.top)), Math.max(...boxes.map((b) => b.bottom))];
+  });
+  expect(to - from).toBeLessThan(2540 / 2);
+});
+
+test("offline, a sentence still answers from the device: the lemma block under left's first group, the function words folded", async ({
+  page,
+  context,
+}) => {
+  await deleteTranslator(page);
+  await openReady(page);
+  await context.setOffline(true);
+  const requestUrls: string[] = [];
+  page.on("request", (request) => requestUrls.push(request.url()));
+
+  await page.getByRole("textbox", { name: messages.search.label }).fill("I left it there");
+  await expect(visible(page, formLine("viaInflectionWithEntry", "left", "leave"))).toHaveCount(1);
+  const lines = (await blockLines(page, "left", "it")).map((l) => l.text);
+  expect(lines.indexOf("sobrado, sobras")).toBeLessThan(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave")));
+  expect(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave"))).toBeLessThan(lines.indexOf("izquierda, de izquierda, izquierdo"));
+
+  await expect(controlOf(page, "it")).toHaveAttribute("aria-expanded", "false");
+  await expect(visible(page, "tecnología de la información")).toHaveCount(0);
+  await unfold(page, "it");
+  await expect(visible(page, "tecnología de la información")).toHaveCount(1);
+
+  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  expect(strayRequests(requestUrls).filter((url) => !url.includes("/api/translate"))).toEqual([]);
+});
+
+test("log.study.forms is gone from the messages", () => {
+  expect(Object.keys(messages.log.study)).not.toContain("forms");
 });

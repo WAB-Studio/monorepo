@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { ConnectionsScreen, type ConnectionRow } from "@/components/connections/connections-screen";
+import { ConnectionsScreen, type ConnectionRow, type ConnectionStamp } from "@/components/connections/connections-screen";
 import { env } from "@/lib/env";
 import { listAccessTokens } from "@/lib/queries/tokens";
 import { getPerson } from "@/lib/session";
@@ -19,26 +19,18 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("connections") };
 }
 
-// The auth gate, the list, and the words each row reads. The key a person just
+// The auth gate and the list; the screen words each row. The key a person just
 // made is not here: it lives in the screen's state and nowhere a render reaches.
 export default async function ConnectionsPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");
 
-  const [tokens, t] = await Promise.all([listAccessTokens(), getTranslations()]);
+  const tokens = await listAccessTokens();
 
   const today = todayInZone();
-  // «hoy 09:40» for today, «el 5 oct 2026» (plus the time when `clock`) for any other day.
-  const stamp = (instant: string, clock: boolean) =>
-    civilDateInZone(new Date(instant)) === today
-      ? `${t("connections.row.today")} ${timeInZone(instant)}`
-      : `${t("connections.row.on", { date: dayOf(instant) })}${clock ? ` ${timeInZone(instant)}` : ""}`;
-  const live = (token: (typeof tokens)[number]) => {
-    const family = token.kind === "oauth" ? "connections.oauth" : "connections.row";
-    const created = stamp(token.createdAt, false);
-    return token.lastUsedAt
-      ? t(`${family}.metaUsed`, { created, used: stamp(token.lastUsedAt, true) })
-      : t(`${family}.metaUnused`, { created });
+  const stamp = (instant: string): ConnectionStamp => {
+    const day = civilDateInZone(new Date(instant));
+    return { today: day === today, date: dayOf(instant), time: timeInZone(instant) };
   };
 
   const rows: ConnectionRow[] = tokens.map((token) => ({
@@ -46,9 +38,12 @@ export default async function ConnectionsPage() {
     kind: token.kind,
     name: token.name,
     revoked: token.revokedAt !== null,
-    meta: token.revokedAt
-      ? t("connections.row.revokedMeta", { date: dayOf(token.revokedAt) })
-      : live(token),
+    revokedAt: token.revokedAt ? stamp(token.revokedAt) : null,
+    expiredAt: token.expiredAt ? stamp(token.expiredAt) : null,
+    created: stamp(token.createdAt),
+    used: token.lastUsedAt ? stamp(token.lastUsedAt) : null,
+    returnHost: token.returnHost,
+    folded: token.folded,
   }));
 
   return <ConnectionsScreen rows={rows} siteUrl={env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")} />;

@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
+
+import sources from "../messages/es/sources.json";
 
 import { test, expect } from "./fixtures";
 import { todayInZone } from "../lib/zone";
+import plan from "../messages/es/plan.json";
 
 // ICU's Spanish, never the catalogue's list the screen reads.
 function weekLongName(civilDay: string): string {
@@ -59,7 +62,7 @@ async function deleteGoal(db: postgres.Sql, personId: string, goalId: string): P
 
 // Inserted over the owner connection (`MIGRATION_DATABASE_URL`, RLS bypassed
 // the same way every other probe in this suite writes), under the spec's own
-// signed-in identity — decided by the user 2026-09-28: a registered harness
+// signed-in identity — a registered harness
 // identity may own its own `reading.lookups` rows. One device, one local id
 // per row: `lookups`' own primary key is `(user_id, device_id, local_id)`,
 // never a surrogate `id` column.
@@ -88,6 +91,11 @@ async function lookupCountOf(db: postgres.Sql, personId: string): Promise<number
     select count(*)::int as count from reading.lookups where user_id = ${personId}
   `;
   return row.count;
+}
+
+// What the row draws besides its name, whitespace folded: its one meta line.
+async function metaOf(row: Locator, name: string): Promise<string> {
+  return (await row.innerText()).replace(name, "").replace(/\s+/g, " ").trim();
 }
 
 async function factCount(db: postgres.Sql, commitmentId: string): Promise<number> {
@@ -127,12 +135,12 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await openNewCommitmentForm(page, goalId);
     await page.getByLabel("qué es").fill(commitmentName);
 
-    await page.getByRole("button", { name: "lo que ya sabe otra app", exact: true }).click();
+    await page.getByRole("button", { name: plan.commitmentForm.satisfaction.evidence, exact: true }).click();
     // The catalogue's one source, read by its own labelKey — never typed
     // here, `sources.json`'s own word.
     await expect(page.getByRole("button", { name: "diccionario", exact: true })).toBeVisible();
 
-    const thresholdField = page.getByLabel("umbral");
+    const thresholdField = page.getByLabel(plan.commitmentForm.thresholdLabel);
     await expect(thresholdField).toHaveValue("1");
     await thresholdField.fill(String(threshold));
 
@@ -142,7 +150,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     // The goal screen's own words for it (`commitment-list.tsx`'s
     // `satisfactionWords`): the threshold just typed, plural, over the
     // source's own name.
-    await expect(page.getByText(`${threshold} búsquedas · diccionario`)).toBeVisible();
+    await expect(page.getByText(`${threshold} búsquedas · ${sources.readingLookups}`)).toBeVisible();
 
     const commitment = await commitmentByName(db, personId, commitmentName);
     expect(commitment).not.toBeNull();
@@ -159,6 +167,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await expect(row).toBeVisible();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
     await expect(row).not.toContainText("diccionario");
+    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas`);
     await expect(row).toBeDisabled();
     expect(await factCount(db, commitmentId)).toBe(0);
 
@@ -167,6 +176,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await page.reload();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
     await expect(row).not.toContainText("diccionario");
+    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas`);
 
     // The threshold itself, stamped the same evening: the evidence mark
     // (never the declared one), named, and still nothing to undo — the same
@@ -174,7 +184,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     await insertLookup(db, personId, deviceId, 2, eveningInBogota(day));
     await page.reload();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
-    await expect(row).toContainText("diccionario");
+    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas · ${sources.readingLookups}`);
     await expect(row).not.toContainText("lo dijiste tú");
     await expect(row).not.toContainText("pide el número");
     await expect(row).toBeDisabled();
@@ -193,7 +203,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     expect(await lookupCountOf(db, otherId)).toBe(otherRows);
   } finally {
     // Deleted by the exact ids this spec minted — the identity's own purge
-    // (module 53's `dropRun`, `ON DELETE CASCADE`) is the backstop, not the
+    // (`dropRun`, `ON DELETE CASCADE`) is the backstop, not the
     // only door.
     await deleteLookups(db, personId, deviceId);
     if (goalId) await deleteGoal(db, personId, goalId);

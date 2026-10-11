@@ -5,12 +5,15 @@ import { sql } from "drizzle-orm";
 import { phaseOn } from "@/lib/day/derive";
 import type { EvidenceDay } from "@/lib/day/types";
 import { dayBefore } from "@/lib/day/weeks";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
-import { carryShare, monthList, type MonthItem } from "@/lib/plan/carry";
 import { monthOf, toDate } from "@/lib/plan/months";
+import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
+import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
+import { weekPlanned } from "@/lib/plan/week-planned";
 import {
   goalFigures,
+  matchingSourceKeys,
   type CommitmentRow,
   type FactRow,
   type GoalRow,
@@ -28,10 +31,10 @@ type ReportRow = {
   commitments: CommitmentRow[];
   facts: FactRow[];
   budgets: { month: string; amount: number }[];
-  tasks: TaskRow[];
+  tasks: (TaskRow & { in_plan: boolean; created_at: string; position: number })[];
 };
 
-// One statement over every goal not archived (RP-46). RLS narrows it to the
+// One statement over every goal not archived (RP-49). RLS narrows it to the
 // caller's own rows (RNP-05).
 async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
   const rows = await tx.execute<ReportRow>(sql`
@@ -69,28 +72,47 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
 
 // Bounded in SQL from the earliest open goal's opening, as `goalSpan` does
 // for one goal: the reading statement opens blind, beside the goals one.
-async function queryReportEvidence(
-  tx: Transaction,
-  personId: string,
-  today: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-  const from = sql`(select min((g.created_at at time zone ${TIME_ZONE})::date)
+const reportEvidenceFrom = sql`(select min((g.created_at at time zone ${TIME_ZONE})::date)
                       from "goals"."goals" g where g.archived_at is null)`;
 
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from, to: today, zone: TIME_ZONE, tx });
-  }
-
-  return bySourceKey;
+// The goal's plan, read the way `planMonthList` and `planShare` ask (RP-49).
+function planInputOf(row: ReportRow, today: string): PlanInput {
+  const tasks: PlanTask[] = row.tasks.map((task) => ({
+    id: task.id,
+    parentId: task.parent_id,
+    name: task.name,
+    plannedMonth: task.planned_month,
+    day: task.day,
+    estimate: task.estimate,
+    doneOn: task.done_on,
+    factId: task.fact_id ?? null,
+    note: task.note,
+    inPlan: task.in_plan,
+    createdOn: civilDateInZone(new Date(task.created_at)),
+    position: task.position,
+  }));
+  return {
+    rhythm: row.goal.rhythm ?? null,
+    budgets: row.budgets,
+    tasks,
+    openedOn: civilDateInZone(new Date(row.goal.created_at)),
+    horizon: row.goal.horizon,
+    today,
+  };
 }
 
-// What `monthList` hands «Mes», done and not (RP-46). A parent is done on its
+// False when neither the task nor any child carries an estimate.
+function hasAmountOf(item: PlanItem): boolean {
+  return item.children.length === 0
+    ? item.task.estimate !== null
+    : item.children.some((child) => child.estimate !== null);
+}
+
+// What the plan hands «Mes», done and not (RP-49). A parent is done on its
 // last child's day; `owes` counts what is undone today.
-function toReportTask(item: MonthItem): ReportTask {
+function toReportTask(item: PlanItem): ReportTask {
   const leaf = item.children.length === 0;
+  const splits = item.from !== null || item.to !== null;
   const undone = item.children.filter((child) => child.doneOn === null);
   const doneOn = !item.done
     ? null
@@ -106,12 +128,14 @@ function toReportTask(item: MonthItem): ReportTask {
     done: item.done,
     doneOn,
     estimate: leaf ? item.task.estimate : null,
+    part: splits && hasAmountOf(item) ? item.part : null,
+    continuesIn: item.to,
     owes: leaf
       ? item.task.doneOn === null
         ? (item.task.estimate ?? 0)
         : 0
       : undone.reduce((sum, child) => sum + (child.estimate ?? 0), 0),
-    hasAmount: item.hasAmount,
+    hasAmount: hasAmountOf(item),
     note: item.task.note ?? null,
     children: item.children.map((child) => ({
       name: child.name,
@@ -123,7 +147,7 @@ function toReportTask(item: MonthItem): ReportTask {
   };
 }
 
-// The days `loadGoal` would have read: its own opening to its horizon.
+// The days `loadGoal` would have read: its own opening to the day before its horizon.
 function withinGoal(
   bySourceKey: Record<string, EvidenceDay[]>,
   openedOn: string,
@@ -131,13 +155,13 @@ function withinGoal(
 ): Record<string, EvidenceDay[]> {
   const bounded: Record<string, EvidenceDay[]> = {};
   for (const [key, days] of Object.entries(bySourceKey)) {
-    bounded[key] = days.filter((day) => day.day >= openedOn && day.day <= horizon);
+    bounded[key] = days.filter((day) => day.day >= openedOn && day.day < horizon);
   }
   return bounded;
 }
 
 /**
- * The export's data (RP-46): every goal not archived, in two transactions
+ * The export's data (RP-49): every goal not archived, in two transactions
  * fanned with `Promise.all` — one over the goals, one over the evidence — so
  * the goal count never lengthens the chain (RNP-03). An evidence rejection
  * degrades to `"unreadable"` and every goal keeps its declared half (RNP-04).
@@ -148,7 +172,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
 
   const [rows, evidenceOutcome] = await Promise.all([
     withGoalsDb(queryReportRows),
-    withReadingDb((tx) => queryReportEvidence(tx, person.id, today)).then(
+    withReadingDb((tx) => queryEvidenceBySource(tx, person.id, reportEvidenceFrom, today)).then(
       (bySourceKey) => ({ status: "read" as const, bySourceKey }),
       () => ({ status: "unreadable" as const, bySourceKey: {} }),
     ),
@@ -172,6 +196,9 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       today,
     });
     const current = phaseOn(phases, today);
+    const planInput = planInputOf(row, today);
+    const monthItems = planMonthList(planInput, thisMonth);
+    const unmeasured = row.goal.measure_unit === null;
 
     return {
       id: row.goal.id,
@@ -179,6 +206,8 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       horizon: row.goal.horizon,
       endedOn: row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
       unit: row.goal.measure_unit,
+      measureName: row.goal.measure_name,
+      measureFed: matchingSourceKeys(row.goal, row.commitments).size > 0,
       thisMonth: {
         planned: figures.month?.planned ?? null,
         reached: figures.month?.reached ?? 0,
@@ -188,11 +217,11 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
       phases: phases.map((phase) => ({
         aim: phase.name,
         startsOn: phase.startsOn,
-        endsOn: phase.endsOn ?? dayBefore(row.goal.horizon),
+        endsOn: phase.endsOn,
         current: current?.id === phase.id,
       })),
-      tasks: monthList(figures.tasks, thisMonth, today).map(toReportTask),
-      carried: monthList(figures.tasks, thisMonth, today)
+      tasks: monthItems.map(toReportTask),
+      carried: monthItems
         .filter((item) => item.carriedFrom !== null && !item.done)
         .map((item) => {
           // Only what is undone today: a child done this month owes nothing.
@@ -210,18 +239,32 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
             note: item.task.note ?? null,
             from: item.carriedFrom as string,
             owes: leaf ? (item.task.estimate ?? 0) : children.reduce((sum, c) => sum + c.owes, 0),
-            hasAmount: leaf ? item.task.estimate !== null : children.some((c) => c.hasAmount),
+            hasAmount: hasAmountOf(item),
             children,
           };
         }),
       months: figures.months.map((row) => {
-        const share = row.past ? carryShare(figures.tasks, row.month) : null;
+        const share = row.past ? planShare(planInput, row.month) : null;
+        const items = unmeasured ? planMonthList(planInput, row.month) : null;
         return {
           ...row,
-          carried: share ? Math.floor((share.carried * 100) / share.planned) : null,
+          carried: share && share.carried > 0 ? Math.floor((share.carried * 100) / share.planned) : null,
+          ...(items ? { tasks: { done: items.filter((item) => item.done).length, total: items.length } } : {}),
         };
       }),
       weeks: figures.weeks,
+      weekPlanned: (() => {
+        const week = figures.weeks.find((w) => w.current);
+        return week
+          ? weekPlanned({
+              weekStart: week.startsOn,
+              weekEnd: week.endsOn,
+              budgets: row.budgets,
+              openedOn,
+              horizon: row.goal.horizon,
+            })
+          : null;
+      })(),
       weekSplits: figures.weeks
         .filter((week) => monthOf(week.startsOn) !== monthOf(week.endsOn))
         .flatMap((week) => {

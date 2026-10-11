@@ -40,7 +40,7 @@ test("the Metas tab opens the goals list, and a second goal is opened from it, n
   const goalId = page.url().split("/metas/")[1];
 
   // Below 1024px Hoy draws a section only for a goal that asks today
-  // (module 263): a daily tap commitment makes the new one ask.
+  //: a daily tap commitment makes the new one ask.
   await db`
     insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
     values (${personId}, ${goalId}, 'Tocar la segunda', 'daily', 'tap', now() - interval '3 days')`;

@@ -25,6 +25,8 @@ reading app, the plan's done criterion, the Zod schema, the database schema.
    Never to decide what is correct.
 3. Write the tests.
 4. Kill each one with a mutation (below). A test you have not seen red is not written yet.
+   Dispatched before the worker, the code is not built yet: show each test red against the branch as it
+   stands, cover every row of the plan's Done table, and commit them. The worker makes them green.
 
 # Never
 
@@ -57,7 +59,11 @@ A fact a `node:test` can state in milliseconds does not belong in a 6-minute Pla
 For every test, name the mutation it kills, apply it, and watch it go red.
 
 Take the change out and put it back by patch, never by stash:
-`git diff > /tmp/<name>.patch && git apply -R /tmp/<name>.patch`, then `git apply /tmp/<name>.patch`.
+`git diff > private/<name>.patch && git apply -R private/<name>.patch`, then `git apply private/<name>.patch`.
+Keep the patch in the lane, never in `/tmp`.
+
+Run each mutation against the one test that kills it (`spec:line` or `-g`), never the whole spec file.
+Wait for the server to answer, never a fixed `sleep`. Save each red to a log under the lane's `private/`.
 
 A mutation that reddens nothing means the assertion cannot fail. Fix the test, not the mutation.
 Never invent a mutation that fakes a red: deleting the function under test proves nothing.

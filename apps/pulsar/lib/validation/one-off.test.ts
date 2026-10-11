@@ -5,7 +5,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import {
   createOneOffSchema,
-  moveTaskSchema,
+  fixTaskSchema,
   noteSchema,
   scheduleOneOffSchema,
   setOneOffNoteSchema,
@@ -95,17 +95,17 @@ test("createOneOffSchema: an estimate on a one-off of no goal measures nothing",
   assert.equal(refusal({ name: "x", day: null, estimate: 30 }), "month.errors.noMeasure");
 });
 
-test("moveTaskSchema: an id and a YYYY-MM are taken; a day, a month 13 or a bad id are refused with their keys", () => {
-  assert.equal(moveTaskSchema.safeParse({ oneOffId: parentId, month: "2026-11" }).success, true);
+test("fixTaskSchema: an id and a YYYY-MM are taken; a day, a month 13 or a bad id are refused with their keys", () => {
+  assert.equal(fixTaskSchema.safeParse({ oneOffId: parentId, month: "2026-11" }).success, true);
   for (const month of ["2026-11-01", "2026-13", "2026-1", ""]) {
     assert.equal(refusal2({ oneOffId: parentId, month }), "month.errors.monthInvalid");
   }
   assert.equal(refusal2({ oneOffId: "nope", month: "2026-11" }), "month.errors.invalid");
-  assert.equal(moveTaskSchema.safeParse({ month: "2026-11" }).success, false);
+  assert.equal(fixTaskSchema.safeParse({ month: "2026-11" }).success, false);
 });
 
 function refusal2(input: unknown): string | undefined {
-  const parsed = moveTaskSchema.safeParse(input);
+  const parsed = fixTaskSchema.safeParse(input);
   assert.equal(parsed.success, false, JSON.stringify(input));
   return parsed.error?.issues[0]?.message;
 }

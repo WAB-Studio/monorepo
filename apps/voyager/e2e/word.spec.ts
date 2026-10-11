@@ -53,9 +53,25 @@ const SUGGESTIONS_SETTLE_MS = 900;
 // commas"), so it is no longer a text node of its own: this finds it
 // bounded by the line's own start, end or comma, never a longer gloss that
 // merely contains it.
-function glossLocator(page: Page, gloss: string): Locator {
+function glossPattern(gloss: string): RegExp {
   const escaped = gloss.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return page.getByText(new RegExp(`(^|, )${escaped}(,|$)`));
+  return new RegExp(`(^|, )${escaped}(,|$)`);
+}
+
+function glossLocator(page: Page, gloss: string): Locator {
+  return page.getByText(glossPattern(gloss));
+}
+
+// A table word folds the dictionary behind one control (RL-59); the block
+// it opens is that control's next sibling.
+async function openDictionary(page: Page): Promise<void> {
+  const toggle = page.locator("main button[aria-expanded]");
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+}
+
+function dictionaryBlock(page: Page): Locator {
+  return page.locator("main button[aria-expanded=true] + *");
 }
 
 type WorkerRequestShape = Extract<WorkerRequest, { kind: "lookup" }>;
@@ -283,29 +299,33 @@ test("a paused prefix never leaves the page blank", async ({ page }) => {
   expect(textLength).toBeGreaterThan(0);
 });
 
-// Counts definition blocks (docs/voyager/DESIGN.md "The English definition
-// draws open, always") bounded by document order to two headings — never
-// the whole page — so a second headword's own senses (an inflected form's
-// `viaInflection` group) never inflate the count of the one being measured.
-async function countDefinitionsBetween(
+// The definitions drawn after `ownHeading` that sit outside `otherHeading`'s
+// block — the offer's rail, found as the nearest ancestor of that heading
+// with a left rule. The offered lemma block can sit under the entry's first
+// group (RL-58), so the entry's own definitions are no longer one span.
+async function countOwnDefinitions(
   page: Page,
-  afterHeading: string,
-  beforeHeading: string | null,
+  ownHeading: string,
+  otherHeading: string,
   label: string,
 ): Promise<number> {
   return page.evaluate(
-    ({ afterHeading, beforeHeading, label }) => {
+    ({ ownHeading, otherHeading, label }) => {
       const headings = Array.from(document.querySelectorAll("h1"));
-      const after = headings.find((h) => h.textContent === afterHeading);
-      const before = beforeHeading ? headings.find((h) => h.textContent === beforeHeading) : undefined;
-      if (!after) return -1;
+      const own = headings.find((h) => h.textContent === ownHeading);
+      const other = headings.find((h) => h.textContent === otherHeading);
+      if (!own || !other) return -1;
+      let otherBlock: Element | null = other;
+      while (otherBlock && parseFloat(getComputedStyle(otherBlock).borderInlineStartWidth) === 0) {
+        otherBlock = otherBlock.parentElement;
+      }
+      if (!otherBlock) return -1;
       return Array.from(document.querySelectorAll("[data-definition-block]"))
         .filter((b) => b.textContent?.includes(label))
-        .filter((b) => Boolean(after.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING))
-        .filter((b) => !before || Boolean(b.compareDocumentPosition(before) & Node.DOCUMENT_POSITION_FOLLOWING))
-        .length;
+        .filter((b) => Boolean(own.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING))
+        .filter((b) => !otherBlock.contains(b)).length;
     },
-    { afterHeading, beforeHeading, label },
+    { ownHeading, otherHeading, label },
   );
 }
 
@@ -423,9 +443,9 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("left");
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
-  // RL-40 offers `leave` beneath `left`'s own entry — its own senses carry
-  // no definition at all, so bounding the count to `left`'s own block below
-  // proves the period-only filter without depending on that separately.
+  // RL-40 offers `leave` within `left`'s entry — its own senses carry no
+  // definition at all, but the count below leaves its block out anyway, so
+  // the period-only filter does not depend on that.
   await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
   await page.waitForTimeout(DECORATION_SETTLE_MARGIN_MS);
 
@@ -433,7 +453,7 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   // never had one), adv ("On the left side."), n ("The left side or
   // direction.") and v ("."). Only the two real ones draw; the bare period
   // is filtered to no definition, same as adj's null.
-  const definitions = await countDefinitionsBetween(page, "left", "leave", messages.word.definitionEnglish);
+  const definitions = await countOwnDefinitions(page, "left", "leave", messages.word.definitionEnglish);
   expect(definitions).toBe(2);
 });
 
@@ -448,10 +468,10 @@ test("the English definition draws open with no interaction, and stays inside th
   await page.waitForTimeout(1000);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("her");
-  await expect(page.getByRole("heading", { name: "her", exact: true })).toBeVisible({ timeout: 5000 });
+  await searchBox.fill("bitter");
+  await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible({ timeout: 5000 });
 
-  const englishText = "The form of she used after a preposition, as the object of a verb";
+  const englishText = "(usually in the plural bitters) A liquid or powder, made from bitter herbs, used in mixed drinks or as a tonic.";
 
   // Open on arrival, nothing tapped: the label and its prose both show.
   await expect(page.getByText(messages.word.definitionEnglish).first()).toBeVisible();
@@ -527,13 +547,18 @@ test("a one-character query answers only `a` and `i`, never the other ten single
   // "a" is one of the two: its own entry answers, translations included.
   await searchBox.fill("a");
   await expect(page.getByRole("heading", { name: "a", exact: true })).toBeVisible({ timeout: 5000 });
-  await expect(glossLocator(page, "una")).toBeVisible();
+  // RL-59: a table word's dictionary entry sits folded; open it and read
+  // the entry itself, not the table line above it.
+  await openDictionary(page);
+  await expect(dictionaryBlock(page).getByText(messages.word.translations).first()).toBeVisible();
+  await expect(dictionaryBlock(page).getByText(glossPattern("una"))).toBeVisible();
   await expect(suggestionsLabel).toHaveCount(0);
 
   // "I" is the other: it normalises to "i" and answers with "yo".
   await searchBox.fill("I");
   await expect(page.getByRole("heading", { name: "i", exact: true })).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText("yo", { exact: true })).toBeVisible();
+  await openDictionary(page);
+  await expect(dictionaryBlock(page).getByText("yo", { exact: true })).toBeVisible();
 
   // Two or more characters are untouched: `be` and `bed` answer as before.
   await searchBox.fill("be");
@@ -576,7 +601,7 @@ test("RL-40: a word's own entry answers first, and a plausible inflection is off
   await expect(glossLocator(page, "izquierda").first()).toBeVisible();
   // The offer's own label and heading, naming both the surface and the
   // lemma it also inflects from.
-  await expect(page.getByText('"left" también es una forma de "leave"', { exact: false })).toBeVisible();
+  await expect(page.getByText('«left» también es una forma de «leave»', { exact: false })).toBeVisible();
   await expect(leaveHeading).toBeVisible();
   await expect(glossLocator(page, "dejar").first()).toBeVisible();
   // `left`'s own entry sits above the offer in document order — it answers

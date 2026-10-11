@@ -8,6 +8,16 @@ import { test, expect, type Person } from "./fixtures";
 // it is made, and no later render holds it.
 const NAME = "Claude Code";
 const KEY = /^pls_[A-Za-z0-9_-]{20,}$/;
+// What `row.metaUnusedFirst` draws for a key made today and never used.
+const FRESH_UNUSED = /^Creada hoy a las \d\d:\d\d · sin usar$/;
+
+// 15:00Z lands on the same calendar day in any zone the specs run in.
+function daysAgo(days: number): Date {
+  const when = new Date();
+  when.setUTCDate(when.getUTCDate() - days);
+  when.setUTCHours(15, 0, 0, 0);
+  return when;
+}
 
 async function openScreen(browser: import("@playwright/test").Browser, baseURL: string, person: Person, width = 360) {
   const context = await browser.newContext({
@@ -36,6 +46,12 @@ async function expectMetasCurrent(page: Page) {
   const nav = page.getByRole("navigation");
   await expect(nav.locator("[aria-current]")).toHaveCount(1);
   await expect(nav.getByRole("link", { name: "Metas", exact: true })).toHaveAttribute("aria-current", "page");
+}
+
+// Dead rows older than 30 days sit behind a fold (RP-64); open every one that is shut.
+async function openFolds(page: Page) {
+  const shut = page.getByRole("button", { name: /que ya no entran?$/, expanded: false });
+  while ((await shut.count()) > 0) await shut.first().click();
 }
 
 // The row's button only asks; the sheet's own «Revocar» is what revokes.
@@ -126,7 +142,7 @@ test.describe("the connections screen (RP-38)", () => {
       await expect(page.getByRole("button", { name: messages.create })).toBeVisible();
       await absentEverywhere(page, key);
       await expect(page.getByText(NAME, { exact: true })).toBeVisible();
-      await expect(page.getByText(messages.row.neverUsed)).toBeVisible();
+      await expect(page.getByText(FRESH_UNUSED)).toBeVisible();
     } finally {
       await context.close();
     }
@@ -156,12 +172,12 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       const key = await create(page, NAME);
       await page.getByRole("button", { name: messages.created.done }).click();
-      await expect(page.getByText(messages.row.neverUsed)).toBeVisible();
+      await expect(page.getByText(FRESH_UNUSED)).toBeVisible();
 
       expect((await mcp(baseURL!, key)).status()).toBe(200);
       await page.reload();
-      await expect(page.getByText(messages.row.neverUsed)).toHaveCount(0);
-      await expect(page.getByText(/usada hoy \d\d:\d\d$/)).toBeVisible();
+      await expect(page.getByText(FRESH_UNUSED)).toHaveCount(0);
+      await expect(page.getByText(/usada hoy a las \d\d:\d\d$/)).toBeVisible();
 
       await confirmRevoke(page);
       await expect(page.getByText(/^revocada el .* · ya no entra$/)).toBeVisible();
@@ -195,12 +211,12 @@ test.describe("the connections screen (RP-38)", () => {
     browser,
     baseURL,
   }) => {
-    await seed(db, person, { kind: "personal", name: "Vieja viva", created: "2026-01-01T10:00:00Z" });
+    await seed(db, person, { kind: "personal", name: "Vieja viva", created: daysAgo(30).toISOString() });
     await seed(db, person, {
       kind: "personal",
       name: "Nueva revocada",
-      created: "2026-02-01T10:00:00Z",
-      revoked: "2026-02-02T10:00:00Z",
+      created: daysAgo(20).toISOString(),
+      revoked: daysAgo(19).toISOString(),
     });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
@@ -218,17 +234,22 @@ test.describe("the connections screen (RP-38)", () => {
     browser,
     baseURL,
   }) => {
+    const created = daysAgo(10);
+    const used = daysAgo(9);
     await seed(db, person, {
       kind: "oauth",
       name: "Claude",
-      created: "2026-03-01T10:00:00Z",
-      used: "2026-03-02T10:00:00Z",
+      created: created.toISOString(),
+      used: used.toISOString(),
     });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
       await expect(page.getByText(messages.sections.oauth, { exact: true })).toBeVisible();
       await expect(page.getByText("Claude", { exact: true })).toBeVisible();
-      await expect(page.getByText(/^conectada el 1 mar 2026 · usada el 2 mar 2026 \d\d:\d\d$/)).toBeVisible();
+      const stamp = (d: Date) => `${d.getUTCDate()} \\p{L}+\\.? ${d.getUTCFullYear()}`;
+      await expect(
+        page.getByText(new RegExp(`^conectada el ${stamp(created)} · usada el ${stamp(used)} \\d\\d:\\d\\d$`, "u")),
+      ).toBeVisible();
       await expect(page.getByText(messages.sections.keys, { exact: true })).toHaveCount(0);
 
       await confirmRevoke(page);
@@ -247,7 +268,7 @@ test.describe("the connections screen (RP-38)", () => {
     browser,
     baseURL,
   }) => {
-    await seed(db, person, { kind: "personal", name: "Doble", created: "2026-01-01T10:00:00Z" });
+    await seed(db, person, { kind: "personal", name: "Doble", created: new Date().toISOString() });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
       await db`update goals.access_tokens set revoked_at = now() where user_id = ${person.id}`;
@@ -308,8 +329,15 @@ test.describe("the connections screen (RP-38)", () => {
     try {
       await create(page, NAME);
       await page.getByRole("button", { name: messages.created.done }).click();
-      await expect(page.getByText(/^creada hoy \d\d:\d\d · sin usar$/)).toBeVisible();
+      await expect(page.getByText(/^Creada hoy a las \d\d:\d\d · sin usar$/)).toBeVisible();
       expect(await page.locator("main").innerText()).not.toContain("usada sin usar");
+      // 318: a key's row is a row (56 px, padded), and the header carries no second eyebrow over the title.
+      const row = page.getByText(NAME, { exact: true }).locator("xpath=ancestor::div[2]");
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(56);
+      await expect(page.locator("main > header > div")).toHaveCount(1);
+      await expect(
+        page.getByText("Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.", { exact: true }),
+      ).toBeVisible();
     } finally {
       await context.close();
     }
@@ -364,10 +392,48 @@ test.describe("the connections screen (RP-38)", () => {
   }) => {
     await seed(db, person, { kind: "personal", name: "Antigua", created: "2025-10-05T15:00:00Z", used: "2025-12-31T15:00:00Z" });
     await seed(db, person, { kind: "personal", name: "Revocada", created: "2025-01-02T15:00:00Z", revoked: "2026-02-03T15:00:00Z" });
+    await seed(db, person, { kind: "personal", name: "Viva", created: "2025-10-05T15:00:00Z", used: new Date().toISOString() });
     const { context, page } = await openScreen(browser, baseURL!, person);
     try {
-      await expect(page.getByText(/^creada el 5 oct 2025 · usada el 31 dic 2025 \d\d:\d\d$/)).toBeVisible();
+      await openFolds(page);
+      await expect(page.getByText(/^creada el 5 oct 2025 · usada hoy a las \d\d:\d\d$/)).toBeVisible();
+      // Unused for over 90 days, so it reads expired: both its dates still carry the year.
+      await expect(page.getByText("venció el 31 mar 2026 · sin uso desde el 31 dic 2025", { exact: true })).toBeVisible();
       await expect(page.getByText("revocada el 3 feb 2026 · ya no entra", { exact: true })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("«Copiar» answers «Copiada.» under the row for a moment, then goes quiet", async ({ person, browser, baseURL }) => {
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      const copy = page.getByRole("button", { name: messages.connector.copyName });
+      await copy.click();
+      const line = page.getByRole("status").filter({ hasText: messages.connector.copied });
+      await expect(line).toBeVisible();
+      await expect(copy).toHaveText(messages.connector.copy);
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/mcp$/);
+      await expect(line).toHaveCount(0, { timeout: 4000 });
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("when the clipboard refuses, the same place says so and the label stays", async ({ person, browser, baseURL }) => {
+    const { context, page } = await openScreen(browser, baseURL!, person);
+    try {
+      await page.evaluate(() => {
+        Object.defineProperty(navigator.clipboard, "writeText", {
+          configurable: true,
+          value: () => Promise.reject(new DOMException("denied", "NotAllowedError")),
+        });
+      });
+      const copy = page.getByRole("button", { name: messages.connector.copyName });
+      await copy.click();
+      await expect(page.getByRole("status").filter({ hasText: messages.connector.copyFailed })).toBeVisible();
+      await expect(page.getByText(messages.connector.copied)).toHaveCount(0);
+      await expect(copy).toHaveText(messages.connector.copy);
     } finally {
       await context.close();
     }

@@ -19,6 +19,8 @@
     "notFoundHint": "Revisa la ortografía o prueba con otra forma de la palabra",
     "correctionTitle": "¿Quisiste decir…?",
     "noEntry": {
+      "showDictionary": "ver el diccionario",
+      "hideDictionary": "ocultar el diccionario",
       "title": "El diccionario no tiene «{query}». Esto es lo que dice de cada palabra.",
       "titleTranslationFailed": "No se pudo traducir «{query}». Esto es lo que dice el diccionario de cada palabra.",
       "resolving": "Buscando cada palabra…",
@@ -38,8 +40,8 @@
     "preparingReadOnly": "Instalando el diccionario en el dispositivo"
   },
   "word": {
-    "viaInflectionWithEntry": "\"{surface}\" también es una forma de \"{lemma}\"",
-    "formOf": "\"{surface}\" es una forma de \"{lemma}\"",
+    "viaInflectionWithEntry": "«{surface}» también es una forma de «{lemma}»",
+    "formOf": "«{surface}» es una forma de «{lemma}»",
     "translations": "Traducciones",
     "networkTranslations": "Traducciones de internet",
     "definitionEnglish": "Definición en inglés",
@@ -87,7 +89,8 @@
       "exact": "Exacta",
       "inflected": "Flexionada",
       "translated": "Traducida",
-      "miss": "Sin resultado"
+      "miss": "Sin resultado",
+      "unlisted": "De la red"
     },
     "listFailed": "No se pudo cargar el registro",
     "retry": "Reintentar",
@@ -101,7 +104,12 @@
       "failedAction": "Reintentar",
       "download": "Descargar el registro",
       "skeletonWord": "Palabra de ejemplo",
-      "skeletonTranslation": "Su traducción de ejemplo"
+      "skeletonTranslation": "Su traducción de ejemplo",
+      "noResult": "sin resultado",
+      "filterLabel": "Buscar en el registro",
+      "filterClear": "Borrar el filtro",
+      "filterCount": "{shown} de {total} palabras",
+      "filterNone": "Ninguna palabra con «{query}»"
     },
     "word": {
       "back": "Registro",
@@ -112,7 +120,11 @@
       "emptyBody": "No has buscado «{word}» todavía.",
       "emptyAction": "Buscarla",
       "skeletonAnswer": "Su respuesta de ejemplo",
-      "phraseMissing": "No se guardó una traducción para esta frase."
+      "phraseMissing": "No se guardó una traducción para esta frase.",
+      "lemmaSubtitle": "{translation} · {count, plural, one {# búsqueda} other {# búsquedas}} desde el {date}.",
+      "timeToday": "Hoy, {time}",
+      "timeYesterday": "Ayer, {time}",
+      "timeOther": "{date}, {time}"
     },
     "clear": {
       "trigger": "Vaciar el registro",
@@ -150,16 +162,29 @@
     },
     "copy": {
       "label": "Copia",
-      "upToDateTitle": "Copiando a tu cuenta",
-      "upToDateBody": "Al día. La última copia fue hace {time}.",
-      "syncingNow": "Copiando {count, plural, one {# palabra} other {# palabras}}…",
-      "neverSynced": "Aún no ha habido una copia. La primera sale cuando cierres esta pestaña.",
+      "neverSynced": "Aún no ha habido una copia.",
       "failedTitle": "La copia no salió",
-      "failedBody": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
       "failedAction": "Reintentar",
       "noSessionTitle": "Tu registro vive solo en este dispositivo",
       "noSessionBody": "Con una cuenta lo llevas al teléfono y al portátil. Sin ella, nada sale de aquí.",
-      "noSessionAction": "Entrar con mi correo"
+      "noSessionAction": "Entrar con mi correo",
+      "confirmTitle": "Copiar tu registro a {email}",
+      "confirmBody": "Hasta que lo confirmes, nada sale de este dispositivo.",
+      "confirmAction": "Empezar a copiar",
+      "failedBodyFirst": "Tus palabras siguen en este dispositivo.",
+      "retiredTitle": "Este dispositivo ya no copia",
+      "retiredBody": "Lo retiraste de tu cuenta y tu registro se quedó completo aquí. Para copiarlo de nuevo, cierra sesión y vuelve a entrar.",
+      "lastCopy": "Última copia hace {time}",
+      "lastCopyMoment": "Última copia hace un momento",
+      "momentSpan": "un momento",
+      "syncingSearches": "{count, plural, =0 {Copiando tus búsquedas…} one {Copiando # búsqueda…} other {Copiando # búsquedas…}}",
+      "otherReader": "Las búsquedas de antes se quedan en este dispositivo. A tu cuenta sólo va lo que busques desde ahora.",
+      "failedOfflineTitle": "La copia no salió",
+      "failedOffline": "Sin conexión desde hace {time}. Tus palabras siguen en este dispositivo.",
+      "offlineNoCopy": "Sin conexión. Tus palabras siguen en este dispositivo.",
+      "failedQuotaTitle": "Hoy ya no se copia más",
+      "failedQuotaBody": "Copiaste el máximo de hoy. Sigue sola a las {time}; tus palabras siguen en este dispositivo.",
+      "failedServer": "Falló de nuestro lado. Tus palabras siguen en este dispositivo."
     },
     "info": {
       "tabs": {
@@ -168,13 +193,16 @@
       },
       "dictionaryLabel": "El diccionario",
       "dictionaryName": "FreeDict eng–spa",
-      "dictionaryStats": "{entries} entradas · {edition} · {size} en este dispositivo.",
+      "dictionaryStats": "{entries, number} entradas · {edition} · {size} en este dispositivo.",
       "licenceLabel": "Licencia",
-      "licenceCredit": "Obra derivada de DBnary, bajo <cc>CC BY-SA 3.0</cc>. Esta app la distribuye bajo la misma licencia.",
       "frequencyLabel": "Orden de las acepciones",
-      "frequencyCredit": "El orden en que se muestran las acepciones de una palabra viene de <source>SUBTLEX-US con información gramatical</source>, bajo <cc>CC BY-NC-SA 4.0</cc>. Esta app distribuye esa tabla bajo la misma licencia, sin uso comercial.",
       "appLabel": "La app",
-      "appVersion": "Diccionario de lectura · versión {version}"
+      "appVersion": "Diccionario de lectura · versión {version}",
+      "licenceBody": "Obra derivada de DBnary. Esta app la distribuye bajo la misma licencia.",
+      "licenceName": "CC BY-SA 3.0",
+      "frequencyBody": "El orden en que se muestran las acepciones de una palabra viene de una tabla de frecuencias. Esta app distribuye esa tabla bajo la misma licencia, sin uso comercial.",
+      "frequencySource": "SUBTLEX-US con información gramatical",
+      "frequencyLicence": "CC BY-NC-SA 4.0"
     },
     "devices": {
       "title": "Dispositivos",
@@ -191,8 +219,32 @@
       "loading": "Cargando los dispositivos…",
       "empty": "Todavía no hay ningún dispositivo copiando tu registro",
       "confirmBody": "Sus búsquedas salen de tu copia y este dispositivo deja de sincronizar. Lo que ya se copió a tus otros dispositivos sigue en ellos.",
-      "confirmBodyOwn": "Además, la copia se apaga en este dispositivo: tu registro local se queda completo aquí, y si la activas de nuevo se sube todo desde cero.",
-      "confirmBodyLastDevice": "Es tu único dispositivo copiando: la copia queda vacía. Tu registro local se queda entero donde esté, y si vuelves a activarla se sube todo otra vez."
+      "confirmBodyOwn": "Además, este dispositivo deja de copiar: tu registro se queda completo aquí. Para copiarlo de nuevo, cierra sesión y vuelve a entrar.",
+      "confirmBodyLastDevice": "Es tu único dispositivo copiando: la copia de tu cuenta queda vacía. Tu registro se queda entero aquí.",
+      "label": "{browser} en {platform}",
+      "labelUnknown": "Dispositivo desconocido",
+      "browser": {
+        "chrome": "Chrome",
+        "safari": "Safari",
+        "firefox": "Firefox",
+        "edge": "Edge",
+        "opera": "Opera",
+        "samsung": "Samsung Internet"
+      },
+      "platform": {
+        "android": "Android",
+        "ios": "iPhone",
+        "ipados": "iPad",
+        "windows": "Windows",
+        "macos": "macOS",
+        "linux": "Linux"
+      },
+      "loadFailed": "No pude cargar tus dispositivos",
+      "lastSeenMoment": "Visto por última vez: hace un momento",
+      "labelBrowserOnly": "{browser} en otro sistema",
+      "labelPlatformOnly": "Navegador desconocido en {platform}",
+      "since": "Desde el {date}",
+      "sinceDate": "{day} de {month}."
     }
   },
   "error": {

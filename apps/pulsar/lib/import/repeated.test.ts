@@ -8,6 +8,7 @@ function draftOf(...names: string[]): ImportDraft {
   return {
     goals: names.map((name) => ({
       name,
+      rhythm: null,
       horizon: "2027-10-01",
       measure: null,
       phases: [],

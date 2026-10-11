@@ -38,8 +38,10 @@
 }
 
 .label {
-  font-size: var(--pulsar-text-name-size);
-  font-weight: var(--pulsar-text-name-weight);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pulsar-ink-secondary);
 }
 
 .hint {

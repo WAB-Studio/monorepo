@@ -2,8 +2,12 @@ import { test, expect } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
+import monthMessages from "../messages/es/month.json";
 
-// `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio` (module 209, RP-43, RP-31):
+const owesLine = (month: string, owes: string) =>
+  monthMessages.list.owes.replace(/<\/?fig>/g, "").replace("{month}", month).replace("{owes}", owes);
+
+// `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio` (RP-43, RP-31):
 // this month of every open goal. Calendar-bound as `mes.spec.ts`: «last
 // month» is always the month before today, so the carried task is always there.
 
@@ -116,13 +120,13 @@ test("each open goal draws its month: the line, the carried task first, the task
     await expect(carriedLabel).toBeVisible();
     await expect(ownLabel).toBeVisible();
     expect((await carriedLabel.boundingBox())!.y).toBeLessThan((await ownLabel.boundingBox())!.y);
-    await expect(timedBlock.getByText(`de ${label(lastMonth)} · debe 3 h`)).toBeVisible();
+    await expect(timedBlock.getByText(owesLine(label(lastMonth), "3 h"))).toBeVisible();
 
     const pagesBlock = page.locator("section", { has: page.getByRole("heading", { name: `Libros ${stamp}` }) });
     await expect(pagesBlock.getByText(`en ${label(thisMonth)} · sin monto este mes`)).toBeVisible();
     await expect(pagesBlock.getByRole("link", { name: `Planear ${label(thisMonth)}` })).toHaveAttribute(
       "href",
-      `/metas/${pages}/meses?planear=${seg}`,
+      `/metas/${pages}/meses?planear=${seg}&volver=${encodeURIComponent("/mes")}`,
     );
 
     const bareBlock = page.locator("section", { has: page.getByRole("heading", { name: `Mudanza ${stamp}` }) });
@@ -143,6 +147,7 @@ test("each open goal draws its month: the line, the carried task first, the task
     // One tap on the name lands on the goal's month, on a target 48px tall.
     await page.goto("/mes");
     const nameLink = page.getByRole("link", { name: `Inglés ${stamp}` });
+    await expect(nameLink).toBeVisible();
     expect((await nameLink.boundingBox())!.height).toBeGreaterThanOrEqual(48);
     await nameLink.click();
     await expect(page).toHaveURL(new RegExp(`/metas/${timed}/meses/${seg}$`));
@@ -197,9 +202,13 @@ test("with the dictionary unreadable the strip speaks and a goal with no amount 
     const page = await context.newPage();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/mes");
-    await expect(page.getByRole("status")).toHaveText(
-      "No se pudo leer el diccionario de lectura. Las cifras que dependen de él son solo lo que dijiste tú.",
+    // FuenteCaidaPalabras: the same words as Hoy, Semana and Meta, naming no source.
+    const note = page.getByRole("status").filter({ hasText: "No pudimos leer una fuente." });
+    await expect(note).toHaveCount(1);
+    await expect(note).toContainText(
+      "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
     );
+    await expect(note).not.toContainText(/diccionario|lectura/i);
     const block = (name: string) => page.locator("section", { has: page.getByRole("heading", { name: `${name} ${stamp}` }) });
 
     await expect(block("Inglés").getByText("solo lo que dijiste tú")).toBeVisible();

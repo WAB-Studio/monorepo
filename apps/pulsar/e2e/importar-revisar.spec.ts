@@ -1,7 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { test, expect } from "./fixtures";
+import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
 import { dayBefore } from "../lib/day/weeks";
 import { civilDateToDate, todayInZone } from "../lib/zone";
 
@@ -48,7 +48,7 @@ async function toReview(page: Page, text: string) {
 // `load` fires with the loading fallback still standing.
 async function settled(page: Page) {
   await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
+  await pageSettled(page);
 }
 
 // The worker's own person drives each test, so what the database holds is theirs alone.
@@ -95,9 +95,21 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await expect(box(page, /^Tutor/)).toBeChecked();
       await expect(box(page, /Elegir tutor/)).toBeChecked();
       await expect(box(page, /Sesiones 1–4/)).toBeChecked();
-      await expect(page.getByText(`${word(first)} · la suma de lo marcado`, { exact: true })).toBeVisible();
+      // The template carries a rhythm, so the month only orders the plan: the line is the sum alone.
+      await expect(page.getByText("la suma de lo marcado", { exact: true })).toBeVisible();
+      await expect(page.getByText(`${word(first)} · la suma de lo marcado`, { exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Crear 1 meta" })).toBeVisible();
-      await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0);
+      await expect(appAlerts(page).filter({ hasText: /\S/ })).toHaveCount(0);
+    });
+  });
+
+  test("a commitment whose days come out of order is read Monday first with «y» before the last", async ({ person, browser, baseURL }) => {
+    await asPerson({ person, browser, baseURL }, async (page) => {
+      const text = template().replace("- Tema técnico · martes y jueves · 2 h", "- Tema técnico · domingo, miércoles y lunes · 2 h");
+      expect(text).toContain("domingo, miércoles y lunes");
+      await toReview(page, text);
+
+      await expect(box(page, /Tema técnico/)).toHaveAccessibleName("Tema técnico lunes, miércoles y domingo 2 h");
     });
   });
 
@@ -245,10 +257,14 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
       await toReview(page, template());
       await expect(page.getByRole("button", { name: `Cambiar el monto de ${word(first)}, 12 h` })).toHaveCount(1);
       await expect(page.getByRole("link", { name: backName, exact: true })).toBeVisible();
+      // RP-63: the goal's rhythm row is the one checkbox that says «12 h», as «12 h al mes»; no month's amount is.
+      const rhythm = messages.review.rhythmOf.replace("{amount}", "12 h");
       for (const checkbox of await page.getByRole("checkbox").all()) {
-        expect(await checkbox.evaluate((el) => (el as HTMLInputElement).labels?.[0]?.textContent ?? "")).not.toContain("12 h");
+        const label = await checkbox.evaluate((el) => (el as HTMLInputElement).labels?.[0]?.textContent ?? "");
+        if (label.startsWith(rhythm)) continue;
+        expect(label).not.toContain("12 h");
       }
-      await expect(page.getByRole("checkbox", { name: /12 h/ })).toHaveCount(0);
+      await expect(page.getByRole("checkbox", { name: /12 h/ })).toHaveCount(1);
     });
   });
 
@@ -356,9 +372,27 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
         await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
         await settled(page);
         await expect(page.getByText(messages.review.sourceFile.replace("{name}", "mi-plan.txt"), { exact: true })).toBeVisible();
+        expect(await page.getByText(messages.review.sourceFile.replace("{name}", "mi-plan.txt"), { exact: true }).evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
         await expect(page.getByRole("textbox", { name: messages.review.sourceLabel })).toHaveCount(0);
       },
       { width: 1440, height: 900 },
     );
   });
+
+  for (const width of [360, 1280]) {
+    test(`its provenance is the header's one eyebrow and its sentences read in Archivo at ${width}`, async ({ person, browser, baseURL }) => {
+      await asPerson(
+        { person, browser, baseURL },
+        async (page) => {
+          await toReview(page, template());
+          const header = page.locator("main > header");
+          await expect(header.getByText(messages.review.eyebrowTemplate, { exact: true })).toBeVisible();
+          await expect(page.locator("main > :not(header)").getByText(messages.review.eyebrowTemplate, { exact: true })).toHaveCount(0);
+          const hint = page.getByText(messages.review.hint, { exact: true });
+          expect(await hint.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);
+        },
+        { width, height: 800 },
+      );
+    });
+  }
 });

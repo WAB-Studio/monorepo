@@ -40,6 +40,7 @@ Light, the primary:
 | quiet (strokes and decoration only) | `#8A939E` |
 | accent | `#1C6E5A` |
 | accent, soft (the evidence mark's fill) | `#DCEAE5` |
+| today (Semana's today column from 1024; the phone keeps `raised`) | `#E3E8EE` |
 | scrim (behind a sheet) | `rgba(18, 23, 28, 0.34)` |
 
 Dark, the same design inverted:
@@ -56,6 +57,7 @@ Dark, the same design inverted:
 | quiet | `#5C666F` |
 | accent | `#4FBEA0` |
 | accent, soft | `#17332C` |
+| today | `#1E252C` |
 | scrim | `rgba(5, 7, 9, 0.62)` |
 
 - The scrim is darker than the dark ground on purpose: a sheet is `raised`, and it has to lift off
@@ -267,6 +269,8 @@ Drawn 2026-10-06 on the pages they belong to, approved by the user the same day:
 
 Say what is missing, so a gap nobody drew reads as a gap nobody needed.
 
+- **Modules 720, 721 and 723.** Built without a board (decided 2026-10-09 by the orchestrator); the user reviews them
+  at the end.
 - **Dark beyond `HoyOscuro.dc.html`.** Every other state is this design with the dark column of the
   token table. Drawing it again repeats a decision instead of taking one. Decided by the user
   2026-09-10, for every app.
@@ -361,7 +365,8 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   that cycled three ways.
 - **The tap floor is 48 px, with two named exceptions**: the mark, 24 px inside its 56 px row, and
   the theme control at 44. Both clear RNP-07's 32.
-- **A field's label takes the section label's type** — 11 px mono, uppercase, 0.14 em, muted — and
+- **Superseded 2026-10-06 by the user: a field's label is Archivo 13, not mono caps** (see «Decisions of 2026-10-06,
+  after the UX review»). Was: **a field's label takes the section label's type** — 11 px mono, uppercase, 0.14 em, muted — and
   has no type of its own. It is what `MetaNueva.dc.html`, `HoyCantidad.dc.html` and
   `CompromisoNuevo.dc.html` already draw; written down 2026-09-22 so it reads as a decision rather
   than a coincidence.
@@ -447,10 +452,10 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   note, when there is one, as a third quiet line (the type role already named `quiet` in the token
   table; no new role). Decided 2026-09-27 by the coordinator, the user having delegated it.
 - **A goal adds a phase from its own screen, the same pattern as a commitment** (RP-15). Under the
-  phase list, a block outlined `Button` «Añadir una fase» → `/metas/[goalId]/fases/nueva`; solid
-  while the goal has no phase yet, outlined once it carries one — `commitment-list.tsx`'s own
-  block-button rule, never a second one invented for a phase. Decided 2026-09-27 by the coordinator,
-  the user having delegated it.
+  phase list, «Añadir una fase» → `/metas/[goalId]/fases/nueva`, always outlined on the phone and a
+  `TextLink` from 1024; on an empty goal «Añadir un compromiso» is the one solid act. Decided by the
+  user 2026-10-06 with the UX review (`ux-2026-10-06-b`: «Añadir una fase» solid on an empty goal),
+  replacing the coordinator's 2026-09-27 rule (solid until the first phase).
 - **`Fase nueva` is a full screen in `CompromisoNuevo.dc.html`'s own shape** (RP-15): overline the
   goal's name, h1 «Fase nueva», a field «qué busca» for the aim, a section «qué semanas» with two
   numeric fields «desde la semana» / «hasta la semana», counted from the goal's own opening week
@@ -652,11 +657,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   «Dejar el azúcar terminó ayer · ver», then «terminó el lunes 28» later in the same week, gone once
   that week is over (a goal that ended on a Sunday is gone on the Monday). «ver» opens the goal.
   Board `HoyMetaTerminada.dc.html`, approved by the user 2026-09-29; the desktop face is the same line
-  under «Hoy». Several goals ended that week: one line each, most recent first. Only on today, never
+  under «Hoy». Several goals ended that week: one line each, in plan order (RP-47; «most recent first» superseded by the user's RP-47 of 2026-10-05, read 2026-10-07). Only on today, never
   on `/dia/<fecha>`, and never beside the all-ended card, which already names the last goal. Wording
   decided 2026-09-29 by the coordinator.
-- **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» leave the
-  daily «hechos» and their row says the cadence and the count: «3 veces por semana · 1 de 3 esta
+- **A flexible cadence counts by its period in Semana**: «2 veces por semana» and «N al mes» say their
+  period and no longer leave the daily «hechos» (corrected 2026-10-09: they count; see «hechos N de M» below), and their row says the cadence and the count: «3 veces por semana · 1 de 3 esta
   semana», «4 al mes · 3 de 4 este mes». On the table the days not done read the quiet «·»; on the
   phone they sit in a group «{meta} · por semana y por mes» under the day rows. Boards
   `SemanaFlexible.dc.html` and `SemanaEscritorioFlexible.dc.html`, approved by the user 2026-09-29.
@@ -667,11 +672,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   `CompromisoNuevoMes.dc.html`. Decided 2026-09-29 by the user.
 - **Hoy builds what `HoyEscritorio.dc.html` draws**: each row's cadence, a flexible
   commitment's progress, «fase 1 de 3», the time on a done commitment. Decided 2026-09-29 by the user.
-- **Hoy says «hechos N de M» over the same rows as the Semana's «hechos»**; a flexible row with
+- **Hoy says «hechos N de M» over the same rows as the Semana's «hechos»**, flexible rows counted since 2026-10-09; a flexible row with
   progress says only its progress; a flexible met in its period stays as a quiet row «cumplida esta
   semana», and can be marked again. Board `HoyCuenta.dc.html`. Decided 2026-09-29 by the coordinator,
   on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
-- **The goal's measure line reads «mide en {unidad}»**, and the review's measure column is headed
+- **The goal's measure line reads «mide en {unidad}»** (in time, «mide en horas y minutos»: see below), and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.
 - **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
   says «pide el número» after its target.** «Anki · 10 min · 07:40 · lo dijiste tú», «Monólogo
@@ -719,6 +724,11 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   screen lives at `/conexiones`, reached from `/metas`'s «el plan» («Conectar una IA»). Phone and light face only; the dark
   face is the token table's, and 1280 follows the desktop layout. Approved by the user 2026-10-05, «por mientras», with the
   desktop layout as a whole under review.
+- **A key or connection unused for 90 days stays on `/conexiones`, muted like a revoked one, with no «Revocar»:
+  «venció el {date} · sin uso desde el {used}».** `ConexionesVencida` draws it; a claude.ai connection expires the same way,
+  in its own section. Order: live, expired, revoked; newest first within each. The screen derives the row from
+  `expiredAt` and computes no date. Phone and light face only; dark is the token table's. Approved by the user 2026-10-08
+  (audit B3, Q2).
 - **Signed out, the consent screen names no client.** Before sign-in the name is only what the client declares, so anyone
   could call itself «Claude»: it reads «Una aplicación pidió entrar…». `AutorizarSinSesion`'s «Claude» is the signed-in
   name. No grant to `anon`. Decided 2026-10-05 by the coordinator.
@@ -824,3 +834,423 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
     board draws it; it repeats the measured card's order minus the week figure. Decided by the orchestrator 2026-10-06
     (module 283).
 - **«Correr un mes» is offered only when the month also fell short of its amount** (RP-48, succeeding RP-34).
+
+## Decisions of 2026-10-06, after the UX review
+
+Taken by the user 2026-10-06 («todo sí») on the two UX critics' reports, `private/reportes/ux-2026-10-06-{a,b}.md`.
+The user's words: «textos todos pegados, no se entiende la mayoría, la estructura no es tan buena».
+
+- **Space lives in the primitives, never in a screen.** A `Section` primitive carries its label→content gap and the
+  gap to the next section; Split's columns space their children; a field's hint keeps air before the next control.
+  A screen that needs a gap of its own is reaching past `components/ui`.
+- **Content stops at about 1200 px wide on desktop.** A block button never runs the width of the column; a link
+  button and a `<button>` side by side are one width rule.
+- **Mono is for figures and dates only.** Every sentence — a hint, an explanation, a refusal, an empty state, a note
+  — is Archivo, in muted. A new quiet-sentence variant of `Text` carries it; `variant="meta"` keeps figures and dates.
+  This is the Type section's «a figure in mono, a sentence in Archivo», which the screens had drifted from.
+- **A field's label is Archivo 13 / 500, in ink secondary**, never the section label's mono caps. Two labels must
+  never read as two headings. Reverses the 2026-09-22 rule above.
+- **Tapping a task's or a suelta's name opens an edit sheet**: name, estimate and month, with «Borrar» at its foot.
+  The mark still marks done. Tapping a name never offers deletion first.
+- **«hechos N de M» on Hoy counts every commitment row that asks that day**, flexible (weekly, monthly) and evidence rows included; the Semana's «hechos» counts the same. Sueltas are not in it. A past day's «ese día pedía N» counts the same rows. Corrects the 2026-09-29 rule that left flexible rows out. Decided 2026-10-09 by the user (answers Q1 (a) and Q4 (a) of 2026-10-08). Boards `HoyCuenta`, `HoyDia`, `HoyAyerPrimerDia`.
+- **The plan's words are plain.** «arrastró», «correr un mes», «debe», «umbral», «toque» give way to plain Spanish
+  («quedó pendiente», «aplazar un mes», «falta»). The exact words are drawn on the boards first. Behaviour is
+  unchanged, so no code is retired.
+- **The report folds its weeks under their month on screen; on paper it prints months only.**
+- **A phase is still chosen by week numbers, with the dates beside them, live, and the valid range stated.**
+
+- **The space system, approved by the user 2026-10-06 on `SistemaEspacio.dc.html`.** Every gap is a multiple of 4.
+  - Header: date → title 6; title → lead 12; header → first section 32.
+  - Section: label → content 12; section → section 32, 40 from 1024. A row pads 12 above and below, 56 tall at least.
+  - Field: label → control 8; control → hint or refusal 6; hint → next control 20.
+  - Width from 1024: content up to 1200, centred in what the rail leaves; a one-column screen (a form, an empty state)
+    up to 640. Cards in a column stand 16 apart, from the column's gap, never a card's margin.
+  - Buttons: full width and stacked 12 apart on the phone; from 1024 sized to their text, 160 at least, in a row, the
+    primary first. A link shaped as a button follows the same rule as a `<button>`.
+- **The type roles, approved the same day on `SistemaTipo.dc.html`:** title; section label (mono 11 caps, one per
+  section, names a group); field label (Archivo 13 / 500, ink secondary); name (Archivo 16 / 500); quiet sentence
+  (Archivo 13 / 1.5, muted: hints, refusals, empty states, notes); figure and date (mono 12); measure (mono 26, its unit
+  13 beside it, never wrapped). A unit never breaks from its number.
+- **`ConexionesTelefono.dc.html` and `HoyVacioEscritorio.dc.html` are the two screens redrawn on the system**, approved
+  with it. Their words: «Claude lee tus metas, anota lo hecho y reorganiza tus meses. Nunca borra ni archiva.»; a key's
+  line «Creada hoy a las 12:18 · sin usar»; «Copiar» answers «Copiada.» beside a check.
+  A failed copy shows, in the same place, one quiet sentence: «No se pudo copiar. Mantén presionado el texto para copiarlo.» (decided 2026-10-06).
+- **Seven more, taken by the user the same day on the planner's questions** (the orchestrator's picks, «el resto de
+  recomendación»):
+  - The report on paper prints months only; RP-46 retired for **RP-49**.
+  - A done task's name can be edited; its estimate cannot, so past totals never move.
+  - The app is called **«Bitácora de metas»** everywhere a person reads it: the rail, the consent screen, the PDF, every
+    button. «pulsar» stays in the address alone.
+  - A goal's weeks count its partial last week: a goal that ends mid-week has 36 weeks when 35 are whole, and a phase may
+    take the 36th.
+  - «Aplazar un mes» (the old «Correr un mes») is offered on Hoy and on the goal too, while it is open.
+  - Hoy steps between days with labelled controls beside the date, «‹ ayer» and «mañana ›»; a bare ‹ means back
+    everywhere.
+  - A commitment in a goal that measures takes the goal's unit; there is no free unit field there.
+- **The plan is a roadmap, decided by the user 2026-10-06** («que vaya por cantidad de horas por mes y funcione como
+  roadmap, de esa manera todo se mueve proporcionalmente»). Drawn on the page «El plan por mes» (`RoadmapPlan`,
+  `RoadmapHoyMovido`, `RoadmapPasaElFinal`, `RoadmapSinRitmo`, `RoadmapFijar`) and approved by the user the same day; written
+  as RP-50 to RP-55, retiring RP-42 and RP-48. RP-28 stays: a month's own amount overrides the rhythm.
+  - A goal has a rhythm, hours per month, which one month may override. Its tasks are one ordered list, each with its
+    estimate. The app gives each task its month by filling each month's hours in order.
+  - The person may **fix** a task to a month (a real date: an exam, a delivery); the rest flows around it.
+  - **The plan moves by itself** whenever something changes — a month left short, an estimate, a new task, a month's
+    hours — and Hoy says so («tu plan se movió 2 semanas»). Nothing asks to be accepted.
+  - **A task that does not fit whole starts where it fits and goes on in the next month** («sigue en noviembre»); its
+    hours are split between the two.
+  - The end date is the plan's: «a este ritmo terminas en …», set against the goal's end.
+  - Built before wave 3 of the UX slice: the edit sheet and the plan's words wait for these boards.
+- **Boards III of the roadmap, approved by the user 2026-10-06** on the page «El plan por mes», second row:
+  `RoadmapTramoMedio`, `RoadmapTareaNueva`, `RoadmapRitmoHoja`, `RoadmapSinMedida`, `MetaVerPlan`,
+  `RoadmapHoyMovidoDias`. `RoadmapFijar` asks the estimate in hours and minutes, the task form's two fields (RP-35).
+- **Five more, taken by the user the same day** (the orchestrator's picks):
+  - A goal's first rhythm releases its pending fixed tasks into the plan; «Armar el plan» says first how many will
+    move. Fixed after that stays fixed. That line is not on `RoadmapSinRitmo`; its words come with module 346.
+  - A task the plan carried keeps «de septiembre · falta 3 h», fixed or not. RP-31 stays.
+  - The AI fixes a task to a month and returns it to the plan; it never changes a rhythm. RP-40 retired for **RP-56**.
+  - «Septiembre cerró con 6 h de 12 h» counts the estimates of the tasks done that month, never the measure reached:
+    what is missing is exactly what moved.
+  - A one-off with no goal is renamed from the same sheet: **RP-57**.
+- **A pin means something only against a plan** (2026-10-06, decided by the orchestrator). A row draws the pin and «Fijada en …»
+  only when its goal has a rhythm and the task holds a month. A goal with no rhythm draws none on any row: every task
+  of it has a month and pinning all of them says nothing. The task's sheet still shows «Mes» there, with «Fijarla en»
+  selected for a task that holds a month.
+- **`RoadmapFijar` picks the month with chips** (2026-10-06, decided by the orchestrator): «Fijarla en» opens a row of
+  month chips, one selected, instead of a select; no select primitive exists in `components/ui`.
+- **The plan's notice on Hoy** (2026-10-06, decided by the orchestrator). A move under 7 days reads in days
+  (`RoadmapHoyMovidoDias`: «se movió 3 días», and no sentence about the rest running behind); from 7 days it reads in
+  whole weeks, rounded (`RoadmapHoyMovido`: «se movió 2 semanas»). With several goals the notices stack at the top of
+  Hoy, above the goal sections, each naming its goal. A move of 0 days draws none.
+- **A phase is written in weeks and reads its dates**, decided by the user 2026-10-06 after the wave-2 review. The
+  phase form shows live, under the weeks, the days they cover («del lunes 5 de octubre al domingo 8 de noviembre») and
+  the last week the goal allows, as «Mover el final» does. No schema change. Boards `FaseFechas`, `FaseFechasFuera`,
+  `FaseFechasSolapa`, approved by the user 2026-10-06.
+- **The phase form rings the field that is out of range** (2026-10-06, decided by the orchestrator): «hasta» when only
+  the end passes the goal's last week, «desde» when the start does. `FaseFechasFuera` drew «desde» only because its
+  example started past. «Añadir la fase» under a refusal moves focus to that field, «desde» first.
+- **An imported phase that starts before its goal is cut to week 1**, decided by the user 2026-10-06. The import's
+  review says so before «Crear» («la fase X empieza en la semana 1, el 6 de octubre»). Board `ImportarFaseRecortada`,
+  approved by the user 2026-10-06.
+- **The goal at 1024 draws its phases on a full-width row under the two columns** (2026-10-06, decided by the
+  orchestrator): a 260 px phases column broke an aim into one word per line.
+- **Decided by the user 2026-10-06, after the roadmap and wave-2 critics:**
+  - A goal holds no fact before the day it opened. The AI refuses such a fact and says why; the past day never draws
+    the goal before it opened.
+  - A month's figure on the goal and the plan is the hours of the tasks done that month against its room, as Hoy's
+    notice counts («septiembre cerró con 6 h de 12 h»). The measure's total stays on its own line.
+  - «Mover el final» asks first: a sheet names the old and the new end («Mover el final del 29 de noviembre al 20 de
+    febrero»), «Moverlo» and «Cancelar». Supersedes the one tap of `RoadmapPasaElFinal`. Boards `RoadmapMoverFinalHoja`,
+    `RoadmapMoverFinalFallo`, approved by the user 2026-10-06.
+  - When several plans moved, Hoy draws one card: «N planes se movieron», a line per goal (how far, «Ver el plan»), one
+    «Entendido». Supersedes one card per goal (`RoadmapHoyMovido`) and the stacking decided earlier today. Board
+    `RoadmapHoyMovidoVarios`, approved by the user 2026-10-06.
+- **Decided by the orchestrator 2026-10-06, same reviews:**
+  - A task past the goal's end that starts inside it reads its part in its month («Empieza aquí con 10 h y sigue en
+    diciembre.»); only what falls after the end is listed under «después de tu final» (RP-54).
+  - A row under «después de tu final» opens the task's sheet, as every task row does.
+  - A month's header says which figure it is: the current month «5 h de 12 h en tareas hechas», a later one «12 h planeadas de
+    12 h». Boards `RoadmapMesCifras`, `MetaPlanHechas`, approved by the user 2026-10-06.
+  - Setting a goal's first rhythm raises no «se movió» notice: the plan starts there.
+  - A task with no estimate reads «sin estimar» as its trailing, muted, in every list of the plan.
+  - A parent's sheet says under «Nombre» why it has no estimate: «Suma lo de sus sub-tareas.»
+  - A task fixed to a month that has closed shows that month as the selected chip, closed, in its sheet.
+  - On `/sueltas` a suelta's name opens the RP-57 sheet; «Darle un día» is a row inside that sheet (W3-Q1).
+  - A goal's own dated one-off opens the same sheet with its name alone (W3-Q2).
+  - Figures use a plain zero, never the slashed one (W3-Q3).
+  - An imported phase that ends before its goal opens is dropped and listed in the import's review (W3-Q4).
+- **Wave 3 of the UX review, decided by the orchestrator 2026-10-06** (module 365):
+  - A past day's heading counts what «hechos» counts (:671, :846): «ese día pedía cinco» counts the weekly rows too (corrected 2026-10-09).
+  - The phone week draws a goal only when it has rows, and says «hechos» once, in its footer.
+  - An empty section draws no label: no «cero compromisos», «cero fases», «abiertas» over nothing.
+  - An archived goal with no task this month draws no month block.
+  - A unit is said once in a figure pair («7 de 90 kilómetros»); a stored phase reads from week 1 at the earliest.
+- **`SistemaPiezas.dc.html`, approved by the user 2026-10-06.**
+  - A mixed line is a sentence in Archivo with only its figures, the unit glued to them, and its dates in mono, each kept
+    on one line: «Día 21 · 5 h 24 min de 12 h, bajo el 60 %».
+  - A measure's minutes take two digits after hours: «1 h 05 min», never read as «15».
+  - A row's name wraps by words, never inside one; its trailing figure keeps one line and drops under the name when it
+    does not fit.
+  - One link style: accent, 15 / 500, no underline, underlined on hover and focus; never grey.
+  - A selected chip is the accent's soft fill with an accent border; the full accent fill is the act's button alone.
+
+- **Chips and paired fields are spaced by their primitives** (2026-10-06, decided by the orchestrator from the space
+  system's multiples of 4). Chips in a row sit 8 apart and wrap by chip; the seven weekday chips sit 4 apart
+  (`ChipRow`, `tight`). A field pair sits 8 apart, two fields sharing the width, or the first sized by the pair when
+  it is narrow, a quantity beside its unit (`FieldPair`). No screen spaces either with `Flex gap` or `style`.
+
+- **`MetaVerPlan`, states the board does not draw** (2026-10-06, decided by the orchestrator).
+  - A goal with no rhythm: the row's first line reads «Armar el plan», with no second line; it still links to the plan.
+  - A goal with no task in the plan: no «el plan» section.
+  - The plan's end carries the year only when it is not the current year, as the rest of the screen does.
+
+- **The plan's months, module 349** (2026-10-06, decided by the orchestrator):
+  - A task past the goal's end appears only under «después de tu final», never again in the month holding its hours.
+  - A month past the goal's last month with no rows is dropped.
+  - A goal with no measure draws no figure and no bar on the plan's months.
+  - «Añadir una tarea» opens the sheet with no «va a» hint.
+  - A plan that ends on the goal's last day reads «A este ritmo terminas el {date}, el día de tu final.», never «0 días antes».
+
+- **Eighteen boards of wave 3 and the roadmap's second round, approved by the user 2026-10-06: «si a todo».**
+  `RoadmapMoverFinalHoja`, `RoadmapMoverFinalFallo`, `RoadmapHoyMovidoVarios`, `RoadmapMesCifras`, `MetaPlanHechas`,
+  `FaseFechas`, `FaseFechasFuera`, `FaseFechasSolapa`, `ImportarFaseRecortada`, `EntrarFormulario`, `EntrarEnviado`,
+  `PermisoSinSesion`, `PermisoConSesion`, `SueltaHoja`, `SueltaHojaHecha`, `ReportePlegado`, `ReporteImpresoMeses`,
+  `PalabrasDelPlan`. Canvas version 69. Where a board and the lines above disagree, the lines above win.
+- **`ReportePlegado`'s «Esta semana: [3 h] de [3 h].» keeps its second figure** (decided by the user 2026-10-06): it is
+  the month's planned amount prorated by day over the week (RP-58, module 392). Until 392 lands the line reads the done
+  figure alone. Options refused: owed over the remaining weeks (moves daily), dated tasks' estimates (empty for most goals).
+- **The report's split week is one row** (2026-10-06, orchestrator, module 379): a week across two months reads its
+  whole total once under the fold, no longer two halves.
+- **`MetaPlanHechas` settles where «hechas» reaches** (2026-10-06, read by the orchestrator from the approved board):
+  the goal's plan row reads «Ritmo 12 h al mes · en octubre, 5 h de 12 h en tareas hechas» (amended 2026-10-06, A3); the block «lo medido» keeps the measure («6 h 40 min de
+  estudio en octubre», RP-28). Hoy's month line and «Mes» (RP-43) keep the measure this round. No code retired.
+- **A fact before its goal opened is refused with «Ese día es anterior a cuando abriste esta meta.»** (2026-10-06,
+  decided by the orchestrator; no board draws it).
+- **The consent screen keeps its «may / never» lists under `PermisoConSesion`'s lead** (2026-10-06, decided by the
+  orchestrator, module 381). The board draws the layout — centred, h1, «Podrá leer tus metas y anotar lo que hagas. Puedes
+  revocarlo en Conexiones.», «Permitir» over «No permitir» — and not the removal of what a person reads before granting
+  access. Signed out, the promise line under the form goes, as the board draws.
+
+## Decisions of 2026-10-06, after the product critic of train 4 (module 393, decided by the orchestrator, no board)
+
+- **On the plan with no rhythm, «Armar el plan» is the one solid act.** «Añadir una tarea» is outlined until the plan has
+  a rhythm, then solid as built (:114). A goal with no measure draws no rhythm form, so its «Añadir una tarea» stays solid.
+- **A sub-task's row on Semana says «de <parent>» as its second line**, Archivo muted, the pattern of
+  `HoyTareaMesSubtarea` (:255). A top-level task or a suelta draws no second line.
+- **«Mover el final» opens on the goal's own end.** The count it opens with names the goal's last day, and «Moverlo»
+  untouched moves nothing. A count that is not 1–520 says why under the field as it is typed, the field ringed, as the
+  phase form does (378).
+- **An archived goal whose end passed reads «terminó el <weekday day month>»**, as an ended goal does (:612), never
+  «N semanas · hasta el …». An archived goal whose end is still ahead keeps its weeks line.
+- **What is in the import box when the screen answers is what is read.** Text typed before the page settles is kept;
+  the stored draft fills the box only when it is empty. The box never changes under the person's hands.
+- **Decided by the user 2026-10-06, after the product critic of train 4** (questions A–D and W4-Q2):
+  - A. «hechas» on the plan is labelled as the done tasks it counts; Hoy, Semana and the goal's measure keep their own
+    figures. The plan's figure never adds commitments' facts.
+  - B. A suelta is a task with no goal. A goal's task with no day stays in its goal's plan, never on `/sueltas`.
+  - C. «Armar el plan» keeps every month that already has an amount and spreads only the rest.
+  - D. A closed month that did more than planned stays as it is; nothing is split into the next month.
+  - W4-Q2. An imported task with sub-tasks and its own amount is left out, and the create bar says what stays out (RP-37).
+- **Words of the boards of wave 4, approved by the user 2026-10-06 on the words, before the boards were drawn**
+  («apruebo los tableros»). Drawn after, from these lines; where a drawing and these lines disagree, these lines win.
+  - `HoySiguienteCifra` (394): one hour figure per row, never a 0. A whole task trails its estimate and reads «Siguiente
+    del plan» with no figure; a task with no estimate trails «sin estimar», muted; a sub-task reads «de <parent>» above
+    and trails its own estimate; a split task trails its estimate and reads «Siguiente del plan · 10 h este mes».
+  - `MetaTotal` (399): under the measure figure, a quiet line «en total, desde el 24 de agosto» (date mono, year only
+    when not the current one, as «de <year>»). «0 min» stays.
+  - `ImportarFuera` (401): above «Crear 1 meta», one quiet line: «Sin «Elegir método» y su sub-tarea: no se puede
+    crear.» for one item, «Sin 3 cosas que no se pueden crear.» for more, the count linking up to «No se puede crear». Decided by the orchestrator 2026-10-06 (module 401): a goal refused whole reads «Sin «<goal>»: no se puede
+    crear.»; a task with several sub-tasks «Sin «<name>» y sus <n> sub-tareas: no se puede crear.»; a task with none
+    «Sin «<name>»: no se puede crear.»
+  - `MetaPlanHechas` and `RoadmapMesCifras` (405): «Ritmo 12 h al mes · en octubre, 5 h de 12 h en tareas hechas»;
+    the current month «5 h de 12 h en tareas hechas»; a later month keeps «12 h planeadas de 12 h».
+  - `HoyTareaDeMeta` (408): the field at a goal's foot is labelled «Una tarea de {goal}»; on «sin día» it answers
+    «Anotada en el plan de {goal}.» with «ver el plan»; an empty name answers «Escribe qué hay que hacer.». The goalless
+    field keeps «Algo suelto». Boards `HoyTareaDeMeta`, `HoyTareaDeMetaAnotada`, `HoyTareaDeMetaVacia` drawn 2026-10-07 and
+    approved by the user that day: the empty field's placeholder reads «Una tarea de {goal}…», the link «ver el plan»
+    in lower case.
+  - A goal's task with no day is a task of the goal's plan: it never shows on `/sueltas`, never counts in «N sin día»,
+    and Hoy never calls it suelto (RP-59).
+
+## Decisions of 2026-10-08, after the pulsar audit
+
+- **The consent screen names where it sends you back** (B2, approved by the user 2026-10-08, boards `PermisoDominio` and
+  `PermisoDominioLocal`). Under the h1, in mono 13 px, ink colour: «al permitir, vuelves a **claude.ai**» — the
+  `redirect_uri`'s host, with its port when it has one (`localhost:33418` for Claude Code), never the path. It sits
+  between the h1 and the lead, before the «may / never» lists and the buttons. Signed out nothing changes:
+  `PermisoSinSesion` names neither client nor domain, since nothing is validated before sign-in.
+
+## Decisions of 2026-10-08, after the product critic of the audit slice
+
+Taken by the user on the critic's questions. No board drawn yet; each one opens its module with a board first.
+
+- **Each connection row names where it sends you back.** «Claude · vuelve a claude.ai»: the grant's `redirect_uri`
+  host, as the consent shows it. Two rows named «Claude» are told apart by host. Not trusting the registered name in
+  the consent's h1 when the host is not claude.ai is a later step, not taken.
+- **Keys that no longer enter fold away.** A lapsed or revoked key older than 30 days folds under «N llaves que ya no
+  entran»; nothing is deleted (RP-38). A lapsed key says «crea otra».
+- **A loose task on today moves from Hoy.** The Hoy sheet of a suelta gains «Darle otro día», the same step `/sueltas`
+  already has. A code succeeding RP-57.
+- **The plan is for goals measured in time.** «El plan» (rhythm and roadmap) is offered only to a goal whose unit is
+  time; a goal in km or pages keeps its month amounts and no roadmap. A code narrowing RP-50.
+- **The template carries a rhythm.** `ritmo: 12 h` in `PLANTILLA.md`; the import writes the goal's rhythm, so an
+  imported plan arrives armed. A code next to RP-37.
+- **Hoy counts every row that asks today**, flexible and evidence rows included, in «hechos N de M».
+- **Row metadata in plain days.** «mar y jue · 2 h»; «pide el número» goes.
+- **The key screen's sample sentence is generic:** «lee mis metas y dime qué sigue».
+- **Yesterday is a word.** «‹ ayer», hidden before the first day that has a goal.
+- **Tasks of a goal not measured in time are fixed to the month they are created in**; the person moves them by hand.
+- **Codes.** RP-62 narrows RP-50 (RP-50 stays); RP-64 opens for the host on each connection row and the folding of dead
+  keys (RP-60 and RP-38 stay). The 30 days count from when the key stopped entering (lapsed or revoked).
+- **Claude Desktop gets a copyable `claude_desktop_config.json`** running `npx mcp-remote` with the key in a header;
+  RP-38 stays true.
+
+## Decisions of 2026-10-09, the boards of the product critic
+
+- **The 19 boards are approved as drawn** (user, 2026-10-09, canvas version 84): `ConexionesConDominio`,
+  `ConexionesPlegadas`, `ConexionesPlegadasAbiertas`, `ConexionesVencidaCreaOtra`, `ConexionesCreadaDesktop` (446, 448);
+  `PermisoPalabras`, `FuenteCaidaPalabras` (580); `HoyDia` (574, 590, 591); `HoyAyerPrimerDia` (590); `HoySueltaMover`,
+  `HoySueltaMoverDia` (575); `SemanaHoyEvidencia`, `SemanaHoyEvidenciaOscuro` (576); `ReporteFuenteCaida`,
+  `ReporteTareaParte` (578); `ReporteImpresoCompacto` (579); `MetaSinPlan`, `MetaSinPlanTareas` (583);
+  `ImportarRevisarRitmo` (586). Each board's own note carries its words and what it takes for granted.
+- **`ReporteTareaParte` says only «sigue en».** The plan always starts in the current month, so a month's report never
+  receives a part carried from before; there is no «viene de».
+- **A goal with no measure keeps «El plan»** (user, 2026-10-09, module 583). Only a goal measured in a unit other than time
+  loses it: its `/metas/<id>/plan` redirects to the goal. A goal with no measure estimates its tasks in hours, as before.
+
+## Decisions of 2026-10-09, after the slice-close critic
+
+Taken by the user the same day («elige el recomendado», `private/plan-cierre-2026-10-09.md` Part 2). Each one waits on its
+module; until it lands, the screen and its approved board stay as built.
+
+- **A done task adds its figure only to a goal measured in time.** In a goal measured in km or pages a task carries no
+  figure: its sheet asks no estimate and Hoy never says «sin estimar». RP-36 retires for a successor in the module that
+  builds it.
+- **Hours are time.** `horas`, `hora` and `h` are accepted as a goal's unit and stored in minutes, so such a goal keeps
+  «El plan».
+- **An imported `ritmo:` moves the plan.** With `ritmo:` in the template, each task goes into the plan and its month only
+  orders it; the review lets the person change the rhythm like any other amount. Needs a board.
+- **Semana marks today with its own tint at 1440**, distinct from the card and from the evidence fill, checked for
+  contrast in both faces. Needs a board. The step back reads «‹ semana anterior», as Hoy reads «‹ ayer».
+- **Claude Desktop connects like claude.ai**, as a custom connector to `/mcp` with the OAuth consent, if the person's
+  Claude plan allows custom connectors; otherwise the `mcp-remote` file stays and says where the file lives in each
+  system, that it merges with other servers and that it needs Node.
+- **`PermisoPalabras` and `FuenteCaidaPalabras` are redrawn.** The consent lists only acts that exist: «darle mes o día a
+  una tarea, devolverla al plan y cambiar el monto de un mes», and «nunca» gains «cambiar el ritmo» (RP-56). An evidence
+  row under a fallen source says what it asks and that the source was not read.
+- **The connections section on `/conexiones` reads «conexiones»**, not «claude.ai»; each row already says where it
+  returns.
+- **The report:** the table header reads «por mes | hecho | planeado», as `ReporteImpresoCompacto` draws it; «HECHO km»
+  stays; the month's tasks stay a full list and every open task says it is pending; A4 is the app's promise, and the
+  tests print with the app's own `@page`.
+- **A goal's month line says tasks in tasks** («0 de 4 tareas») next to the measure's figure, so the two are not read as
+  the same number.
+- **The harness registry learns OAuth clients**, so `harness:reap` deletes the ones a test registers.
+- **Deploy when this cut closes.**
+
+## Decisions of 2026-10-09, the boards of the slice close
+
+- **The four boards are approved as drawn** (user, 2026-10-09, canvas version 91): `HoyTareaMesSinPlan`,
+  `HoySueltaMoverArrastrada`, `ConexionesVencidaSinUsar`, `ImportarErrorLinea`.
+- **The person's Claude plan allows custom connectors** (user, 2026-10-09). Claude Desktop connects like claude.ai: the
+  desktop section says «agrega un conector con esta dirección» and the `mcp-remote` JSON goes (module 672).
+- **RP-30 retires for RP-68** (user, 2026-10-09): a task carries an estimate only in a goal measured in time.
+- **«Darle otro día» offers no «sin día»** (orchestrator, 2026-10-09, module 654). `HoySueltaMoverArrastrada` draws four
+  chips ending in «sin día»; RP-61 moves a one-off «to any day from today on», so the chip stays out and the step offers
+  «hoy», «mañana», «otro día». A one-off on today opens on «mañana»; a carried one opens on «hoy».
+
+## Decisions of 2026-10-10, after the train-5 critic
+
+Taken by the user the same evening, on the critic's four questions. Boards `ImportarCabeceraRota`, `ImportarPrimeraLinea`,
+`ImportarErrorMarcaLinea` and `ReporteImpresoTablaLarga` approved as drawn by the user 2026-10-10.
+
+- **(1) A broken header cuts the reading and says so.** A header line the reader cannot take (a measure without its
+  unit) shows that one error, with its own message, and «Arréglala y vuelve a leer: las líneas de abajo no se pudieron
+  leer.» The lines below are not judged. All-at-once (RP-72) holds for everything after a sound header.
+- **(2) A first line that starts with «pulsar ·» and is not «pulsar · plantilla 1» is refused here, never sent to the
+  model.** The message names the line: «La primera línea va como «pulsar · plantilla 1».» Text that does not start with
+  «pulsar ·» still goes to the AI reading.
+- **(3) Label, table and months-left-out line stay together only when the table fits a page.** A table of 15 rows or more (20,
+  lowered to 15 after the train-6 critic) starts on the page it reaches and flows; its label stays glued to its first rows. Refines decision (2) of the train-4
+  critic for long tables only.
+- **(4) Tapping an error selects its line in the box.** After a reading with errors, focus goes to the list; each error is
+  a control that selects its line in the textarea and scrolls it into view. No line-number gutter.
+
+## Decisions of 2026-10-10, after the train-6 critic
+
+Taken by the user the same evening. No board: they move a page break and name a cause; nothing new is drawn.
+
+- **A goal whose «por mes» table prints whole (8 to 19 rows) keeps its name, measure line and figures on the table's
+  page.** The head never ends a page without its table.
+- **A «por mes» table of 15 printed rows or more flows (was 20): a goal's head never ends a page alone.** Taken by the
+  user 2026-10-10.
+- **An over-long goal name says so:** «El nombre de la meta va en 120 caracteres o menos.» It no longer reads «Falta el
+  nombre de la meta».
+- **Accepted as is:** a long table's last page may hold one row, its head and the months-left-out line.
+- **Taken by the orchestrator, no question:** tapping an error scrolls the page so the box and its line are on screen,
+  also with the keyboard up (the approved «scrolls it into view» meant the screen, not only the box).
+
+## Decisions of 2026-10-10, after the train-4 critic
+
+Taken by the user the same evening, on the critic's four questions.
+
+- **(1) The months a paper leaves out always carry their year:** «diciembre de 2026, enero de 2027 y febrero de 2027: sin
+  monto». No ranges, no count. RP-71 already says every printed date carries its year; the line now obeys it.
+- **(2) A goal's «por mes» label, its table and its months-left-out line stay together on paper.** A blank at the foot of a
+  page is the accepted cost; a table longer than a page still breaks.
+- **(3) The import accepts the goal's unit on every line that carries an amount, and shows every error at once.** A
+  commitment written «8 km» under a km goal passes like a month; under a goal in another unit the message names the unit
+  that goes. One reading lists all the template's errors, not the first. Board `ImportarTodosLosErrores` approved as
+  drawn by the user 2026-10-10: **RP-72**.
+- **(4) A goal with no measure prints its months on paper:** a «por mes» table of its tasks, done and to do. RP-71 already
+  promises «its months» for every goal. Board `ReporteImpresoSinMedida` approved as drawn by the user 2026-10-10:
+  TAREAS instead of HECHO, «N de M hechas» or «N por hacer», and «…: sin tareas» for the months left out.
+
+## Decisions of 2026-10-10, after the part-3 critic
+
+Taken by the user («1. b 2. b 3. b 4. a»); questions 2 and 3 are voyager's.
+
+- **(1b) The paper names a goal's measure with both its name and its unit:** «mide Práctica, en horas y minutos»,
+  «mide distancia, en km». The goal screen keeps «mide en horas y minutos».
+- **(4a) The paper says which months it leaves out.** A line under the goal's «por mes» table names the months not
+  printed (not started, no amount), e.g. «diciembre y enero: sin monto»; the table's count counts printed months only.
+  It refines RP-70 (2026-10-09): the months still do not print, but the paper no longer hides that they exist. Board
+  `ReporteImpresoMesesFuera` approved as drawn by the user 2026-10-10; RP-70 retired for **RP-71**.
+- **Taken by the orchestrator, the same day, no board (they fix what boards already draw):**
+  - A weekdays cadence reads Monday first and joins with «y» on every screen (goal, import review, Hoy).
+  - A km goal's month block carries its unit («34 km de 120 km»); «N tareas» never splits from its number.
+  - A month with no planned amount shows «sin monto planeado» alone; a month that is not the current one never says
+    «este mes».
+  - The import accepts a month amount written with the goal's own unit («- 2026-10 · 8 km»), and names the unit when
+    another is written.
+
+## Decisions of 2026-10-09, the boards of Part 2
+
+Taken by the user the same evening («1. si 2. b 3. a 4. a 5. a 6. a»), on canvas version 94.
+
+- **The eleven boards of Part 2 are approved as drawn:** `HojaTareaSinCifra`, `MesTareaNuevaSinCifra` (663),
+  `ImportarRitmoPlan` (669), `SemanaHoyTinte` (670), `SemanaPasoAtras` (671), `ConexionesSeccionConexiones`,
+  `ConexionesDesktopConector` (672), `PermisoPalabrasActos` (673), `FuenteCaidaQuePide` (674), `ReporteTareaPendiente`
+  (675), `MetaRitmoTareas` (676). `PermisoPalabras`, `FuenteCaidaPalabras`, `ImportarRevisarRitmo` and
+  `ConexionesCreadaDesktop` go to «Archivo» the day their successor's module lands.
+- **`--pulsar-today`** is `#e3e8ee` light and `#1e252c` dark, as `SemanaHoyTinte` measures it (670).
+- **With `ritmo:`, the review's task rows say «va al plan · desde octubre»**, not the month alone (669).
+- **The connector address shows on the main `/conexiones` screen only**, not again after a key is created (672).
+- **The report's month state moves under the month's name** («cerrado · 25 % pasó a octubre», «en curso»), since the third
+  column now carries the plan (675).
+
+## Decisions of 2026-10-09, after the critic of Part 2
+
+Taken by the user the same night («todo lo que recomendaste»).
+
+- **Under a rhythm, a task's written month only orders the tasks** (686). The review says «va al plan», never «desde {month}»,
+  and a parent's second line drops the month («la suma de lo marcado»). This replaces «va al plan · desde octubre» above.
+- **A month amount coexists with the rhythm, and says so** (687): under a rhythm, a month with its own amount reads «en lugar del
+  ritmo», in the review and on the goal's month block.
+- **`/plan`'s month header counts tasks** (688): «1 de 3 tareas hechas», as the goal does since 676.
+- **The rhythm runs from 1 min to 744 h a month** (orchestrator, 689), and its error says so in hours.
+- **No boards drawn for 686–689 before the code:** the user chose to review every app at the end. The canvas gets the built
+  screens at slice close.
+
+### The canvas at slice close, 2026-10-09
+
+- **Version 95 carries the built Part 2 as real captures** of `integracion` c021347b: the eleven approved boards, plus
+  `ImportarRitmoHoja`, `RitmoTope`, `ImportarCifraSinTiempo` (686, 689), `MetaMesEnLugarDelRitmo` (687) and `PlanMesTareas` (688).
+- `PermisoPalabras`, `FuenteCaidaPalabras`, `ImportarRevisarRitmo` and `ConexionesCreadaDesktop` are in «Archivo».
+- **`ConexionesDesktopConector` is the capture, not the drawing:** after a key is created there is no Claude Desktop section.
+- **Boards still drawn though built:** `HoyTareaMesSinPlan` (656), `HoySueltaMoverArrastrada` (654), `ConexionesVencidaSinUsar`
+  (657), `ImportarErrorLinea` (659). Their captures are owed.
+
+## Decisions of 2026-10-09, after the critic of Part 3
+
+Three answers of the user, 2026-10-09.
+
+- **RP-49 is retired for RP-70 (2026-10-09, user).** On paper a month that has not begun and has no planned amount does not
+  print; past months, the current one and the planned ones do. On screen and to a connected AI every month stays.
+- **RP-69 opens (2026-10-09, user).** A goal measured in km or pages says this month's tasks on its own screen, «1 de 3 tareas
+  hechas», and «Por mes» counts them beside each month.
+- **The two changes of form take a board before the code (2026-10-09, user):** `MetaKmTareas` (722) and
+  `ReporteImpresoSinMesesVacios` (725). Both approved as drawn (user, 2026-10-09, canvas version 97).
+- **A measure in time reads «mide en horas y minutos»** (orchestrator, 2026-10-09). It replaces «mide en {unidad}» above for
+  time only; every other unit keeps «mide en {unidad}».
+- **The empty month of a goal that does not measure time promises no time** (orchestrator, 2026-10-09, 723).
+- **Built without a board, for the user's review at the end:** 720, 721 and 723 (see «The boards that do not exist»).

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { test, expect, laneNumber } from "./fixtures";
+import { test, expect, laneNumber, settled } from "./fixtures";
 
 // RNP-17 at the kit's level: what `components/ui` does at 1024px and does not
 // do below it. `Face`, `Split` and `WeekTable` have no consumer yet; the
@@ -47,7 +47,7 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1280);
 });
 
-// Four tabs fixed at the foot (module 203): the nav 57 px (56 of tab and its
+// Four tabs fixed at the foot: the nav 57 px (56 of tab and its
 // rule), four equal links, the page column 640 wide and centred from 700 up.
 for (const [width, pageBox] of [
   [360, { x: 0, width: 360 }],
@@ -144,6 +144,7 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
     await page.setViewportSize({ width: 1024, height: 768 });
     for (const path of ["/", "/semana", `/metas/${goalId}`, `/metas/${goalId}/revision`]) {
       await page.goto(path);
+      await settled(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth), path).toBe(1024);
     }
 

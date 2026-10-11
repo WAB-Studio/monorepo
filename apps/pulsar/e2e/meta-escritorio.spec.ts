@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { civilDateInZone } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, settled as pageSettled } from "./fixtures";
 
 // RNP-17: the goal opens in two columns from 1024 — the commitments left, the
 // end, the figure and the phases right — and «Renombrar» and «Archivar» sit
@@ -34,7 +34,7 @@ async function seedGoal(db: postgres.Sql, personId: string, name: string): Promi
 async function settled(page: Page) {
   await expect(page.getByText("Compromiso ancho", { exact: true })).toBeVisible();
   await expect(page.getByText("Fase ancha", { exact: true })).toBeVisible();
-  await expect(page.locator("main")).toHaveCount(1);
+  await pageSettled(page);
 }
 
 async function boxOf(page: Page, text: string) {
@@ -44,7 +44,7 @@ async function boxOf(page: Page, text: string) {
   });
 }
 
-test("at 1280 the commitments sit left, the end and the phases right, one of each act visible (RNP-17)", async ({
+test("at 1280 the commitments sit left, the end right and the phases under both, one of each act visible (RNP-17)", async ({
   page,
   db,
   personId,
@@ -62,9 +62,10 @@ test("at 1280 the commitments sit left, the end and the phases right, one of eac
       const { x, y } = el.getBoundingClientRect();
       return { x, y };
     });
-    expect(phase.x).toBeGreaterThan(commitment.x + 300);
+    // From 1024 the phases stand under both columns.
+    expect(phase.x).toBeLessThan(commitment.x + 100);
     expect(end.x).toBeGreaterThan(commitment.x + 300);
-    expect(end.y).toBeLessThan(phase.y);
+    expect(phase.y).toBeGreaterThan(end.y);
 
     // Each group sits in a bordered white card: commitments, the end, the phases.
     for (const text of ["Compromiso ancho", "Fase ancha", "el final"]) {
@@ -142,7 +143,7 @@ test("at 360 the order is the phone's: end, commitments, phases, then «Archivar
   }
 });
 
-test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase» sits right of the phases label (RNP-17)", async ({
+test("at 1280 a goal with no measure draws no empty card (RNP-17)", async ({
   page,
   db,
   personId,
@@ -152,7 +153,7 @@ test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase
   try {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("cero fases", { exact: true })).toBeVisible();
+    await expect(page.getByText("cero fases", { exact: true })).toHaveCount(0);
     await expect(page.locator("main")).toHaveCount(1);
 
     const cards = await page.locator("main").evaluate((main) =>
@@ -163,19 +164,14 @@ test("at 1280 a goal with no measure draws no empty card, and «Añadir una fase
         })
         .map((el) => (el as HTMLElement).innerText.trim()),
     );
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(4);
     for (const text of cards) expect(text).not.toBe("");
-
-    const label = await boxOf(page, "cero fases");
-    const add = await page.getByRole("link", { name: "Añadir una fase" }).boundingBox();
-    expect(add!.x).toBeGreaterThan(label.x + 150);
-    expect(Math.abs(add!.y + add!.height / 2 - (label.y + 8))).toBeLessThan(30);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }
 });
 
-// `MetaRiel.dc.html` (module 211): the name is the page's one h1, the actions
+// `MetaRiel.dc.html`: the name is the page's one h1, the actions
 // sit on its line, and the rail marks this goal.
 test("at 1280 and 1440 the goal's name is the one h1, «Renombrar» and «Archivar» sit on its line, the rail marks the goal (RP-23, RNP-16)", async ({
   page,

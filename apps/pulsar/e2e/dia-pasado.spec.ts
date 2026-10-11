@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, visit } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-06's own screen (`DiaPasado.dc.html`): a day already past, reached by a
@@ -70,10 +70,25 @@ async function factsFor(db: postgres.Sql, commitmentId: string) {
 }
 
 test("from Hoy, steps back reach yesterday and then the seventh day back, and no eighth step is drawn (RP-06)", async ({
-  page,
+  person,
+  browser,
+  db,
 }) => {
+  // «ayer» is drawn only from the first day with a goal: this person's opened before the seven days back.
+  const { goalId } = await seedGoal(db, person.id, { name: `Fila ayer ${Date.now()}`, kind: "tap" });
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  try {
+    const page = await context.newPage();
+    await stepBack(page);
+  } finally {
+    await context.close();
+    await deleteGoal(db, person.id, goalId);
+  }
+});
+
+async function stepBack(page: import("@playwright/test").Page): Promise<void> {
   await page.goto("/");
-  await page.getByRole("link", { name: "Ver ayer" }).click();
+  await page.getByRole("link", { name: "ayer", exact: true }).click();
   await page.waitForURL(`**/dia/${pastDay(1)}`);
   await expect(page.getByRole("link", { name: "volver a hoy" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Semana" })).toHaveAttribute("aria-current", "page");
@@ -88,7 +103,7 @@ test("from Hoy, steps back reach yesterday and then the seventh day back, and no
 
   await page.getByRole("link", { name: "volver a hoy" }).click();
   await page.waitForURL((url) => url.pathname === "/");
-});
+}
 
 test("on yesterday a tap writes one fact for yesterday, read as written today; Hoy is untouched; a second tap undoes it (RP-06, RP-05)", async ({
   page,
@@ -248,6 +263,29 @@ test("a day before every goal this person holds says it asked for nothing, with 
   }
 });
 
+test("at 1440 an empty past day keeps its line in the column, under its title (RP-44)", async ({ person, browser, db }) => {
+  const day = pastDay(LIMIT);
+  const opened = pastDay(LIMIT - 2);
+  const stamp = Date.now();
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  try {
+    await db`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${`Tardía ${stamp}`}, ${pastDay(-60)}, ${new Date(`${opened}T17:00:00Z`)})
+    `;
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await visit(page, `/dia/${day}`);
+    const title = (await page.getByText("Ese día no pedía nada").boundingBox())!;
+    const line = (await page.getByText(/^tardía \d+ empezó el /i).boundingBox())!;
+    expect(Math.abs(line.x - title.x)).toBeLessThanOrEqual(1);
+    expect(line.y).toBeGreaterThan(title.y);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where user_id = ${person.id}`;
+  }
+});
+
 test("the seventh day back draws why there is no step further, the sixth draws the step (RP-06)", async ({
   page,
 }) => {
@@ -289,17 +327,20 @@ test("/dia/<the eighth day back> lands on its own week, not on a 404 (RP-06, RP-
 });
 
 test("a past day steps both ways: the day after, Hoy from yesterday, and no empty section (RP-06)", async ({
-  page,
+  person,
+  browser,
   db,
-  personId,
 }) => {
   const empty = `Meta sin filas ${Date.now()}`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at)
-    values (${personId}, ${empty}, ${pastDay(-60)}, ${new Date(Date.now() - (LIMIT + 3) * 86_400_000)})
+    values (${person.id}, ${empty}, ${pastDay(-60)}, ${new Date(Date.now() - (LIMIT + 3) * 86_400_000)})
     returning id
   `;
+  // «Ese día no pedía nada» is an absence over the whole page: the person is the worker's own.
+  const context = await browser.newContext({ storageState: person.sessionFile });
   try {
+    const page = await context.newPage();
     await page.goto(`/dia/${pastDay(1)}`);
     await expect(page.getByRole("link", { name: "día siguiente" })).toHaveAttribute("href", "/");
     await expect(page.getByRole("link", { name: "día anterior" })).toHaveAttribute("href", `/dia/${pastDay(2)}`);
@@ -314,7 +355,8 @@ test("a past day steps both ways: the day after, Hoy from yesterday, and no empt
     await expect(page.getByRole("main").getByText(empty)).toHaveCount(0);
     await expect(page.getByText("Ese día no pedía nada")).toBeVisible();
   } finally {
-    await deleteGoal(db, personId, goal.id);
+    await context.close();
+    await deleteGoal(db, person.id, goal.id);
   }
 });
 
@@ -341,10 +383,18 @@ test("a past day draws the half mark, «ese día pedía» and the count with «e
   }
 });
 
-test("/dia/<today> is Hoy itself (RP-06)", async ({ page }) => {
-  await page.goto(`/dia/${todayInZone()}`);
-  await page.waitForURL((url) => url.pathname === "/");
-  await expect(page.getByRole("link", { name: "Ver ayer" })).toBeVisible();
+test("/dia/<today> is Hoy itself (RP-06)", async ({ person, browser, db }) => {
+  const { goalId } = await seedGoal(db, person.id, { name: `Fila hoy ${Date.now()}`, kind: "tap" });
+  const context = await browser.newContext({ storageState: person.sessionFile });
+  try {
+    const page = await context.newPage();
+    await page.goto(`/dia/${todayInZone()}`);
+    await page.waitForURL((url) => url.pathname === "/");
+    await expect(page.getByRole("link", { name: "ayer", exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+    await deleteGoal(db, person.id, goalId);
+  }
 });
 
 // `DiaPasadoEscritorio.dc.html`: the date is the one `h1`, «volver a hoy» is the

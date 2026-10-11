@@ -120,6 +120,9 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   2026-09-07. Checked 2026-09-08: the published canvas contains the string `Noche` zero times.
   Nothing on it contradicts this file any more.
 - When a board and this file disagree, **this file wins**.
+- **The canvas is 149 boards**, counted 2026-10-08 from **version 39**'s own `appifact-doc` block (150 `.dc.html`
+  files plus `canvas.json`). The five added are module 525's, in one row of the `cuenta` page under one annotation,
+  primary face only. **The canvas has no index page yet**, which `AGENTS.md` asks of every canvas: a gap, written here.
 - **The canvas is 144 boards**, counted 2026-09-13 from **version 34**'s own `appifact-doc` block
   (145 `.dc.html` files plus `canvas.json`). The two added are RL-49's, `CuentaEnlaceNoVerificado`
   and `CuentaEnlaceInvalido`, side by side on the `cuenta` page so the pair reads as the comparison
@@ -828,10 +831,26 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   credit and Wikimedia's per-image credit join the dictionary's in `CuentaInformacion`; the reading
   screen carries no credit line and no per-block affix. The tab reads with no session, which is what
   keeps the credit reachable to whoever uses the work.
-- **The account screen shows a state, never a control.** Decided by the user 2026-09-09, approving
-  `CuentaCopia`. With a session it reads «Copiando a tu cuenta» and when the last copy was; there is
-  no button and neither of the two figures RL-23 used to name. Copying now, never copied, failed
-  with its retry, and signed-out are each drawn. The only way out stays signing out, per RL-30.
+- **With a session, nothing leaves the device until the reader confirms.** Decided by the user 2026-10-08,
+  approving the boards `CuentaCopiaConfirmar`, `CuentaCopiaConfirmarEnCurso`, `CuentaCopiaConfirmarFallida`,
+  `CuentaDispositivoRetirado` and `DispositivosRetirarPropio` (canvas version 39, page Cuenta). It replaces «the account
+  screen shows a state, never a control» (2026-09-09): the «Copia» section now carries one control, and only before the
+  first copy.
+  - Not confirmed on this device: «Copiar tu registro a {email}», «Hasta que lo confirmes, nada sale de este
+    dispositivo.» and the button «Empezar a copiar». A second reader on a device that holds another's log sees the same
+    board with their own address.
+  - Tapped: the button goes and `copy.syncingSearches` stays (the title keeps the address); when the round ends, `copy.lastCopy` / `copy.lastCopyMoment` as `CuentaCopia`.
+  - The first copy fails: «La copia no salió», «Tus palabras siguen en este dispositivo.» and «Reintentar». It has no
+    «hace {time}»: there is no copy before it.
+  - This device retired: «Este dispositivo ya no copia», «Lo retiraste de tu cuenta y tu registro se quedó completo aquí.
+    Para copiarlo de nuevo, cierra sesión y vuelve a entrar.», no button. The way back is signing out and in.
+  - Retiring this device: «Además, este dispositivo deja de copiar: tu registro se queda completo aquí. Para copiarlo de
+    nuevo, cierra sesión y vuelve a entrar.»; when it is the only one: «Es tu único dispositivo copiando: la copia de tu
+    cuenta queda vacía. Tu registro se queda entero aquí.» No sentence mentions a switch: there is none.
+  - Device labels read «{browser} en {platform}»; a code it cannot read, or an old English label, reads «Dispositivo
+    desconocido».
+  - **Not drawn, on purpose:** the light and desktop faces of these five. Desktop is the same column wider and light is
+    the token table.
 
 - **The AI is parked, and no provider is chosen.** Decided by the user 2026-09-08, after the numbers
   came in. RL-28 and RL-29 stay open and unbuilt; nothing in the app calls a model, so picking a
@@ -1553,3 +1572,119 @@ lines without spending it.
 **When a board and the code disagree, this is the direction the fix runs.** The canvas is the
 artifact; a screen that drifted from it drifted by accident, not by decision. Read the boards before
 assuming the shipped screen is the intended one.
+
+### Decisions of 2026-10-08, after the product critic of the audit slice
+
+Taken by the user on the critic's questions. Each opens its module with a board first where a person sees it.
+
+- **A second reader copies only what they searched.** When the reader on a device changes, the first copy sends only the
+  searches made after the new reader confirms; older rows stay on the device and never reach the new account.
+- **An unlisted word answered over the network is recorded.** Only when the answer arrived. RL-39 is retired for a
+  successor that counts it as found; the copy schema accepts the new outcome.
+- **Opening the record pulls.** With the copy on, opening `/registro` or `/cuenta` pulls once and the list refreshes when
+  it lands; the box itself stays off the network (RNL-09 reworded). «Al día» goes: the line reads «Última copia hace X».
+- **The other-reader rule rewrites RL-52, unticked.** Its words change; no successor.
+- **«Retirar» goes grey.** The retire button takes the soft weight «Cerrar sesión» has; the one-tap confirm stays.
+- **Two devices are told apart.** A label keeps its known half («Chrome en otro sistema» rather than «Dispositivo
+  desconocido» when only the platform is unknown) and each row adds «Desde el {fecha}» from `created_at`.
+- **Function words in the per-word fallback (RL-37) come from a hand table.** About a hundred words with their common
+  translation, read before the dictionary's order in that fallback only.
+- **The lemma rises under the form's first group.** For `left`, the «leave» block sits right below the first group of
+  the form, not at the end. «Form first» stands.
+- **`/registro` groups by lemma.** One row per lemma with the forms searched under it; RL-32 is retired for a successor.
+- **iPhone: measure first.** The user checks on a real iPhone whether the installed app keeps its storage apart from
+  Safari; if it does, sign-in moves to a six-digit code typed in the app (RL-22 retired for a successor).
+- **RL-37 and RL-47 are retired for successors (user, 2026-10-08).** RL-57 and RL-58 carry the hand table and the lemma block under the form's first group. If the iPhone measurement confirms it, the six-digit code rides on the shared Supabase email template (`{{ .Token }}`).
+- **The boards of this slice are approved** (user, 2026-10-08, canvas version 40): `CuentaCopiaConfirmarUnaDireccion`,
+  `CuentaCopiaConfirmarOtroLector`, `CuentaCopiaConfirmarEnCursoBusquedas`, `CuentaCopiaConfirmarEnCursoBajada`,
+  `CuentaCopiaHecha`, `CuentaCopiaAlAbrir`, `CuentaCopiaFallida{SinRed,Cuota,Servidor}`, `CuentaCopiaRetirada`,
+  `DispositivosRetirarPropioConfirmar`, `DispositivosLista`, `DispositivosFallo`, `CuentaInformacionCreditos`,
+  `CuentaSinSesionOscuroEscritorio`, `RegistroEstudioPorLema`, `PalabraHistorialLema`, `PalabraHistorialRed`,
+  `PalabraLemaBajoPrimerGrupo`, `SinEntradaFraseFuncion`. Along with them: each credit link on its own 32 px row;
+  a form in `/registro` opens its lemma's page; the dictionary line sits muted under a function word's table
+  translation; the signed-out button at 1280 shares the field's 400 px; an unknown browser on a known platform reads
+  «Navegador desconocido en {platform}»; «the first group» is the first category of the first pronunciation block.
+- **The canvas has an Índice page** listing every board and its state, and an Archivo page for the 39 superseded ones.
+- **Boards that do not exist:** no light face and no 1280 face of the new `/cuenta`, `/registro` and word boards (light
+  is the token inversion; 1280 is the same column wider, except signed-out); no board for pulling on open while
+  unconfirmed, retired or signed out (nothing is drawn: the pull does not run).
+
+### Decisions of 2026-10-09
+
+- **The forms line of a `/registro` row lists every searched form, most searched first, a tie to the most recent**
+  (orchestrator, 2026-10-09, module 562): it reconciles «linger · lingered, lingering» and «left · leave» on
+  `RegistroEstudioPorLema`. A row whose only searched form is its key draws no line.
+- **The function-word table is approved** (user, 2026-10-09, `private/reportes/558-tabla.md`), with two glosses changed:
+  will reads «-ré, -rá (futuro)» and would «-ría (condicional)».
+- **`/cuenta` keeps the lines its boards did not write** (user, 2026-10-09): «Copiando tus búsquedas…», «Visto por última
+  vez: hace un momento» and the two licence paragraphs.
+
+### Decisions of 2026-10-09, after the slice-close critic
+
+Taken by the user the same day («elige el recomendado», `private/plan-cierre-2026-10-09.md` Part 2). Each one waits on its
+module; until it lands, the screen and its approved board stay as built.
+
+- **`/cuenta` offline with a session says so.** The cached shell reads the session and the `sync` row from IndexedDB and
+  draws «Sin conexión desde hace X», never the signed-out screen. The shell carries no address. Needs a board.
+- **A word the network answered keeps its study page honest.** Now: the page drops «El diccionario no tiene esa palabra»
+  and shows the saved translation. Later: the row keeps the whole answer (definition and example).
+- **RL-58 reaches the compact breakdown.** Inside a sentence, a form's lemma block sits under its first group, as on the
+  word page. Needs a board (`SinEntradaLemaCompacto`).
+- **The muted dictionary block under a function word folds** behind one tap. Needs a board (`SinEntradaFuncionPlegada`).
+  This replaces the 2026-10-08 decision to show it whole.
+- **The forms line on `/registro` lists every searched form with commas, the most searched first, with no «·»**
+  («linger, lingered, lingering»). This replaces the line decided above for `RegistroEstudioPorLema`.
+- **`log.spec.ts` keeps one test per teardown path**; the 0/200/400 ms matrix becomes a unit test of the recording
+  machine (`settleCandidate`). The RNL-01 latency test drives the real `mergeForeign`.
+- **564 is measured by the user on a real iPhone**; 565–568 wait for it.
+- **`CuentaCopiaFallidaCuotaHora` and `CuentaCopiaSinCopia` are approved as drawn** (user, 2026-10-09, canvas version 42).
+  `CuentaCopiaFallidaCuotaHora` supersedes `CuentaCopiaFallidaCuota`, which moves to «Archivo».
+
+### Decisions of 2026-10-09, the boards of Part 2
+
+Taken by the user the same evening, on canvas version 43.
+
+- **The five boards of Part 2 are approved as drawn:** `RegistroFormasComasOscuroMovil` (680),
+  `SinEntradaLemaCompactoOscuroMovil`, `SinEntradaFuncionPlegadaOscuroMovil` (681), `PalabraHistorialRedSinFaltaOscuroMovil`
+  (682), `CuentaSinRedConSesionOscuroMovil` (683).
+- **A network word's saved translation leaves the subtitle** and stays in the body (682).
+- **Offline, `/cuenta` draws no «Cerrar sesión»**, nor «Reintentar» nor «Dispositivos» (683).
+
+### Decisions of 2026-10-09, sentences
+
+- Sentences are translated by the paid model within the daily cap, MyMemory as fallback (692, user 2026-10-09).
+- **A function word typed alone leads with the table, the dictionary folded beneath** (690, user 2026-10-09). No board drawn before the code: the user reviews the apps at the end.
+
+### Decisions of 2026-10-09, part 3
+
+Taken by the orchestrator, 2026-10-09, for modules 695–704.
+
+- **(a) A form whose lemma answers draws no network line offline.** With no connection or the network down, the network
+  answer of a form whose lemma answers shows nothing: no «Buscando…» left behind and no «No se pudo responder por
+  internet». A word with no entry (RL-44) keeps its failure line.
+- **(b) A network answer that arrived silences the dictionary's miss.** The search stops drawing «El diccionario no tiene
+  esa palabra» and «Revisa la ortografía…». While it waits, the first stays and the second does not. With the network
+  down, both stay.
+- **(c) `/cuenta` offline with a session reloads itself when the connection returns**, so «Sin conexión desde hace X» is
+  never shown with a connection.
+- **(d) The hour of the quota does not break.** Its spaces are non-breaking («7:00 p. m.» stays whole at 390 px).
+- **(e) The forms line on `/registro` is 14 px (`Text size="2"`), muted**, as the 704 boards draw it.
+- **(f) The filter on `/registro` is a field above the list, visible whenever the list has rows** (RL-63).
+- **(g) Boards that do not exist:** none for 700–702; they draw blocks already drawn or remove lines.
+- **(h) The `/registro` filter is drawn first and approved as drawn** (user, 2026-10-09, canvas version 46):
+  `RegistroFiltroOscuroMovil` (empty field, the whole list), `RegistroFiltroFiltrandoOscuroMovil` («ling»: «2 de 312
+  palabras» under the field, the × clears it), `RegistroFiltroNingunaOscuroMovil` («Ninguna palabra con «zzz»» in place of
+  the list). «Buscar en el registro» is the field's placeholder and its accessible name. Boards that do not exist: the
+  field while loading, empty or failed (it is not drawn there), light and 1280 (token inversion, the same column wider).
+
+### Decisions of 2026-10-10, after the part-3 critic
+
+Taken by the user («2. b 3. b»).
+
+- **The network's answer to a form (`went` → «fue, se fue» and its example) is not stored.** The log keeps the lemma
+  with the dictionary's translations; the `/registro` filter does not find «fue». Reopen when it is missed while reading.
+- **With the dictionary not installed, a search does not ask the network.** It says the word will have no answer until
+  the reader retries; RL-44 keeps the network to words with no entry.
+- **The spelling hint never shows before the network has answered** a word with no entry (orchestrator, same day): it
+  did for ~600 ms during the debounce, against decision (b) of part 3.
+

@@ -74,7 +74,7 @@ test("RL-47: swishing leads with its own form, swish sits under the 2px rule", a
   await expect(page.getByRole("heading", { name: "swishing", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByRole("heading", { name: "swish", exact: true })).toBeVisible();
   await expect(
-    page.getByText('"swishing" es una forma de "swish"', { exact: false }),
+    page.getByText('«swishing» es una forma de «swish»', { exact: false }),
   ).toBeVisible();
 
   const order = await headingOrder(page);
@@ -100,7 +100,7 @@ test("RL-47 leaves the exact branch alone but gives its offered lemma a voice co
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
   await expect(
-    page.getByText('"left" también es una forma de "leave"', { exact: false }),
+    page.getByText('«left» también es una forma de «leave»', { exact: false }),
   ).toBeVisible();
 
   const order = await headingOrder(page);

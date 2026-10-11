@@ -29,9 +29,7 @@ export default async function GoalsIndexPage() {
     <Button asChild variant="outline" block stack>
       <Link href="/conexiones">
         {t("title")}
-        <Text variant="meta">
-          {t("hint")}
-        </Text>
+        <Text variant="sentence">{t("hint")}</Text>
       </Link>
     </Button>
   );

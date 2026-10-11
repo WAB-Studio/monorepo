@@ -47,6 +47,25 @@ async function stubTranslateRouteWithLatency(
   return { count: () => count };
 }
 
+// The keystroke-to-answer gap is a worker round trip (`has()`), a few
+// milliseconds a polling `expect` steps right over. Sample the page on the
+// next task and the next frame after every input event instead.
+async function probeAfterInput(page: Page, needle: string): Promise<void> {
+  await page.evaluate((text) => {
+    const w = window as unknown as { __afterInput: boolean[] };
+    w.__afterInput = [];
+    const present = () => document.body.innerText.includes(text);
+    document.addEventListener("input", () => {
+      setTimeout(() => w.__afterInput.push(present()), 0);
+      requestAnimationFrame(() => w.__afterInput.push(present()));
+    });
+  }, needle);
+}
+
+async function samplesAfterInput(page: Page): Promise<boolean[]> {
+  return page.evaluate(() => (window as unknown as { __afterInput: boolean[] }).__afterInput);
+}
+
 test("the sentence path debounces, dedupes, and never raises the word UI", async ({ page }) => {
   // Chromium's built-in `Translator` hangs `availability()` forever
   // (docs/TRAPS.md); deleting it routes every sentence over the network,
@@ -193,4 +212,102 @@ test("a stale phrase response never lands once the query has moved on (RNL-05, r
   await page.waitForTimeout(700);
   await expect(page.getByText(staleAnswer)).toHaveCount(0);
   await expect(page.getByText(freshAnswer)).toBeVisible();
+});
+
+test("editing the box stops drawing the previous sentence's translation at once (RNL-05, rule 4)", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as unknown as { Translator?: unknown }).Translator;
+  });
+
+  const firstText = "The cat sleeps all day";
+  const firstAnswer = "El gato duerme todo el día";
+  const secondText = "The dog barks at night";
+  const secondAnswer = "El perro ladra de noche";
+
+  // The second answer is held until the test lets it go, so the window in
+  // which only the old translation could be on screen is as long as we want.
+  let releaseSecond: () => void = () => {};
+  const secondGate = new Promise<void>((resolve) => {
+    releaseSecond = resolve;
+  });
+  let secondAsked = 0;
+  await page.route("**/api/translate", async (route) => {
+    const { text: source } = route.request().postDataJSON() as { text: string };
+    if (source === secondText) {
+      secondAsked++;
+      await secondGate;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ text: source === firstText ? firstAnswer : secondAnswer, origin: "network" }),
+    });
+  });
+  await waitForDictionary(page);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill(firstText);
+  await expect(page.getByText(firstAnswer)).toBeVisible();
+
+  await probeAfterInput(page, firstAnswer);
+  await searchBox.fill(secondText);
+  await page.waitForTimeout(100);
+  const samples = await samplesAfterInput(page);
+  expect(samples.length, "the probe saw the keystroke").toBeGreaterThanOrEqual(2);
+  expect(samples, "the old translation is gone on the next task and the next frame").not.toContain(true);
+  await expect(page.getByText(firstAnswer), "the old translation goes with the keystroke").toHaveCount(0);
+
+  await expect.poll(() => secondAsked, { timeout: 3000 }).toBe(1);
+  await expect(page.getByText(firstAnswer), "still gone while the new one is in flight").toHaveCount(0);
+  await expect(page.getByText(secondAnswer)).toHaveCount(0);
+
+  releaseSecond();
+  await expect(page.getByText(secondAnswer)).toBeVisible();
+  await expect(page.getByText(firstAnswer)).toHaveCount(0);
+});
+
+test("a translated sentence deleted from and typed back keeps its translation without a new request", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as unknown as { Translator?: unknown }).Translator;
+  });
+
+  const text = "The cat sleeps all day";
+  const answer = "El gato duerme todo el día";
+  const translated = await stubTranslateRoute(page, answer);
+  await waitForDictionary(page);
+
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await searchBox.fill(text);
+  await expect(page.getByText(answer)).toBeVisible();
+  expect(translated.count()).toBe(1);
+
+  // Every frame after the retype, the answer's presence is recorded: a
+  // render that empties it between the keystroke and the cached answer is
+  // the flash.
+  await page.evaluate((needle) => {
+    const w = window as unknown as { __frames: boolean[] };
+    w.__frames = [];
+    const present = () => document.body.innerText.includes(needle);
+    new MutationObserver(() => w.__frames.push(present())).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  }, answer);
+
+  await probeAfterInput(page, answer);
+  await searchBox.press("Backspace");
+  await page.waitForTimeout(100);
+  const afterDelete = await samplesAfterInput(page);
+  expect(afterDelete.length, "the probe saw the keystroke").toBeGreaterThanOrEqual(2);
+  expect(afterDelete, "a shorter text is not the translated one, from the first frame").not.toContain(true);
+  await expect(page.getByText(answer)).toHaveCount(0);
+  await page.evaluate(() => ((window as unknown as { __frames: boolean[] }).__frames = []));
+  await searchBox.pressSequentially(text.slice(-1));
+  await expect(page.getByText(answer)).toBeVisible();
+  const frames = await page.evaluate(() => (window as unknown as { __frames: boolean[] }).__frames);
+  expect(frames.includes(false), "once typed back, the answer never blinks out again").toBe(false);
+  await page.waitForTimeout(PHRASE_DEBOUNCE_MS + 300);
+  expect(translated.count(), "the cache answered, no second request").toBe(1);
+  await expect(page.getByText(answer)).toBeVisible();
 });

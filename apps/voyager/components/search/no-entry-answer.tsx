@@ -1,11 +1,15 @@
 "use client";
 
 import NextLink from "next/link";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import type { WordAnswer } from "@/lib/dictionary/lookup";
-import { Flex, Headword, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
-import { SenseList } from "./sense-list";
+import { functionWordTranslation } from "@/lib/phrase/function-words";
+import { Box, Button, Flex, Headword, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
+import { SenseList, SpeakButton, leadPronunciation } from "./sense-list";
+import type { GeneratedTextState } from "./generated-text";
+import type { NetworkAnswerState } from "./network-answer";
 
 export type NoEntryPart = { token: string; answer: WordAnswer | null };
 
@@ -79,7 +83,94 @@ function NoEntryWord({ part, t }: { part: NoEntryPart; t: ReturnType<typeof useT
       </Flex>
     );
   }
-  return <SenseList answer={part.answer} variant="compact" wordHref={wordHref(part.token)} />;
+  const table = functionWordTranslation(part.token);
+  if (table === null) {
+    return <SenseList answer={part.answer} variant="compact" wordHref={wordHref(part.token)} />;
+  }
+  // RL-57: a function word leads with the table's translation, the
+  // dictionary's own block following whole and muted
+  // (docs/voyager/DESIGN.md `SinEntradaFraseFuncion`). `SenseList` draws its
+  // exact headword itself, so it is hidden there and drawn here, above the
+  // table line.
+  const heading = part.answer.exact?.headword ?? part.token;
+  return <FunctionWordBlock part={part} answer={part.answer} heading={heading} table={table} t={t} />;
+}
+
+// The dictionary block folds behind one ghost control; a word with no block
+// of its own draws no control. `alone` is RL-59's word typed by itself: the
+// headword is plain and carries the voice control, and the folded block is
+// the dictionary's whole answer (IPA, definitions, example) instead of the
+// breakdown's translations alone.
+export function FunctionWordBlock({
+  part,
+  answer,
+  heading,
+  table,
+  t,
+  alone = false,
+  generated,
+  networkAnswer,
+}: {
+  part: NoEntryPart;
+  answer: WordAnswer;
+  heading: string;
+  table: string;
+  t: ReturnType<typeof useTranslations>;
+  alone?: boolean;
+  generated?: GeneratedTextState;
+  networkAnswer?: NetworkAnswerState;
+}) {
+  const [open, setOpen] = useState(false);
+  const tWord = useTranslations("word");
+  const hit = hasHit(answer);
+  return (
+    <Flex direction="column" gap="3">
+      {alone ? (
+        <Flex align="center" gap="1">
+          <Headword>{heading}</Headword>
+          <SpeakButton headword={heading} ipa={answer.exact ? leadPronunciation(answer.exact.senses) : null} t={tWord} />
+        </Flex>
+      ) : (
+        <Link asChild underline="always">
+          <NextLink href={wordHref(part.token)}>
+            <TapTarget align="center" gap="1">
+              <Headword>{heading}</Headword>
+              <ChevronGlyph />
+            </TapTarget>
+          </NextLink>
+        </Link>
+      )}
+      <Text variant="translation">{table}</Text>
+      {hit && (
+        <Button
+          variant="ghost"
+          color="gray"
+          size="2"
+          tap={44}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {t(open ? "noEntry.hideDictionary" : "noEntry.showDictionary")}
+          <ChevronGlyph />
+        </Button>
+      )}
+      {hit && open && (
+        <Box muted>
+          {alone ? (
+            <SenseList
+              answer={answer}
+              showExactHeadword={false}
+              showSpeaker={false}
+              generated={generated}
+              networkAnswer={networkAnswer}
+            />
+          ) : (
+            <SenseList answer={answer} variant="compact" wordHref={wordHref(part.token)} showExactHeadword={false} />
+          )}
+        </Box>
+      )}
+    </Flex>
+  );
 }
 
 // RL-31: the screen a typed word or a short phrase used to leave blank.

@@ -5,7 +5,7 @@ import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
 // `TareaNota`, `TareaNotaEscribiendo`, `TareaNotaGuardada`, `TareaNotaHecha`,
-// `TareaNotaFallo`, `TareaNotaLarga`, `TareaNotaVaciar` (module 245, RP-45):
+// `TareaNotaFallo`, `TareaNotaLarga`, `TareaNotaVaciar` (RP-45):
 // the note of a task, on a goal's month and on «Mes», at 360px.
 
 const today = todayInZone();
@@ -91,7 +91,7 @@ for (const screen of ["goal", "across"] as const) {
   });
 }
 
-test("the mark still completes in one tap and the name still opens the delete sheet; a done task's note saves (RP-45)", async ({
+test("the mark still completes in one tap and the name opens the task's sheet, never the delete one; a done task's note saves (RP-45)", async ({
   person,
   browser,
   baseURL,
@@ -108,7 +108,8 @@ test("the mark still completes in one tap and the name still opens the delete sh
     const page = await context.newPage();
     await page.goto(`/metas/${goalId}/meses/${seg}`);
     await page.getByRole("button", { name, exact: true }).click();
-    await expect(page.getByRole("dialog")).toContainText("¿Borrarla?");
+    await expect(page.getByRole("dialog").getByRole("heading", { name })).toBeVisible();
+    await expect(page.getByRole("dialog")).not.toContainText("¿Borrarla?");
     await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: "Marcar como hecho" }).click();

@@ -12,14 +12,17 @@ import type {
   CommitmentPlan,
   DayView,
   DeclaredFact,
-  EvidenceDay,
   Phase,
   SatisfiedBy,
 } from "@/lib/day/types";
-import { estimateFacts, monthList, type Task } from "@/lib/plan/carry";
+import { estimateFacts, type Task } from "@/lib/plan/carry";
+import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
+import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { phasePositions } from "@/lib/day/row-phrases";
-import { knownSourceKeys, readerFor } from "@/lib/evidence/registry";
+import { dayBefore } from "@/lib/day/weeks";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
   toDeclaredFact,
@@ -29,8 +32,9 @@ import {
   type CommitmentRow as BaseCommitmentRow,
   type PhaseRow as BasePhaseRow,
 } from "@/lib/queries/rows";
+import { sourceKey, type SourceKey } from "@/i18n/translator";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
+import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
 // (`lib/evidence/registry.ts`), never over the day's own commitments: a
@@ -43,7 +47,7 @@ import { civilDateInZone, civilDateToDate, dateToCivilDate, TIME_ZONE, todayInZo
 //
 // This is also why `withReadingDb` runs one query *per known key*, not one
 // per commitment that actually needs it: today, with one key, that is four
-// statements total, the number module 8's done criterion measured. **Four is
+// statements total. **Four is
 // a fact of today's registry, not a law of this file.** The day a second key
 // lands, a person with no commitment pointing at it still pays its query —
 // RNP-03's "bounded" still holds (bounded by the catalogue's own size, which
@@ -56,15 +60,17 @@ type GoalRow = {
   created_at: string;
   measure_name: string | null;
   measure_unit: string | null;
+  rhythm: number | null;
+  plan_seen: string | null;
 };
 
 // `source_key` and `source_unit` ride in from the join to `evidence_sources`;
 // neither column exists on `commitments` itself (RNP-10 keeps the source a
 // row of configuration, not a commitment column). `goal_id` widens
-// `rows.ts`'s own `CommitmentRow` — nothing module 4's `CommitmentPlan`
-// reads, so `toCommitmentPlan` still ignores it; module 13's screen is what
+// `rows.ts`'s own `CommitmentRow` — nothing `CommitmentPlan`
+// reads, so `toCommitmentPlan` still ignores it; `DayScreen` is what
 // groups a slot by goal and names its row.
-type CommitmentRow = BaseCommitmentRow & { goal_id: string };
+type CommitmentRow = BaseCommitmentRow & { goal_id: string; source_label_key: string | null };
 
 type PhaseRow = BasePhaseRow & { goal_id: string };
 
@@ -72,8 +78,8 @@ type PhaseRow = BasePhaseRow & { goal_id: string };
 // bare quantity, never its own unit (`db/schema/commitments.ts`'s own
 // comment — "the unit belongs here, never to the fact that repeats it").
 // `id` rides in from `to_jsonb(f)` like every other bare column here — it was
-// read out from the start, only never named on this type before module 34
-// needed a row's own fact to undo (RP-05).
+// read out from the start, only never named on this type before a row's own fact
+// had to be undone (RP-05).
 type FactRow = {
   id: string;
   commitment_id: string | null;
@@ -103,7 +109,7 @@ type OneOffRow = {
 // The one statement's whole shape. `goals` and `one_offs` are fetched here
 // and, beside `view`, returned from `loadDay` below as `GoalSummary[]` and
 // `OneOffSummary[]` — `deriveDay` takes no goals array and `DayView` has no
-// place for a one-off, so module 13's screen is what groups a slot under the
+// place for a one-off, so `DayScreen` is what groups a slot under the
 // goal it belongs to and draws a one-off beneath the last one.
 type DoneOneOffRow = {
   id: string;
@@ -114,17 +120,8 @@ type DoneOneOffRow = {
   note: string | null;
 };
 
-type MonthTaskRow = {
-  goal_id: string;
-  id: string;
-  name: string;
-  estimate: number | null;
-  note: string | null;
-  parent_name: string | null;
-};
-
-// Every task of an open goal with its own done day, what `monthList` counts
-// the month's tasks from (the same rule `/metas` reads).
+// Every task of an open goal with its own done day: what the plan (`fillPlan`)
+// places the month's tasks from.
 type GoalTaskRow = {
   id: string;
   goal_id: string;
@@ -133,6 +130,10 @@ type GoalTaskRow = {
   planned_month: string | null;
   day: string | null;
   estimate: number | null;
+  note: string | null;
+  in_plan: boolean;
+  position: number;
+  created_at: string;
   done_on: string | null;
 };
 
@@ -142,6 +143,8 @@ export type MonthTask = {
   estimate: number | null;
   note: string | null;
   parentName: string | null;
+  // The hours the plan places in this month for the task: the part of a split one.
+  part: number;
 };
 
 // Every evidence commitment of a goal, retired ones included: the source keys
@@ -161,13 +164,13 @@ type GoalsQueryRow = {
   month_budgets: MonthBudgetRow[];
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
-  month_tasks: MonthTaskRow[];
   goal_tasks: GoalTaskRow[];
   dayless_count: number;
   measure_sources: MeasureSourceRow[];
   scheduled_count: number;
   last_ended: { name: string; horizon: string } | null;
   ended_this_week: { id: string; name: string; horizon: string }[];
+  first_goal_at: string | null;
 };
 
 // A goal is open on `day` while its horizon, the first day after it, lies
@@ -178,20 +181,8 @@ function openGoal(alias: string, day: string) {
 
 export type EndedGoal = { id: string; name: string; lastDay: string };
 
-// A horizon is the first day after the goal; its last day is the one before.
-function dayBefore(day: string): string {
-  const date = civilDateToDate(day);
-  date.setUTCDate(date.getUTCDate() - 1);
-  return dateToCivilDate(date);
-}
-
-export type EvidenceOutcome = {
-  status: "read" | "unreadable";
-  bySourceKey: Record<string, EvidenceDay[]>;
-};
-
 /**
- * One statement, five subqueries: everything the day's derivation needs,
+ * One statement, one subquery per thing the day reads: everything the day's derivation needs,
  * scoped to the caller's own rows by RLS alone — no `user_id` filter is
  * written here, the same choice `lib/evidence/reading-lookups.ts` took, so
  * the policy is the reason the rows are safe, not a second copy of it.
@@ -206,13 +197,14 @@ export type EvidenceOutcome = {
  * `times_per_month` asks by its month and counts what the week alone never
  * reads. What is week-bound (the goal's measure) narrows back in TS.
  *
- * `goals` is the one subquery RP-24 filters: an archived goal is never in
- * this list, and `DayScreen` (module 13) only ever groups a row under a goal
- * it finds here — a commitment or a one-off belonging to an archived goal
- * still rides along unfiltered in its own subquery below, but nothing loops
- * over either outside the per-goal grouping, so it never draws. `goals.length
- * === 0` is also what decides the day's own empty state (`empty-day.tsx`), so
- * an all-archived person needs no second check.
+ * `goals` is the list RP-24 filters: an archived goal is never in it, and
+ * `DayScreen` only ever groups a row under a goal it finds here. `commitments`
+ * and `one_offs` do not join to the goal, so a row of an archived goal still
+ * rides along, but nothing loops over either outside the per-goal grouping and
+ * it never draws. `month_budgets`, `goal_tasks` and `scheduled_count` join
+ * only open goals (`openGoal`). `goals.length === 0` is also what decides the
+ * day's own empty state (`empty-day.tsx`), so an all-archived person needs no
+ * second check.
  */
 async function queryGoalsRow(
   tx: Transaction,
@@ -225,9 +217,11 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(g) order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g
          where g.archived_at is null and g.horizon > ${weekStart}::date) as goals,
+      (select min(g.created_at) from "goals"."goals" g) as first_goal_at,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
-                 'source_unit', s.unit
+                 'source_unit', s.unit,
+                 'source_label_key', s.label_key
                ) order by c.position, c.created_at, c.id), '[]'::json)
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
@@ -256,7 +250,8 @@ async function queryGoalsRow(
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
       (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
          from "goals"."month_budgets" b
-         where b.month = date_trunc('month', ${day}::date)::date) as month_budgets,
+         join "goals"."goals" g on g.id = b.goal_id and ${openGoal("g", day)}
+         where b.month >= (date_trunc('month', ${day}::date) - interval '1 month')::date) as month_budgets,
       (select coalesce(json_agg(to_jsonb(o) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.day <= ${day}::date
@@ -275,32 +270,6 @@ async function queryGoalsRow(
          join "goals"."facts" f on f.one_off_id = o.id
          where f.day = ${day}::date) as done_one_offs,
       (select coalesce(json_agg(jsonb_build_object(
-                 'goal_id', t.goal_id,
-                 'id', t.id,
-                 'name', t.name,
-                 'estimate', t.estimate,
-                 'note', t.note,
-                 'parent_name', t.parent_name
-               )), '[]'::json)
-         from (
-           select distinct on (coalesce(p.goal_id, o.goal_id))
-                  coalesce(p.goal_id, o.goal_id) as goal_id, o.id, o.name, o.estimate, o.note, p.name as parent_name
-             from "goals"."one_offs" o
-             left join "goals"."one_offs" p on p.id = o.parent_id
-             join "goals"."goals" g on g.id = coalesce(p.goal_id, o.goal_id) and ${openGoal("g", day)}
-            where ${isToday}::boolean
-              and o.day is null
-              and coalesce(p.planned_month, o.planned_month) <= date_trunc('month', ${day}::date)::date
-              and (p.id is null or p.day is null)
-              and not exists (select 1 from "goals"."one_offs" k where k.parent_id = o.id)
-              and not exists (select 1 from "goals"."facts" f where f.one_off_id = o.id)
-            order by coalesce(p.goal_id, o.goal_id),
-                     coalesce(p.planned_month, o.planned_month),
-                     coalesce(p.position, o.position),
-                     o.position,
-                     o.id
-         ) t) as month_tasks,
-      (select coalesce(json_agg(jsonb_build_object(
                  'id', o.id,
                  'goal_id', o.goal_id,
                  'parent_id', o.parent_id,
@@ -308,6 +277,10 @@ async function queryGoalsRow(
                  'planned_month', o.planned_month,
                  'day', o.day,
                  'estimate', o.estimate,
+                 'note', o.note,
+                 'in_plan', o.in_plan,
+                 'position', o.position,
+                 'created_at', o.created_at,
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
                )), '[]'::json)
          from "goals"."one_offs" o
@@ -320,10 +293,7 @@ async function queryGoalsRow(
            and not exists (
              select 1 from "goals"."facts" f where f.one_off_id = o.id
            )
-           and (o.goal_id is null or exists (
-             select 1 from "goals"."goals" g
-             where g.id = o.goal_id and ${openGoal("g", day)}
-           ))) as dayless_count,
+           and o.goal_id is null) as dayless_count,
       (select count(*)::int
          from "goals"."one_offs" o
          where o.day > ${day}::date
@@ -353,26 +323,6 @@ async function queryGoalsRow(
   return row;
 }
 
-// One query per known source (today, exactly one), independent of which
-// commitments actually reference it: the mapping step below is what narrows
-// the result back down to the commitments that asked for it.
-async function queryEvidenceBySource(
-  tx: Transaction,
-  personId: string,
-  from: string,
-  day: string,
-): Promise<Record<string, EvidenceDay[]>> {
-  const bySourceKey: Record<string, EvidenceDay[]> = {};
-
-  for (const key of knownSourceKeys()) {
-    const reader = readerFor(key);
-    if (!reader) continue;
-    bySourceKey[key] = await reader({ personId, from, to: day, zone: TIME_ZONE, tx });
-  }
-
-  return bySourceKey;
-}
-
 // A source that cannot be read degrades to an empty outcome, never a throw
 // (RNP-04): the caller still draws, minus the evidence. Hoy and `/metas` both
 // read their figures through this.
@@ -397,12 +347,11 @@ function toCommitmentPlan(row: CommitmentRow): CommitmentPlan {
   };
 }
 
-// `Phase` (module 4) names no goal: `deriveDay`'s own `phaseOn` picks the
+// `Phase` names no goal: `deriveDay`'s own `phaseOn` picks the
 // first span that holds `day` out of every phase across every goal, which is
-// only ever right for one goal at a time. Module 13's screen calls that same
+// only ever right for one goal at a time. `DayScreen` calls that same
 // `phaseOn` itself, once per goal, against phases narrowed to that goal by
-// this `goalId` — `deriveDay` and `DayView.phase` stay exactly as module 4
-// left them.
+// this `goalId` — `deriveDay` and `DayView.phase` stay as they are.
 export type PhaseInfo = Phase & { goalId: string };
 
 function toPhaseInfo(row: PhaseRow): PhaseInfo {
@@ -436,7 +385,7 @@ function toGoalSummary(row: GoalRow): GoalSummary {
 // to none, and the screen draws it in its own group below the rest. `day` is
 // the one-off's own, not the day drawn — a screen reading `day < view.day`
 // is reading a carried one-off, undone since a day before today's; RP-19
-// widened 2026-09-28 says it rides every day after its own until it is done
+// says it rides every day after its own until it is done
 // or deleted, never just the one it was written for.
 export type OneOffSummary = {
   id: string;
@@ -464,7 +413,7 @@ function toOneOffSummary(row: OneOffRow): OneOffSummary {
 
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
 // commitment belongs to, its own name, and the mechanism that satisfies it —
-// module 13's screen groups by the first, names a row with the second, and
+// `DayScreen` groups by the first, names a row with the second, and
 // decides a tap's target with the third (a `quantity` row opens the
 // quantity sheet instead of calling `declareFact` bare). `target` and `unit`
 // ride the same `commitments` row `toSatisfiedBy` already reads (RP-03); null
@@ -481,6 +430,9 @@ export type CommitmentInfo = {
   target: number | null;
   unit: string | null;
   cadence: Cadence;
+  // Evidence commitments only: how many readings satisfy the day, and the
+  // catalogue keys naming the source and its unit (RNP-10).
+  evidence: { threshold: number; labelKey: SourceKey; unitKey: SourceKey } | null;
 };
 
 function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
@@ -492,6 +444,14 @@ function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
     target: row.satisfaction === "quantity" ? row.target_quantity : null,
     unit: row.satisfaction === "quantity" ? row.unit : null,
     cadence: toCadence(row),
+    evidence:
+      row.satisfaction === "evidence" && row.source_label_key
+        ? {
+            threshold: row.threshold ?? 1,
+            labelKey: sourceKey(row.source_label_key),
+            unitKey: sourceKey(`${row.source_label_key}Unit`),
+          }
+        : null,
   };
 }
 
@@ -562,49 +522,104 @@ function monthLineOf(
       row.measure_sources.filter((source) => source.goal_id === goal.id),
       evidenceOutcome.bySourceKey,
     );
-    const budget = row.month_budgets.find((b) => b.goal_id === goal.id);
+    const budget = row.month_budgets.find((b) => b.goal_id === goal.id && b.month === month);
     lines[goal.id] = monthLine({
       month,
       today: day,
       budget: budget ? { month, amount: budget.amount } : null,
       reached: reachedByMonth({ unit, facts, evidence }).get(month) ?? 0,
+      rhythm: goal.rhythm,
     });
   }
   return lines;
 }
 
-// The month's tasks done of total per goal, counted the way `/metas` counts
-// them (`monthList`); a goal with none has no key.
-function monthTaskCountsOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, { done: number; total: number }> {
+// What `fillPlan` reads for one goal: every task it holds, the budgets of the
+// months from the previous one, and the goal's rhythm.
+function planInputOf(goal: GoalRow, row: GoalsQueryRow, day: string): PlanInput {
+  const tasks: PlanTask[] = row.goal_tasks
+    .filter((task) => task.goal_id === goal.id)
+    .map((task) => ({
+      id: task.id,
+      parentId: task.parent_id,
+      name: task.name,
+      plannedMonth: task.planned_month,
+      day: task.day,
+      estimate: task.estimate,
+      doneOn: task.done_on,
+      note: task.note,
+      inPlan: task.in_plan,
+      createdOn: civilDateInZone(new Date(task.created_at)),
+      position: task.position,
+    }));
+  return {
+    rhythm: goal.rhythm,
+    budgets: row.month_budgets
+      .filter((budget) => budget.goal_id === goal.id)
+      .map((budget) => ({ month: budget.month, amount: budget.amount })),
+    tasks,
+    openedOn: civilDateInZone(new Date(goal.created_at)),
+    horizon: goal.horizon,
+    today: day,
+  };
+}
+
+// The plan's list for the current month, per goal; a goal with none has no key.
+function monthItemsOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, PlanItem[]> {
   const month = monthOf(day);
-  const counts: Record<string, { done: number; total: number }> = {};
+  const lists: Record<string, PlanItem[]> = {};
   for (const goal of goals) {
-    const tasks: Task[] = row.goal_tasks
-      .filter((task) => task.goal_id === goal.id)
-      .map((task) => ({
-        id: task.id,
-        parentId: task.parent_id,
-        name: task.name,
-        plannedMonth: task.planned_month,
-        day: task.day,
-        estimate: task.estimate,
-        doneOn: task.done_on,
-      }));
-    const items = monthList(tasks, month, day);
-    if (items.length > 0) counts[goal.id] = { done: items.filter((item) => item.done).length, total: items.length };
+    const items = planMonthList(planInputOf(goal, row, day), month);
+    if (items.length > 0) lists[goal.id] = items;
+  }
+  return lists;
+}
+
+// The month's tasks done of total per goal, from the same list the screens read.
+function monthTaskCountsOf(lists: Record<string, PlanItem[]>): Record<string, { done: number; total: number }> {
+  const counts: Record<string, { done: number; total: number }> = {};
+  for (const [goalId, items] of Object.entries(lists)) {
+    counts[goalId] = { done: items.filter((item) => item.done).length, total: items.length };
   }
   return counts;
 }
 
-function monthTaskOf(goals: GoalRow[], row: GoalsQueryRow): Record<string, MonthTask | null> {
+// The first undone leaf of the plan's list, carried first. A dated task is
+// Hoy's own one-off, never the next of the month.
+function monthTaskOf(goals: GoalRow[], lists: Record<string, PlanItem[]>): Record<string, MonthTask | null> {
   const tasks: Record<string, MonthTask | null> = {};
   for (const goal of goals) {
-    const next = row.month_tasks.find((task) => task.goal_id === goal.id);
-    tasks[goal.id] = next
-      ? { id: next.id, name: next.name, estimate: next.estimate, note: next.note, parentName: next.parent_name }
-      : null;
+    tasks[goal.id] = null;
+    for (const item of lists[goal.id] ?? []) {
+      if (item.done || item.task.day !== null) continue;
+      const leaf =
+        item.children.length === 0
+          ? item.task
+          : item.children
+              .filter((child) => child.doneOn === null)
+              .sort((a, b) => a.position - b.position)[0];
+      if (!leaf) continue;
+      tasks[goal.id] = {
+        id: leaf.id,
+        name: leaf.name,
+        estimate: leaf.estimate,
+        note: leaf.note ?? null,
+        parentName: item.children.length === 0 ? null : item.task.name,
+        part: item.part,
+      };
+      break;
+    }
   }
   return tasks;
+}
+
+// The notice of a month that closed short, today alone (RP-52, RP-53).
+function planNoticeOf(goals: GoalRow[], row: GoalsQueryRow, day: string): Record<string, PlanNotice | null> {
+  const notices: Record<string, PlanNotice | null> = {};
+  for (const goal of goals) {
+    notices[goal.id] = planMoved({ ...planInputOf(goal, row, day), seen: goal.plan_seen });
+  }
+  return notices;
 }
 
 // The goal's measure from the Monday of `day` to `day`: the current row of
@@ -663,12 +678,12 @@ function weekMeasureOf(
  * `goals`, `oneOffs` and `commitments` ride out of the same `withGoalsDb`
  * statement `view` is derived from — no third query, still four statements
  * total (`withGoalsDb`'s settle + select, `withReadingDb`'s settle + select).
- * Module 13's screen is what groups a slot under its goal and draws a
- * one-off beneath the last one; `DayView` and `deriveDay` (module 4) are
+ * `DayScreen` is what groups a slot under its goal and draws a
+ * one-off beneath the last one; `DayView` and `deriveDay` are
  * unchanged.
  *
  * `oneOffs` carries every one-off dated on or before `day` that no fact yet
- * names, whatever day that fact was written on (RP-19 widened 2026-09-28):
+ * names, whatever day that fact was written on (RP-19):
  * an undone one-off from three days back rides every `loadDay` after its
  * own until it is done or deleted, read here through `o.day <= day` beside
  * the row-level `not exists` the SQL above already runs. `OneOffSummary`
@@ -695,7 +710,11 @@ export async function loadDay(day: string): Promise<{
   monthTask: Record<string, MonthTask | null>;
   // Tasks of the month, done of total, for every goal that has any; today only.
   monthTaskCounts: Record<string, { done: number; total: number }>;
+  // Each open goal's notice that a closed month moved its end; today only, `{}` on any other day.
+  planNotice: Record<string, PlanNotice | null>;
   commitments: CommitmentInfo[];
+  // The civil day of the person's oldest goal, archived included; null without goals.
+  firstGoalDay: string | null;
   phases: PhaseInfo[];
   // Each phase's place among its goal's phases, in every phase the goal has.
   phasePositions: Record<string, { ordinal: number; total: number }>;
@@ -723,13 +742,13 @@ export async function loadDay(day: string): Promise<{
   // The statement returns every phase so a goal's phase can say its place
   // among them; what the day derives from stays the ones in effect on `day`.
   const inEffect = row.phases.filter(
-    (phase) => phase.starts_on <= day && (phase.ends_on === null || phase.ends_on >= day),
+    (phase) => phase.starts_on <= day && phase.ends_on >= day,
   );
   const phases = inEffect.map(toPhase);
   // A one-off's fact carries no `commitment_id`; `DeclaredFact` names one
   // that always does, so a one-off's own fact plays no part in deriving a
   // commitment's slot (RP-19's list is this file's own `oneOffs`, read by
-  // module 13's screen).
+  // `DayScreen`).
   const dayFacts = row.facts.filter((fact) => fact.day === day);
   // Every fact of the period, not the day's alone: `asksOn` counts a quota
   // over the week or the month, and `deriveSlot` reads the day's own by day.
@@ -745,6 +764,8 @@ export async function loadDay(day: string): Promise<{
   const evidence = toEvidenceByCommitment(row.commitments, dayEvidence);
   const goals = row.goals.filter((goal) => goal.horizon > day);
 
+  const monthItems = isToday ? monthItemsOf(goals, row, day) : null;
+
   const view = deriveDay({ commitments, phases, facts, evidence, day });
   const periodDone: Record<string, number> = {};
   for (const plan of commitments) {
@@ -752,7 +773,7 @@ export async function loadDay(day: string): Promise<{
     if (done !== null) periodDone[plan.id] = done;
   }
 
-  // `completeOneOff` (module 12) never deletes the one-off's own row — it
+  // `completeOneOff` never deletes the one-off's own row — it
   // only writes the fact that explains it — so the `one_offs` subquery
   // itself carries the `not exists (... facts ...)` check now (RP-19's
   // "done, it leaves the list", true on any day the fact was written, not
@@ -782,9 +803,11 @@ export async function loadDay(day: string): Promise<{
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     monthLine: monthLineOf(goals, row, evidenceOutcome, day),
-    monthTask: isToday ? monthTaskOf(goals, row) : {},
-    monthTaskCounts: isToday ? monthTaskCountsOf(goals, row, day) : {},
+    monthTask: monthItems ? monthTaskOf(goals, monthItems) : {},
+    monthTaskCounts: monthItems ? monthTaskCountsOf(monthItems) : {},
+    planNotice: isToday ? planNoticeOf(goals, row, day) : {},
     commitments: row.commitments.map(toCommitmentInfo),
+    firstGoalDay: row.first_goal_at ? civilDateInZone(new Date(row.first_goal_at)) : null,
     phases: inEffect.map(toPhaseInfo),
     phasePositions: phasePositions(row.phases.map((phase) => ({ id: phase.id, goalId: phase.goal_id, startsOn: phase.starts_on }))),
     factsByCommitment: latestFactByCommitment(dayFacts.map(toFactForCommitment)),

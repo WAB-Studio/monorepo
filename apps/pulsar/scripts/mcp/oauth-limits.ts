@@ -1,4 +1,4 @@
-// Proves RP-41 and RNP-19: the call limit on the two anonymous OAuth routes and
+// Proves RP-60 and RNP-19: the call limit on the two anonymous OAuth routes and
 // the ceiling on unused clients. Drives the lane's running server
 // (`PULSAR_BASE_URL`, else :3200 + lane - 1). Every address is a random /64 of
 // the documentation prefix, and every assertion is on rows this run made.
@@ -6,10 +6,10 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
-import { assertSuiteDatabase } from "@repo/harness-registry";
+import { assertSuiteDatabase, closeRun, registerOAuthClient } from "@repo/harness-registry";
 import postgres from "postgres";
 
-import { adminSql, stubServerOnly } from "./lib/people";
+import { adminSql, openCheckRun, stubServerOnly } from "./lib/people";
 
 assertSuiteDatabase();
 
@@ -38,12 +38,16 @@ function remember(address: string): void {
   sources.push(fingerprint(callerAddress({ headers: new Headers({ "x-forwarded-for": address }) })));
 }
 
-const register = (address: string, name: string) =>
-  fetch(`${base}/oauth/registro`, {
+const register = async (address: string, name: string) => {
+  const response = await fetch(`${base}/oauth/registro`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-forwarded-for": address },
     body: JSON.stringify({ client_name: name, redirect_uris: [REDIRECT] }),
   });
+  if (response.status === 201) await registerOAuthClient(admin, (await response.clone().json()).client_id);
+
+  return response;
+};
 
 const garbageToken = (address: string) =>
   fetch(`${base}/oauth/token`, { method: "POST", headers: { "x-forwarded-for": address }, body: "" });
@@ -74,6 +78,7 @@ function assertRefused(response: Response, ceiling: number): void {
 
 before(async () => {
   stubServerOnly();
+  await openCheckRun(admin);
   ({ fingerprint } = await import("@/lib/mcp/tokens"));
   ({ callerAddress } = await import("@/lib/oauth/throttle"));
 });
@@ -82,6 +87,7 @@ after(async () => {
   try {
     await admin`delete from goals.oauth_clients where client_name like ${`limits-${run}-%`}`;
     for (const source of sources) await admin`delete from goals.oauth_calls where source = ${source}`;
+    await closeRun(admin);
   } finally {
     await door.end();
     await admin.end();
@@ -171,7 +177,7 @@ const grants: Record<string, Record<string, string>> = {
 };
 
 for (const grant of Object.keys(grants)) {
-  test(`a ${grant} request naming a metadata URL spends the registration limit before it reads`, async () => {
+  test(`a ${grant} request naming a new metadata URL spends the registration limit before it reads`, async () => {
     await outwait(3600, 60);
     const e = `${prefix()}::1`;
     remember(e);
@@ -189,6 +195,29 @@ for (const grant of Object.keys(grants)) {
     assert.ok(answers.every((status) => status === 400), `answers ${answers}`);
     assert.equal(await callsOf(e, "register"), 12, "the metadata read did not claim the register bucket");
     assert.equal(await callsOf(e, "token"), 12);
+  });
+}
+
+for (const grant of Object.keys(grants)) {
+  test(`a ${grant} request naming a registered metadata URL spends no registration`, async () => {
+    await outwait(300, 30);
+    const g = `${prefix()}::1`;
+    remember(g);
+    const known = `https://192.0.2.1/stored-${run}-${grant}.json`;
+    await admin`
+      insert into goals.oauth_clients (client_name, redirect_uris, metadata_url)
+      values (${`limits-${run}-stored-${grant}`}, ${[REDIRECT]}, ${known})`;
+    for (let n = 0; n < 11; n += 1) {
+      const response = await fetch(`${base}/oauth/token`, {
+        method: "POST",
+        headers: { "x-forwarded-for": g },
+        body: new URLSearchParams({ ...grants[grant], client_id: known }),
+      });
+      await response.text();
+      assert.equal(response.status, 400, `request ${n + 1}`);
+    }
+    assert.equal(await callsOf(g, "register"), 0, "a registered client spent the register bucket");
+    assert.equal(await callsOf(g, "token"), 11);
   });
 }
 

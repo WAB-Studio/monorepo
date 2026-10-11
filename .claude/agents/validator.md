@@ -14,7 +14,7 @@ An assignment already implemented on a branch: goal, files, contract, RF codes c
 # Stance
 
 Trust nothing the worker claimed without its log. Read the logs it saved; re-run the module's own tests and
-mutations yourself. Never re-run a suite the worker logged green. Prove a policy fires; never assume it from the code.
+mutations nobody logged red. Never re-run a suite the worker logged green. Prove a policy fires; never assume it from the code.
 
 # Run
 
@@ -30,6 +30,8 @@ Read the diff the worker landed: `git show --stat` on each commit of
 that moved after the fork reads as the branch deleting what the base added.
 
 Against the contract:
+- Walk the Done table row by row: the assertion exists, and its mutation reddens it. A clause of the
+  contract with no row is a FAIL of the plan; say so under `Deferred` and name the missing row.
 - Every file the contract names is touched; no file outside it is.
 - Inputs, outputs and types match the contract to the letter.
 - The done criterion is actually met by the code, not only by a passing command.
@@ -46,7 +48,9 @@ Against the hard rules (`AGENTS.md`, `docs/SPEC.md` §2):
 
 # Mutations
 
-Drive every mutation yourself. Never take the worker's table of them.
+Take a mutation the worker or tester logged red from its log: check the log ran the mutated code
+(the patch, the build after it, the one test that killed it). Drive it yourself only when that log is
+missing or ran the wrong code. Drive every mutation the Done table names and nobody logged.
 Run the `check:*` that import what the branch changed, sized as `AGENTS.md` § Verification says.
 Never run the whole e2e suite: CI runs it on the pull request.
 

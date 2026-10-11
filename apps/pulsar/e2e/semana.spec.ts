@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Seeded by `harness:seed-goal`: the one goal and its one one-off, already
 // attributed to it (RP-20).
@@ -78,33 +79,6 @@ async function resetOneOff(db: postgres.Sql, id: string): Promise<void> {
   await db`delete from goals.facts where one_off_id = ${id}`;
 }
 
-// A commitment asks nothing before the civil day it was written, and the
-// seed writes them today: without this, a Sunday's other day (yesterday) and
-// a Monday's would hold no dots at all. Moved back by id, restored by id.
-async function backdateCommitments(
-  db: postgres.Sql,
-  personId: string,
-): Promise<() => Promise<void>> {
-  const originals = await db<{ id: string; created_at: Date }[]>`
-    select id, created_at from goals.commitments where user_id = ${personId}
-  `;
-  const ids = originals.map((row) => row.id);
-  if (ids.length > 0) {
-    await db`
-      update goals.commitments set created_at = created_at - interval '30 days'
-      where id in ${db(ids)} and user_id = ${personId}
-    `;
-  }
-  return async () => {
-    for (const row of originals) {
-      await db`
-        update goals.commitments set created_at = ${row.created_at}
-        where id = ${row.id} and user_id = ${personId}
-      `;
-    }
-  };
-}
-
 test("at 360px a commitment is one row of seven marks, no horizontal overflow (RP-16)", async ({
   page,
   db,
@@ -122,12 +96,23 @@ test("at 360px a commitment is one row of seven marks, no horizontal overflow (R
   expect(scrollWidth).toBeLessThanOrEqual(360);
 });
 
-test("a day with no facts carries no filled mark (RP-16)", async ({ page, db, personId }) => {
-  const restore = await backdateCommitments(db, personId);
+test("a day with no facts carries no filled mark (RP-16)", async ({ browser, db, person }) => {
+  // The whole week is asserted empty, so the person is the worker's own; a
+  // commitment asks nothing before the day it was written, hence created 30 days ago.
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${GOAL_NAME}, now() + interval '60 days', now() - interval '40 days') returning id
+  `;
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${person.id}, ${goal.id}, ${`Compromiso ${Date.now()}`}, 'daily', 'tap', now() - interval '30 days')
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile });
   try {
-    await checkEmptyOtherDay(page);
+    await checkEmptyOtherDay(await context.newPage());
   } finally {
-    await restore();
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
   }
 });
 
@@ -172,7 +157,7 @@ test("a one-off under a goal completed today fills a mark in that goal's today c
     const nameButton = page.locator("button", { hasText: ONE_OFF_NAME });
     const rowContainer = nameButton.locator("xpath=ancestor::div[1]");
     await rowContainer.getByRole("button", { name: "Marcar como hecho" }).click();
-    // Done, it stays on Hoy under «hechas hoy», its mark now the undo (module 68).
+    // Done, it stays on Hoy under «hechas hoy», its mark now the undo.
     await expect(page.getByRole("button", { name: `Deshacer: ${ONE_OFF_NAME}` })).toBeVisible();
 
     await page.goto("/semana");
@@ -236,5 +221,50 @@ test("a one-off belonging to nothing, done today, fills a mark in the Sueltas gr
     // Deletes the fact along with it (`facts.one_off_id`'s own cascade) —
     // never a blanket delete by name, only this exact row's id.
     await db`delete from goals.one_offs where id = ${id} and user_id = ${personId}`;
+  }
+});
+
+// The desktop footer tallies each day that has come as «done de total», today
+// included, and leaves the days not yet come blank.
+test("at 1440 the footer's cell for today reads «1 de 2» with one of two done today, and days to come stay blank (RP-16)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  const today = todayInZone();
+  const todayIndex = (civilDateToDate(today).getUTCDay() + 6) % 7;
+  const created = new Date(`${dateToCivilDate(new Date(civilDateToDate(today).getTime() - 40 * 86_400_000))}T17:00:00Z`);
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${"Pie de hoy"}, now() + interval '60 days', ${created}) returning id
+  `;
+  const [done] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${person.id}, ${goal.id}, ${"Hecha hoy"}, 'daily', 'tap', ${created}) returning id
+  `;
+  await db`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+    values (${person.id}, ${goal.id}, ${"Abierta hoy"}, 'daily', 'tap', ${created})
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day)
+    values (${person.id}, ${goal.id}, ${done.id}, ${today}::date)
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/semana");
+    const cells = page.locator("tfoot td");
+    await expect(cells).toHaveCount(7);
+    await expect(cells.nth(todayIndex)).toHaveText("1 de 2");
+    for (let index = 0; index < 7; index++) {
+      if (index < todayIndex) await expect(cells.nth(index)).toHaveText("0 de 2");
+      if (index > todayIndex) await expect(cells.nth(index)).toHaveText("");
+    }
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;
   }
 });

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { Button, Page, ScreenExit, ScreenHeader, Text } from "@/components/ui";
+import { Button, Page, ScreenExit, ScreenHeader } from "@/components/ui";
 
 /**
  * `ArmazonFallo.dc.html` (RNP-01, RNP-16). `app/(app)/layout.tsx` still renders above this
@@ -29,14 +29,7 @@ export default function Error({
 
   return (
     <Page width="full">
-      <ScreenHeader
-        title={t("title")}
-        eyebrow={
-          <Text as="p" variant="meta" tone="muted">
-            {t("kicker")}
-          </Text>
-        }
-      />
+      <ScreenHeader title={t("title")} />
       <ScreenExit message={t("body")}>
         <Button onClick={() => retry()}>{t("retry")}</Button>
         <Button asChild variant="ghost" tone="accent">

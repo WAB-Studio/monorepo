@@ -1,6 +1,7 @@
 import { createMcpHandler, generateProtectedResourceMetadata } from "mcp-handler";
 
 import { env } from "@/lib/env";
+import { cors } from "@/lib/http/cors";
 import { registerReadTools } from "@/lib/mcp/tools/read";
 import { registerWriteTools } from "@/lib/mcp/tools/write";
 
@@ -23,12 +24,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
   );
 }
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Max-Age": "86400",
-};
+const CORS = cors("GET");
 
 // RFC 9728 §3: the document both well-known paths answer.
 export function resourceMetadataResponse(): Response {

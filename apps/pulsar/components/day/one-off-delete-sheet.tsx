@@ -19,8 +19,7 @@ export type OneOffDeleteSheetProps = {
  * `SueltaBorrar.dc.html` (RP-22): the retire sheet's own shape — `Sheet` with
  * a solid confirm over an outlined way out — built as a sibling here rather
  * than by extracting `RetireSheet` (`components/goal/retire-sheet.tsx`),
- * which hardwires `retireCommitment` and reads `plan.retireSheet.*` (module
- * 18's validator, 2026-09-27). The sentence says what the act is not — done
+ * which hardwires `retireCommitment` and reads `plan.retireSheet.*`. The sentence says what the act is not — done
  * leaves a record, deleted leaves nothing — so nobody reads a delete as an
  * undo.
  */
@@ -54,7 +53,7 @@ export function OneOffDeleteSheet({ open, onOpenChange, oneOffId, name }: OneOff
       description={t("day.oneOffs.delete.description")}
     >
       {error ? (
-        <Text as="p" tone="muted" variant="meta">
+        <Text as="p" variant="sentence">
           {t(error)}
         </Text>
       ) : null}

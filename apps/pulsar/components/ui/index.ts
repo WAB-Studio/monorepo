@@ -31,6 +31,12 @@ export { MarkList } from "./mark-list";
 export { Panel, PanelGrid } from "./panel";
 export { SectionLabel } from "./section-label";
 
+export { Section } from "./section";
+
+export { Fold } from "./fold";
+
+export { TextLink } from "./text-link";
+
 export { Figure } from "./figure";
 
 export { Progress } from "./progress";
@@ -50,6 +56,10 @@ export { CodeBlock } from "./code-block";
 export { CheckRow, ActionBar } from "./check-row";
 
 export { Chip } from "./chip";
+
+export { ChipRow } from "./chip-row";
+
+export { FieldPair } from "./field-pair";
 
 export { Skeleton } from "./skeleton";
 
@@ -75,4 +85,4 @@ export { WeekFold, WeekTable } from "./week-table";
 
 export { SheetActions } from "./sheet-actions";
 
-export { PrintPage, PrintBlock, PrintHidden, PrintOnly } from "./print";
+export { PrintPage, PrintBlock, PrintGoal, PrintHidden, PrintOnly } from "./print";

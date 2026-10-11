@@ -10,6 +10,9 @@ function weekLongName(civilDay: string): string {
   return `${weekday} ${date.getUTCDate()}`;
 }
 
+// What the row draws besides its name, whitespace folded: its one meta line.
+const metaOf = (text: string) => text.replace(/Compromiso vaciado \d+/, "").replace(/\s+/g, " ").trim();
+
 test("emptying the reading record empties the evidence mark on Hoy and on Semana, and writes no fact (RP-10, RP-09)", async ({
   person,
   browser,
@@ -61,7 +64,7 @@ test("emptying the reading record empties the evidence mark on Hoy and on Semana
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
-    await expect(row).toContainText("diccionario");
+    expect(metaOf(await row.innerText())).toBe("1 búsqueda · diccionario");
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(dot).toHaveAttribute("data-state", "evidence");
@@ -74,6 +77,7 @@ test("emptying the reading record empties the evidence mark on Hoy and on Semana
     await expect(page.locator("main")).toHaveCount(1);
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
     await expect(row).not.toContainText("diccionario");
+    expect(metaOf(await row.innerText())).toBe("1 búsqueda");
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(dot).toHaveCount(1);

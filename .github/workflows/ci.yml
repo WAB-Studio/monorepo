@@ -91,6 +91,7 @@ jobs:
         with:
           apps: voyager
       - run: npm run check:sync -w apps/voyager
+      - run: npm run check:grants -w apps/voyager
 
   # The pure modules, mirrors voyager's `unit` job. No database, no secret.
   pulsar-unit:
@@ -128,8 +129,9 @@ jobs:
   # Chromium for it. Every job runs on its own stack, so runs never contend.
   # Every path below addresses `apps/orbit`: the suite, its `.env.local`,
   # its route types and its results directory all live there since the monorepo.
-  # `apps/voyager` has no database, no identity and no harness, so nothing here
-  # touches it — its own browser suite runs without any of this.
+  # `apps/voyager` has its own database and local stack, but no harness lane:
+  # nothing here touches it — its checks run in the voyager jobs above and in
+  # `voyager-e2e`.
   # Which of the two apps a change can actually affect. Orbit's suite is 17
   # minutes and drives the one shared remote Postgres through a single-slot
   # group, so running it for a change it cannot reach costs the whole queue.
@@ -140,6 +142,7 @@ jobs:
     outputs:
       orbit: ${{ steps.filter.outputs.orbit }}
       pulsar: ${{ steps.filter.outputs.pulsar }}
+      voyager: ${{ steps.filter.outputs.voyager }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -151,9 +154,11 @@ jobs:
           # `packages/` and the lockfile reach both apps; so does this workflow.
           orbit_paths="apps/orbit packages package-lock.json .github/workflows/ci.yml"
           pulsar_paths="apps/pulsar packages package-lock.json .github/workflows/ci.yml"
+          voyager_paths="apps/voyager packages package-lock.json .github/workflows/ci.yml"
           if [ -z "$BASE_SHA" ]; then
             echo "orbit=true" >> "$GITHUB_OUTPUT"
             echo "pulsar=true" >> "$GITHUB_OUTPUT"
+            echo "voyager=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if git diff --quiet "$BASE_SHA" HEAD -- $orbit_paths; then
@@ -165,6 +170,11 @@ jobs:
             echo "pulsar=false" >> "$GITHUB_OUTPUT"
           else
             echo "pulsar=true" >> "$GITHUB_OUTPUT"
+          fi
+          if git diff --quiet "$BASE_SHA" HEAD -- $voyager_paths; then
+            echo "voyager=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "voyager=true" >> "$GITHUB_OUTPUT"
           fi
 
   # `next build` for orbit runs nowhere else since #57 turned off preview
@@ -458,6 +468,8 @@ jobs:
       # Creates or refreshes lane 7's shared pair; idempotent.
       - run: npm run harness:token -w apps/orbit
 
+      - run: npm run check:e2e-static -w apps/pulsar
+
       - run: npm run build -w apps/pulsar
 
       - name: Start the app and wait for it to answer
@@ -570,6 +582,8 @@ jobs:
   # `reading-log` pinned at version 1 after module 6 raised the store to 2.
   voyager-e2e:
     runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.voyager == 'true'
     timeout-minutes: 30
     env:
       VOYAGER_BASE_URL: http://localhost:3100

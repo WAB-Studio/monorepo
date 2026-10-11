@@ -1,10 +1,14 @@
-import { LOOKUP_SCHEMA, type LookupOutcome, type LookupRecord, type SyncState } from "./types";
+import { isRecordedOutcome } from "./outcome";
+import { countPending } from "./pending";
+import { pendingRowFrom } from "./record-text";
+import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
+import type { LookupRecord, SyncState } from "./types";
 
 // A separate database from `reading-dictionary`: an IndexedDB transaction is
 // scoped to one database, so a write here never queues behind a read of the
 // 8.2 MB payload (RNL-06).
 const DATABASE_NAME = "reading-log";
-export const DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 3;
 const STORE_NAME = "lookups";
 const AT_INDEX = "at";
 const SYNC_STORE_NAME = "sync";
@@ -45,8 +49,8 @@ function openDatabase(): Promise<IDBDatabase> {
   if (databasePromise) return databasePromise;
   databasePromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    // No branch here ever reads, writes or deletes a row: version 1 to 2
-    // adds a store and an index, nothing more, so an upgrade cannot lose one.
+    // No branch here ever reads, writes or deletes a row: versions 1 to 3
+    // add stores and indexes, nothing more, so an upgrade cannot lose one.
     request.onupgradeneeded = (event) => {
       const database = request.result;
       if (event.oldVersion < 1) {
@@ -65,12 +69,24 @@ function openDatabase(): Promise<IDBDatabase> {
           .objectStore(STORE_NAME)
           .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
       }
+      if (event.oldVersion < 3) {
+        // A null `headword` is not a valid key, so a phrase or an unlisted
+        // word stays out of this index.
+        request.transaction!.objectStore(STORE_NAME).createIndex("headword", "headword");
+      }
     };
     request.onsuccess = () => {
       const database = request.result;
       // A connection the browser closes on its own (eviction, another tab's
       // version change) stops being usable synchronously too.
       database.onclose = () => {
+        openDatabaseHandle = null;
+        databasePromise = null;
+      };
+      // A newer tab upgrading the schema waits on this connection: close it
+      // and let the next write reopen.
+      database.onversionchange = () => {
+        database.close();
         openDatabaseHandle = null;
         databasePromise = null;
       };
@@ -249,8 +265,7 @@ function notifyFlushed(): void {
 // settled candidate — hit or miss — ends up, never at the call that reports
 // it: `recordLookup` still has to run for a miss, so it can displace
 // whatever prefix was pending and let the chain keep extending past it.
-const LOGGED_OUTCOMES: ReadonlySet<LookupOutcome> = new Set(["exact", "inflected", "translated"]);
-
+//
 // Relays to `localStorage` before either IndexedDB path is even tried: a
 // killed tab still lets its transaction commit (measured), but a reload, a
 // URL navigation or a history traversal tears the document down before its
@@ -268,7 +283,7 @@ const LOGGED_OUTCOMES: ReadonlySet<LookupOutcome> = new Set(["exact", "inflected
 // never sit in `localStorage` waiting for a load that would resurrect it,
 // the same as it must never reach IndexedDB.
 function commit(row: LookupRecord): void {
-  if (!LOGGED_OUTCOMES.has(row.outcome)) return;
+  if (!isRecordedOutcome(row.outcome)) return;
   relayPendingRow(row);
   if (writeRowSync(row)) return;
   void writeRow(row).then(notifyFlushed);
@@ -314,7 +329,7 @@ function onSettleTimer(): void {
  * and when this ever reaches IndexedDB.
  */
 export function recordLookup(row: Omit<LookupRecord, "id" | "schema">): void {
-  latestCandidate = { ...row, schema: LOOKUP_SCHEMA };
+  latestCandidate = pendingRowFrom(row);
   if (settleTimer) clearTimeout(settleTimer);
   settleTimer = setTimeout(onSettleTimer, SETTLE_MS);
 }
@@ -349,8 +364,6 @@ if (typeof document !== "undefined") {
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", flushPendingLookup);
 }
-
-// Written for the review engine; nothing in this slice calls either.
 
 export async function countRecords(): Promise<number> {
   const database = await openDatabase();
@@ -410,6 +423,8 @@ function defaultSyncState(): SyncState {
     pulledThroughCursor: null,
     lastSyncedAt: null,
     enabled: false,
+    readerId: null,
+    retired: false,
   };
 }
 
@@ -437,7 +452,7 @@ function putSyncRow(database: IDBDatabase, state: SyncState): Promise<void> {
 async function readSyncStateFresh(): Promise<SyncState> {
   const database = await openDatabase();
   const existing = await getSyncRow(database);
-  if (existing) return existing;
+  if (existing) return normaliseSyncState(existing);
   const state = defaultSyncState();
   await putSyncRow(database, state);
   return state;
@@ -450,30 +465,73 @@ async function readSyncStateFresh(): Promise<SyncState> {
 // silence. Reset on failure so the next call retries instead of caching it.
 let syncStatePromise: Promise<SyncState> | null = null;
 
-/** The device's sync row, minting `deviceId` the first time it is read. */
-export async function readSyncState(): Promise<SyncState> {
+// Throws when the stored row cannot be read, so a caller about to write can
+// tell that apart from a device that has no row yet.
+function loadSyncState(): Promise<SyncState> {
   if (!syncStatePromise) {
     syncStatePromise = readSyncStateFresh();
     syncStatePromise.catch(() => {
       syncStatePromise = null;
     });
   }
+  return syncStatePromise;
+}
+
+/** The device's sync row, minting `deviceId` the first time it is read. */
+export async function readSyncState(): Promise<SyncState> {
   try {
-    return await syncStatePromise;
+    return await loadSyncState();
   } catch {
     return defaultSyncState();
   }
 }
 
-/** Merges `next` into the persisted state. A failure disables the copy. */
+/** Merges `next` into the persisted state. A failed read writes nothing. */
 export async function writeSyncState(next: Partial<SyncState>): Promise<void> {
   try {
     const database = await openDatabase();
-    const current = await readSyncState();
+    const current = await loadSyncState();
     const merged: SyncState = { ...current, ...next };
     await putSyncRow(database, merged);
     syncStatePromise = Promise.resolve(merged);
   } catch {
     databasePromise = null;
   }
+}
+
+async function highestLocalId(): Promise<number | null> {
+  const database = await openDatabase();
+  return new Promise<number | null>((resolve, reject) => {
+    const request = database
+      .transaction(STORE_NAME, "readonly")
+      .objectStore(STORE_NAME)
+      .openCursor(null, "prev");
+    request.onsuccess = () => resolve(request.result ? (request.result.key as number) : null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/** How many of this device's own searches the copy has yet to upload. */
+export async function countPendingUpload(): Promise<number> {
+  const [rows, state] = await Promise.all([readAll(), readSyncState()]);
+  return countPending(rows, state.pushedThroughLocalId);
+}
+
+/** Starts the copy for this reader: keeps the cursors only for the same reader on a live device; another reader leaves stored rows behind. */
+export async function startCopyFor(readerId: string): Promise<SyncState> {
+  const current = await readSyncState();
+  const next = syncStateForReader(current, readerId, () => crypto.randomUUID(), await highestLocalId());
+  await writeSyncState(next);
+  return next;
+}
+
+/** Turns the copy off for a sign-out; a retired device also forgets its identity. */
+export async function signOutSync(): Promise<void> {
+  const current = await readSyncState();
+  await writeSyncState(signOutSyncState(current, () => crypto.randomUUID()));
+}
+
+/** The server retired this device: the copy stops until a new sign-in mints another. */
+export async function markRetired(): Promise<void> {
+  await writeSyncState({ retired: true, enabled: false });
 }

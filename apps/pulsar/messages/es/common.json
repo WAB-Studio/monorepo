@@ -1,11 +1,9 @@
 {
   "appName": "Bitácora de metas",
-  "brand": "pulsar",
-  "tagline": "Lo que pasó, cuándo y quién lo escribió.",
+  "brand": "Bitácora de metas",
   "nav": {
     "today": "Hoy",
     "week": "Semana",
-    "goal": "Meta",
     "goals": "Metas",
     "month": "Mes",
     "goalsSection": "metas abiertas"
@@ -14,14 +12,12 @@
     "back": "Volver a {place}"
   },
   "notFound": {
-    "kicker": "no está",
     "title": "Esta página no existe",
     "body": "Si era una meta, puede que esté archivada: la encuentras en Metas.",
     "primaryAction": "Ir a hoy",
     "secondaryAction": "Ver las metas"
   },
   "error": {
-    "kicker": "no cargó",
     "title": "No se pudo abrir",
     "body": "Lo que ya anotaste está guardado.",
     "retry": "Intentar otra vez",

@@ -1,10 +1,11 @@
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { pgCode } from "@/lib/db-error";
 import { errorOf } from "@/lib/mcp/errors";
 import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
 import type { ResolvedPerson } from "@/lib/mcp/tokens";
-import { monthList } from "@/lib/plan/carry";
+import { planMonthList } from "@/lib/plan/roadmap-read";
 import { loadDay } from "@/lib/queries/day";
 import { listGoalsForMetas, loadGoal } from "@/lib/queries/goal";
 import { listDaylessOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
@@ -39,8 +40,8 @@ async function run(ctx: ServerContext, load: () => Promise<Outcome>): Promise<Ca
   try {
     return answer(await actAs(person, load));
   } catch (error) {
-    // The cause stays in the server's log; the caller reads only the sentence.
-    console.error("mcp read tool failed:", error instanceof Error ? error.message : String(error));
+    // The name and the SQLSTATE only: a driver's message carries the query and its parameters (RNP-15).
+    console.error("mcp read tool failed:", error instanceof Error ? error.name : "unknown", pgCode(error) ?? "");
     return answer({ error: "mcp.errors.unknown" });
   }
 }
@@ -80,7 +81,7 @@ export function registerReadTools(server: McpServer): void {
         const view = await loadGoal(input.goal_id);
         if (view === null) return { error: "mcp.errors.goalNotFound" };
         const first = `${input.month}-01`;
-        const items = monthList(view.tasks, first, todayInZone());
+        const items = planMonthList(view.plan, first);
         return { value: shapeMonth({ goalId: view.id, month: first, unit: view.measureUnit, items }) };
       }),
   );

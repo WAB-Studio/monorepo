@@ -10,6 +10,20 @@ if (process.env.VERCEL && process.env.PULSAR_FAULT_SEAM) {
 const nextConfig: NextConfig = {
   // The dev badge defaults to bottom-left, over the desktop rail's face toggle.
   devIndicators: { position: "bottom-right" },
+  // Every response, so no page of the app is framed by another site (the
+  // consent screen's «Permitir» above all). Only `frame-ancestors`: this is
+  // not a full CSP.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+        ],
+      },
+    ];
+  },
 };
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");

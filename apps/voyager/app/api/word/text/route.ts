@@ -1,19 +1,17 @@
 import "server-only";
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
 import { normaliseHeadword } from "@/lib/dictionary/format";
-import type { DictionaryPayload } from "@/lib/dictionary/format";
-import { buildIndex, groupFor, type DictionaryIndex } from "@/lib/dictionary/index-build";
+import { groupFor } from "@/lib/dictionary/index-build";
 import { env } from "@/lib/env";
+import { claimClientCall, scopedClientKey } from "@/lib/word/client-budget";
+import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { generateWordText, MODEL_NAME } from "@/lib/word/model";
 import { textRequestSchema, textResponseSchema } from "@/lib/word/protocol";
 import { claimDailyCall } from "@/lib/word/spend";
 import {
   markTranslationsAsked,
   readCachedText,
-  translationsWereFound,
+  translationsWereAnswered,
   writeCachedText,
 } from "@/lib/word/text-cache";
 import { inflectionReallyMovedReader, isInflectionDisagreement, isThinAnswer } from "@/lib/word/thin";
@@ -22,6 +20,10 @@ import { inflectionReallyMovedReader, isInflectionDisagreement, isThinAnswer } f
 // cache is keyed on the headword alone (`db/schema/word-texts.ts`), and its
 // answer is never a candidate for the full route cache.
 export const dynamic = "force-dynamic";
+
+// Above the provider's own 20 s timeout, so a slow model answers 204 rather
+// than the platform killing the function mid-claim.
+export const maxDuration = 30;
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -33,27 +35,14 @@ function empty(status: 204 | 400): Response {
   return new Response(null, { status, headers: NO_STORE });
 }
 
-const DICTIONARY_ASSET = path.join(
-  process.cwd(),
-  "public",
-  "dictionary",
-  "eng-spa-2025.11.23.json",
-);
-
-// Read once per server process — the same 64,258-entry asset the client
-// installs. This is the closed list the route accepts: a headword absent
-// from it never reaches the model, however the caller spells the body. An
-// anonymous route that fired a paid call on arbitrary text is how someone
-// would inflate the bill, so this check runs before the cache read, not
-// just before the model call.
-let dictionaryIndex: DictionaryIndex | null = null;
-
-function loadDictionaryIndex(): DictionaryIndex {
-  if (!dictionaryIndex) {
-    const payload = JSON.parse(readFileSync(DICTIONARY_ASSET, "utf8")) as DictionaryPayload;
-    dictionaryIndex = buildIndex(payload);
-  }
-  return dictionaryIndex;
+// The caller's cap, then the day's, in series: run in parallel, a caller
+// already refused would still take one of the day's calls. No chargeable
+// caller (no salt, no address) reaches the model at all.
+async function claimModelCall(request: Request, dailyCap: number): Promise<boolean> {
+  const client = scopedClientKey("text", request.headers);
+  if (!client) return false;
+  if (!(await claimClientCall(client, env.WORD_TEXT_DAILY_CLIENT_CAP))) return false;
+  return claimDailyCall(dailyCap);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -69,6 +58,9 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: "invalid" }, 400);
   }
 
+  // The closed list the route accepts, checked before the cache read: a
+  // headword absent from it never reaches the model, however the caller
+  // spells the body.
   const index = loadDictionaryIndex();
   const headword = normaliseHeadword(parsed.data.headword);
   const group = groupFor(index, headword);
@@ -91,19 +83,21 @@ export async function POST(request: Request): Promise<Response> {
   if (cached) {
     let translations = cached.translations;
     // A thin word never asked, or asked before this column existed:
-    // enrich it in place, at most once per row a translation actually
-    // lands. The cap guards this ask too, but never at the cost of the
-    // answer already cached — over it, or with the model off, the row's
-    // definition and example still return; only the enrichment is
-    // skipped, and it stays open for a later lookup whether the ask never
-    // ran or ran and came back empty.
-    if (thin && !cached.translationsAsked && env.OPENAI_API_KEY && env.WORD_TEXT_DAILY_CALL_CAP) {
-      const calls = await claimDailyCall();
-      if (calls <= env.WORD_TEXT_DAILY_CALL_CAP) {
-        const generated = await generateWordText(headword, false, group.senses);
-        translations = generated?.translations ?? null;
-        await markTranslationsAsked(headword, translations);
-      }
+    // enrich it in place, at most once per row the model answers. Both caps
+    // guard this ask too, but never at the cost of the answer already
+    // cached — over either, or with the model off, the row's definition and
+    // example still return; only the enrichment is skipped, and it stays
+    // open for a later lookup.
+    if (
+      thin &&
+      !cached.translationsAsked &&
+      env.OPENAI_API_KEY &&
+      env.WORD_TEXT_DAILY_CALL_CAP &&
+      (await claimModelCall(request, env.WORD_TEXT_DAILY_CALL_CAP))
+    ) {
+      const generated = await generateWordText(headword, false, group.senses);
+      translations = generated?.translations ?? null;
+      await markTranslationsAsked(headword, translations);
     }
     return json(
       textResponseSchema.parse({
@@ -117,14 +111,13 @@ export async function POST(request: Request): Promise<Response> {
 
   // Absence is one shape everywhere: no key configured, no cap configured,
   // over the cap, a provider failure, or a generation that fails to
-  // validate all answer `204`, the same "no connection" screen already
+  // validate, or no chargeable caller all answer `204`, the same "no connection" screen already
   // drawn (RL-35).
   if (!env.OPENAI_API_KEY || !env.WORD_TEXT_DAILY_CALL_CAP) {
     return empty(204);
   }
 
-  const calls = await claimDailyCall();
-  if (calls > env.WORD_TEXT_DAILY_CALL_CAP) {
+  if (!(await claimModelCall(request, env.WORD_TEXT_DAILY_CALL_CAP))) {
     return empty(204);
   }
 
@@ -143,9 +136,9 @@ export async function POST(request: Request): Promise<Response> {
 
   const definition = wantDefinition ? generated.definition : null;
   const translations = thin ? generated.translations : null;
-  // A thin word whose call comes back empty stays open, the same rule
-  // `markTranslationsAsked` applies to the re-enrichment path: `thin`
-  // alone answers "did we ask", never "is the ask closed".
+  // A thin word the model answered, even with `[]`, is closed; one it left
+  // null stays open — the same rule `markTranslationsAsked` applies to the
+  // re-enrichment path.
   await writeCachedText(
     headword,
     MODEL_NAME,
@@ -153,7 +146,7 @@ export async function POST(request: Request): Promise<Response> {
     generated.example.en,
     generated.example.es,
     translations,
-    translationsWereFound(translations),
+    translationsWereAnswered(translations),
   );
 
   return json(

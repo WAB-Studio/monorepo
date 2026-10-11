@@ -4,14 +4,16 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { approveAuthorization, denyAuthorization } from "@/app/actions/oauth";
-import { Button, Notice, Page, Text } from "@/components/ui";
+import { Button, Notice, Page, ScreenHeader, Text } from "@/components/ui";
 import type { AuthorizationRequest } from "@/lib/validation/oauth";
+
+import { returnHost } from "@/lib/oauth/return-host";
 
 import { ConsentList } from "./consent-list";
 import { type MessageKey } from "@/i18n/translator";
 
-const MAY = ["read", "done", "write", "reorganize"] as const;
-const NEVER = ["delete", "undo"] as const;
+const MAY = ["read", "done", "write", "rename", "phases", "plan"] as const;
+const NEVER = ["delete", "undo", "rhythm"] as const;
 
 export function Consent({
   client,
@@ -41,13 +43,14 @@ export function Consent({
   }
 
   return (
-    <Page alone>
-      <Text as="p" variant="meta" tone="muted">
-        {t("eyebrow")}
-      </Text>
-      <Text asChild variant="title">
-        <h1>{t("title", { client })}</h1>
-      </Text>
+    <Page alone middle snug>
+      <ScreenHeader
+        title={t("title", { client })}
+        eyebrow={t("eyebrow")}
+        lead={t.rich("returnsTo", { address: returnHost(request.redirect_uri), host: (chunks) => <strong>{chunks}</strong> })}
+        metaVariant="sentence"
+        meta={t("consentLead")}
+      />
       <ConsentList label={t("mayLabel")} items={MAY.map((key) => t(`may.${key}`))} mark="+" />
       <ConsentList label={t("neverLabel")} items={NEVER.map((key) => t(`never.${key}`))} mark="–" tone="muted" />
       {error ? <Notice role="alert">{root(error)}</Notice> : null}
@@ -57,7 +60,7 @@ export function Consent({
       <Button variant="outline" tap={52} block disabled={working} onClick={() => void answer(denyAuthorization)}>
         {t("deny")}
       </Button>
-      <Text as="p" variant="meta" tone="quiet">
+      <Text as="p" variant="sentence" tone="muted">
         {t("footer", { email })}
       </Text>
     </Page>

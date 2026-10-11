@@ -1,13 +1,12 @@
 {
   "range": "Del {start} al {end}",
+  "rangeWithMonth": "Del {start} al {end} de {month}",
   "sectionLabel": "{name} · semana {week} de {total}",
   "todayMark": "· hoy",
   "table": {
     "caption": "La semana, un compromiso por fila y un día por columna",
-    "footer": "hechos"
-  },
-  "summary": {
-    "rest": "de {total} · {partial} en parte"
+    "footer": "hechos",
+    "footerPartial": "hechos <fig>{done}</fig> de <fig>{total}</fig> · <fig>{partial}</fig> en parte"
   },
   "legend": {
     "done": "hecho",
@@ -15,9 +14,7 @@
     "partial": "en parte",
     "pending": "pendiente"
   },
-  "ratio": "{done} de {total}",
   "flexible": {
-    "group": "{name} · por semana y por mes",
     "week": "{count, plural, one {# vez por semana} other {# veces por semana}}",
     "month": "{count} al mes",
     "weekProgress": "{done} de {total} esta semana",
@@ -26,7 +23,8 @@
     "weekProgressPast": "{done} de {total} esa semana",
     "monthProgressPast": "{done} de {total} ese mes"
   },
-  "unreadableEvidence": "No pudimos leer una fuente. Lo declarado esta semana sigue aquí.",
+  "unreadableTitle": "No pudimos leer una fuente.",
+  "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
   "weekdayShort": ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"],
   "weekdayLong": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
   "openDay": "Abrir el {weekday} {day}",
@@ -44,8 +42,8 @@
   "archivedOn": "{label} · archivada el {date}",
   "ratioOf": "de {total}",
   "nav": {
-    "prev": "Semana anterior",
-    "next": "Semana siguiente"
+    "prev": "semana anterior",
+    "next": "semana siguiente"
   },
   "eyebrow": {
     "this": "esta semana",

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { createTranslator } from "next-intl";
-import { expect, test } from "./fixtures";
+import { confirmCopy, expect, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import postgres from "postgres";
 
@@ -134,6 +134,9 @@ async function seedLocalDatabase(
             request.transaction!
               .objectStore("lookups")
               .createIndex("foreign", ["device", "deviceSeq"], { unique: true });
+          }
+          if (event.oldVersion < 3) {
+            request.transaction!.objectStore("lookups").createIndex("headword", "headword");
           }
         };
         request.onsuccess = () => {
@@ -435,6 +438,88 @@ test("with the store broken, /registro draws the failure, with no system red and
   await expect(page.getByRole("button", { name: messages.log.study.failedAction })).toBeVisible();
 });
 
+// Opens fail while `window.__store` is "throw" and never answer while it is
+// "hang"; anything else reaches the real store. The page flips it between the
+// first read and the retry, so the failure belongs to the first open alone.
+async function failStoreUntilReleased(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __store: "throw" | "hang" | "ok" };
+    w.__store = "throw";
+    const real = IDBFactory.prototype.open;
+    IDBFactory.prototype.open = function (...args: Parameters<typeof real>) {
+      if (w.__store === "throw") throw new Error("storage broken");
+      if (w.__store === "hang") return {} as IDBOpenDBRequest;
+      return real.apply(this, args);
+    };
+  });
+}
+
+async function seedOneLookup(page: Page): Promise<void> {
+  await deleteTranslator(page);
+  const assetResponse = page.waitForResponse(
+    (response) => response.url().includes(manifest.asset.path) && response.ok(),
+  );
+  await page.goto("/");
+  await assetResponse;
+  await dictionaryReady(page);
+  await recordSearch(page, "apple");
+}
+
+async function setStore(page: Page, mode: "throw" | "hang" | "ok"): Promise<void> {
+  await page.evaluate((m) => {
+    (window as unknown as { __store: string }).__store = m;
+  }, mode);
+}
+
+test("RL-34: «Reintentar» on the failed /registro reads the store again and lists the seeded row", async ({ page }) => {
+  await seedOneLookup(page);
+  // Registered after the seed: the first document kept the real store, and a
+  // fresh context starts empty, so no wipe is needed (and one would rerun on
+  // every navigation).
+  await failStoreUntilReleased(page);
+  await page.goto("/registro");
+  await expect(page.getByText(messages.log.study.failedTitle)).toBeVisible();
+
+  await setStore(page, "ok");
+  await page.getByRole("button", { name: messages.log.study.failedAction }).click();
+
+  await expect(page.locator('a[href="/registro/apple"]')).toBeVisible();
+  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(page.getByText(messages.log.study.failedTitle)).toHaveCount(0);
+});
+
+test("RL-34: the retry takes the failure off the screen at the click, before the second read answers", async ({ page }) => {
+  await seedOneLookup(page);
+  await failStoreUntilReleased(page);
+  await page.goto("/registro");
+  await expect(page.getByText(messages.log.study.failedTitle)).toBeVisible();
+
+  await setStore(page, "hang");
+  await page.getByRole("button", { name: messages.log.study.failedAction }).click();
+
+  await expect(page.getByText(messages.log.study.failedTitle)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: messages.log.study.failedAction })).toHaveCount(0);
+});
+
+test("RNL-02: the failed /registro title is full-weight ink, never muted, accent or red, in light and dark", async ({ page }) => {
+  await deleteTranslator(page);
+  await breakIndexedDB(page);
+
+  const palette = {
+    light: { ink: "#17160F", muted: "#6B675A" },
+    dark: { ink: "#F0EBDD", muted: "#9A9484" },
+  } as const;
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto("/registro");
+    const title = page.getByText(messages.log.study.failedTitle);
+    await expect(title).toBeVisible();
+    const colour = await computedColor(title);
+    expect(colour).toBe(hexToRgb(palette[scheme].ink));
+    expect(colour).not.toBe(hexToRgb(palette[scheme].muted));
+  }
+});
+
 test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar el registro» accent, and its confirm keeps the accent off both destructive options — no red, in light and dark", async ({
   page,
 }) => {
@@ -619,7 +704,6 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
   const sql = postgres(process.env.MIGRATION_DATABASE_URL!, { prepare: false, max: 1 });
   const runId = await openRun("e2e", sql);
   const reader = await mintReaderIdentity(sql, runId);
-  const ownDeviceId = randomUUID();
   const foreignDeviceId = randomUUID();
 
   try {
@@ -636,24 +720,21 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
     await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
     await firstMount;
 
-    await seedLocalDatabase(page, {
-      sync: {
-        deviceId: ownDeviceId,
-        pushedThroughLocalId: null,
-        pulledThroughCursor: null,
-        lastSyncedAt: null,
-        enabled: true,
-      },
-    });
-
     await signInAs(page, reader.hash);
 
-    // First sync: pulls the foreign row down onto this device.
-    await hideTab(page);
+    // First copy: the reader confirms on /cuenta (RL-52), and it pulls the
+    // foreign row down onto this device.
+    await page.goto("/cuenta");
+    await confirmCopy(page);
     await expect
       .poll(() => readLastSyncedAt(page), { message: "the first sync never finished" })
       .toBeGreaterThan(0);
-    await page.reload();
+    // RNL-09: opening /registro with the copy on is one round of its own.
+    const openedSync = page.waitForResponse(
+      (response) => response.url().includes("/api/log/sync") && response.request().method() === "POST",
+    );
+    await page.goto("/registro");
+    await openedSync;
     let rows = await readLogRows(page);
     expect(rows.map((row) => row.normalised), "the foreign row never made it down").toContain("foreign-word");
 
@@ -665,9 +746,19 @@ test("«Vaciar sólo en este dispositivo» does not come back on the next sync",
 
     // A fresh mount resets `SyncOnHide`'s own 60s gate, so the sync below is
     // a new call, not the same one blocked from firing twice.
+    const syncedBeforeReload = await readLastSyncedAt(page);
     const mounted = armListener();
+    const reopenedSync = page.waitForResponse(
+      (response) => response.url().includes("/api/log/sync") && response.request().method() === "POST",
+    );
     await page.reload();
     await mounted;
+    // RNL-09: the reload is an open of /registro with the copy on, so a round
+    // leaves by itself; the hide below must be a second one, not this one.
+    await reopenedSync;
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the open's own round never finished" })
+      .toBeGreaterThan(syncedBeforeReload);
     const syncedBefore = await readLastSyncedAt(page);
     await hideTab(page);
     await expect
@@ -736,7 +827,18 @@ test("«Vaciar aquí y en mi cuenta» empties every device's copy, and a reader 
     });
 
     await signInAs(page, reader.hash);
-    await page.reload();
+    // This device is copying for the reader (RL-52): the account wipe has a
+    // live copy to empty, not only rows another device left behind.
+    await page.goto("/cuenta");
+    await confirmCopy(page);
+    await expect
+      .poll(() => readLastSyncedAt(page), { message: "the copy never finished" })
+      .toBeGreaterThan(0);
+    const openedSync = page.waitForResponse(
+      (response) => response.url().includes("/api/log/sync") && response.request().method() === "POST",
+    );
+    await page.goto("/registro");
+    await openedSync;
 
     const clearTrigger = page.getByRole("button", { name: messages.log.clear.trigger });
     await expect(clearTrigger).toBeVisible();

@@ -8,7 +8,7 @@ import { todayInZone } from "@/lib/zone";
 import { WaitingList } from "./waiting-list";
 
 /**
- * What waits (RP-21, `SueltasProgramadas.dc.html`): the one-offs with no day,
+ * What waits (RP-59, `SueltasProgramadas.dc.html`): the one-offs with no day,
  * then those dated after today. Each can be done, moved or deleted from here.
  */
 export async function DaylessScreen() {
@@ -32,7 +32,7 @@ export async function DaylessScreen() {
   };
 
   return (
-    <Page width="full">
+    <Page width="column">
       <ScreenHeader
         title={t("oneOffs.title")}
         back={{ href: "/", place: t("common.nav.today") }}

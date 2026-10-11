@@ -154,10 +154,26 @@ async function main(): Promise<void> {
   }
 
   console.log("\n== database size ==");
-  const [{ size }] = await run(fixtureSql<{ size: string }[]>`
-    select pg_size_pretty(pg_database_size(current_database())) as size
+  // `access_tokens` carries no `client_id`: a client reaches a token only through
+  // an `oauth_codes` or `oauth_refresh` row, so "no owner" is no code and no
+  // refresh. `query_to_xml` defers parsing the count to run time, so a database
+  // with no `goals` schema answers null in the same trip instead of failing.
+  const [{ size, orphans }] = await run(fixtureSql<{ size: string; orphans: number | null }[]>`
+    select pg_size_pretty(pg_database_size(current_database())) as size, case
+      when to_regclass('goals.oauth_clients') is null
+        or to_regclass('goals.oauth_codes') is null
+        or to_regclass('goals.oauth_refresh') is null then null
+      else (xpath('/row/n/text()', query_to_xml(
+        'select count(*) as n from goals.oauth_clients c
+         where not exists (select 1 from goals.oauth_codes oc where oc.client_id = c.id)
+           and not exists (select 1 from goals.oauth_refresh orf where orf.client_id = c.id)',
+        false, true, '')))[1]::text::int
+    end as orphans
   `);
   console.log(`  ${size}`);
+
+  console.log("\n== goals.oauth_clients ==");
+  console.log(orphans === null ? "  oauth_clients sin dueño: no hay esquema goals" : `  oauth_clients sin dueño: ${orphans}`);
 
   console.log(`\nREPORT  census — ${trips} round trips.`);
 }

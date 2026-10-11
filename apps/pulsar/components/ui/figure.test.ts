@@ -59,7 +59,7 @@ test("an exact hour and an hour count past a thousand keep 145's own rules (RP-3
     tokens: [
       { text: "1.234", figure: true },
       { text: "h", figure: false },
-      { text: "5", figure: true },
+      { text: "05", figure: true },
       { text: "min", figure: false },
     ],
   });

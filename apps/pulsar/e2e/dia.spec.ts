@@ -3,7 +3,7 @@ import type postgres from "postgres";
 import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
-// Seeded by `harness:seed-goal` (module 20): a plain `tap` commitment, daily,
+// Seeded by `harness:seed-goal`: a plain `tap` commitment, daily,
 // with no quantity and no evidence behind it — the one row a single click
 // satisfies outright (RP-02).
 const TAP_COMMITMENT = "Cerrar el ciclo: tarjetas de los errores";

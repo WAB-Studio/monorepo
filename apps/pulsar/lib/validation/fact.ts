@@ -8,9 +8,8 @@ import { civilDateToDate, dateToCivilDate, isCivilDate, todayInZone } from "@/li
 // string and compare it lexicographically against another one.
 const civilDate = (message: string) => z.string().refine(isCivilDate, { error: message });
 
-// How far back a fact may reach (RP-06), decided by the user 2026-09-28, in
-// exactly one place — the one modules 46 and 49 read their date picker's
-// floor from, never a second 7 typed beside this one.
+// How far back a fact may reach (RP-06), in
+// exactly one place — the one the date pickers read their floor from, never a second 7 typed beside this one.
 export const PAST_DAY_LIMIT = 7;
 
 // The earliest civil day a fact may name, given today's. Goes through `Date`
@@ -123,14 +122,14 @@ export function requireQuantityFor(satisfaction: "tap" | "quantity" | "evidence"
 
 /**
  * A caller-supplied day never names a moment its subject could not have had
- * (RP-06): before a commitment existed, after it was retired, or at all on a
+ * (RP-06): before its goal opened, before a commitment existed, after it was retired, or at all on a
  * one-off — a one-off is done on the day it is done, never redated. Read the
  * subject's own civil days first, never guessed from the payload, then run
  * this refinement on the very schema the action used.
  */
 export function requireDayForSubject(
   subject:
-    | { kind: "commitment"; createdDay: string; retiredDay: string | null }
+    | { kind: "commitment"; openedDay: string; createdDay: string; retiredDay: string | null }
     | { kind: "oneOff" },
 ) {
   return function refine(data: { day?: string | null }, ctx: z.RefinementCtx) {
@@ -138,6 +137,12 @@ export function requireDayForSubject(
 
     if (subject.kind === "oneOff") {
       ctx.addIssue({ code: "custom", message: "day.errors.dayOnOneOff", path: ["day"] });
+      return;
+    }
+
+    // The goal's rule is stated first and alone: it names the earlier moment.
+    if (data.day < subject.openedDay) {
+      ctx.addIssue({ code: "custom", message: "day.errors.dayBeforeGoal", path: ["day"] });
       return;
     }
 

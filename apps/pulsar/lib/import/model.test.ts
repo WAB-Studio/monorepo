@@ -12,6 +12,7 @@ mock.module("@/lib/env", { namedExports: { env: fakeEnv } });
 const goal: ImportDraft["goals"][number] = {
   name: "IA aplicada",
   horizon: "2027-10-01",
+  rhythm: null,
   measure: { name: "horas de estudio", unit: "minutos" },
   phases: [{ aim: "Evals", startsOn: "2026-10-01", endsOn: "2026-12-31" }],
   months: [{ month: "2026-10", amount: 720 }],
@@ -399,4 +400,17 @@ test("the request carries reasoning effort, an output budget, the schema name an
   assert.ok(calls[0].init.signal instanceof AbortSignal);
   assert.equal(calls[0].init.method, "POST");
   assert.equal((calls[0].init.headers as Record<string, string>)["content-type"], "application/json");
+});
+
+test("the model's answer in hours is read in minutes", async () => {
+  const { readPlan } = await import("./model");
+  fakeEnv.OPENAI_API_KEY = "sk-test";
+  const hours = { ...goal, measure: { name: "estudio", unit: "horas" }, months: [{ month: "2026-10", amount: 12 }] };
+  replyWith(() => completion({ goals: [hours] }));
+  const reading = await readPlan({ kind: "text", text: "plan" });
+  assert.equal(reading.status, "ok");
+  if (reading.status === "ok") {
+    assert.equal(reading.draft.goals[0].measure?.unit, "minutos");
+    assert.equal(reading.draft.goals[0].months[0].amount, 720);
+  }
 });

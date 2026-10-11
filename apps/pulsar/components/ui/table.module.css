@@ -95,14 +95,24 @@
 }
 
 /* Beside a list's own chevron the note is a short phrase («sin monto»): it
-   keeps its line, and the label gives up its fixed 100px before it does. */
+   keeps its line, and the label never gives up its 100px. */
 .narrow .stackNote {
   white-space: nowrap;
 }
 
+/* The label holds its width so every figure after it starts on one edge. */
 .narrow .stackLabel {
-  flex: 0 1 100px;
-  min-inline-size: min-content;
+  flex: 0 0 100px;
+  min-inline-size: 0;
+}
+
+.narrow .detail {
+  white-space: normal;
+}
+
+.wrapDetail .detail,
+.wrapDetail .detailWide {
+  white-space: normal;
 }
 
 /* The wide face, `RevisionEscritorio.dc.html`. */
@@ -194,6 +204,7 @@
 }
 
 .label {
+  padding-inline-end: 16px;
   font-family: var(--font-mono);
   font-size: var(--pulsar-text-meta-size);
   letter-spacing: var(--pulsar-text-measure-tracking);
@@ -300,5 +311,116 @@
   .stackRow.open .stackLabel {
     font-weight: 600;
     color: var(--pulsar-ink);
+  }
+}
+
+/* The fold (`ReportePlegado.dc.html`): a link-card, 56px tall, that opens the
+   table under it. The chevron turns down once open. */
+.foldSummary {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-block-size: 56px;
+  padding: 8px 16px;
+  border: 1px solid var(--pulsar-line);
+  border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--pulsar-text-line-size);
+  color: var(--pulsar-ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.foldSummary::-webkit-details-marker {
+  display: none;
+}
+
+.foldSummary:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+}
+
+.foldChevron {
+  flex: none;
+  color: var(--pulsar-quiet);
+}
+
+.fold[open] .foldChevron {
+  transform: rotate(90deg);
+}
+
+.fold[open] .foldSummary {
+  margin-block-end: 16px;
+}
+
+/* The line under the rows (`after`): not a ruled row, 12px below the last one. */
+.after {
+  margin-block-start: 12px;
+}
+
+.afterRow[data-print-only] {
+  display: none;
+}
+
+.afterCell {
+  padding: 12px 0 0;
+}
+
+/* A row never breaks across pages; a fold is screen-only. */
+@media print {
+  .stackRow,
+  .wide tr {
+    break-inside: avoid;
+  }
+
+  .caption {
+    break-after: avoid;
+  }
+
+  .header {
+    padding-block-end: 6px;
+  }
+
+  .cell {
+    padding-block: 6px;
+  }
+
+  /* The header and the first row stay together, so the label above them
+     follows its first row onto the next page. */
+  .wide thead,
+  .wide thead tr {
+    break-after: avoid;
+  }
+
+  .wide tbody tr:first-child {
+    break-before: avoid;
+  }
+
+  /* Chromium keeps a line with the rows above it only inside the table. */
+  .wide tr[data-last] {
+    break-after: avoid;
+  }
+
+  .wide .afterRow {
+    break-before: avoid;
+  }
+
+  .wide .afterRow[data-print-only] {
+    display: table-row;
+  }
+
+  .phone .after {
+    display: none;
+  }
+
+  .fold {
+    display: none;
+  }
+
+  .stackRow[data-unprinted],
+  .wide tr[data-unprinted] {
+    display: none;
   }
 }

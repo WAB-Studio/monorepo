@@ -13,6 +13,7 @@ export function Split({
   aside = 360,
   twoFifths = false,
   even = false,
+  afterBelow = false,
 }: {
   main: ReactNode;
   before?: ReactNode;
@@ -28,12 +29,16 @@ export function Split({
   // `main` alone, its children in two equal columns from 1024: the past day
   // (`DiaPasadoEscritorio.dc.html`), which never narrows as the screen widens.
   even?: boolean;
+  // From 1024 `after` leaves the right column and stands under both, at the
+  // content's full width: a part whose text needs more than the aside gives.
+  afterBelow?: boolean;
 }) {
   const className = [
     styles.split,
     aside === 380 ? styles.asideWide : undefined,
     twoFifths ? styles.twoFifths : undefined,
     even ? styles.even : undefined,
+    afterBelow ? styles.afterBelow : undefined,
     before ? undefined : styles.noBefore,
   ]
     .filter(Boolean)
