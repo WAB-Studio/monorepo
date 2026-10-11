@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { draftRefusals, importDraftJsonSchema } from "./draft";
 import { parseTemplate } from "./template";
+import { GOAL_NAME_MAX } from "@/lib/validation/plan";
 
 const catalogue = JSON.parse(readFileSync(new URL("../../messages/es/import.json", import.meta.url), "utf8"));
 const EXAMPLE: string = catalogue.template.example;
@@ -641,4 +642,14 @@ test("801 cut: a stray text line under a goal with no horizon cuts there with th
   const result = cutOf(`pulsar · plantilla 1\n# A\nhola\n${BROKEN_MONTH}`);
   assert.deepEqual(result.errors.map((e) => [e.line, e.expected]), [[3, "import.errors.form.horizon"]]);
   assert.equal(result.cut, true);
+});
+
+// Module 803: a goal name past the schema's limit says so, instead of «Falta el nombre».
+test("803 name: 121 characters answer the long-name sentence on the goal's line, and cut; 120 pass", () => {
+  const over = cutOf(`pulsar · plantilla 1\n# ${"a".repeat(GOAL_NAME_MAX + 1)}\nhorizonte: 2026-12-17\nmedida: d · km\n${BROKEN_MONTH}`);
+  assert.deepEqual(over.errors.map((e) => e.line), [2]);
+  assert.equal(over.cut, true);
+  assert.equal(sentenceOf(over.errors[0].expected), "El nombre de la meta va en 120 caracteres o menos.");
+  const ok = parseTemplate(`pulsar · plantilla 1\n# ${"a".repeat(GOAL_NAME_MAX)}\nhorizonte: 2026-12-17\n`);
+  assert.ok(ok.matched && "draft" in ok, JSON.stringify(ok));
 });

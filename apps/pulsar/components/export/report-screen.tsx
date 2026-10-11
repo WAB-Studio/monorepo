@@ -8,6 +8,7 @@ import {
   civilSpan,
   goalSections,
   isLongTable,
+  keepsHeadWithTable,
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
@@ -557,7 +558,7 @@ function GoalPart({
 
   const spans = (section: GoalSection) => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
-    <PrintGoal>
+    <PrintGoal whole={keepsHeadWithTable(goal.months)}>
       <PrintBlock span="lead">
         <Flex direction="column" gap="3">
           <Text asChild variant="name" rule>

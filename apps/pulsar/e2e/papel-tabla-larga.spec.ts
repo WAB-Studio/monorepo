@@ -112,7 +112,9 @@ function locate(file: string, name: string, months: number): Where {
     const found: { page: number; at: number }[] = [];
     pages.forEach((lines, page) =>
       lines.forEach((line, at) => {
-        if (line.startsWith(labelOf(offset))) found.push({ page, at });
+        // Another goal's table above this one prints the same months.
+        const after = page > labelPage || (page === labelPage && at > labelAt);
+        if (after && line.startsWith(labelOf(offset))) found.push({ page, at });
       }),
     );
     expect(found, `row ${labelOf(offset)} printed exactly once (${file})`).toHaveLength(1);
@@ -266,5 +268,35 @@ test.describe("the paper report: a «por mes» table of 20 rows or more starts w
       expect(new Set(w.rows.map((row) => row.page))).toEqual(new Set([w.labelPage]));
       expect(w.pages[w.labelPage].some((text) => text.includes("sin tareas"))).toBe(true);
     });
+  });
+});
+
+// Module 803 (decision of 2026-10-10, after the train-6 critic): a goal whose table prints whole keeps its head with it.
+// Open tasks of a goal before it slide the page cut over the head; across enough of them it falls between head and label.
+test.describe("the paper report: a goal whose table prints whole keeps its head with it when the goal fits a page (803)", () => {
+  for (const above of range(40))
+  test(`12-month goal under another goal's ${above} open tasks: its name is on the page of its «por mes» label`, async ({
+    person, browser, baseURL, db,
+  }) => {
+    const [filler] = await db<{ id: string }[]>`
+      insert into goals.goals (user_id, name, horizon, created_at)
+      values (${person.id}, ${`Previa ${Date.now()}`}, ${startOf(3)},
+              (${startOf(0)}::date + interval '13 days' + interval '12 hours')::timestamptz)
+      returning id
+    `;
+    for (const n of range(above)) {
+      await db`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month)
+        values (${person.id}, ${filler.id}, ${`Previa ${n}`}, ${startOf(0)}::date)
+      `;
+    }
+    try {
+      await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 12, measured: true, tag: `h12x${above}` }, (w) => {
+        expect(w.labelPage, `label on page ${w.labelPage + 1}, the goal's name on page ${w.namePage + 1}`).toBe(w.namePage);
+        expect(w.rows[0].page, "and its first row with the label").toBe(w.labelPage);
+      });
+    } finally {
+      await remove(db, person, filler.id);
+    }
   });
 });

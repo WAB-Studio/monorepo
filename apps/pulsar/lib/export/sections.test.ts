@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { GoalReport } from "./report";
-import { civilSpan, goalSections, monthsWithWeeks, printsOnPaper } from "./sections";
+import { civilSpan, goalSections, keepsHeadWithTable, monthsWithWeeks, printsOnPaper } from "./sections";
 
 function goal(patch: Partial<GoalReport> = {}): GoalReport {
   return {
@@ -144,4 +144,16 @@ test("RP-71 goalSections: a goal with no unit and only future months without tas
   assert.deepEqual(goalSections(goal({ unit: null, months: [ahead("2026-11-01"), ahead("2026-12-01")] })), ["phases", "tasks"]);
   const held = { ...ahead("2027-01-01"), tasks: { done: 0, total: 1 } };
   assert.deepEqual(goalSections(goal({ unit: null, months: [ahead("2026-11-01"), held] })), ["phases", "tasks", "months"]);
+});
+
+test("803 keepsHeadWithTable: 8 to 19 printed rows keep the head with the table; 7 and 20 do not", () => {
+  const rows = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({ month: `2026-${String(i % 12 + 1).padStart(2, "0")}-01`, planned: 10, reached: 0, current: false, past: false, carried: null }));
+  assert.deepEqual([7, 8, 19, 20].map((count) => keepsHeadWithTable(rows(count))), [false, true, true, false]);
+});
+
+test("803 keepsHeadWithTable: months that print nothing do not count", () => {
+  const silent = { month: "2027-01-01", planned: null, reached: 0, current: false, past: false, carried: null };
+  const planned = { ...silent, planned: 10 };
+  assert.equal(keepsHeadWithTable([...Array(7).fill(planned), ...Array(5).fill(silent)]), false);
 });

@@ -33,8 +33,9 @@ export function PrintBlock({
 }
 
 // A goal's blocks: a column on screen, two columns on paper (`ReporteImpresoCompacto.dc.html`).
-export function PrintGoal({ children }: { children?: ReactNode }) {
-  return <div className={styles.goal}>{children}</div>;
+// `whole` keeps the goal on one page; a goal taller than a page still breaks.
+export function PrintGoal({ children, whole }: { children?: ReactNode; whole?: boolean }) {
+  return <div className={whole ? `${styles.goal} ${styles.whole}` : styles.goal}>{children}</div>;
 }
 
 // Gone on screen, shown in print: the head's brand and dated year.

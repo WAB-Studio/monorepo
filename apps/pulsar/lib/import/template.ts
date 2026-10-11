@@ -1,5 +1,7 @@
 import { isTimeUnit, parseTime, storedMeasure } from "@/lib/units/time";
 
+import { GOAL_NAME_MAX } from "@/lib/validation/plan";
+
 import { importDraftSchema, type ImportDraft } from "./draft";
 
 // The grammar is docs/pulsar/PLANTILLA.md's.
@@ -21,6 +23,7 @@ type Task = Goal["tasks"][number];
 // The form of a line, shown as `expected`: syntax, not prose.
 const FORMS = {
   goal: "import.errors.form.goal",
+  goalLong: "import.errors.form.goalLong",
   horizon: "import.errors.form.horizon",
   measure: "import.errors.form.measure",
   rhythmPlace: "import.errors.form.rhythmPlace",
@@ -145,6 +148,7 @@ export function parseTemplate(text: string): TemplateResult {
       const name = line.slice(2).trim();
       goals.push({ name, horizon: "", measure: null, rhythm: null, phases: [], months: [], commitments: [], tasks: [] });
       spots.set(`goals.${g + 1}`, { line: n, expected: FORMS.goal });
+      if (name.length > GOAL_NAME_MAX) spots.set(`goals.${g + 1}.name`, { line: n, expected: FORMS.goalLong });
       needsHorizon = { line: n };
       section = null;
       skipping = false;

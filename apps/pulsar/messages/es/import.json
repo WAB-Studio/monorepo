@@ -92,6 +92,7 @@
     "templateCount": "{count, plural, one {# línea por corregir} other {# líneas por corregir}}",
     "form": {
       "goal": "Falta el nombre de la meta: «# nombre».",
+      "goalLong": "El nombre de la meta va en 120 caracteres o menos.",
       "horizon": "La meta termina con «horizonte: AAAA-MM-DD», justo después del nombre.",
       "measure": "La medida va como «medida: nombre · unidad».",
       "firstLine": "La primera línea va como «pulsar · plantilla 1».",
