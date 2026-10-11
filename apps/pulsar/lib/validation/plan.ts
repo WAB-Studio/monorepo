@@ -6,6 +6,8 @@ import { isCivilDate } from "@/lib/zone";
 // `writtenAt`): a horizon or a phase boundary is chosen ahead of time.
 const civilDate = (message: string) => z.string().refine(isCivilDate, { error: message });
 
+export const GOAL_NAME_MAX = 120;
+
 export const createGoalSchema = z.object({
   // Two fields, no measure (§0.3, 3): the measure columns land null and are
   // named later, by the first commitment that measures something.
@@ -13,7 +15,7 @@ export const createGoalSchema = z.object({
     .string({ error: "plan.errors.nameEmpty" })
     .trim()
     .min(1, { error: "plan.errors.nameEmpty" })
-    .max(120, { error: "plan.errors.nameTooLong" }),
+    .max(GOAL_NAME_MAX, { error: "plan.errors.nameTooLong" }),
   horizon: civilDate("plan.errors.horizonInvalid"),
 });
 

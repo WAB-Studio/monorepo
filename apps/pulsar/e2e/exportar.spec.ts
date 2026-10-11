@@ -910,12 +910,12 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
           .locator("table", { has: page.locator("thead th", { hasText: /^por mes$/ }) })
           .first();
         // The state sits on a second line of the same cell: the label is its first words.
-        const labels = (await table.locator("tbody tr td:first-child").allTextContents()).map(
+        const labels = (await table.locator("tbody tr:not([data-row='months-out']) td:first-child").allTextContents()).map(
           (label) => /^[a-zñ]+ \d{4}/.exec(label.trim())![0],
         );
         expect(labels.length, `${name}: months on screen`).toBeGreaterThanOrEqual(4);
         // RP-70: a month with no state and no planned amount is on screen only.
-        const rows = table.locator("tbody tr");
+        const rows = table.locator("tbody tr:not([data-row='months-out'])");
         const kept: string[] = [];
         for (const [row, month] of labels.entries()) {
           const cells = rows.nth(row).locator("td");

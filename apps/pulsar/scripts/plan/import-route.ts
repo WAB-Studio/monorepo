@@ -328,3 +328,39 @@ test("a body that is no form: 422 import.errors.blank, no row, no model", async 
   assert.equal((await rows()).length, 0);
   assert.equal(modelCalls.length, 0);
 });
+
+// Module 801.
+test("801: a first line «pulsar · plantilla 2» is 422 on line 1, never sent to the model, with no key too", async () => {
+  for (const keyed of [true, false]) {
+    if (!keyed) delete envHandle.OPENAI_API_KEY;
+    const response = await route.POST(request({ text: TEMPLATE.replace("plantilla 1", "plantilla 2") }));
+    assert.equal(response.status, 422, `key ${keyed}`);
+    const body = await answer(response);
+    assert.equal(body.error, "import.errors.templateLine");
+    assert.deepEqual((body.errors as { line: number }[]).map((e) => e.line), [1]);
+  }
+  assert.equal(modelCalls.length, 0);
+  assert.equal((await rows()).length, 0);
+});
+
+test("801: the same refusal reaches a file, the way a pasted text does", async () => {
+  const file = new File([TEMPLATE.replace("plantilla 1", "plantilla 2")], "plan.md", { type: "text/markdown" });
+  const response = await route.POST(request({ file }));
+  assert.equal(response.status, 422);
+  assert.equal(modelCalls.length, 0);
+});
+
+test("801: a text that does not start with «pulsar ·» still goes to the model", async () => {
+  const response = await route.POST(request({ text: "plantilla 2\nquiero aprender inglés" }));
+  assert.equal(response.status, 200);
+  assert.equal(modelCalls.length, 1);
+});
+
+test("801: a broken header answers one error and judges nothing below it", async () => {
+  const text = TEMPLATE.replace("medida: horas de estudio · minutos", "medida: horas de estudio").replace("- 2026-10 · 12 h", "- octubre · 12 h");
+  const response = await route.POST(request({ text }));
+  assert.equal(response.status, 422);
+  const errors = (await answer(response)).errors as { line: number; expected: string }[];
+  assert.deepEqual(errors, [{ line: 5, expected: "import.errors.form.measure" }]);
+  assert.equal(modelCalls.length, 0);
+});

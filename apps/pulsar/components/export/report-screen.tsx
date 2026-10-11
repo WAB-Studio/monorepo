@@ -7,6 +7,8 @@ import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
   goalSections,
+  isLongTable,
+  keepsHeadWithTable,
   printsOnPaper,
   type Section as GoalSection,
 } from "@/lib/export/sections";
@@ -400,17 +402,19 @@ function GoalPart({
                 rows={rows}
                 nowrapLabel
                 stackInCard
+                after={
+                  out.length > 0 ? (
+                    <Text as="p" variant="line">
+                      {t("monthsOutTasks", {
+                        months: format.list(
+                          out.map((m) => monthYear.format(civilDateToDate(m.month))),
+                          { type: "conjunction" },
+                        ),
+                      })}
+                    </Text>
+                  ) : undefined
+                }
               />
-              {out.length > 0 ? (
-                <Text as="p" variant="line">
-                  {t("monthsOutTasks", {
-                    months: format.list(
-                      out.map((m) => monthYear.format(civilDateToDate(m.month))),
-                      { type: "conjunction" },
-                    ),
-                  })}
-                </Text>
-              ) : null}
             </Section>
           );
         }
@@ -505,14 +509,15 @@ function GoalPart({
                 stackInCard
                 wrapDetail
                 current={current === -1 ? undefined : current}
+                afterPrintOnly
+                after={
+                  out.length > 0 ? (
+                    <Text as="p" variant="line">
+                      {t("monthsOut", { months: outNames })}
+                    </Text>
+                  ) : undefined
+                }
               />
-              {out.length > 0 ? (
-                <PrintOnly>
-                  <Text as="p" variant="line">
-                    {t("monthsOut", { months: outNames })}
-                  </Text>
-                </PrintOnly>
-              ) : null}
             </Section>
             {goal.weeks.length > 0 ? (
               <PrintHidden>
@@ -553,7 +558,7 @@ function GoalPart({
 
   const spans = (section: GoalSection) => (section !== "month" && section !== "toDate" ? "all" : undefined);
   return (
-    <PrintGoal>
+    <PrintGoal whole={keepsHeadWithTable(goal.months)}>
       <PrintBlock span="lead">
         <Flex direction="column" gap="3">
           <Text asChild variant="name" rule>
@@ -565,7 +570,7 @@ function GoalPart({
         </Flex>
       </PrintBlock>
       {sections.map((section) => (
-        <PrintBlock key={section} span={spans(section)} whole={section === "months"} only={section === "months" && unit === null}>
+        <PrintBlock key={section} span={spans(section)} whole={section === "months" && !isLongTable(goal.months)} only={section === "months" && unit === null}>
           {render(section)}
         </PrintBlock>
       ))}

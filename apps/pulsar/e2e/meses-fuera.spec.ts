@@ -183,9 +183,13 @@ test.describe("the paper names the months it leaves out (RP-71)", () => {
       const section = page.locator("section").filter({ hasText: `${name} · por mes` }).last();
       const line = section.getByText(`${yearName(1)} y ${yearName(2)}: sin monto`, { exact: true }).locator("visible=true");
       await expect(line).toHaveCount(1);
-      const table = await section.locator("table").locator("visible=true").first().boundingBox();
+      const grid = section.locator("table").locator("visible=true").first();
+      const table = await grid.boundingBox();
+      const lastMonth = await grid.locator("tbody tr:not([data-row='months-out']):not([data-unprinted])").last().boundingBox();
       const at = await line.boundingBox();
-      expect(at!.y, "the line sits under the table").toBeGreaterThanOrEqual(table!.y + table!.height - 1);
+      expect(at!.y, "the line sits under the last month row").toBeGreaterThanOrEqual(lastMonth!.y + lastMonth!.height - 1);
+      expect(at!.y + at!.height, "and at the end of the table").toBeLessThanOrEqual(table!.y + table!.height + 1);
+      await expect(grid.locator("tbody tr[data-row='months-out']"), "in the table's last row").toHaveCount(1);
       // Body text, not the quiet note: the body-line size token, in the sans family.
       const look = await line.evaluate((node) => {
         const probe = document.createElement("span");
